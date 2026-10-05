@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.getValue
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -113,7 +114,7 @@ fun AboutWanxiangScreen(
                     SettingsRowLocal(icon = RuntimeIconName.Info, title = "Android 版本", value = "API ${Build.VERSION.SDK_INT}")
                     SettingsRowLocal(icon = RuntimeIconName.Speed, title = "CPU 核心数", value = deviceInfo.cpuCores)
                     SettingsRowLocal(icon = RuntimeIconName.Speed, title = "运行内存", value = "${deviceInfo.totalRamGib} GiB（可用 ${deviceInfo.freeRamGib} GiB）")
-                    SettingsRowLocal(icon = RuntimeIconName.FolderOpen, title = "内部存储", value = deviceInfo.totalStorageGib + " GiB（可用 " + deviceInfo.freeStorageGib + " GiB）")
+                    SettingsRowLocal(icon = RuntimeIconName.FolderOpen, title = "内部存储", value = "${deviceInfo.totalStorageGib} GiB（可用 ${deviceInfo.freeStorageGib} GiB）")
                 }
             }
         }
@@ -175,7 +176,6 @@ private fun SettingsRowLocal(
     title: String,
     value: String,
     onClick: (() -> Unit)? = null,
-    trailing: (@Composable () -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier
@@ -189,7 +189,6 @@ private fun SettingsRowLocal(
             Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
             Text(value, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        if (trailing != null) trailing()
     }
 }
 

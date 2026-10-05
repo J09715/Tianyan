@@ -224,6 +224,17 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settingsDataStore.clearFirstUseGuides() }
     }
 
+    val webChatStatus: StateFlow<top.wanxiang.app.runtime.webchat.WebChatServerStatus> =
+        webChatBridgeServer?.status ?: MutableStateFlow(top.wanxiang.app.runtime.webchat.WebChatServerStatus()).asStateFlow()
+
+    fun toggleWebChatServer(enabled: Boolean, port: Int = 8899) {
+        if (enabled) {
+            webChatBridgeServer?.start(port)
+        } else {
+            webChatBridgeServer?.stop()
+        }
+    }
+
     fun switchActiveDistro(distroId: String) {
         viewModelScope.launch {
             linuxRuntime.switchActiveDistro(distroId)
