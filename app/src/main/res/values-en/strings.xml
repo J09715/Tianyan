@@ -1,14 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="wanxiang_app_name">WanXiang</string>
-    <string name="wanxiang_update_available">New version available: v%1$s</string>
-    <string name="wanxiang_update_versions">Current: v%1$s  ➔  Latest: v%2$s</string>
-    <string name="wanxiang_update_downloading_package">Downloading update…</string>
-    <string name="wanxiang_update_download_failed">Failed to download the update package. Check your network and try again.</string>
-    <string name="wanxiang_downloading">Downloading…</string>
-    <string name="wanxiang_update_now">Update now</string>
-    <string name="wanxiang_open_github">Open GitHub</string>
-    <string name="wanxiang_later">Later</string>
     <string name="wanxiang_agent_notification_channel">Agent execution</string>
     <string name="wanxiang_agent_ready">Agent center ready</string>
     <string name="wanxiang_agent_default_title">WanXiang Agent</string>

@@ -10,7 +10,6 @@ class AppearancePreferences @Inject constructor(private val store: SettingsDataS
     val themeStyle get() = store.themeStyle
     val chengmingBackgroundUri get() = store.chengmingBackgroundUri
     val appFontScale get() = store.appFontScale
-    val autoCheckUpdates get() = store.autoCheckUpdates
 }
 
 @Singleton
@@ -211,16 +210,3 @@ class WanxiangCloudPreferences @Inject constructor(private val store: SettingsDa
     suspend fun cacheConfig(configJson: String) = store.setCloudConfig(configJson)
 }
 
-/** 更新检查的门面（P0-1 冷却 + 去重），只让 MainActivity 用。 */
-@Singleton
-class UpdatePreferences @Inject constructor(private val store: SettingsDataStore) {
-    val lastUpdateCheckTimeMs get() = store.lastUpdateCheckTimeMs
-    val dismissedUpdateVersionCode get() = store.dismissedUpdateVersionCode
-    val autoCheckUpdates get() = store.autoCheckUpdates
-    suspend fun setLastUpdateCheckTime(ms: Long) = store.setLastUpdateCheckTime(ms)
-    suspend fun setDismissedUpdateVersionCode(code: Int) = store.setDismissedUpdateVersionCode(code)
-    suspend fun clearUpdateCooldown() = store.clearUpdateCooldown()
-    companion object {
-        const val UPDATE_AUTO_CHECK_COOLDOWN_MS = SettingsDataStore.UPDATE_AUTO_CHECK_COOLDOWN_MS
-    }
-}

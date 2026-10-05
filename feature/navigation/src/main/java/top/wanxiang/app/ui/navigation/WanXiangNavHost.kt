@@ -68,8 +68,7 @@ sealed interface AppDestination : NavKey
 @Serializable data object LinuxEnvSettingsDestination : AppDestination
 @Serializable data object AppearanceSettingsDestination : AppDestination
 @Serializable data object SystemDevSettingsDestination : AppDestination
-@Serializable data object AboutCommunityDestination : AppDestination
-@Serializable data object SponsorDestination : AppDestination
+@Serializable data object AboutWanxiangDestination : AppDestination
 @Serializable data object AgentSettingsDestination : AppDestination
 @Serializable data object AgentSubagentSettingsDestination : AppDestination
 @Serializable data object AgentSkillSettingsDestination : AppDestination
@@ -330,7 +329,7 @@ fun WanXiangNavHost(
                         onOpenLinuxEnv = { settingsStack.push(SettingsDestination, LinuxEnvSettingsDestination) },
                         onOpenAppearance = { settingsStack.push(SettingsDestination, AppearanceSettingsDestination) },
                         onOpenSystemDev = { settingsStack.push(SettingsDestination, SystemDevSettingsDestination) },
-                        onOpenAboutCommunity = { settingsStack.push(SettingsDestination, AboutCommunityDestination) },
+                        onOpenAboutWanxiang = { settingsStack.push(SettingsDestination, AboutWanxiangDestination) },
                         viewModel = settingsViewModel,
                     )
                 }
@@ -394,18 +393,12 @@ fun WanXiangNavHost(
                     )
                 }
             }
-            entry<AboutCommunityDestination> {
-                GuardedEntry(AboutCommunityDestination) {
-                    top.wanxiang.app.ui.settings.AboutCommunityScreen(
+            entry<AboutWanxiangDestination> {
+                GuardedEntry(AboutWanxiangDestination) {
+                    top.wanxiang.app.ui.settings.AboutWanxiangScreen(
                         onBack = ::popBack,
-                        onOpenSponsor = { settingsStack.push(AboutCommunityDestination, SponsorDestination) },
                         viewModel = settingsViewModel,
                     )
-                }
-            }
-            entry<SponsorDestination> {
-                GuardedEntry(SponsorDestination) {
-                    top.wanxiang.app.ui.settings.SponsorScreen(onBack = ::popBack)
                 }
             }
             entry<DistroManagementDestination> {

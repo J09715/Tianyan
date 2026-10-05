@@ -33,6 +33,123 @@ val MIGRATION_28_29 = object : Migration(28, 29) {
 }
 
 /**
+ * v29 → v30：Agent 多 lane 并发执行模型重构。
+ * - 新增 6 表（harness_entries / lanes / lane_results / operations / queue_items / usage）
+ * - 删除已重构的 harness_messages（生产代码零引用；DROP 用 runCatching 兜底，
+ *   存量设备可能已通过其他路径越过 v30）
+ *
+ * DDL 从 `schemas/top.wkbin.taixu.core.database.AppDatabase/30.json` 的
+ * createSql 逐字提取（替换 `${TABLE_NAME}`），非手写，保证与 Room 校验的 identityHash 一致。
+ * 本迁移此前从未注册（addMigrations 缺口），缺失期间旧版用户升级会走
+ * fallbackToDestructiveMigration 静默丢全部 Harness 数据。
+ */
+val MIGRATION_29_30 = object : Migration(29, 30) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `harness_entries` (
+                `sequence` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                `id` TEXT NOT NULL,
+                `sessionId` TEXT NOT NULL,
+                `parentId` TEXT,
+                `createdAt` INTEGER NOT NULL,
+                `entryType` TEXT NOT NULL,
+                `customType` TEXT,
+                `payloadJson` TEXT NOT NULL
+            )
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `harness_lanes` (
+                `sessionId` TEXT NOT NULL,
+                `name` TEXT NOT NULL,
+                `leafId` TEXT,
+                `currentOperationId` TEXT,
+                `modelId` TEXT,
+                `thinkingLevel` TEXT NOT NULL,
+                `faulted` INTEGER NOT NULL,
+                `updatedAt` INTEGER NOT NULL,
+                PRIMARY KEY(`sessionId`, `name`)
+            )
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `harness_lane_results` (
+                `sessionId` TEXT NOT NULL,
+                `laneName` TEXT NOT NULL,
+                `operationId` TEXT NOT NULL,
+                `outcome` TEXT NOT NULL,
+                `finalEntryId` TEXT,
+                `detailsJson` TEXT,
+                `completedAt` INTEGER NOT NULL,
+                PRIMARY KEY(`sessionId`, `laneName`)
+            )
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `harness_operations` (
+                `id` TEXT NOT NULL,
+                `sessionId` TEXT NOT NULL,
+                `laneName` TEXT NOT NULL,
+                `kind` TEXT NOT NULL,
+                `status` TEXT NOT NULL,
+                `phase` TEXT NOT NULL,
+                `startedAt` INTEGER NOT NULL,
+                `updatedAt` INTEGER NOT NULL,
+                `startLeafId` TEXT,
+                `stateJson` TEXT NOT NULL,
+                `pendingEffectKind` TEXT,
+                `pendingEffectId` TEXT,
+                `replayPolicy` TEXT,
+                `attempt` INTEGER NOT NULL,
+                PRIMARY KEY(`id`)
+            )
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `harness_queue_items` (
+                `id` TEXT NOT NULL,
+                `sessionId` TEXT NOT NULL,
+                `laneName` TEXT NOT NULL,
+                `operationId` TEXT,
+                `queueType` TEXT NOT NULL,
+                `createdAt` INTEGER NOT NULL,
+                `payloadJson` TEXT NOT NULL,
+                PRIMARY KEY(`id`)
+            )
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `harness_usage` (
+                `sequence` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                `id` TEXT NOT NULL,
+                `sessionId` TEXT NOT NULL,
+                `operationId` TEXT,
+                `entryId` TEXT,
+                `provider` TEXT,
+                `modelId` TEXT,
+                `inputTokens` INTEGER NOT NULL,
+                `outputTokens` INTEGER NOT NULL,
+                `reasoningTokens` INTEGER NOT NULL,
+                `cacheReadTokens` INTEGER NOT NULL,
+                `cacheWriteTokens` INTEGER NOT NULL,
+                `estimatedCostUsd` REAL,
+                `adjustment` INTEGER NOT NULL,
+                `detailsJson` TEXT,
+                `createdAt` INTEGER NOT NULL
+            )
+            """.trimIndent(),
+        )
+        runCatching { db.execSQL("DROP TABLE IF NOT EXISTS harness_messages") }
+    }
+}
+
+/**
  * 审批请求绑定 harness operation 与参数摘要，并引入过期时间：
  * - operationId：审批所属运行，恢复执行前校验归属，防跨运行重放；
  * - argsHash：argumentsJson 的 SHA-256，防"批准旧参数、执行新参数"；

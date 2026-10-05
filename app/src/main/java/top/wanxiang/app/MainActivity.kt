@@ -7,7 +7,6 @@ import top.wanxiang.app.ui.onboarding.OnboardingViewModel
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
@@ -15,57 +14,25 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import top.wanxiang.app.ui.components.RuntimeButton as Button
-import top.wanxiang.app.ui.components.RuntimeCircularProgressIndicator as CircularProgressIndicator
-import top.wanxiang.app.ui.components.RuntimeLinearProgressIndicator as LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import top.wanxiang.app.ui.components.RuntimeTextButton as TextButton
 import androidx.compose.runtime.LaunchedEffect
-import kotlin.math.roundToInt
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.MutableState
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import top.wanxiang.app.core.datastore.AppearancePreferences
-import top.wanxiang.app.core.model.AppUpdateInfo
-import top.wanxiang.app.core.network.AppUpdateManager
 import top.wanxiang.app.runtime.service.RuntimeServiceController
-import top.wanxiang.app.ui.components.RuntimeIcon
-import top.wanxiang.app.ui.components.RuntimeIconName
 import top.wanxiang.app.ui.navigation.WanXiangNavHost
 import top.wanxiang.app.ui.theme.WanXiangTheme
-import androidx.core.net.toUri
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 
 import javax.inject.Inject
@@ -77,12 +44,6 @@ import top.wanxiang.app.service.adb.AdbNotificationManager
 class MainActivity : AppCompatActivity() {
     @Inject
     lateinit var settingsDataStore: AppearancePreferences
-
-    @Inject
-    lateinit var updatePreferences: top.wanxiang.app.core.datastore.UpdatePreferences
-
-    @Inject
-    lateinit var appUpdateManager: AppUpdateManager
 
     @Inject
     lateinit var runtimeServiceController: RuntimeServiceController
@@ -155,234 +116,6 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
 
-                // 启动时静默检查更新
-                var updateInfo by remember { mutableStateOf<AppUpdateInfo?>(null) }
-                var downloadProgress by remember { mutableStateOf<Float?>(null) }
-                var downloadBytesPair by remember { mutableStateOf<Pair<Long, Long>?>(null) }
-                // 下载协程句柄：更新对话框下载中提供「取消下载」，用户不再被锁死在弹窗里
-                var downloadJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-                var isDownloading by remember { mutableStateOf(false) }
-                var downloadFailed by remember { mutableStateOf(false) }
-                val scope = rememberCoroutineScope()
-                val mainContext = LocalContext.current
-                val currentVersionName = remember {
-                    try {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            mainContext.packageManager.getPackageInfo(
-                                mainContext.packageName,
-                                PackageManager.PackageInfoFlags.of(0),
-                            ).versionName
-                        } else {
-                            @Suppress("DEPRECATION")
-                            mainContext.packageManager.getPackageInfo(mainContext.packageName, 0).versionName
-                        }
-                    } catch (_: Exception) {
-                        null
-                    } ?: "0.0.0"
-                }
-
-                LaunchedEffect(onboarding.completed) {
-                    if (!onboarding.completed) return@LaunchedEffect
-                    val autoCheck = updatePreferences.autoCheckUpdates.first()
-                    if (!autoCheck) {
-                        android.util.Log.i("WanxiangUpdate", "auto check 关闭，跳过")
-                        return@LaunchedEffect
-                    }
-                    // P0-1 冷却：同 versionCode 用户已「稍后再说」→ 本次不弹；上次自动检查 <6h → 本次跳过
-                    val dismissedCode = updatePreferences.dismissedUpdateVersionCode.first()
-                    val lastCheckMs = updatePreferences.lastUpdateCheckTimeMs.first()
-                    val nowMs = System.currentTimeMillis()
-                    val ageMin = (nowMs - lastCheckMs) / 60_000
-                    val coolingDown = nowMs - lastCheckMs < top.wanxiang.app.core.datastore.UpdatePreferences.UPDATE_AUTO_CHECK_COOLDOWN_MS
-                    android.util.Log.i("WanxiangUpdate", "上次检查 ${ageMin} 分钟前（6h 冷却）→ cooling=$coolingDown dismissedCode=$dismissedCode")
-                    if (coolingDown) return@LaunchedEffect
-                    updatePreferences.setLastUpdateCheckTime(nowMs)
-                    val res = appUpdateManager.checkUpdateMerged(currentVersionName)
-                    res.onSuccess { info ->
-                        android.util.Log.i("WanxiangUpdate", "云端 ${info.latestVersion} hasUpdate=${info.hasUpdate} versionCode=${info.versionCode}")
-                        if (info.hasUpdate && info.versionCode != dismissedCode) {
-                            // P0-2 忙碌延后：延迟 3 秒，避开用户冷启后立刻输入或操作的窗口
-                            kotlinx.coroutines.delay(3_000L)
-                            updateInfo = info
-                        }
-                    }.onFailure {
-                        android.util.Log.w("WanxiangUpdate", "检查失败：${it.message}")
-                    }
-                }
-
-                updateInfo?.let { info ->
-                    RuntimeAlertDialog(
-                        onDismissRequest = {
-                            if (!isDownloading && !info.forceUpdate) {
-                                updateInfo = null
-                                scope.launch { updatePreferences.setDismissedUpdateVersionCode(info.versionCode) }
-                            }
-                        },
-                        title = {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            ) {
-                                RuntimeIcon(
-                                    name = RuntimeIconName.Refresh,
-                                    modifier = Modifier.size(24.dp),
-                                    tint = MaterialTheme.colorScheme.primary,
-                                )
-                                Text(stringResource(R.string.wanxiang_update_available, info.latestVersion), fontWeight = FontWeight.Bold)
-                            }
-                        },
-                        text = {
-                            Column(
-                                modifier = Modifier.verticalScroll(rememberScrollState()),
-                                verticalArrangement = Arrangement.spacedBy(10.dp),
-                            ) {
-                                Surface(
-                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                                    shape = RoundedCornerShape(8.dp),
-                                ) {
-                                    Text(
-                                        text = stringResource(R.string.wanxiang_update_versions, info.currentVersion, info.latestVersion),
-                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                    )
-                                }
-                                if (info.releaseNotes.isNotBlank()) {
-                                    Surface(
-                                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                        shape = RoundedCornerShape(10.dp),
-                                        modifier = Modifier.fillMaxWidth(),
-                                    ) {
-                                        // 更新说明逐行呈现：数据带 \n 按行拆；旧数据一整句用「；」
-                                        // 分隔时按分句拆行——不再挤成一坨
-                                        val noteLines = if (info.releaseNotes.contains('\n')) {
-                                            info.releaseNotes.lines()
-                                        } else {
-                                            info.releaseNotes.split('；')
-                                        }.map { it.trim() }.filter { it.isNotBlank() }
-                                        Column(
-                                            modifier = Modifier.padding(12.dp),
-                                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                                        ) {
-                                            noteLines.forEach { line ->
-                                                Text(
-                                                    text = line,
-                                                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                                if (isDownloading) {
-                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        Text(stringResource(R.string.wanxiang_update_downloading_package), style = MaterialTheme.typography.labelMedium)
-                                        LinearProgressIndicator(
-                                            progress = { (downloadProgress ?: 0f).coerceIn(0f, 1f) },
-                                            modifier = Modifier.fillMaxWidth(),
-                                        )
-                                        val pct = ((downloadProgress ?: 0f) * 100).roundToInt()
-                                        val mb = downloadBytesPair
-                                        Text(
-                                            text = if (mb != null && mb.second > 0) {
-                                                "$pct% · ${"%.1f".format(mb.first / 1048576.0)} / ${"%.1f".format(mb.second / 1048576.0)} MB"
-                                            } else {
-                                                if (downloadProgress != null) "$pct%" else "准备下载…"
-                                            },
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    }
-                                }
-                                if (downloadFailed) {
-                                    // 下载失败必须可见：不再静默停止
-                                    Text(
-                                        text = stringResource(R.string.wanxiang_update_download_failed),
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.error,
-                                    )
-                                }
-                            }
-                        },
-                        confirmButton = {
-                            val apkUrl = info.apkDownloadUrl
-                            if (apkUrl != null) {
-                                Button(
-                                    onClick = {
-                                        isDownloading = true
-                                        downloadProgress = 0f
-                                        downloadBytesPair = null
-                                        downloadFailed = false
-                                        downloadJob = scope.launch {
-                                            // 这里拿到的就是 0.5，一步到位不再让用户 0.4→0.5 二级跳。
-                                            val fresh = runCatching {
-                                                appUpdateManager.checkUpdateMerged(currentVersionName).getOrNull()
-                                            }.getOrNull()
-                                            val useInfo = if (fresh != null && fresh.hasUpdate && fresh.versionCode > info.versionCode) {
-                                                updateInfo = fresh
-                                                fresh
-                                            } else info
-                                            val useUrl = useInfo.apkDownloadUrl ?: apkUrl
-                                            val res = appUpdateManager.downloadApk(useUrl, useInfo.apkSizeBytes) { dl, tot ->
-                                                downloadBytesPair = if (tot != null && tot > 0) dl to tot else dl to (useInfo.apkSizeBytes ?: 0L)
-                                                if (tot != null && tot > 0) downloadProgress = dl.toFloat() / tot.toFloat()
-                                            }
-                                            isDownloading = false
-                                            res.onSuccess { apkFile ->
-                                                downloadProgress = 1f
-                                                appUpdateManager.installApk(apkFile)
-                                                updateInfo = null
-                                            }.onFailure {
-                                                // 下载失败：在更新对话框内给出可见的错误文案（跟随现有 UI 模式）
-                                                downloadFailed = true
-                                            }
-                                        }
-                                    },
-                                    enabled = !isDownloading,
-                                ) {
-                                    Text(stringResource(if (isDownloading) R.string.wanxiang_downloading else R.string.wanxiang_update_now))
-                                }
-                            } else {
-                                Button(
-                                    onClick = {
-                                        runCatching {
-                                            startActivity(Intent(Intent.ACTION_VIEW,
-                                                info.releaseUrl.toUri()))
-                                        }
-                                        updateInfo = null
-                                    },
-                                ) {
-                                    Text(stringResource(R.string.wanxiang_open_github))
-                                }
-                            }
-                        },
-                        dismissButton = {
-                            if (isDownloading) {
-                                // 下载中给出口：取消回到可重试状态，不再锁死对话框
-                                TextButton(
-                                    onClick = {
-                                        downloadJob?.cancel()
-                                        downloadJob = null
-                                        isDownloading = false
-                                        downloadProgress = null
-                                        downloadBytesPair = null
-                                    },
-                                ) { Text("取消下载") }
-                            } else if (!info.forceUpdate) {
-                                // 强制更新时不显示「稍后再说」，用户只能去下载
-                                TextButton(
-                                    onClick = {
-                                        updateInfo = null
-                                        // P0-1：记下这个 versionCode 已被用户 dismiss，下次同版本不再弹
-                                        scope.launch { updatePreferences.setDismissedUpdateVersionCode(info.versionCode) }
-                                    },
-                                ) {
-                                    Text(stringResource(R.string.wanxiang_later))
-                                }
-                            }
-                        },
-                    )
-                }
-
                 when {
                     !onboarding.loaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
@@ -390,7 +123,6 @@ class MainActivity : AppCompatActivity() {
                     onboarding.completed -> WanXiangNavHost(globalNavigationBus = globalNavigationBus)
                     else -> OnboardingScreen(onboardingViewModel)
                 }
-                // 下载进度不再挂全局顶部横幅——只呈现在更新对话框内部（用户操作页），见上方 updateInfo dialog。
                 // 全局 git 凭据弹窗宿主：容器 helper 走文件 IPC 请求凭据时，无论在哪个页面都能立即弹出。
                 top.wanxiang.app.ui.chat.GlobalCredentialDialogHost(gitCredentialIpcBridge)
                 }

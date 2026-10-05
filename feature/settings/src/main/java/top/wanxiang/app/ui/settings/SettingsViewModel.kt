@@ -68,7 +68,6 @@ class SettingsViewModel @Inject constructor(
     private val linuxRuntime: top.wanxiang.app.runtime.LinuxRuntime,
     private val pathManager: RuntimePathManager,
     private val linuxEnvironmentManager: LinuxEnvironmentManager,
-    private val appUpdateManager: top.wanxiang.app.core.network.AppUpdateManager,
     private val subagentRepository: top.wanxiang.app.core.database.AgentSubagentRepository,
     private val agentSkillRepository: AgentSkillRepository,
     private val mcpServerRepository: McpServerRepository,
@@ -81,7 +80,6 @@ class SettingsViewModel @Inject constructor(
     private val profileBackupCodec: AiProfileBackupCodec,
     private val webChatBridgeServer: top.wanxiang.app.runtime.webchat.WebChatBridgeServer? = null,
     private val browserPrefs: BrowserPreferences,
-    private val wanxiangCloudClient: top.wanxiang.app.core.network.WanxiangCloudClient,
 ) : ViewModel() {
     val installedDistros = linuxRuntime.installedDistros
     val activeDistroId = linuxRuntime.activeDistroId
@@ -213,10 +211,6 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settingsDataStore.setChengmingBackgroundUri(uri) }
     }
 
-    // ---- 应用版本更新机制 ----
-    val autoCheckUpdates: StateFlow<Boolean> = settingsDataStore.autoCheckUpdates
-        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
-
     /** 沙箱内置 HTTP 代理（用户在设置里填 `http://host:port` 让 git/curl/apt 全走），空 = 不启用回落 Android 全局。 */
     val sandboxHttpProxy: StateFlow<String> = settingsDataStore.sandboxHttpProxy
         .stateIn(viewModelScope, SharingStarted.Eagerly, "")
@@ -225,103 +219,9 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settingsDataStore.setSandboxHttpProxy(value) }
     }
 
-    val webChatStatus: StateFlow<top.wanxiang.app.runtime.webchat.WebChatServerStatus> =
-        webChatBridgeServer?.status ?: MutableStateFlow(top.wanxiang.app.runtime.webchat.WebChatServerStatus()).asStateFlow()
-
-    fun toggleWebChatServer(enabled: Boolean, port: Int = 8899) {
-        if (enabled) {
-            webChatBridgeServer?.start(port)
-        } else {
-            webChatBridgeServer?.stop()
-        }
-    }
-
-    private val _updateCheckState = MutableStateFlow<top.wanxiang.app.core.model.UpdateCheckState>(top.wanxiang.app.core.model.UpdateCheckState.Idle)
-    val updateCheckState: StateFlow<top.wanxiang.app.core.model.UpdateCheckState> = _updateCheckState.asStateFlow()
-
-    private val _announcements = MutableStateFlow<List<top.wanxiang.app.core.model.CloudAnnouncement>>(emptyList())
-    val announcements: StateFlow<List<top.wanxiang.app.core.model.CloudAnnouncement>> = _announcements.asStateFlow()
-    private val _announcementLoading = MutableStateFlow(false)
-    val announcementLoading: StateFlow<Boolean> = _announcementLoading.asStateFlow()
-    private val _announcementError = MutableStateFlow<String?>(null)
-    val announcementError: StateFlow<String?> = _announcementError.asStateFlow()
-
-    /** 拉取公告列表（断网时静默失败，显示错误提示而非崩溃）。 */
-    fun loadAnnouncements() {
-        viewModelScope.launch {
-            _announcementLoading.value = true
-            _announcementError.value = null
-            wanxiangCloudClient.getAnnouncements(20)
-                .onSuccess { _announcements.value = it }
-                .onFailure { err -> _announcementError.value = err.message ?: "公告加载失败" }
-            _announcementLoading.value = false
-        }
-    }
-
-    private val _downloadProgress = MutableStateFlow<Float?>(null)
-    val downloadProgress: StateFlow<Float?> = _downloadProgress.asStateFlow()
-
-    private val _isDownloading = MutableStateFlow(false)
-    val isDownloading: StateFlow<Boolean> = _isDownloading.asStateFlow()
-
-    private val _downloadedBytes = MutableStateFlow(0L)
-    val downloadedBytes: StateFlow<Long> = _downloadedBytes.asStateFlow()
-    private val _totalBytes = MutableStateFlow<Long?>(null)
-    val totalBytes: StateFlow<Long?> = _totalBytes.asStateFlow()
-
-    fun setAutoCheckUpdates(enabled: Boolean) {
-        viewModelScope.launch { settingsDataStore.setAutoCheckUpdates(enabled) }
-    }
-
     /** 清空全部首次使用引导标记，下次进入相应页面会重新展示引导遮罩。 */
     fun replayFirstUseGuides() {
         viewModelScope.launch { settingsDataStore.clearFirstUseGuides() }
-    }
-
-    fun checkForUpdates(currentVersion: String) {
-        viewModelScope.launch {
-            _updateCheckState.value = top.wanxiang.app.core.model.UpdateCheckState.Checking
-            val res = appUpdateManager.checkUpdateMerged(currentVersion)
-            res.onSuccess { info ->
-                _updateCheckState.value = top.wanxiang.app.core.model.UpdateCheckState.Success(info)
-            }.onFailure { err ->
-                _updateCheckState.value = top.wanxiang.app.core.model.UpdateCheckState.Error(err.message ?: "检查更新失败，请检查网络")
-            }
-        }
-    }
-
-    fun downloadAndInstall(apkUrl: String) {
-        viewModelScope.launch {
-            _isDownloading.value = true
-            _downloadProgress.value = 0f
-            _downloadedBytes.value = 0L
-            _totalBytes.value = null
-            val res = appUpdateManager.downloadApk(apkUrl) { downloaded, total ->
-                _downloadedBytes.value = downloaded
-                _totalBytes.value = total
-                if (total != null && total > 0) {
-                    _downloadProgress.value = downloaded.toFloat() / total.toFloat()
-                } else {
-                    _downloadProgress.value = null
-                }
-            }
-            _isDownloading.value = false
-            res.onSuccess { apkFile ->
-                _downloadProgress.value = 1f
-                appUpdateManager.installApk(apkFile)
-            }.onFailure { err ->
-                _downloadProgress.value = null
-                _updateCheckState.value = top.wanxiang.app.core.model.UpdateCheckState.Error("下载更新包失败：${err.message}")
-            }
-        }
-    }
-
-    fun clearUpdateState() {
-        _updateCheckState.value = top.wanxiang.app.core.model.UpdateCheckState.Idle
-        _downloadProgress.value = null
-        _isDownloading.value = false
-        _downloadedBytes.value = 0L
-        _totalBytes.value = null
     }
 
     fun switchActiveDistro(distroId: String) {

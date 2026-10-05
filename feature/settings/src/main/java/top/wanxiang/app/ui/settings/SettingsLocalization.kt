@@ -122,20 +122,6 @@ private fun legacyStringResource(source: String): Int? = when (source) {
         "开发者控制台" -> R.string.settings_legacy_0101
         "开发者调试与控制台" -> R.string.settings_legacy_0102
         "实时查看 PRoot 进程与命令追踪" -> R.string.settings_legacy_0103
-        "关于与社区" -> R.string.settings_legacy_0104
-        "关于万象 · WanXiang" -> R.string.settings_legacy_0105
-        "关于、更新与官方社区" -> R.string.settings_legacy_0106
-        "应用版本与更新" -> R.string.settings_legacy_0107
-        "检查新版本" -> R.string.settings_legacy_0108
-        "检查中…" -> R.string.settings_legacy_0109
-        "已是最新版本" -> R.string.settings_legacy_0110
-        "检查更新失败" -> R.string.settings_legacy_0111
-        "启动时自动检查更新" -> R.string.settings_legacy_0112
-        "应用启动时在后台静默检测新版本" -> R.string.settings_legacy_0113
-        "官方社区与开源" -> R.string.settings_legacy_0114
-        "GitHub 开源项目" -> R.string.settings_legacy_0115
-        "万象官方交流群" -> R.string.settings_legacy_0116
-        "官方 QQ 交流群" -> R.string.settings_legacy_0117
         "前往 GitHub 下载" -> R.string.settings_legacy_0118
         "运行平稳" -> R.string.settings_legacy_0119
         "未配置" -> R.string.settings_legacy_0120
