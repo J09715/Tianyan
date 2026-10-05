@@ -9,9 +9,12 @@ on:
 permissions:
   contents: write
 
+# 保留 concurrency，但 cancel-in-progress 关闭：
+# 之前 fork 账号（免费 tier）一有并发的 workflow 排队，旧任务就被 cancel-in-progress 干掉，
+# 导致永远 queued→cancelled。关掉它让后续构建排队等待而不是取消。
 concurrency:
   group: apk-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   apk:
