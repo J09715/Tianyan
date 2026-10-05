@@ -430,6 +430,8 @@ class SettingsDataStore @Inject constructor(
         }
     }
 
+    private val lastSeenAnnouncementIdKey = androidx.datastore.preferences.core.longPreferencesKey("wanxiang_last_seen_announcement_id")
+
     /** 最近一次已读/已弹公告的最大 id，用于判断是否有新公告需自动弹出。 */
     val lastSeenAnnouncementId: Flow<Long> = context.settingsDataStore.data.map { it[lastSeenAnnouncementIdKey] ?: 0L }
 
