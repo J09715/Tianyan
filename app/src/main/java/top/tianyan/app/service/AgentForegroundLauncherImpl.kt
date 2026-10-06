@@ -1,4 +1,4 @@
-package top.wanxiang.app.service
+package top.tianyan.app.service
 
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext

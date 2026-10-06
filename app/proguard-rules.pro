@@ -6,6 +6,7 @@
 # Persisted polymorphic payloads may use their declared serializable class name. Keep only
 # those class names while still allowing unused classes/members to shrink and optimize.
 -keep,allowshrinking,allowoptimization @kotlinx.serialization.Serializable class top.wanxiang.app.**
+-keep,allowshrinking,allowoptimization @kotlinx.serialization.Serializable class top.tianyan.app.**
 
 # JNI symbol lookup includes the declaring class and method names. This precise rule also
 # covers zstd-jni native entry points without retaining the whole dependency.

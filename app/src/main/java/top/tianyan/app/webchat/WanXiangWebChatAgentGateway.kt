@@ -1,4 +1,4 @@
-package top.wanxiang.app.webchat
+package top.tianyan.app.webchat
 
 import java.util.UUID
 import javax.inject.Inject

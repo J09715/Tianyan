@@ -1,4 +1,4 @@
-package top.wanxiang.app.di
+package top.tianyan.app.di
 
 import android.content.Context
 import androidx.room.Room
@@ -60,7 +60,7 @@ import top.wanxiang.app.runtime.pty.PtyManager
 import top.wanxiang.app.runtime.pty.NativePtyManager
 import top.wanxiang.app.runtime.service.LocalServiceLauncher
 import top.wanxiang.app.runtime.service.LocalServiceLauncherImpl
-import top.wanxiang.app.service.AgentForegroundLauncherImpl
+import top.tianyan.app.service.AgentForegroundLauncherImpl
 import top.wanxiang.app.harness.AgentForegroundLauncher
 import dagger.Module
 import dagger.Provides

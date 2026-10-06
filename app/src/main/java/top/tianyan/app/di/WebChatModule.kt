@@ -1,11 +1,11 @@
-package top.wanxiang.app.di
+package top.tianyan.app.di
 
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import top.wanxiang.app.runtime.webchat.WebChatAgentGateway
-import top.wanxiang.app.webchat.TianyanWebChatAgentGateway
+import top.tianyan.app.webchat.TianyanWebChatAgentGateway
 
 @Module
 @InstallIn(SingletonComponent::class)

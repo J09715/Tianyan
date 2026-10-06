@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="app/src/main/res/drawable/wanxiang_logo.webp" width="96" alt="万象 Logo" />
+  <img src="app/src/main/res/drawable/wanxiang_logo.xml" width="96" alt="万象 Logo" />
 </p>
 
-<h1 align="center">万象 · WanXiang</h1>
+<h1 align="center">天衍 · Tianyan</h1>
 
-<p align="center"><strong>掌中万象，造物随心。</strong></p>
+<p align="center"><strong>掌中沙盒 · 自主 Agent · 上游：万象（WanXiang）</strong></p>
 
 <p align="center">
   Android 无 Root Linux Runtime · 智能体引擎 (Agent Harness) · 原生 PTY 终端 · 移动开发工作区 · 无线 ADB 诊断
@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  🐧 <strong>官方 QQ 交流群：905971993</strong>
+  🐧 <strong>官方 QQ 交流群：000000000</strong>
 </p>
 
 <p align="center">
@@ -63,7 +63,7 @@
 
 ## 🚀 快速上手
 
-1. **获取安装包**：加入官方 QQ 群 **905971993**，置顶公告下载最新 Release APK（arm64-v8a，Android 10+，推荐 Android 12+）。
+1. **获取安装包**：加入官方 QQ 群 **000000000**，置顶公告下载最新 Release APK（arm64-v8a，Android 10+，推荐 Android 12+）。
 2. **就绪沙箱**：首次进入跟随「启程向导」选择 Linux 发行版（如 Ubuntu 24.04），联网完成 RootFS 初始化（国内镜像自动加速）。
 3. **配置模型**：在设置中配置你的 API Key（支持 DeepSeek、Claude、OpenAI、SiliconFlow 等），或在沙箱内部署 `llama.cpp` 本地模型。
 4. **开启工作区**：在工坊中创建新工程，或从 GitHub / 本地 ZIP 导入已有项目。
@@ -128,7 +128,7 @@ $env:JAVA_HOME="C:\Program Files\Android\Studio\jbr"
 
 限制从未真正消失；但自由可以来自身处限制之中，仍有能力去构筑、去验证属于自己的世界。
 
-欢迎加入官方 QQ 群 **905971993**，分享你的真机使用记录！
+欢迎加入官方 QQ 群 **000000000**，分享你的真机使用记录！
 
 ---
 

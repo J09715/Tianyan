@@ -1,4 +1,4 @@
-package top.wanxiang.app.service.adb
+package top.tianyan.app.service.adb
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -19,8 +19,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
-import top.wanxiang.app.MainActivity
-import top.wanxiang.app.R
+import top.tianyan.app.MainActivity
+import top.tianyan.app.R
 import top.wanxiang.app.runtime.bridge.adb.EmbeddedAdbManager
 
 /**

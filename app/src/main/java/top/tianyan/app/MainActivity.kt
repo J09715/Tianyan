@@ -1,4 +1,4 @@
-package top.wanxiang.app
+package top.tianyan.app
 
 import top.wanxiang.app.ui.components.RuntimeAlertDialog
 import top.wanxiang.app.ui.onboarding.OnboardingScreen
@@ -33,7 +33,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import top.wanxiang.app.core.datastore.AppearancePreferences
-import top.wanxiang.app.runtime.service.RuntimeServiceController
+import top.tianyan.app.runtime.service.RuntimeServiceController
 import top.wanxiang.app.ui.navigation.TianyanNavHost
 import top.wanxiang.app.ui.theme.TianyanTheme
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -41,7 +41,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import javax.inject.Inject
 import top.wanxiang.app.core.common.navigation.AppNavigationTarget
 import top.wanxiang.app.core.common.navigation.GlobalNavigationBus
-import top.wanxiang.app.service.adb.AdbNotificationManager
+import top.tianyan.app.service.adb.AdbNotificationManager
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {

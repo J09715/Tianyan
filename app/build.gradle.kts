@@ -6,12 +6,12 @@ import java.util.Properties
 import org.gradle.kotlin.dsl.configure
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
-val appVersionName = "0.13.35"
-val appVersionCode = 54
+val appVersionName = "0.14.0"
+val appVersionCode = 55
 
 // WanXiangDev 双包构建开关：CI（.github/workflows/wanxiangdev-build.yml）设 WANXIANG_DEV_BUILD=1 时，
-// 产出独立预览包 top.wanxiang.app.dev / 应用名 WanXiangDev / 版本后缀 -dev，
-// 与正式版（top.wanxiang.app）及本地调试包（top.wanxiang.app.debug）完全共存互不干扰。
+// 产出独立预览包 top.tianyan.app.dev / 应用名 TianyanDev / 版本后缀 -dev，
+// 与正式版（top.tianyan.app）及本地调试包（top.tianyan.app.debug）完全共存互不干扰。
 val wanxiangDevBuild = System.getenv("WANXIANG_DEV_BUILD") == "1"
 
 plugins {
@@ -24,19 +24,19 @@ plugins {
 }
 
 extensions.configure<ApplicationExtension> {
-    namespace = "top.wanxiang.app"
+    namespace = "top.tianyan.app"
     resourcePrefix = "wanxiang_"
     compileSdk = 37
     ndkVersion = "30.0.15729638"
 
     defaultConfig {
-        applicationId = if (wanxiangDevBuild) "top.wanxiang.app.dev" else "top.wanxiang.app"
+        applicationId = if (wanxiangDevBuild) "top.tianyan.app.dev" else "top.tianyan.app"
         minSdk = 29
         targetSdk = 37
         versionCode = appVersionCode
         versionName = appVersionName
-        // 应用名统一走 manifest placeholder：WanXiangDev 构建显示 "WanXiangDev"，其余显示 "万象"。
-        manifestPlaceholders["appLabel"] = if (wanxiangDevBuild) "WanXiangDev" else "万象"
+        // 应用名统一走 manifest placeholder：TianyanDev 构建显示 "TianyanDev"，其余显示 "天衍"。
+        manifestPlaceholders["appLabel"] = if (wanxiangDevBuild) "TianyanDev" else "天衍"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             abiFilters += "arm64-v8a"
@@ -93,7 +93,7 @@ extensions.configure<ApplicationExtension> {
     buildTypes {
         debug {
             // WanXiangDev 双包构建：包名与应用名已在 defaultConfig 按 wanxiangDevBuild 分流，
-            // 此处只控制后缀——本地调试包保持 top.wanxiang.app.debug/-debug，
+            // 此处只控制后缀——本地调试包保持 top.tianyan.app.debug/-debug，
             // WanXiangDev 预览包（top.wanxiang.app.dev）不再叠加额外后缀，版本后缀为 -dev。
             if (!wanxiangDevBuild) {
                 applicationIdSuffix = ".debug"
@@ -101,7 +101,7 @@ extensions.configure<ApplicationExtension> {
             versionNameSuffix = if (wanxiangDevBuild) "-dev" else "-debug"
         }
         release {
-            manifestPlaceholders["appLabel"] = if (wanxiangDevBuild) "WanXiangDev" else "万象"
+            manifestPlaceholders["appLabel"] = if (wanxiangDevBuild) "TianyanDev" else "天衍"
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -170,7 +170,6 @@ dependencies {
 }
 
 dependencies {
-    debugImplementation(libs.leakcanary.android)
     implementation(project(":core:common"))
     implementation(project(":core:model"))
     implementation(project(":core:database"))
@@ -283,7 +282,7 @@ tasks.configureEach {
 
 extensions.configure<ApplicationAndroidComponentsExtension> {
     onVariants { variant ->
-        val buildAppName = "wanxiang-v${appVersionName}-${variant.name}.apk"
+        val buildAppName = "tianyan-v${appVersionName}-${variant.name}.apk"
         variant.outputs.forEach { output ->
             output.outputFileName.set(buildAppName)
         }

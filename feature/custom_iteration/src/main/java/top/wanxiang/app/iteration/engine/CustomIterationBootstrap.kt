@@ -15,7 +15,7 @@ import java.io.File
 object CustomIterationBootstrap {
 
     const val WORKSPACE_NAME = "custom_wanxiang"
-    const val OFFICIAL_REPO = "https://github.com/peakSee/Tianyan"
+    const val OFFICIAL_REPO = "https://github.com/J09715/Tianyan"
 
     const val BOOTSTRAP_PROMPT = """我准备在天衍（Tianyan）的手机 Linux 虚拟沙盒中进行 天衍（Tianyan）自定义迭代。
 

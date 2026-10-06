@@ -1,4 +1,4 @@
-package top.wanxiang.app.service.adb
+package top.tianyan.app.service.adb
 
 import android.content.BroadcastReceiver
 import android.content.Context

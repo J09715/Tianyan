@@ -1,4 +1,4 @@
-package top.wanxiang.app.di
+package top.tianyan.app.di
 
 import top.wanxiang.app.core.tools.ToolRuntimeAdapter
 import top.wanxiang.app.runtime.tools.CodexToolInstaller

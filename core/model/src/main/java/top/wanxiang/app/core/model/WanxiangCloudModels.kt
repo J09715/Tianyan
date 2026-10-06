@@ -15,15 +15,3 @@ data class CloudLatestVersion(
     val forceUpdate: Boolean = false,
 )
 
-/**
- * 云端公告——`/app-api/wanxiang/announcement/list` 的数组元素。
- * type：1=通知 2=公告；content 为富文本 HTML；createTime 为毫秒时间戳。
- */
-@Serializable
-data class CloudAnnouncement(
-    val id: Long = 0,
-    val title: String = "",
-    val type: Int = 1,
-    val content: String = "",
-    val createTime: Long = 0,
-)

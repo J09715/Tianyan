@@ -19,7 +19,7 @@ wanxiang-custom-iteration-module/
     │   │   └── skills/
     │   │       └── wanxiang-custom-iteration/
     │   │           └── SKILL.md            # Agent 专有开发与 PR 规范 Skill
-    │   └── java/top/peakSee/Tianyan/
+    │   └── java/top/J09715/Tianyan/
     │       ├── iteration/engine/
     │       │   ├── CustomIterationBootstrap.kt   # 自举引擎（工作区初始化/引导 Prompt 生成）
     │       │   └── TianyanDevBuildCoordinator.kt   # CI 调度与 APK 下载校验协调器

@@ -13,7 +13,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import top.wanxiang.app.core.model.CloudAnnouncement
 import top.wanxiang.app.core.model.CloudLatestVersion
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -39,27 +38,6 @@ class TianyanCloudClient @Inject constructor(
             if (code != null && code != 0) throw IllegalStateException("云端配置 code=$code")
             val data = root["data"]?.jsonObject ?: return@runCatching emptyMap()
             data.entries.associate { (k, v) -> k to (v.jsonPrimitive.contentOrNull ?: v.toString()) }
-        }
-    }
-
-    /** 拉取公告列表（按时间倒序）。 */
-    suspend fun getAnnouncements(count: Int = 10): Result<List<CloudAnnouncement>> = withContext(Dispatchers.IO) {
-        runCatching {
-            val body = executeGet("$BASE_URL/app-api/wanxiang/announcement/list?count=${count.coerceIn(1, 50)}")
-            val root = json.parseToJsonElement(body).jsonObject
-            val code = root["code"]?.jsonPrimitive?.intOrNull
-            if (code != null && code != 0) throw IllegalStateException("公告 code=$code")
-            val arr = root["data"]?.jsonArray ?: return@runCatching emptyList()
-            arr.map { el ->
-                val obj = el.jsonObject
-                CloudAnnouncement(
-                    id = obj["id"]?.jsonPrimitive?.longOrNull ?: 0,
-                    title = obj["title"]?.jsonPrimitive?.contentOrNull.orEmpty(),
-                    type = obj["type"]?.jsonPrimitive?.intOrNull ?: 1,
-                    content = obj["content"]?.jsonPrimitive?.contentOrNull.orEmpty(),
-                    createTime = obj["createTime"]?.jsonPrimitive?.longOrNull ?: 0,
-                )
-            }
         }
     }
 

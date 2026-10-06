@@ -1,4 +1,4 @@
-package top.wanxiang.app
+package top.tianyan.app
 
 import android.app.Application
 import top.wanxiang.app.core.common.logging.CrashReporter
@@ -7,7 +7,7 @@ import top.wanxiang.app.core.datastore.SettingsDataStore
 import top.wanxiang.app.core.database.AgentSkillRepository
 import top.wanxiang.app.core.database.McpServerRepository
 import top.wanxiang.app.core.database.SkillScanRoot
-import top.wanxiang.app.service.AgentForegroundService
+import top.tianyan.app.service.AgentForegroundService
 import top.wanxiang.app.runtime.privilege.PrivilegeManager
 import top.wanxiang.app.harness.browser.BrowserMcpBootstrap
 import dagger.hilt.android.HiltAndroidApp

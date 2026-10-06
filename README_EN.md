@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="app/src/main/res/drawable/wanxiang_logo.webp" width="96" alt="WanXiang Logo" />
+  <img src="app/src/main/res/drawable/wanxiang_logo.xml" width="96" alt="WanXiang Logo" />
 </p>
 
-<h1 align="center">WanXiang · 万象</h1>
+<h1 align="center">Tianyan · 天衍</h1>
 
-<p align="center"><strong>The Myriad Manifestations in the Great Void.</strong></p>
+<p align="center"><strong>Android Linux sandbox & AI Agent harness. Upstream: WanXiang (万象).</strong></p>
 
 <p align="center">
   Android No-Root Linux Runtime · Native Agent Harness · PTY Terminal · Mobile Dev Workspace · Wireless ADB Diagnostics

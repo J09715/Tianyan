@@ -59,6 +59,6 @@ description: 天衍（Tianyan）自定义迭代与 TianyanDev 构建规范，引
 ## 4. 开源 PR 提交规范
 
 经过本地真机安装验证满意后，协助用户生成标准 PR 模板并提交到天衍官方仓库：
-- **目标仓库**：`peakSee/Tianyan:main`
+- **目标仓库**：`J09715/Wanxiang:main`
 - **源分支**：`user-fork:feature/xxx`
 - **PR 模板包含**：概述（Summary）、改动点（Changes）、测试结果（Testing）、截图/录屏（Screenshots）、潜在风险（Risks）。

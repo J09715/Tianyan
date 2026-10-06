@@ -73,8 +73,6 @@ class HomeViewModel @Inject constructor(
     private val backgroundTaskRegistry: BackgroundTaskRegistry,
     private val privilegeManager: PrivilegeManager,
     private val logger: AppLogger,
-    private val wanxiangCloudClient: top.wanxiang.app.core.network.TianyanCloudClient,
-    private val settingsDataStore: top.wanxiang.app.core.datastore.SettingsDataStore,
     private val webChatBridgeServer: top.wanxiang.app.runtime.webchat.WebChatBridgeServer? = null,
 ) : ViewModel() {
 
@@ -88,39 +86,6 @@ class HomeViewModel @Inject constructor(
             } else {
                 webChatBridgeServer?.stop()
             }
-        }
-    }
-
-    // ===== 公告：入口 + 新公告自动弹窗 =====
-    private val _announcements = MutableStateFlow<List<top.wanxiang.app.core.model.CloudAnnouncement>>(emptyList())
-    val announcements: StateFlow<List<top.wanxiang.app.core.model.CloudAnnouncement>> = _announcements.asStateFlow()
-    private val _announcementLoading = MutableStateFlow(false)
-    val announcementLoading: StateFlow<Boolean> = _announcementLoading.asStateFlow()
-    private val _hasUnreadAnnouncement = MutableStateFlow(false)
-    val hasUnreadAnnouncement: StateFlow<Boolean> = _hasUnreadAnnouncement.asStateFlow()
-    private val _showAnnouncementPopup = MutableStateFlow(false)
-    val showAnnouncementPopup: StateFlow<Boolean> = _showAnnouncementPopup.asStateFlow()
-
-    /** 首页可见时拉取公告；未读则亮红点，未读中含「公告(type=2)」才自动弹窗（通知只亮红点不打扰）。 */
-    fun checkNewAnnouncements() {
-        viewModelScope.launch(Dispatchers.IO) {
-            wanxiangCloudClient.getAnnouncements(20).onSuccess { list ->
-                _announcements.value = list
-                val lastSeen = settingsDataStore.lastSeenAnnouncementId.first()
-                val unseen = list.filter { it.id > lastSeen }
-                _hasUnreadAnnouncement.value = unseen.isNotEmpty()
-                _showAnnouncementPopup.value = unseen.any { it.type == 2 }
-            }
-        }
-    }
-
-    /** 打开公告列表 / 关闭弹窗后，标记全部已读（红点消失）。 */
-    fun markAnnouncementsRead() {
-        _showAnnouncementPopup.value = false
-        _hasUnreadAnnouncement.value = false
-        viewModelScope.launch(Dispatchers.IO) {
-            val latestId = _announcements.value.maxOfOrNull { it.id } ?: 0L
-            if (latestId > 0) settingsDataStore.setLastSeenAnnouncementId(latestId)
         }
     }
 

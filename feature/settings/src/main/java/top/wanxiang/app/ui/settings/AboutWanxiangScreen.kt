@@ -89,6 +89,11 @@ fun AboutTianyanScreen(
                         value = "v$appVersion",
                     )
                     SettingsRowLocal(
+                        icon = RuntimeIconName.Package,
+                        title = "包名",
+                        value = context.packageName,
+                    )
+                    SettingsRowLocal(
                         icon = RuntimeIconName.Cpu,
                         title = "运行时",
                         value = when (val s = runtimeState) {

@@ -1,4 +1,4 @@
-package top.wanxiang.app.service
+package top.tianyan.app.service
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -13,7 +13,7 @@ import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
-import top.wanxiang.app.R
+import top.tianyan.app.R
 import top.wanxiang.app.core.database.HarnessSessionRepository
 import top.wanxiang.app.core.model.SessionRunState
 import top.wanxiang.app.harness.HarnessLoop

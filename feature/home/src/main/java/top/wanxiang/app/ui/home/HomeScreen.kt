@@ -138,11 +138,6 @@ fun HomeScreen(
     val switchingDistro by viewModel.switchingDistro.collectAsStateWithLifecycle()
     val modeStatus by viewModel.executionModeStatus.collectAsStateWithLifecycle()
     val webChatStatus by viewModel.webChatStatus.collectAsStateWithLifecycle()
-    val announcements by viewModel.announcements.collectAsStateWithLifecycle()
-    val announcementLoading by viewModel.announcementLoading.collectAsStateWithLifecycle()
-    val hasUnreadAnnouncement by viewModel.hasUnreadAnnouncement.collectAsStateWithLifecycle()
-    val showAnnouncementPopup by viewModel.showAnnouncementPopup.collectAsStateWithLifecycle()
-    var showAnnouncementSheet by remember { mutableStateOf(false) }
 
     val allFilesPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -206,23 +201,10 @@ fun HomeScreen(
     // 首页可见性联动：进入时恢复指标轮询，切走（离开组合）即暂停，避免后台空转。
     DisposableEffect(Unit) {
         viewModel.onScreenVisible()
-        viewModel.checkNewAnnouncements()
         onDispose { viewModel.onScreenHidden() }
     }
 
     val isLiquidGlassTheme = isLiquidGlassThemeActive()
-
-    // 公告(type=2)自动弹出 或 点击顶栏公告图标
-    if (showAnnouncementPopup || showAnnouncementSheet) {
-        HomeAnnouncementDialog(
-            announcements = announcements,
-            loading = announcementLoading,
-            onDismiss = {
-                showAnnouncementSheet = false
-                viewModel.markAnnouncementsRead()
-            },
-        )
-    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -231,26 +213,6 @@ fun HomeScreen(
                 title = stringResource(R.string.home_dashboard_title),
                 statusText = "${metrics.linuxDistro} · ${metrics.cpuArch}",
                 actions = {
-                    IconButton(
-                        onClick = {
-                            viewModel.checkNewAnnouncements()
-                            viewModel.markAnnouncementsRead()
-                            showAnnouncementSheet = true
-                        },
-                        contentDescription = "公告",
-                    ) {
-                        Box {
-                            RuntimeIcon(name = RuntimeIconName.Mail, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            if (hasUnreadAnnouncement) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .align(Alignment.TopEnd)
-                                        .background(MaterialTheme.colorScheme.error, androidx.compose.foundation.shape.CircleShape)
-                                )
-                            }
-                        }
-                    }
                     IconButton(
                         onClick = {
                             viewModel.refreshMetrics()

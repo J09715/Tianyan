@@ -46,7 +46,7 @@
     </queries>
 
     <application
-        android:name=".WanXiangApplication"
+        android:name=".TianyanApplication"
         android:allowBackup="false"
         android:icon="@drawable/wanxiang_logo"
         android:label="${appLabel}"
@@ -114,7 +114,7 @@
             android:exported="false" />
         <!-- GUI 手势通路：exported=true 否则 Android 12+ system_server 无法绑定无障碍服务 -->
         <service
-            android:name="top.wanxiang.app.runtime.gui.WanxiangGuiAccessibilityService"
+            android:name="top.wanxiang.app.runtime.gui.TianyanGuiAccessibilityService"
             android:exported="true"
             android:label="@string/wanxiang_app_name"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
