@@ -111,7 +111,7 @@ jobs:
           [ -f "$APK_PATH" ] || { echo "::error::No release APK generated"; exit 1; }
           "$ANDROID_HOME/build-tools/37.0.0/zipalign" -c -P 16 -v 4 "$APK_PATH"
           "$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --verbose --print-certs "$APK_PATH" | tee /tmp/apk-signature.txt
-          grep -q 'certificate SHA-256 digest: a391e0f58385b4691c643b52d34f58032e60ddeb3439b4452beee38f2c705da' /tmp/apk-signature.txt
+          grep -q 'certificate SHA-256 digest: a391e0f58385b4691c643b52d34f58032e60ddeb3439b44552beee38f2c705da' /tmp/apk-signature.txt
           "$ANDROID_HOME/build-tools/37.0.0/aapt" dump badging "$APK_PATH" | grep -q "package: name='top.tianyan.app'"
           mkdir -p output
           cp "$APK_PATH" output/Tianyan-arm64-release.apk
