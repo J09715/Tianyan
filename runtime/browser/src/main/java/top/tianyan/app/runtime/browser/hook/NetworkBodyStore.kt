@@ -1,11 +1,7 @@
 package top.tianyan.app.runtime.browser.hook
 
-import java.util.concurrent.atomic.AtomicLong
-
 /**
- * 网络请求/响应 body 存储（阶段 1 只存文本；二进制以 `"[binary N bytes]"` 占位）。
- *
- * 总字节预算 LRU 逐出：超出 [totalBudgetBytes] 时淘汰最旧条目（body 替换为大小标记）。
+ * Network request and response body cache with a UTF-8 byte budget and LRU eviction.
  */
 class NetworkBodyStore(
     private val totalBudgetBytes: Long = 6L * 1024 * 1024,
@@ -17,69 +13,68 @@ class NetworkBodyStore(
         val responseBody: String,
         val at: Long = System.currentTimeMillis(),
     ) {
-        val bytes: Long get() = requestBody.length.toLong() + responseBody.length.toLong()
+        val bytes: Long
+            get() = requestBody.toByteArray(Charsets.UTF_8).size.toLong() +
+                responseBody.toByteArray(Charsets.UTF_8).size.toLong()
     }
 
+    private data class Entry(val body: NetworkBody, val bytes: Long)
+
     private val lock = Any()
-    // accessOrder=true：get 即刷新新旧
-    private val map = LinkedHashMap<String, NetworkBody>(32, 0.75f, true)
-    private val totalBytes = AtomicLong(0)
+    private val map = LinkedHashMap<String, Entry>(32, 0.75f, true)
+    private var totalBytes = 0L
+
+    init {
+        require(totalBudgetBytes >= 0) { "totalBudgetBytes must not be negative" }
+    }
 
     fun put(body: NetworkBody) {
-        if (body.bytes > totalBudgetBytes) return
+        val bytes = body.bytes
+        if (bytes > totalBudgetBytes) return
         synchronized(lock) {
             removeLocked(body.id)
-            map[body.id] = body
-            totalBytes.addAndGet(body.bytes)
+            map[body.id] = Entry(body, bytes)
+            totalBytes += bytes
             evictLocked()
         }
     }
 
-    fun get(id: String): NetworkBody? = synchronized(lock) { map[id] }
+    fun get(id: String): NetworkBody? = synchronized(lock) { map[id]?.body }
 
     fun size(): Int = synchronized(lock) { map.size }
 
-    fun totalStoredBytes(): Long = totalBytes.get()
+    fun totalStoredBytes(): Long = synchronized(lock) { totalBytes }
 
     fun clear() {
         synchronized(lock) {
             map.clear()
-            totalBytes.set(0)
+            totalBytes = 0
         }
     }
 
     fun clearForTab(tabId: String) {
         synchronized(lock) {
-            val before = map.size
-            map.entries.removeIf { it.value.tabId == tabId }
-            if (map.size != before) recountLocked()
+            val iterator = map.values.iterator()
+            while (iterator.hasNext()) {
+                val entry = iterator.next()
+                if (entry.body.tabId == tabId) {
+                    totalBytes -= entry.bytes
+                    iterator.remove()
+                }
+            }
         }
     }
 
     private fun removeLocked(id: String) {
-        map.remove(id)?.let { totalBytes.addAndGet(-it.bytes) }
+        map.remove(id)?.let { removed -> totalBytes -= removed.bytes }
     }
 
     private fun evictLocked() {
-        val toEvict = ArrayList<NetworkBody>()
-        for (body in map.values) {
-            if (totalBytes.get() <= totalBudgetBytes) break
-            toEvict.add(body)
+        val iterator = map.values.iterator()
+        while (totalBytes > totalBudgetBytes && iterator.hasNext()) {
+            val oldest = iterator.next()
+            totalBytes -= oldest.bytes
+            iterator.remove()
         }
-        toEvict.forEach { body ->
-            val marker = NetworkBody(
-                id = body.id,
-                tabId = body.tabId,
-                requestBody = "[evicted ${body.requestBody.length}B]",
-                responseBody = "[evicted ${body.responseBody.length}B]",
-                at = body.at,
-            )
-            map[body.id] = marker
-            totalBytes.addAndGet(marker.bytes - body.bytes)
-        }
-    }
-
-    private fun recountLocked() {
-        totalBytes.set(map.values.sumOf { it.bytes })
     }
 }
