@@ -1,5 +1,6 @@
 package top.tianyan.app.runtime
 
+import android.app.Application
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.flow.toList
@@ -22,7 +23,7 @@ import top.tianyan.app.runtime.doctor.EnvironmentRepairer
 import top.tianyan.app.runtime.shell.CommandResult
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(sdk = [36], application = Application::class)
 class EnvironmentDoctorTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
     private val logger = AppLogger(context, SensitiveDataRedactor { it })
