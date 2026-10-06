@@ -1,24 +1,40 @@
 package top.tianyan.app.runtime
 
-import top.tianyan.app.core.model.DoctorStatus
-import top.tianyan.app.core.model.RuntimeState
-import top.tianyan.app.runtime.doctor.EnvironmentDoctor
-import top.tianyan.app.runtime.doctor.EnvironmentRepairer
-import top.tianyan.app.runtime.shell.CommandResult
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import top.tianyan.app.core.common.logging.AppLogger
+import top.tianyan.app.core.common.logging.SensitiveDataRedactor
+import top.tianyan.app.core.datastore.SettingsDataStore
+import top.tianyan.app.core.model.DoctorStatus
+import top.tianyan.app.core.model.RuntimeState
+import top.tianyan.app.core.security.SecretManager
+import top.tianyan.app.runtime.doctor.EnvironmentDoctor
+import top.tianyan.app.runtime.doctor.EnvironmentRepairer
+import top.tianyan.app.runtime.shell.CommandResult
 
+@RunWith(RobolectricTestRunner::class)
 class EnvironmentDoctorTest {
+    private val context: Context = ApplicationProvider.getApplicationContext()
+    private val logger = AppLogger(context, SensitiveDataRedactor { it })
+    private val settingsDataStore = SettingsDataStore(context, SecretManager())
+
+    private fun doctor(runtime: FakeLinuxRuntime) =
+        EnvironmentDoctor(linuxRuntime = runtime, logger = logger)
+
 
     @Test
     fun reportsUnreadyWhenSandboxNotInitialized() = runBlocking {
         val runtime = FakeLinuxRuntime()
         runtime.state.value = RuntimeState.NotInitialized
-        val doctor = EnvironmentDoctor(linuxRuntime = runtime)
+        val doctor = doctor(runtime)
 
         val report = doctor.check()
 
@@ -52,7 +68,7 @@ class EnvironmentDoctorTest {
                 runtime.commandResults[cmd] = CommandResult(0, "android env ok", "", 1)
             }
 
-        val doctor = EnvironmentDoctor(linuxRuntime = runtime)
+        val doctor = doctor(runtime)
         val report = doctor.check()
 
         assertEquals(DoctorStatus.HEALTHY, report.overallStatus)
@@ -81,7 +97,7 @@ class EnvironmentDoctorTest {
         runtime.commandResults["node --version 2>/dev/null || /opt/tianyan/bin/node --version 2>/dev/null || /usr/bin/node --version 2>/dev/null"] =
             CommandResult(1, "", "not found", 1) // 缺失 node
 
-        val doctor = EnvironmentDoctor(linuxRuntime = runtime)
+        val doctor = doctor(runtime)
         val report = doctor.check()
 
         assertEquals(DoctorStatus.WARNING, report.overallStatus)
@@ -109,7 +125,7 @@ class EnvironmentDoctorTest {
         runtime.commandResults["node --version 2>/dev/null || /opt/tianyan/bin/node --version 2>/dev/null || /usr/bin/node --version 2>/dev/null"] =
             CommandResult(0, "v22.22.3\n", "", 1)
 
-        val doctor = EnvironmentDoctor(linuxRuntime = runtime)
+        val doctor = doctor(runtime)
         val report = doctor.check()
 
         assertEquals(DoctorStatus.WARNING, report.overallStatus)
@@ -122,8 +138,8 @@ class EnvironmentDoctorTest {
     fun environmentRepairerEmitsAllProgressStepsToCompletion() = runBlocking {
         val runtime = FakeLinuxRuntime()
         runtime.state.value = RuntimeState.Ready
-        val doctor = EnvironmentDoctor(linuxRuntime = runtime)
-        val repairer = EnvironmentRepairer(runtime, doctor)
+        val doctor = doctor(runtime)
+        val repairer = EnvironmentRepairer(runtime, doctor, logger, settingsDataStore)
 
         val progresses = repairer.repair().toList()
 
@@ -159,7 +175,7 @@ class EnvironmentDoctorTest {
         checkNotNull(androidCoreCheckCmd)
         runtime.commandResults[androidCoreCheckCmd] = CommandResult(0, "android env ready", "", 1)
 
-        val doctor = EnvironmentDoctor(linuxRuntime = runtime)
+        val doctor = doctor(runtime)
         val report = doctor.check()
 
         val androidItem = report.items.first { it.id == "android_environment" }

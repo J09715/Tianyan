@@ -84,7 +84,12 @@ internal class AndroidHttpServer private constructor(
         runCatching { serverSocket?.close() }
         serverSocket = null
         // 已 accept 的连接不会随监听 socket 一起关闭：SSE 流可以挂住工作线程与 fd。
-        activeSockets.forEach { runCatching { it.close() } }
+        // stop() 是立即断开语义。SO_LINGER(0) 让 close() 发送 RST，避免长连接的
+        // 对端不读数据时，关闭过程继续等待 TCP 发送缓冲区排空。
+        activeSockets.forEach { socket ->
+            runCatching { socket.setSoLinger(true, 0) }
+            runCatching { socket.close() }
+        }
         activeSockets.clear()
         ownedExecutor?.shutdownNow()
         ownedExecutor = null

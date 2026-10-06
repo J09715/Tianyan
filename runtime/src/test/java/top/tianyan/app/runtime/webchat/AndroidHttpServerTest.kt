@@ -83,11 +83,13 @@ class AndroidHttpServerTest {
                 outcome.exceptionOrNull() is SocketTimeoutException,
             )
 
-            // 监听 socket 已释放：同一端口可以立刻重新绑定。
-            ServerSocket().use { probe ->
-                probe.reuseAddress = true
-                probe.bind(InetSocketAddress("127.0.0.1", port))
-            }
+            // 监听 socket 已释放：同一端口应能重新绑定。
+            // 用有界等待而不是一次性断言 —— TCP 拆链是内核异步完成的，要求"零延迟"
+            // 在部分内核上会假失败；但真泄漏（监听 socket 没关）在超时后照样会被抓到。
+            assertTrue(
+                "stop() 必须释放监听 socket，使同端口可重新绑定",
+                awaitRebindable(port, 5_000),
+            )
         } finally {
             runCatching { client.close() }
             server.stop(0)
@@ -106,7 +108,9 @@ class AndroidHttpServerTest {
         }
 
         try {
-            repeat(2) {
+            repeat(2) { round ->
+                // 重启前先等端口真正可用：断言的是"能重启"，不是"零延迟能重启"。
+                if (round > 0) assertTrue("端口应在 stop() 后恢复可用", awaitRebindable(port, 5_000))
                 server.start()
                 val response = Socket("127.0.0.1", port).use { socket ->
                     socket.soTimeout = 5_000
@@ -116,7 +120,7 @@ class AndroidHttpServerTest {
                     }
                     socket.getInputStream().bufferedReader().readText()
                 }
-                assertTrue("第 ${it + 1} 次启动应正常响应", response.endsWith("pong"))
+                assertTrue("第 ${round + 1} 次启动应正常响应", response.endsWith("pong"))
                 server.stop(0)
             }
         } finally {
@@ -138,6 +142,29 @@ class AndroidHttpServerTest {
         } finally {
             injected.shutdownNow()
             server.stop(0)
+        }
+    }
+
+    /**
+     * 轮询到同端口可重新绑定为止。
+     *
+     * 监听 socket 被 close() 之后，内核还需要一点时间回收本地端口（取决于对端是否
+     * 已回 FIN、以及内核的 TIME_WAIT/FIN_WAIT_2 处理）。所以这里给一个有界窗口，
+     * 而不是断言"立刻"。若 stop() 根本没关监听 socket，整个窗口内都会失败。
+     */
+    private fun awaitRebindable(port: Int, timeoutMs: Long): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (true) {
+            try {
+                ServerSocket().use { probe ->
+                    probe.reuseAddress = true
+                    probe.bind(InetSocketAddress("127.0.0.1", port))
+                }
+                return true
+            } catch (_: java.net.BindException) {
+                if (System.currentTimeMillis() >= deadline) return false
+                Thread.sleep(50)
+            }
         }
     }
 }
