@@ -55,6 +55,18 @@ jobs:
           java-version: '21'
           cache: 'gradle'
 
+      - name: Rebuild libpty_native.so from source
+        run: |
+          set -euo pipefail
+          NDK="$ANDROID_HOME/ndk/30.0.15729638"
+          TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64"
+          CC="$TOOLCHAIN/bin/aarch64-linux-android30-clang"
+          [ -x "$CC" ] || { echo "::error::NDK clang missing: $CC"; exit 1; }
+          "$CC" -shared -fPIC -O2 -Wall -Werror=implicit-function-declaration \
+            -o app/src/main/jniLibs/arm64-v8a/libpty_native.so app/src/main/cpp/pty_native.c
+          nm -D --defined-only app/src/main/jniLibs/arm64-v8a/libpty_native.so | \
+            grep -q 'Java_top_tianyan_app_runtime_pty_NativePty_openAndExec'
+
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
 
