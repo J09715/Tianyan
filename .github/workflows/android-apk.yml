@@ -77,16 +77,49 @@ jobs:
           fi
           echo "  JNI 符号与品牌串校验通过"
 
-      - name: Build Debug APK
+      - name: Require release signing secrets
+        env:
+          KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 || secrets.RELEASE_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD || secrets.RELEASE_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS || secrets.RELEASE_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD || secrets.RELEASE_KEY_PASSWORD }}
         run: |
+          set -euo pipefail
+          for value in KEYSTORE_BASE64 STORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!value:-}" ]; then
+              echo "::error::Missing release signing secret: $value"
+              exit 1
+            fi
+          done
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          echo "TIANYAN_RELEASE_STORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          echo "TIANYAN_RELEASE_STORE_PASSWORD=$STORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "TIANYAN_RELEASE_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "TIANYAN_RELEASE_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
+
+      - name: Build signed Release APK
+        run: |
+          set -euo pipefail
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --console=plain --no-daemon
+          ./gradlew :app:assembleRelease --console=plain --no-daemon
+
+      - name: Verify signed Release APK
+        run: |
+          set -euo pipefail
+          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          [ -f "$APK_PATH" ] || { echo "::error::No release APK generated"; exit 1; }
+          "$ANDROID_HOME/build-tools/37.0.0/zipalign" -c -P 16 -v 4 "$APK_PATH"
+          "$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --verbose "$APK_PATH"
+          "$ANDROID_HOME/build-tools/37.0.0/aapt" dump badging "$APK_PATH" | grep -q "package: name='top.tianyan.app'"
+          mkdir -p output
+          cp "$APK_PATH" output/Tianyan-arm64-release.apk
+          sha256sum output/Tianyan-arm64-release.apk > output/Tianyan-arm64-release.apk.sha256
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: tianyan-debug-apk-${{ github.ref_name }}
-          path: app/build/outputs/apk/debug/*.apk
+          name: tianyan-release-apk-${{ github.ref_name }}
+          path: output/*
           if-no-files-found: error
           retention-days: 90
 

@@ -99,6 +99,11 @@ extensions.configure<ApplicationExtension> {
                 applicationIdSuffix = ".debug"
             }
             versionNameSuffix = if (tianyanDevBuild) "-dev" else "-debug"
+            // CI supplies the same keystore for every preview/debug APK so upgrades
+            // remain installable instead of silently using the runner's ephemeral key.
+            if (signingConfigured) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
         release {
             manifestPlaceholders["appLabel"] = if (tianyanDevBuild) "TianyanDev" else "天衍"
