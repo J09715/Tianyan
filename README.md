@@ -14,13 +14,6 @@
   <code>v0.14.0</code> · <code>Android 10+ (SDK 29+)</code> · <code>arm64-v8a</code> · <code>Kotlin · Jetpack Compose</code>
 </p>
 
-<p align="center">
-  <strong>交流群：待公布</strong>
-</p>
-
-<p align="center">
-  安装包下载 · 全量离线插件包 · 更新公告 · 反馈互助 —— 群内获取最新版 APK
-</p>
 
 ---
 
