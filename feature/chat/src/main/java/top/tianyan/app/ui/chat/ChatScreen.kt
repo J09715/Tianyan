@@ -201,7 +201,7 @@ fun ChatScreen(
     val gitPanelState by viewModel.gitPanelState.collectAsStateWithLifecycle()
     val gitCredentials by viewModel.gitCredentials.collectAsStateWithLifecycle()
     val matchedCredId by viewModel.matchedCredentialId.collectAsStateWithLifecycle()
-    val gitUncommittedCount = gitPanelState.let { s -> s.staged.size + s.unstaged.size + s.untracked.size }
+    val gitUncommittedCount = gitPanelState.let { s -> s.staged.size + s.unstaged.size + s.untrackedCount }
     val gitAiCommit by viewModel.aiCommit.collectAsStateWithLifecycle()
     val gitCredHealth by viewModel.credHealth.collectAsStateWithLifecycle()
     val gitRepoList by viewModel.repoList.collectAsStateWithLifecycle()
