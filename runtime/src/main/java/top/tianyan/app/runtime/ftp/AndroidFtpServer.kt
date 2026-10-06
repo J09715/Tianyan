@@ -97,7 +97,11 @@ class AndroidFtpServer(
                         }
                     }
                 }
-            } catch (_: Throwable) {
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (t: Throwable) {
+                // 接受循环异常退出会让 FTP 服务静默停止服务，必须留下痕迹。
+                onLog("FTP 接受循环异常退出: ${t.message ?: t::class.simpleName}")
             } finally {
                 stop()
             }

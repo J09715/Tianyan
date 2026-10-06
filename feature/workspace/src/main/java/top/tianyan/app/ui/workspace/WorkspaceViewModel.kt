@@ -151,7 +151,13 @@ class WorkspaceViewModel @Inject constructor(
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
                 _installedComponentIds.value = toolManager.probeInstalledComponents()
-            } catch (_: Exception) {}
+            } catch (cancellation: kotlinx.coroutines.CancellationException) {
+                throw cancellation
+            } catch (e: Exception) {
+                // 探测失败时 _installedComponentIds 会保留上一次的旧值，
+                // 界面上表现为"组件仍已安装"，与真实状态不符。留日志以便定位。
+                android.util.Log.w("WorkspaceViewModel", "probeInstalledComponents 失败，组件安装状态可能已过期", e)
+            }
         }
     }
 

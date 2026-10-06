@@ -156,7 +156,13 @@ class McpServerRuntime @Inject constructor(
     }
 
     fun stop() {
-        try { engine?.stop(100, 500) } catch (_: Throwable) {}
+        try {
+            engine?.stop(100, 500)
+        } catch (t: Throwable) {
+            // 关停失败会留下未释放的端口，下次 start() 撞上"端口被占用"，
+            // 而调用方只能看到 start 失败、看不到真正原因，故必须留痕。
+            Log.w(TAG, "MCP server stop 失败: ${t.message ?: t::class.simpleName}")
+        }
         engine = null
         BuiltinBrowserMcpAccess.port = null
     }

@@ -24,4 +24,12 @@
     <string name="onboarding_later">稍后配置</string>
     <string name="onboarding_enter">进入天衍</string>
     <string name="onboarding_provider_preset">服务商预设</string>
+    <string name="onboarding_suite_title">选择开发套件</string>
+    <string name="onboarding_suite_description">按需预装，稍后可在「工具中心」随时增删。基础命令行工具始终自动就绪。</string>
+    <string name="onboarding_suite_selected">已选 %1$d / %2$d</string>
+    <string name="onboarding_suite_components">%1$d 个组件</string>
+    <string name="onboarding_suite_installing">正在装配所选套件…</string>
+    <string name="onboarding_suite_install">装配并继续</string>
+    <string name="onboarding_suite_skip">跳过，稍后再说</string>
+    <string name="onboarding_suite_error">套件装配未完成：%1$s。可稍后在「工具中心」重试。</string>
 </resources>

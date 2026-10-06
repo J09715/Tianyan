@@ -70,7 +70,10 @@ class OnboardingViewModel @Inject constructor(
     val isInstallingPlugins = _isInstallingPlugins.asStateFlow()
 
     private val _pluginInstallProgress = MutableStateFlow<String?>(null)
-    val pluginInstallProgress = _pluginInstallProgress.asStateFlow()
+    val pluginInstallProgress: StateFlow<String?> = _pluginInstallProgress.asStateFlow()
+
+    private val _pluginInstallError = MutableStateFlow<String?>(null)
+    val pluginInstallError: StateFlow<String?> = _pluginInstallError.asStateFlow()
 
     private val _distribution = MutableStateFlow("ubuntu")
     val distribution = _distribution.asStateFlow()
@@ -268,14 +271,19 @@ class OnboardingViewModel @Inject constructor(
 
         viewModelScope.launch(Dispatchers.IO) {
             _isInstallingPlugins.value = true
+            _pluginInstallError.value = null
             try {
                 toolManager.batchInstallSuites(selected).collect { event ->
                     if (event is top.tianyan.app.runtime.tools.InstallEvent.Progress) {
                         _pluginInstallProgress.value = event.message
                     }
                 }
+            } catch (cancellation: kotlinx.coroutines.CancellationException) {
+                throw cancellation
             } catch (e: Exception) {
-                // 忽略异常保证流程顺畅
+                // 用户此时已在模型配置页，装配失败若只吞掉，事后只会表现为
+                // 「工具中心里这些套件莫名其妙没装上」，无从追溯。
+                _pluginInstallError.value = e.message ?: e::class.simpleName ?: "未知错误"
             } finally {
                 _isInstallingPlugins.value = false
                 _pluginInstallProgress.value = null

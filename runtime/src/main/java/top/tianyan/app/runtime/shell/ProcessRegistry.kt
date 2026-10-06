@@ -7,6 +7,7 @@ import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -119,7 +120,12 @@ class ProcessRegistryImpl @Inject constructor(
                             }
                         }
                 }
-            } catch (_: Exception) {
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (e: Exception) {
+                // 输出流中断与进程正常退出在 UI 上表现一致（都只看到"已停止"），
+                // 不记日志就无从区分是崩溃还是正常收尾。
+                appendLog(logKey, "[Tianyan] 输出流中断：${e.message ?: e::class.simpleName}")
             } finally {
                 val exitNotice = "[Tianyan] 服务进程已停止"
                 appendLog(logKey, exitNotice)

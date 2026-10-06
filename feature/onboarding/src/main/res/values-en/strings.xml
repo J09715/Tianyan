@@ -24,4 +24,12 @@
     <string name="onboarding_later">Configure later</string>
     <string name="onboarding_enter">Enter Tianyan</string>
     <string name="onboarding_provider_preset">Provider preset</string>
+    <string name="onboarding_suite_title">Choose dev suites</string>
+    <string name="onboarding_suite_description">Install what you need now, add or remove them later in Tool Center. Core CLI tools are always provisioned.</string>
+    <string name="onboarding_suite_selected">%1$d / %2$d selected</string>
+    <string name="onboarding_suite_components">%1$d components</string>
+    <string name="onboarding_suite_installing">Installing selected suites\u2026</string>
+    <string name="onboarding_suite_install">Install and continue</string>
+    <string name="onboarding_suite_skip">Skip for now</string>
+    <string name="onboarding_suite_error">Suite install did not finish: %1$s. Retry later in Tool Center.</string>
 </resources>

@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
@@ -76,6 +77,7 @@ import top.tianyan.app.ui.components.ProviderBadge
 import top.tianyan.app.ui.components.RuntimeAlertDialog
 import top.tianyan.app.ui.components.RuntimeButton
 import top.tianyan.app.ui.components.RuntimeCard
+import top.tianyan.app.ui.components.RuntimeCheckbox
 import top.tianyan.app.ui.components.RuntimeCircularProgressIndicator
 import top.tianyan.app.ui.components.RuntimeFilledTonalButton
 import top.tianyan.app.ui.components.RuntimeIcon
@@ -99,6 +101,7 @@ fun OnboardingScreen(viewModel: OnboardingViewModel = hiltViewModel()) {
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
         when (page) {
             0 -> SystemSetupPage(viewModel, Modifier.fillMaxSize().padding(padding))
+            1 -> SuiteSelectionPage(viewModel, Modifier.fillMaxSize().padding(padding))
             else -> ModelSetupPage(viewModel, Modifier.fillMaxSize().padding(padding))
         }
     }
@@ -264,6 +267,166 @@ private fun SystemSetupPage(viewModel: OnboardingViewModel, modifier: Modifier) 
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
+private fun SuiteSelectionPage(viewModel: OnboardingViewModel, modifier: Modifier) {
+    val suites = viewModel.devSuites
+    val selected by viewModel.selectedSuites.collectAsStateWithLifecycle()
+    val installing by viewModel.isInstallingPlugins.collectAsStateWithLifecycle()
+    val progress by viewModel.pluginInstallProgress.collectAsStateWithLifecycle()
+
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        item {
+            Column(
+                Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.onboarding_suite_title),
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                )
+                Text(
+                    text = stringResource(R.string.onboarding_suite_description),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    text = stringResource(
+                        R.string.onboarding_suite_selected,
+                        selected.size,
+                        suites.size,
+                    ),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+
+        // 装配进行中：显示当前步骤，并禁止再次点击（VM 内也会拦截重复进入）
+        if (installing) {
+            item {
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        RuntimeCircularProgressIndicator(modifier = Modifier.size(16.dp))
+                        Text(
+                            text = progress ?: stringResource(R.string.onboarding_suite_installing),
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        }
+
+        items(suites, key = { it.id }) { suite ->
+            val checked = suite.id in selected
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable(enabled = !installing) { viewModel.toggleSuite(suite.id) },
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(
+                    1.dp,
+                    if (checked) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                    else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                ),
+                color = if (checked) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.22f)
+                else MaterialTheme.colorScheme.surfaceContainerLow,
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    RuntimeCheckbox(
+                        checked = checked,
+                        onCheckedChange = { if (!installing) viewModel.toggleSuite(suite.id) },
+                        enabled = !installing,
+                    )
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(3.dp),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text(
+                                text = suite.name,
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                text = suite.category,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Text(
+                            text = suite.summary,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        if (suite.components.isNotEmpty()) {
+                            Text(
+                                text = stringResource(
+                                    R.string.onboarding_suite_components,
+                                    suite.components.size,
+                                ),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                RuntimeButton(
+                    onClick = viewModel::installSelectedSuitesAndProceed,
+                    enabled = !installing && selected.isNotEmpty(),
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                ) {
+                    Text(
+                        stringResource(R.string.onboarding_suite_install),
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+                RuntimeTextButton(
+                    onClick = viewModel::skipSuites,
+                    enabled = !installing,
+                    modifier = Modifier.fillMaxWidth().height(40.dp),
+                ) {
+                    Text(
+                        stringResource(R.string.onboarding_suite_skip),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
 private fun ModelSetupPage(viewModel: OnboardingViewModel, modifier: Modifier) {
     val provider by viewModel.modelProvider.collectAsStateWithLifecycle()
     val model by viewModel.modelId.collectAsStateWithLifecycle()
@@ -272,6 +435,9 @@ private fun ModelSetupPage(viewModel: OnboardingViewModel, modifier: Modifier) {
     val discovered by viewModel.discoveredModels.collectAsStateWithLifecycle()
     val discovering by viewModel.discoveringModels.collectAsStateWithLifecycle()
     val discoveryError by viewModel.modelDiscoveryError.collectAsStateWithLifecycle()
+    val suitesInstalling by viewModel.isInstallingPlugins.collectAsStateWithLifecycle()
+    val suitesProgress by viewModel.pluginInstallProgress.collectAsStateWithLifecycle()
+    val suitesError by viewModel.pluginInstallError.collectAsStateWithLifecycle()
     val providers = viewModel.providerCatalog
     val selectedProvider = providers.firstOrNull { it.name == provider } ?: providers.first()
 
@@ -298,6 +464,43 @@ private fun ModelSetupPage(viewModel: OnboardingViewModel, modifier: Modifier) {
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        // 套件在后台装配（本页是装配开始后才进入的），进度与失败都必须在这里可见
+        if (suitesInstalling || suitesError != null) {
+            item {
+                Surface(
+                    color = if (suitesError != null) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
+                    else MaterialTheme.colorScheme.surfaceContainerLow,
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(
+                        1.dp,
+                        if (suitesError != null) MaterialTheme.colorScheme.error.copy(alpha = 0.5f)
+                        else MaterialTheme.colorScheme.outlineVariant,
+                    ),
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        if (suitesInstalling) {
+                            RuntimeCircularProgressIndicator(modifier = Modifier.size(16.dp))
+                        }
+                        Text(
+                            text = suitesError?.let {
+                                stringResource(R.string.onboarding_suite_error, it)
+                            } ?: (suitesProgress ?: stringResource(R.string.onboarding_suite_installing)),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (suitesError != null) MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        }
+
         // 顶部 Hero 与快速导入入口
         item {
             Column(
