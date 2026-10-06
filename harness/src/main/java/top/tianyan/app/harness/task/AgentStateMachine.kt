@@ -27,6 +27,7 @@ class AgentStateMachine @Inject constructor(
         maxAttempts: Int = DEFAULT_MAX_ATTEMPTS,
         nowMs: Long = System.currentTimeMillis(),
     ): AgentTaskEntity {
+        require(id.isNotBlank()) { "Durable task requires an id" }
         require(sessionId.isNotBlank()) { "Durable task requires a session id" }
         require(description.isNotBlank()) { "Durable task requires a prompt" }
         val task = AgentTaskEntity(

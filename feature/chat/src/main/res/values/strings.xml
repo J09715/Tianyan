@@ -215,6 +215,8 @@
     <string name="chat_runtime_details">运行</string>
     <string name="chat_round_number">第 %1$d 轮</string>
     <string name="chat_event_count">%1$d 条事件</string>
+    <string name="chat_runtime_round_status">运行中 · 第 %1$d 轮</string>
+    <string name="chat_runtime_event_status">运行中 · %1$d 条事件</string>
     <string name="chat_workbench_collapse">收起工作台</string>
     <string name="chat_workbench_expand">展开工作台</string>
     <string name="chat_action_convert_to_steer">转为修正</string>

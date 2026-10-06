@@ -201,6 +201,8 @@
     <string name="chat_runtime_details">Runtime</string>
     <string name="chat_round_number">Round %1$d</string>
     <string name="chat_event_count">%1$d events</string>
+    <string name="chat_runtime_round_status">Running · round %1$d</string>
+    <string name="chat_runtime_event_status">Running · %1$d events</string>
     <string name="chat_workbench_collapse">Collapse workbench</string>
     <string name="chat_workbench_expand">Expand workbench</string>
     <string name="chat_action_convert_to_steer">Convert to steer</string>

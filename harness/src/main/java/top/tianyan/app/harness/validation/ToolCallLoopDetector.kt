@@ -1,6 +1,9 @@
 package top.tianyan.app.harness.validation
 
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * 智能体工具调用死循环与重复调用检测器。
@@ -38,7 +41,7 @@ class ToolCallLoopDetector(
      */
     @Synchronized
     fun evaluate(toolName: String, args: JsonObject): LoopVerdict {
-        val currentArgsJson = args.toString()
+        val currentArgsJson = canonicalJson(args)
         val recentCalls = callHistory.takeLast(10)
 
         // 1. 检测连续相同调用的失败历史
@@ -114,7 +117,7 @@ class ToolCallLoopDetector(
      */
     @Synchronized
     fun recordIntent(toolName: String, args: JsonObject) {
-        callHistory.add(CallRecord(toolName = toolName, argsJson = args.toString()))
+        callHistory.add(CallRecord(toolName = toolName, argsJson = canonicalJson(args)))
         // 限制历史记录上限
         if (callHistory.size > 50) {
             callHistory.removeAt(0)
@@ -126,7 +129,7 @@ class ToolCallLoopDetector(
      */
     @Synchronized
     fun recordSettled(toolName: String, args: JsonObject, success: Boolean) {
-        val currentArgsJson = args.toString()
+        val currentArgsJson = canonicalJson(args)
         val lastRecord = callHistory.lastOrNull {
             it.toolName.equals(toolName, ignoreCase = true) && it.argsJson == currentArgsJson && it.success == null
         }
@@ -135,6 +138,20 @@ class ToolCallLoopDetector(
         } else {
             callHistory.add(CallRecord(toolName = toolName, argsJson = currentArgsJson, success = success))
         }
+    }
+
+    /**
+     * Canonical JSON keeps semantically identical object arguments comparable even when
+     * providers emit keys in a different order.
+     */
+    private fun canonicalJson(element: JsonElement): String = when (element) {
+        is JsonObject -> element.entries
+            .sortedBy { it.key }
+            .joinToString(prefix = "{", postfix = "}") { (key, value) ->
+                "${JsonPrimitive(key)}:${canonicalJson(value)}"
+            }
+        is JsonArray -> element.joinToString(prefix = "[", postfix = "]", transform = ::canonicalJson)
+        else -> element.toString()
     }
 
     /**

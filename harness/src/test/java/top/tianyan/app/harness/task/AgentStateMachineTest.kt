@@ -15,6 +15,17 @@ import top.tianyan.app.core.database.task.AgentTaskTransition
 
 class AgentStateMachineTest {
     @Test
+    fun `blank task id is rejected before persistence`() = runBlocking {
+        val repository = FakeAgentTaskRepository()
+        val machine = AgentStateMachine(repository, null)
+
+        val error = runCatching { machine.createQueued(" ", "s1", "Task", "prompt") }.exceptionOrNull()
+
+        assertTrue(error is IllegalArgumentException)
+        assertEquals(null, repository.find(" "))
+    }
+
+    @Test
     fun `task follows queued running approval running completed lifecycle`() = runBlocking {
         val repository = FakeAgentTaskRepository()
         val machine = AgentStateMachine(repository, null)

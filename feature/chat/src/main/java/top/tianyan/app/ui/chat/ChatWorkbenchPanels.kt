@@ -154,10 +154,11 @@ internal fun CollapsibleChatWorkbenchStrip(
             // 4. 运行时/轮次状态项
             WorkbenchStatusItem(
                 icon = RuntimeIconName.Logs,
-                label = if (roundCount > 0) {
-                    stringResource(R.string.chat_round_number, roundCount)
-                } else {
-                    stringResource(R.string.chat_event_count, runtimeEvents.size)
+                label = when {
+                    running && roundCount > 0 -> stringResource(R.string.chat_runtime_round_status, roundCount)
+                    running -> stringResource(R.string.chat_runtime_event_status, runtimeEvents.size)
+                    roundCount > 0 -> stringResource(R.string.chat_round_number, roundCount)
+                    else -> stringResource(R.string.chat_event_count, runtimeEvents.size)
                 },
                 tint = if (running) Color(0xFF7C4DFF) else MaterialTheme.colorScheme.tertiary,
                 highlight = running,
