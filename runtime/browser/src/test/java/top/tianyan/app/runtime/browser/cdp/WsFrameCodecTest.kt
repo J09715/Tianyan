@@ -4,6 +4,7 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.fail
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayOutputStream
@@ -119,6 +120,101 @@ class WsFrameCodecTest {
         val headers = "HTTP/1.1 101 Switching Protocols\r\nsec-websocket-accept: abc==\r\n\r\n"
         assertEquals("abc==", WsFrameCodec.headerValue(headers, "Sec-WebSocket-Accept"))
         assertNull(WsFrameCodec.headerValue(headers, "Missing"))
+    }
+
+    @Test
+    fun `invalid feed ranges are rejected`() {
+        val decoder = WsFrameDecoder()
+        for ((offset, length) in listOf(-1 to 1, 0 to -1, 2 to 1)) {
+            try {
+                decoder.feed(byteArrayOf(1), offset, length)
+                fail("range $offset/$length must be rejected")
+            } catch (_: IllegalArgumentException) {
+                // expected
+            }
+        }
+    }
+
+    @Test
+    fun `reserved opcode and rsv bits are rejected`() {
+        for (frame in listOf(byteArrayOf(0x83.toByte(), 0), byteArrayOf(0xC1.toByte(), 0))) {
+            try {
+                WsFrameDecoder().feed(frame)
+                fail("invalid frame must be rejected")
+            } catch (_: IllegalStateException) {
+                // expected
+            }
+        }
+    }
+
+    @Test
+    fun `control frames must be final and at most 125 bytes`() {
+        val oversizedPing = byteArrayOf(0x89.toByte(), 126, 0, 126) + ByteArray(126)
+        val fragmentedPing = byteArrayOf(0x09, 0)
+        for (frame in listOf(oversizedPing, fragmentedPing)) {
+            try {
+                WsFrameDecoder().feed(frame)
+                fail("invalid control frame must be rejected")
+            } catch (_: IllegalStateException) {
+                // expected
+            }
+        }
+    }
+
+    @Test
+    fun `non-canonical extended lengths are rejected`() {
+        val short16 = byteArrayOf(0x82.toByte(), 126, 0, 1, 1)
+        val short64 = byteArrayOf(0x82.toByte(), 127, 0, 0, 0, 0, 0, 0, 0xFF.toByte(), 0xFF.toByte())
+        for (frame in listOf(short16, short64)) {
+            try {
+                WsFrameDecoder().feed(frame)
+                fail("non-canonical payload length must be rejected")
+            } catch (_: IllegalStateException) {
+                // expected
+            }
+        }
+    }
+
+    @Test
+    fun `close frame rejects one-byte payload`() {
+        try {
+            WsFrameDecoder().feed(byteArrayOf(0x88.toByte(), 1, 0))
+            fail("one-byte close payload must be rejected")
+        } catch (_: IllegalStateException) {
+            // expected
+        }
+    }
+
+    @Test
+    fun `reserved high bit in 64 bit payload length is rejected`() {
+        val frame = byteArrayOf(0x82.toByte(), 127, 0x80.toByte(), 0, 0, 0, 0, 0, 0, 0)
+        try {
+            WsFrameDecoder().feed(frame)
+            fail("reserved payload length bit must be rejected")
+        } catch (_: IllegalStateException) {
+            // expected
+        }
+    }
+
+    @Test
+    fun `frame limit is capped to keep buffer arithmetic bounded`() {
+        try {
+            WsFrameDecoder(maxFrameBytes = Int.MAX_VALUE)
+            fail("oversized configured limit must be rejected")
+        } catch (_: IllegalArgumentException) {
+            // expected
+        }
+    }
+
+    @Test
+    fun `configured frame limit is enforced before payload buffering`() {
+        val decoder = WsFrameDecoder(maxFrameBytes = 3)
+        try {
+            decoder.feed(byteArrayOf(0x82.toByte(), 4, 1, 2, 3, 4))
+            fail("frame larger than limit must be rejected")
+        } catch (_: IllegalStateException) {
+            // expected
+        }
     }
 
     @Test
