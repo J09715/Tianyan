@@ -46,27 +46,36 @@ jobs:
       - name: Rebuild libpty_native.so from source (JNI symbols must match current package)
         run: |
           set -euo pipefail
-          NDK="$ANDROID_HOME/ndk/30.0.15729638"
-          HOST_TAG="linux-x86_64"
-          [ -d "$NDK/toolchains/llvm/prebuilt/$HOST_TAG" ] || HOST_TAG="$(ls "$NDK/toolchains/llvm/prebuilt" | head -1)"
-          CC="$NDK/toolchains/llvm/prebuilt/$HOST_TAG/bin/aarch64-linux-android30-clang"
-          [ -x "$CC" ] || { echo "clang not found: $CC"; exit 1; }
+          NDK_VER="30.0.15729638"
+          NDK="$ANDROID_HOME/ndk/$NDK_VER"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SDKMANAGER" ] || SDKMANAGER="$ANDROID_HOME/tools/bin/sdkmanager"
+          if [ ! -x "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang" ]; then
+            echo "NDK $NDK_VER 不存在，先安装…"
+            yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+            "$SDKMANAGER" --install "ndk;$NDK_VER" 2>&1 | tail -3
+          fi
+          HOST_TAG="$(ls "$NDK/toolchains/llvm/prebuilt" 2>/dev/null | head -1)"
+          [ -n "$HOST_TAG" ] || { echo "!! NDK 目录为空: $NDK/toolchains/llvm/prebuilt"; exit 1; }
+          TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/$HOST_TAG"
+          CC="$TOOLCHAIN/bin/aarch64-linux-android30-clang"
+          [ -x "$CC" ] || { echo "!! clang 不存在: $CC"; exit 1; }
           SRC="app/src/main/cpp/pty_native.c"
           OUT="app/src/main/jniLibs/arm64-v8a/libpty_native.so"
-          echo "  CC   : $CC"
-          echo "  SRC  : $SRC"
+          echo "  CC  : $CC"
           "$CC" -shared -fPIC -O2 -Wall -Werror=implicit-function-declaration -o "$OUT" "$SRC"
-          echo "  -> rebuilt $OUT"
           ls -la "$OUT"
-          # 校验：导出的 JNI 符号必须与当前包名一致（top_tianyan_app_runtime_pty）
-          if ! "${NDK}/toolchains/llvm/prebuilt/$HOST_TAG/bin/llvm-nm" -D --defined-only "$OUT" \
-               | grep -q "Java_top_tianyan_app_runtime_pty_NativePty_openAndExec"; then
-            echo "!! 重建后的 .so 未导出 top_tianyan JNI 符号，JNI 将无法绑定"; exit 1
+          # JNI 符号必须与当前包名一致，否则运行时 UnsatisfiedLinkError
+          if ! nm -D --defined-only "$OUT" | grep -q "Java_top_tianyan_app_runtime_pty_NativePty_openAndExec"; then
+            echo "!! 重建后的 .so 未导出 top_tianyan JNI 符号"; nm -D --defined-only "$OUT" | head -20; exit 1
           fi
-          if nm -D --defined-only "$OUT" 2>/dev/null | grep -q "top_wanxiang"; then
+          if nm -D --defined-only "$OUT" | grep -q "top_wanxiang"; then
             echo "!! 重建后的 .so 仍含旧包名符号"; exit 1
           fi
-          echo "  JNI 符号校验通过"
+          if strings "$OUT" | grep -qi "wanxiang"; then
+            echo "!! 重建后的 .so 仍含旧品牌字符串"; exit 1
+          fi
+          echo "  JNI 符号与品牌串校验通过"
 
       - name: Build Debug APK
         run: |
