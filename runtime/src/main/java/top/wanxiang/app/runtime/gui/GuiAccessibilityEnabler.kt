@@ -11,7 +11,7 @@ import top.wanxiang.app.core.model.ExecutionMode
 import top.wanxiang.app.runtime.privilege.PrivilegeManager
 
 /**
- * With Shizuku/Root, programmatically enable [WanxiangGuiAccessibilityService]
+ * With Shizuku/Root, programmatically enable [TianyanGuiAccessibilityService]
  * via Secure settings — no manual trip to 无障碍 settings.
  */
 @Singleton
@@ -44,7 +44,7 @@ class GuiAccessibilityEnabler @Inject constructor(
         }
         lastAttemptAt = now
 
-        val component = ComponentName(context, WanxiangGuiAccessibilityService::class.java).flattenToString()
+        val component = ComponentName(context, TianyanGuiAccessibilityService::class.java).flattenToString()
         val read = privilegeManager.executeShellCommand("settings get secure enabled_accessibility_services")
         val currentRaw = read.stdout.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() }.orEmpty()
         val current = if (currentRaw == "null") "" else currentRaw
@@ -52,7 +52,7 @@ class GuiAccessibilityEnabler @Inject constructor(
             .map { it.trim() }
             .filter { it.isNotEmpty() }
             .toMutableList()
-        if (services.none { it.equals(component, ignoreCase = true) || it.endsWith("/${WanxiangGuiAccessibilityService::class.java.name}") }) {
+        if (services.none { it.equals(component, ignoreCase = true) || it.endsWith("/${TianyanGuiAccessibilityService::class.java.name}") }) {
             services += component
         }
         val joined = services.joinToString(":")

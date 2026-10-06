@@ -56,7 +56,7 @@ data class WebChatServerStatus(
     val accessUrl: String get() = "http://$localIp:$port"
 }
 
-/** LAN bridge for WanXiang's own Harness sessions and registered Linux workspaces. */
+/** LAN bridge for Tianyan's own Harness sessions and registered Linux workspaces. */
 @Singleton
 class WebChatBridgeServer @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -112,10 +112,10 @@ class WebChatBridgeServer @Inject constructor(
                     }
                 }
             }
-            logger.i("万象智枢 Web 协作服务启动成功：http://$localIp:$port")
+            logger.i("天衍智枢 Web 协作服务启动成功：http://$localIp:$port")
             true
         } catch (exception: Exception) {
-            logger.e("万象智枢 Web 协作服务启动失败", exception)
+            logger.e("天衍智枢 Web 协作服务启动失败", exception)
             false
         }
     }
@@ -134,7 +134,7 @@ class WebChatBridgeServer @Inject constructor(
             httpServer?.stop(0)
             httpServer = null
             _status.value = _status.value.copy(isRunning = false, activeConnections = 0)
-        }.onFailure { logger.e("万象智枢 Web 协作服务停止异常", it) }
+        }.onFailure { logger.e("天衍智枢 Web 协作服务停止异常", it) }
     }
 
     fun broadcastEvent(eventName: String, dataJson: String) {
@@ -171,7 +171,7 @@ class WebChatBridgeServer @Inject constructor(
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (throwable: Throwable) {
-                logger.e("万象智枢 Web 请求处理失败：${exchange.requestURI.path}", throwable)
+                logger.e("天衍智枢 Web 请求处理失败：${exchange.requestURI.path}", throwable)
                 if (!exchange.isResponseStarted) {
                     runCatching { sendJson(exchange, 500, errorJson(throwable.message ?: "请求处理失败")) }
                 }
@@ -219,7 +219,7 @@ class WebChatBridgeServer @Inject constructor(
             }.getOrDefault(emptyList())
             sendJson(exchange, 200, buildJsonObject {
                 put("authenticated", true)
-                put("appName", "万象智枢")
+                put("appName", "天衍智枢")
                 put("version", "1.0")
                 putJsonArray("models") {
                     configuredModels.forEach { model ->
@@ -608,16 +608,16 @@ class WebChatBridgeServer @Inject constructor(
             manager.createNotificationChannel(
                 android.app.NotificationChannel(
                     NOTIFICATION_CHANNEL_ID,
-                    "万象智枢 Web 协作台",
+                    "天衍智枢 Web 协作台",
                     android.app.NotificationManager.IMPORTANCE_LOW,
-                ).apply { description = "万象智枢局域网协作服务"; setShowBadge(false) },
+                ).apply { description = "天衍智枢局域网协作服务"; setShowBadge(false) },
             )
         }
         manager.notify(
             NOTIFICATION_ID,
             androidx.core.app.NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.stat_notify_sync)
-                .setContentTitle("万象智枢 Web 协作台运行中")
+                .setContentTitle("天衍智枢 Web 协作台运行中")
                 .setContentText("$url（配对码：$pin）")
                 .setOngoing(true)
                 .setPriority(androidx.core.app.NotificationCompat.PRIORITY_LOW)

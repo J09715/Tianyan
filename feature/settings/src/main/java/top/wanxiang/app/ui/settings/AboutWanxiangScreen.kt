@@ -46,11 +46,11 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import java.io.File
 
 /**
- * 关于万象（本地信息页）
+ * 关于天衍（本地信息页）
  * 替代原「关于、更新与官方社区」页：版本/设备/运行时均为本地只读数据，无任何网络请求。
  */
 @Composable
-fun AboutWanxiangScreen(
+fun AboutTianyanScreen(
     onBack: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
@@ -72,7 +72,7 @@ fun AboutWanxiangScreen(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item {
-            RuntimeTopBar("关于万象", onBack = onBack)
+            RuntimeTopBar("关于天衍", onBack = onBack)
         }
         item {
             SectionHeader("应用信息")
@@ -80,7 +80,7 @@ fun AboutWanxiangScreen(
                 Column(Modifier.padding(vertical = 4.dp)) {
                     SettingsRowLocal(
                         icon = RuntimeIconName.Info,
-                        title = "万象 · WanXiang",
+                        title = "天衍 · Tianyan",
                         value = "Android 原生 Linux PRoot 沙箱与 AI 结对中枢",
                     )
                     SettingsRowLocal(
@@ -157,10 +157,10 @@ fun AboutWanxiangScreen(
                         title = "系统设置与电池优化",
                         value = "跳转到系统设置",
                         onClick = {
-                            val c = LocalContext.current
-                            c.startActivity(Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                data = Uri.parse("package:" + c.packageName)
-                            })
+                            val intent = Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.parse("package:" + context.packageName)
+                            }
+                            context.startActivity(intent)
                         },
                     )
                 }

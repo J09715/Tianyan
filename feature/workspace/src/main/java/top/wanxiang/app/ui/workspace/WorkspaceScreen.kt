@@ -139,7 +139,7 @@ private fun TemplatePreviewImage(file: java.io.File, modifier: Modifier = Modifi
 }
 
 /**
- * 万象 · 工坊空间 (Workspace Space)
+ * 天衍 · 工坊空间 (Workspace Space)
  * 管理 Linux 隔离工作区、代码工程与文件项目
  */
 /** 骨架屏：shimmer 流动高光 + 卡片占位 */
@@ -820,7 +820,7 @@ fun WorkspaceScreen(
                                 TextButton(
                                     onClick = {
                                         val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                                        clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("WanXiang Build Log", progress.logOutput))
+                                        clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Tianyan Build Log", progress.logOutput))
                                     },
                                     contentPadding = PaddingValues(0.dp),
                                 ) {

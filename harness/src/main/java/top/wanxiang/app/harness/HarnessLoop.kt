@@ -140,7 +140,7 @@ class HarnessLoop @Inject constructor(
     // ---- 当前前台聚焦会话的响应式镜像（全部委托给投影协作类） ----
     val messages: StateFlow<List<HarnessMessage>> get() = messageProjector.foregroundMessages
 
-    /** Session-scoped message stream used by trusted secondary surfaces such as WanXiang WebChat. */
+    /** Session-scoped message stream used by trusted secondary surfaces such as Tianyan WebChat. */
     fun messagesForSession(sessionId: String): StateFlow<List<HarnessMessage>> =
         messageProjector.messagesFlow(sessionId)
 

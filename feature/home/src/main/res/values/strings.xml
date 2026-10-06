@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="home_dashboard_title">万象 · 运行仪表盘</string>
+    <string name="home_dashboard_title">天衍 · 运行仪表盘</string>
     <string name="home_system_resources">系统资源监控</string>
     <string name="home_memory">运行内存 (RAM)</string>
     <string name="home_memory_total">总量 %1$d MB</string>
@@ -26,7 +26,7 @@
     <string name="home_view_checks">查看全部 %1$d 项体检指标</string>
     <string name="home_repair">一键自愈修复</string>
     <string name="home_environment_ready_description">环境配置完善，已满足 Claude Code / OpenClaw 等 AI 工具运行要求</string>
-    <string name="home_initialize_description">请先初始化并启动沙箱，万象将自动体检 DNS、国内镜像加速源与核心开发工具链。</string>
+    <string name="home_initialize_description">请先初始化并启动沙箱，天衍将自动体检 DNS、国内镜像加速源与核心开发工具链。</string>
     <string name="home_runtime_ready">Linux 沙箱引擎 · 已就绪</string>
     <string name="home_runtime_error">沙箱引擎异常</string>
     <string name="home_runtime_initializing">正在初始化沙箱环境…</string>
@@ -60,7 +60,7 @@
     <string name="home_android_env_desc">离线包已集成 Android · Flutter · 反编译三大环境</string>
     <string name="home_android_env_qq">进群取离线包</string>
     <string name="home_android_env_tool_center">插件中心安装</string>
-    <string name="home_qq_clipboard_label">万象官方交流群</string>
+    <string name="home_qq_clipboard_label">天衍官方交流群</string>
     <string name="home_qq_copied">已复制 QQ 群号：%1$s，可打开 QQ 搜索加入</string>
     <string name="home_webchat_title">WebChat 电脑大屏协作</string>
     <string name="home_webchat_running">局域网服务运行中 · 已保活</string>
@@ -70,5 +70,5 @@
     <string name="home_webchat_copy">一键复制</string>
     <string name="home_webchat_copied">已复制免密链接，发到电脑打开即可自动进入工作台！</string>
     <string name="home_webchat_hint">💡 提示：电脑需与手机连接至同一 Wi-Fi；当前在线设备：%1$d 台</string>
-    <string name="home_webchat_intro">无需数据线，在同一 Wi-Fi 下使用电脑浏览器直接连入万象 Agent、审阅代码并管理沙箱工作区。</string>
+    <string name="home_webchat_intro">无需数据线，在同一 Wi-Fi 下使用电脑浏览器直接连入天衍 Agent、审阅代码并管理沙箱工作区。</string>
 </resources>

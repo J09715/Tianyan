@@ -60,10 +60,10 @@ import kotlin.math.roundToInt
 
 /**
  * 底部悬浮液态玻璃 Tab 栏 —— 移植自 AiCode core/ui/FloatingTabBar.kt（选中索引版）。
- * 指示器弹簧跟手、长按可拖、滚动时整条弱化。图标体系换成万象 RuntimeIcon。
+ * 指示器弹簧跟手、长按可拖、滚动时整条弱化。图标体系换成天衍 RuntimeIcon。
  */
 
-/** Git/页面共用设计令牌（AiCode Radius/Spacing/GitLanePalette/GitStatusColors 的万象映射）。 */
+/** Git/页面共用设计令牌（AiCode Radius/Spacing/GitLanePalette/GitStatusColors 的天衍映射）。 */
 object GitTokens {
     val spacingXs = 4.dp
     val spacingSm = 8.dp

@@ -714,7 +714,7 @@ fun ModelExportDialog(
                             coroutineScope.launch {
                                 val jsonStr = onGenerateJson(includeKeys)
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                                val clip = ClipData.newPlainText("WanXiang Model Config", jsonStr)
+                                val clip = ClipData.newPlainText("Tianyan Model Config", jsonStr)
                                 clipboard?.setPrimaryClip(clip)
                                 Toast.makeText(context, "已复制 JSON 配置到剪贴板", Toast.LENGTH_SHORT).show()
                                 onDismiss()
@@ -750,7 +750,7 @@ fun ModelExportDialog(
                                 val jsonStr = onGenerateJson(includeKeys)
                                 val sendIntent = Intent(Intent.ACTION_SEND).apply {
                                     type = "text/plain"
-                                    putExtra(Intent.EXTRA_SUBJECT, "WanXiang Model Profiles")
+                                    putExtra(Intent.EXTRA_SUBJECT, "Tianyan Model Profiles")
                                     putExtra(Intent.EXTRA_TEXT, jsonStr)
                                 }
                                 context.startActivity(Intent.createChooser(sendIntent, "分享模型配置"))

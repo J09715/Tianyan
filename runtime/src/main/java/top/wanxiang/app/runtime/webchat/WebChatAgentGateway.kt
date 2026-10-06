@@ -4,7 +4,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 
-/** Runtime-facing boundary for exposing WanXiang's native Harness to the LAN Web console. */
+/** Runtime-facing boundary for exposing Tianyan's native Harness to the LAN Web console. */
 interface WebChatAgentGateway {
     suspend fun createSession(title: String, workspace: String): String
     suspend fun deleteSession(sessionId: String)

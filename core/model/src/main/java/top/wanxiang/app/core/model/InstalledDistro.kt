@@ -1,7 +1,7 @@
 package top.wanxiang.app.core.model
 
 /**
- * 万象支持的已安装 Linux 发行版实例数据模型。
+ * 天衍支持的已安装 Linux 发行版实例数据模型。
  */
 data class InstalledDistro(
     val id: String,

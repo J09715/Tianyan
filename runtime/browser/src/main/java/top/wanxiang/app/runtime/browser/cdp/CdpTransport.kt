@@ -105,7 +105,7 @@ object DevToolsSocketResolver {
 object HttpOverSocket {
     /** 发送 GET 并读完整响应（支持 Content-Length 与读至关闭两种）。 */
     fun get(conn: CdpConnection, path: String, host: String = "127.0.0.1"): String {
-        val req = "GET $path HTTP/1.1\r\nHost: $host\r\nConnection: close\r\nUser-Agent: WanXiang-Cdp/1.0\r\n\r\n"
+        val req = "GET $path HTTP/1.1\r\nHost: $host\r\nConnection: close\r\nUser-Agent: Tianyan-Cdp/1.0\r\n\r\n"
         conn.output.write(req.toByteArray(Charsets.US_ASCII))
         conn.output.flush()
 

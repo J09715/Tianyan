@@ -15,6 +15,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.LaunchedEffect
@@ -31,8 +34,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import top.wanxiang.app.core.datastore.AppearancePreferences
 import top.wanxiang.app.runtime.service.RuntimeServiceController
-import top.wanxiang.app.ui.navigation.WanXiangNavHost
-import top.wanxiang.app.ui.theme.WanXiangTheme
+import top.wanxiang.app.ui.navigation.TianyanNavHost
+import top.wanxiang.app.ui.theme.TianyanTheme
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 
 import javax.inject.Inject
@@ -96,7 +99,7 @@ class MainActivity : AppCompatActivity() {
                     fontScale = systemDensity.fontScale,
                 ),
             ) {
-                WanXiangTheme(
+                TianyanTheme(
                     style = top.wanxiang.app.ui.theme.ThemeStyle.fromId(themeStyle),
                     darkTheme = isDark,
                     backgroundUri = chengmingBackgroundUri,
@@ -110,7 +113,7 @@ class MainActivity : AppCompatActivity() {
                     if (onboarding.loaded && keepSplashOnScreen.value) {
                         keepSplashOnScreen.value = false
                         android.util.Log.i(
-                            "WanXiangStartup",
+                            "TianyanStartup",
                             "splash dismissed in ${android.os.SystemClock.uptimeMillis() - createdUptimeMs}ms",
                         )
                     }
@@ -120,7 +123,7 @@ class MainActivity : AppCompatActivity() {
                     !onboarding.loaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                     }
-                    onboarding.completed -> WanXiangNavHost(globalNavigationBus = globalNavigationBus)
+                    onboarding.completed -> TianyanNavHost(globalNavigationBus = globalNavigationBus)
                     else -> OnboardingScreen(onboardingViewModel)
                 }
                 // 全局 git 凭据弹窗宿主：容器 helper 走文件 IPC 请求凭据时，无论在哪个页面都能立即弹出。

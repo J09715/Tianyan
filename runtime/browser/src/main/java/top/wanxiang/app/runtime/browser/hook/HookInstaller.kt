@@ -11,7 +11,7 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlinx.serialization.json.JsonPrimitive
 
 /**
- * 每引擎一个安装器：为每个 tab 的 WebView 装 `WanxiangBridge`（addJavascriptInterface）
+ * 每引擎一个安装器：为每个 tab 的 WebView 装 `TianyanBridge`（addJavascriptInterface）
  * 与 document-start 脚本（[WebViewCompat.addDocumentStartJavaScript]，WebView 105+）。
  *
  * 线程约定：所有方法都必须在主线程调用（[WebViewTabPool] 的 create / close 均在主线程上下文）。
@@ -34,7 +34,7 @@ class HookInstaller(
 
     /** WebView 创建后、loadUrl 之前调用（主线程）。 */
     fun onWebViewCreated(tabId: String, view: WebView) {
-        view.addJavascriptInterface(WanxiangHookBridge(tabId, pipeline), "WanxiangBridge")
+        view.addJavascriptInterface(TianyanHookBridge(tabId, pipeline), "TianyanBridge")
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             runCatching {
                 docStartHandles[tabId] =
@@ -54,7 +54,7 @@ class HookInstaller(
 
     private fun doDestroy(tabId: String, view: WebView) {
         docStartHandles.remove(tabId)?.let { ref -> runCatching { ref.remove() } }
-        runCatching { view.removeJavascriptInterface("WanxiangBridge") }
+        runCatching { view.removeJavascriptInterface("TianyanBridge") }
     }
 
     /** onPageStarted：仅降级路径需要（无 document-start 支持的古董 WebView）。 */

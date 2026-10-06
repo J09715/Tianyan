@@ -65,7 +65,7 @@ import top.wanxiang.app.ui.components.RuntimeIconName
 import top.wanxiang.app.ui.components.RuntimeTopBar
 
 /**
- * 万象 · 外观、字号与终端深度定制页面 (Appearance & Terminal Settings)
+ * 天衍 · 外观、字号与终端深度定制页面 (Appearance & Terminal Settings)
  */
 @Composable
 fun AppearanceSettingsScreen(

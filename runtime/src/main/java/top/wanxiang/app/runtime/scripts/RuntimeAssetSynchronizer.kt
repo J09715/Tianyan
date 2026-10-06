@@ -10,7 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * 🛠️ 万象资产脚本同步器 (Runtime Asset Synchronizer)
+ * 🛠️ 天衍资产脚本同步器 (Runtime Asset Synchronizer)
  * 将 APK 内置 assets/scripts/ 下的标准化 Shell 脚本与 tools 自动提取并同步到
  * Linux 沙箱隔离目录 (/opt/wanxiang/scripts/ 与 /opt/wanxiang/tools/)，并赋予执行权限。
  */

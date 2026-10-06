@@ -1,7 +1,7 @@
 package top.wanxiang.app.core.model
 
 /**
- * 万象支持的系统运行与特权模式。
+ * 天衍支持的系统运行与特权模式。
  */
 enum class ExecutionMode(
     val id: String,

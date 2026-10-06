@@ -40,7 +40,7 @@ fun HomeAnnouncementDialog(
     RuntimeAlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = { RuntimeTextButton(onClick = onDismiss) { Text("知道了") } },
-        title = { Text("万象公告") },
+        title = { Text("天衍公告") },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),

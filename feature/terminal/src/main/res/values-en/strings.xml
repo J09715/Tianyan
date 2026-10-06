@@ -7,10 +7,10 @@
     <string name="terminal_clipboard_label">Terminal output</string>
     <string name="terminal_copied">Terminal output copied</string>
     <string name="terminal_project_title">Matrix · %1$s</string>
-    <string name="terminal_console_title">WanXiang · Matrix console</string>
+    <string name="terminal_console_title">Tianyan · Matrix console</string>
     <string name="terminal_copy">Copy</string>
     <string name="terminal_paste">Paste</string>
-    <string name="terminal_starting">Starting the WanXiang Linux environment…</string>
+    <string name="terminal_starting">Starting the Tianyan Linux environment…</string>
     <string name="terminal_reset_complete">Terminal reset and restarted</string>
     <string name="terminal_default_label">Terminal %1$d</string>
     <string name="terminal_quick_main">Main terminal</string>

@@ -896,7 +896,7 @@ class WorkspaceManager @Inject constructor(
         }
     }
 
-    /** 生成逆向工作流指引 README，衔接万象内置的 jadx / apktool / 逆向 MCP 能力。 */
+    /** 生成逆向工作流指引 README，衔接天衍内置的 jadx / apktool / 逆向 MCP 能力。 */
     private fun writeReverseReadme(
         projectDir: File,
         name: String,
@@ -920,7 +920,7 @@ class WorkspaceManager @Inject constructor(
             | `unpacked/` | 第一层 ZIP 解包产物（$entryCount 个文件）：`classes.dex`、`resources.arsc`、`AndroidManifest.xml`（二进制 AXML）、`res/`、`assets/`、`lib/` 等 |
             | `apk-info.properties` | 来源与元数据 |
 
-            ## 下一步：在万象终端 / Agent 中继续深挖
+            ## 下一步：在天衍终端 / Agent 中继续深挖
 
             沙箱内已内置逆向工具链（Android & 移动全栈开发套件 或 apktool 套件装配后可用）：
 

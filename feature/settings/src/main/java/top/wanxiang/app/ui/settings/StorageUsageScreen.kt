@@ -360,7 +360,7 @@ private fun StorageDashboardCard(
     ) {
         Column {
             Text(
-                "万象已管理空间",
+                "天衍已管理空间",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

@@ -140,7 +140,7 @@ private fun terminalInputDelta(previous: TextFieldValue, current: TextFieldValue
 }
 
 /**
- * 万象 · 矩阵控制台 (Matrix Terminal)
+ * 天衍 · 矩阵控制台 (Matrix Terminal)
  * 基于原生 Linux PTY，集成开发者快捷辅助按键栏
  */
 @Composable

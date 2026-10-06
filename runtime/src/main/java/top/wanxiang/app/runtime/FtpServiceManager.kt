@@ -260,7 +260,7 @@ class FtpServiceManager @Inject constructor(
         }.getOrNull() ?: return
         val lock = wakeLock ?: pm.newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
-            "Wanxiang::FtpServer",
+            "Tianyan::FtpServer",
         ).also { it.setReferenceCounted(false) }
         wakeLock = lock
         runCatching { lock.acquire(WAKE_LOCK_TIMEOUT_MS) }
@@ -273,7 +273,7 @@ class FtpServiceManager @Inject constructor(
         }.getOrNull() ?: return
         val lock = wifiLock ?: wifi.createWifiLock(
             @Suppress("DEPRECATION") WifiManager.WIFI_MODE_FULL_HIGH_PERF,
-            "Wanxiang::FtpServer",
+            "Tianyan::FtpServer",
         ).also { it.setReferenceCounted(false) }
         wifiLock = lock
         runCatching { lock.acquire() }
@@ -296,7 +296,7 @@ class FtpServiceManager @Inject constructor(
             manager.createNotificationChannel(
                 NotificationChannel(
                     NOTIFICATION_CHANNEL_ID,
-                    "万象 Linux FTP 文件服务",
+                    "天衍 Linux FTP 文件服务",
                     NotificationManager.IMPORTANCE_LOW,
                 ).apply {
                     description = "用于展示 Linux 沙箱 FTP 远程文件访问运行状态的常驻通知"

@@ -6,9 +6,9 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 
 /**
- * WanXiangDevBuildCoordinator — 调度 GitHub Actions 云端构建与本地产物校验。
+ * TianyanDevBuildCoordinator — 调度 GitHub Actions 云端构建与本地产物校验。
  */
-object WanXiangDevBuildCoordinator {
+object TianyanDevBuildCoordinator {
 
     sealed interface BuildStatus {
         data object Idle : BuildStatus

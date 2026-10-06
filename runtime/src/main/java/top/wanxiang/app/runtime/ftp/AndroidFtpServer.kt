@@ -179,7 +179,7 @@ internal class FtpSession(
     private val closed = AtomicBoolean(false)
 
     suspend fun handle() = withContext(Dispatchers.IO) {
-        sendResponse(220, "WanXiang Linux FTP Server ready.")
+        sendResponse(220, "Tianyan Linux FTP Server ready.")
         onLog("[$clientIp] 客户端已连接")
 
         while (!closed.get()) {
@@ -214,7 +214,7 @@ internal class FtpSession(
             "MODE" -> handleMode(arg)
             "STRU" -> handleStru(arg)
             "ALLO" -> sendResponse(200, "ALLO command ignored.")
-            "HELP" -> sendResponse(214, "WanXiang Linux FTP Server.")
+            "HELP" -> sendResponse(214, "Tianyan Linux FTP Server.")
             "SYST" -> sendResponse(215, "UNIX Type: L8")
             "NOOP" -> sendResponse(200, "NOOP ok.")
             "QUIT" -> {
@@ -254,7 +254,7 @@ internal class FtpSession(
             "RNTO" -> handleRnto(arg)
             "ABOR" -> sendResponse(226, "Abort successful.")
             "SITE" -> sendResponse(200, "SITE command ignored.")
-            "STAT" -> sendResponse(211, "WanXiang FTP server status: OK")
+            "STAT" -> sendResponse(211, "Tianyan FTP server status: OK")
             else -> sendResponse(502, "Command not implemented.")
         }
     }

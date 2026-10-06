@@ -5,4 +5,4 @@ package top.wanxiang.app.runtime.terminal
  * 写入发行版 `/opt/wanxiang/motd`，登录 shell 通过 `cat` 打印，绕开命令串转义问题。
  */
 internal fun terminalBanner(): String =
-    "万象 · WanXiang Linux AI Runtime\n"
+    "天衍 · Tianyan Linux AI Runtime\n"

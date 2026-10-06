@@ -41,7 +41,7 @@ data class JsonRpcError(
 data class McpInitializeParams(
     val protocolVersion: String = MCP_PROTOCOL_VERSION,
     val capabilities: JsonObject = JsonObject(emptyMap()),
-    val clientInfo: McpClientInfo = McpClientInfo("WanXiang-Agent", "1.0.0"),
+    val clientInfo: McpClientInfo = McpClientInfo("Tianyan-Agent", "1.0.0"),
 )
 
 @Serializable

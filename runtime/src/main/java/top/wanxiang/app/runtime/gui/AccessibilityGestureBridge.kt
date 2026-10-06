@@ -13,17 +13,17 @@ import kotlin.math.roundToInt
 
 /**
  * Optional global-gesture backend. Active only when the user enables
- * [WanxiangGuiAccessibilityService] in system accessibility settings.
+ * [TianyanGuiAccessibilityService] in system accessibility settings.
  */
 object AccessibilityGestureBridge {
     @Volatile
-    private var serviceRef: WeakReference<WanxiangGuiAccessibilityService>? = null
+    private var serviceRef: WeakReference<TianyanGuiAccessibilityService>? = null
 
-    internal fun attach(service: WanxiangGuiAccessibilityService) {
+    internal fun attach(service: TianyanGuiAccessibilityService) {
         serviceRef = WeakReference(service)
     }
 
-    internal fun detach(service: WanxiangGuiAccessibilityService) {
+    internal fun detach(service: TianyanGuiAccessibilityService) {
         if (serviceRef?.get() === service) serviceRef = null
     }
 
@@ -83,7 +83,7 @@ object AccessibilityGestureBridge {
  * Thin accessibility service used only as a global gesture injector.
  * Does not scrape UI; screen observation still uses privileged uiautomator dump.
  */
-class WanxiangGuiAccessibilityService : AccessibilityService() {
+class TianyanGuiAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = WeakReference(this)
@@ -105,7 +105,7 @@ class WanxiangGuiAccessibilityService : AccessibilityService() {
     companion object {
         private const val TAG = "TaiXu-GuiA11y"
         @Volatile
-        private var instance: WeakReference<WanxiangGuiAccessibilityService>? = null
+        private var instance: WeakReference<TianyanGuiAccessibilityService>? = null
 
         fun performGlobal(action: Int): Boolean {
             val service = instance?.get() ?: return false

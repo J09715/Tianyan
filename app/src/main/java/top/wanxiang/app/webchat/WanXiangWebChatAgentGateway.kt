@@ -28,7 +28,7 @@ import top.wanxiang.app.runtime.webchat.WebChatMessage
 import top.wanxiang.app.runtime.webchat.WebChatSessionSnapshot
 
 @Singleton
-class WanXiangWebChatAgentGateway @Inject constructor(
+class TianyanWebChatAgentGateway @Inject constructor(
     private val harnessLoop: HarnessLoop,
     private val sessions: HarnessSessionRepository,
     private val models: AiModelRepository,

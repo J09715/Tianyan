@@ -27,7 +27,7 @@ import kotlinx.coroutines.launch
 import top.wanxiang.app.core.database.HarnessSessionEntity
 import top.wanxiang.app.core.database.HarnessSessionRepository
 import top.wanxiang.app.harness.HarnessLoop
-import top.wanxiang.app.ui.theme.WanXiangTheme
+import top.wanxiang.app.ui.theme.TianyanTheme
 import javax.inject.Inject
 import kotlin.math.roundToInt
 
@@ -104,7 +104,7 @@ class FloatingChatService : Service() {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool)
             owner.attach(this)
             setContent {
-                WanXiangTheme {
+                TianyanTheme {
                     val messages by harnessLoop.messages.collectAsState()
                     val running by harnessLoop.running.collectAsState()
                     val thinkingLive by harnessLoop.thinkingLive.collectAsState()

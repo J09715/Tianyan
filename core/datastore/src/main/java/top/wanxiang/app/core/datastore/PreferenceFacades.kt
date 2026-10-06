@@ -202,7 +202,7 @@ class BrowserPreferences @Inject constructor(private val store: SettingsDataStor
 
 /** 云端配置窄门面：仅暴露缓存读取与写入，供启动拉取/更新/公告使用。 */
 @Singleton
-class WanxiangCloudPreferences @Inject constructor(private val store: SettingsDataStore) {
+class TianyanCloudPreferences @Inject constructor(private val store: SettingsDataStore) {
     /** 缓存的云端配置 JSON（Map<String,String> 序列化，离线兜底）。 */
     val cachedConfigJson get() = store.cloudConfigJson
     /** 最近一次拉取成功时间戳。 */

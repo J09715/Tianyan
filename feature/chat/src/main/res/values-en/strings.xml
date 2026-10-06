@@ -50,7 +50,7 @@
     <string name="chat_conversation_messages">Conversation messages</string>
     <string name="chat_context_over_budget">Over budget; history will be compacted before the next request</string>
     <string name="chat_context_estimate">Estimate · Final usage is calculated by the harness before sending</string>
-    <string name="chat_agent_intro">WanXiang Agent can write code, manage Linux workspace files, run shell commands, and troubleshoot system issues.</string>
+    <string name="chat_agent_intro">Tianyan Agent can write code, manage Linux workspace files, run shell commands, and troubleshoot system issues.</string>
     <string name="chat_quick_start">Quick start:</string>
     <string name="chat_capability_mount">🧠 Attach skills and MCP tools</string>
     <string name="chat_enabled_for_request">Enabled for this request</string>

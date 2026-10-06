@@ -13,7 +13,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 /**
- * 应用日志：普通运行日志与智能体调试日志统一写入公共 Download/WanXiang 目录（自动创建），
+ * 应用日志：普通运行日志与智能体调试日志统一写入公共 Download/Tianyan 目录（自动创建），
  * 便于用户直接从文件管理器取走日志。未授予"所有文件访问"或公共目录写入失败时，
  * 回退到应用私有 files/logs 目录，保证日志永不静默丢失。
  */
@@ -142,7 +142,7 @@ class AppLogger @Inject constructor(
         file.appendText(content)
     }
 
-    /** 公共 Download/WanXiang 目录下的日志文件；未授予所有文件访问时返回 null。 */
+    /** 公共 Download/Tianyan 目录下的日志文件；未授予所有文件访问时返回 null。 */
     private fun publicLogFile(fileName: String): File? {
         if (!Environment.isExternalStorageManager()) return null
         return runCatching {
@@ -166,8 +166,8 @@ class AppLogger @Inject constructor(
     }
 
     private companion object {
-        const val TAG = "WanXiang"
-        const val PUBLIC_LOG_DIR = "WanXiang"
+        const val TAG = "Tianyan"
+        const val PUBLIC_LOG_DIR = "Tianyan"
         const val INTERNAL_LOG_DIR = "logs"
         const val GENERAL_LOG_FILE = "runtime.log"
         const val AGENT_LOG_FILE = "agent_debug.log"

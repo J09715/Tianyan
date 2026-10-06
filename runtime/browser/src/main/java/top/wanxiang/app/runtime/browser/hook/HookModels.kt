@@ -7,7 +7,7 @@ import kotlinx.serialization.Serializable
  * Hook 引擎数据模型（阶段 1：注入式）。
  *
  * 规则由 agent 经 `browser.hook_create` 创建，序列化为 JSON payload 推送到页内
- * [assets/hook_runtime.js]；命中与网络事件经 WanxiangBridge 回传。
+ * [assets/hook_runtime.js]；命中与网络事件经 TianyanBridge 回传。
  */
 @Serializable
 enum class HookType {

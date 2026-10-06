@@ -10,7 +10,7 @@ import android.webkit.JavascriptInterface
  * - [getRules]：同步返回缓存好的规则 payload JSON —— fetch/XHR wrapper 页内同步决策
  *   block/mock 的关键（异步回调式桥做不到这一点，这也是不采用第三方 JsBridge 库的原因）。
  */
-class WanxiangHookBridge(
+class TianyanHookBridge(
     private val tabId: String,
     private val pipeline: HookEventPipeline,
 ) {

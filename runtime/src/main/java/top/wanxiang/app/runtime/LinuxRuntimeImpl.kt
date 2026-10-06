@@ -945,7 +945,7 @@ class LinuxRuntimeImpl @Inject constructor(
             readTimeout = 6000
             requestMethod = "GET"
             instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "WanXiang-apt-mirror-probe")
+            setRequestProperty("User-Agent", "Tianyan-apt-mirror-probe")
             val code = responseCode
             disconnect()
             code == 200
@@ -984,14 +984,14 @@ class LinuxRuntimeImpl @Inject constructor(
     )
 
     private fun debianSources(main: String, security: String, codename: String): String = """
-        # WanXiang: 国内镜像（启动探测自动选择，$main）
+        # Tianyan: 国内镜像（启动探测自动选择，$main）
         deb $main $codename main contrib non-free non-free-firmware
         deb $main $codename-updates main contrib non-free non-free-firmware
         deb $security $codename-security main contrib non-free non-free-firmware
     """.trimIndent()
 
     private fun ubuntuPortsSources(base: String, codename: String): String = """
-        # WanXiang: 国内镜像（启动探测自动选择，$base）
+        # Tianyan: 国内镜像（启动探测自动选择，$base）
         deb $base $codename main restricted universe multiverse
         deb $base $codename-updates main restricted universe multiverse
         deb $base $codename-security main restricted universe multiverse
@@ -999,7 +999,7 @@ class LinuxRuntimeImpl @Inject constructor(
     """.trimIndent()
 
     private fun kaliSources(base: String): String = """
-        # WanXiang: 国内镜像（启动探测自动选择，$base）
+        # Tianyan: 国内镜像（启动探测自动选择，$base）
         deb $base kali-rolling main contrib non-free
     """.trimIndent()
 
@@ -1028,7 +1028,7 @@ class LinuxRuntimeImpl @Inject constructor(
         config.parentFile?.mkdirs()
         config.writeText(
             """
-            # WanXiang: 清华大学 TUNA PyPI 镜像
+            # Tianyan: 清华大学 TUNA PyPI 镜像
             [global]
             index-url = https://pypi.tuna.tsinghua.edu.cn/simple
             """.trimIndent() + "\n",
@@ -1061,25 +1061,25 @@ class LinuxRuntimeImpl @Inject constructor(
             """
             #!/bin/sh
             set -e
-            echo "[WanXiang] Scanning for perl deb packages to patch hardlinks..."
+            echo "[Tianyan] Scanning for perl deb packages to patch hardlinks..."
             TMPDIR="${'$'}(mktemp -d /tmp/wanxiang-perl-fix.XXXXXX)"
             trap 'rm -rf "${'$'}TMPDIR"' EXIT INT TERM
 
             # 优先从 apt 缓存寻找 perl deb 包，若无则尝试下载
             PERL_DEB="${'$'}(ls -1 /var/cache/apt/archives/perl_*.deb 2>/dev/null | head -n 1 || true)"
             if [ -z "${'$'}PERL_DEB" ]; then
-                echo "[WanXiang] Downloading perl package..."
+                echo "[Tianyan] Downloading perl package..."
                 cd "${'$'}TMPDIR" && apt-get download perl || true
                 PERL_DEB="${'$'}(ls -1 "${'$'}TMPDIR"/perl_*.deb 2>/dev/null | head -n 1 || true)"
             fi
 
             if [ -z "${'$'}PERL_DEB" ] || [ ! -f "${'$'}PERL_DEB" ]; then
-                echo "[WanXiang] Perl deb package not found, attempting apt --fix-broken install..."
+                echo "[Tianyan] Perl deb package not found, attempting apt --fix-broken install..."
                 apt-get --fix-broken install -y || true
                 exit 0
             fi
 
-            echo "[WanXiang] Patching ${'$'}PERL_DEB..."
+            echo "[Tianyan] Patching ${'$'}PERL_DEB..."
             WORKDIR="${'$'}TMPDIR/repack"
             mkdir -p "${'$'}WORKDIR/DEBIAN"
             dpkg-deb -e "${'$'}PERL_DEB" "${'$'}WORKDIR/DEBIAN"
@@ -1089,12 +1089,12 @@ class LinuxRuntimeImpl @Inject constructor(
             if [ -f "${'$'}WORKDIR/usr/bin/perlthanks" ]; then
                 rm -f "${'$'}WORKDIR/usr/bin/perlthanks"
                 ln -s perlbug "${'$'}WORKDIR/usr/bin/perlthanks"
-                echo "[WanXiang] Converted /usr/bin/perlthanks to symlink"
+                echo "[Tianyan] Converted /usr/bin/perlthanks to symlink"
             fi
 
             dpkg-deb -b "${'$'}WORKDIR" "${'$'}TMPDIR/perl-patched.deb"
             dpkg -i --force-overwrite "${'$'}TMPDIR/perl-patched.deb"
-            echo "[WanXiang] Perl patch installed successfully."
+            echo "[Tianyan] Perl patch installed successfully."
             """.trimIndent() + "\n",
         )
         runCatching {
@@ -1202,7 +1202,7 @@ class LinuxRuntimeImpl @Inject constructor(
         home.mkdirs()
         // .gitconfig 合并式写入：writeText 全量覆盖会抹掉用户 [user] 署名段（E2E 实锤：
         // 用户配好署名→重启 App→git 提交报"未配置署名"）。保留用户已有 section，只确保
-        // 万象管理的 safe.directory / http.version 两个键存在。credential.helper 由
+        // 天衍管理的 safe.directory / http.version 两个键存在。credential.helper 由
         // GitCredentialIpcBootstrap 自己用 git config 追加（天然合并，不碰这里）。
         val gitconfig = File(home, ".gitconfig")
         val existing = runCatching { if (gitconfig.isFile) gitconfig.readText() else "" }.getOrDefault("")
@@ -1300,7 +1300,7 @@ class LinuxRuntimeImpl @Inject constructor(
 
         val WANXIANG_HOST_SCRIPT = listOf(
             "#!/bin/sh",
-            "# WanXiang Host Bridge CLI",
+            "# Tianyan Host Bridge CLI",
             "# Usage: wanxiang-host install-apk <path> | wanxiang-host shell <cmd> | wanxiang-host health",
             "",
             "BRIDGE_URL=\"http://127.0.0.1:7980\"",
@@ -1370,7 +1370,7 @@ class LinuxRuntimeImpl @Inject constructor(
             "    echo \"\"",
             "    ;;",
             "  *)",
-            "    echo \"WanXiang Host Bridge CLI\"",
+            "    echo \"Tianyan Host Bridge CLI\"",
             "    echo \"  wanxiang-host install-apk <path>   Install APK on host (wireless ADB or system dialog)\"",
             "    echo \"  wanxiang-host shell <command>      Run host shell (wireless ADB or Shizuku/root)\"",
             "    echo \"  wanxiang-host logcat [pkg] [tag] [prio] [kw] [lines] Capture logcat via wireless ADB\"",
@@ -1381,7 +1381,7 @@ class LinuxRuntimeImpl @Inject constructor(
 
         val WANXIANG_ANDROID_EXEC_SCRIPT = listOf(
             "#!/bin/sh",
-            "# WanXiang Android Binary Executor",
+            "# Tianyan Android Binary Executor",
             "# Sets up correct linker env for Android system binaries in PRoot sandbox.",
             "# Usage: wanxiang-android-exec /system/bin/settings put global captive_portal_http_url ''",
             "",

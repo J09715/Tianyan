@@ -383,7 +383,7 @@ class SshServiceManager @Inject constructor(
         }.getOrNull() ?: return
         val lock = wakeLock ?: pm.newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
-            "Wanxiang::LinuxRuntime",
+            "Tianyan::LinuxRuntime",
         ).also { it.setReferenceCounted(false) }
         wakeLock = lock
         runCatching { lock.acquire(WAKE_LOCK_TIMEOUT_MS) }
@@ -398,7 +398,7 @@ class SshServiceManager @Inject constructor(
             // WIFI_MODE_FULL_HIGH_PERF 在 API 34+ 标记弃用，但 FULL_LOW_LATENCY 语义不同（低延迟≠高吞吐），
             // 保持原模式以不改变行为；系统在 Android 13+ 会自行优化调度。
             @Suppress("DEPRECATION") WifiManager.WIFI_MODE_FULL_HIGH_PERF,
-            "Wanxiang::LinuxRuntime",
+            "Tianyan::LinuxRuntime",
         ).also { it.setReferenceCounted(false) }
         wifiLock = lock
         runCatching { lock.acquire() }

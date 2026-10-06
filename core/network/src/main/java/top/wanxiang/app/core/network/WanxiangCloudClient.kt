@@ -19,13 +19,13 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * 万象云端服务客户端：远程配置 + 公告。
+ * 天衍云端服务客户端：远程配置 + 公告。
  *
  * 三个接口均为匿名（无需登录/Header），统一响应 `{"code":0,"msg":"","data":...}`。
  * 网络失败由调用方静默降级——云端不可达时版本检查回退纯 GitHub、镜像回退直连。
  */
 @Singleton
-class WanxiangCloudClient @Inject constructor(
+class TianyanCloudClient @Inject constructor(
     private val httpClient: OkHttpClient,
 ) {
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
@@ -88,7 +88,7 @@ class WanxiangCloudClient @Inject constructor(
         else runCatching { json.decodeFromString(configMapSerializer, cachedJson) }.getOrNull().orEmpty()
 
     private fun executeGet(url: String): String {
-        val request = Request.Builder().url(url).header("User-Agent", "WanXiang-App").get().build()
+        val request = Request.Builder().url(url).header("User-Agent", "Tianyan-App").get().build()
         httpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw IllegalStateException("云端响应错误 HTTP ${response.code}")
             return response.body?.string().orEmpty()

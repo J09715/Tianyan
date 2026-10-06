@@ -12,7 +12,7 @@ import kotlinx.serialization.json.jsonPrimitive
  * 模型无关的 Planner 决策协议解析器（Model-Agnostic Protocol Parser）。
  *
  * 核心目标：
- * 万象支持任何 LLM（OpenAI, Anthropic Claude, Google Gemini, DeepSeek, 阿里通义千问, 智谱 GLM, 本地 Ollama 等）。
+ * 天衍支持任何 LLM（OpenAI, Anthropic Claude, Google Gemini, DeepSeek, 阿里通义千问, 智谱 GLM, 本地 Ollama 等）。
  * 本解析器专为多模型输出设计，具备高度容错：
  * 1. 优先提取 Markdown 代码块 ```json ... ```；
  * 2. 兜底提取前后带有杂质文本的裸 JSON 对象 `{ ... }`；

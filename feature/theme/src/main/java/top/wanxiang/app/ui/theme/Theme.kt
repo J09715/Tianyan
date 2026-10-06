@@ -36,7 +36,7 @@ import kotlinx.coroutines.withContext
 import top.wanxiang.app.feature.theme.R
 
 /**
- * 万象内置主题风格。
+ * 天衍内置主题风格。
  *
  * - [XUANTONG]（玄同）—— 默认主题。源自《老子》「万物同归于玄」，曜石夜空与温润素白的 M3 Expressive 设计系统。
  * - [CHENGMING]（澄明）—— 液态玻璃主题。源自「澄明」通透清澈之意，以毛玻璃折射 + 流光 Aurora 渲染虚实交织的界面。
@@ -201,7 +201,7 @@ private val ChengmingDarkColors = darkColorScheme(
 /**
  * Material 3 Expressive 形状体系 (Generous, Organic, Bolder)
  */
-private val WanXiangShapes = Shapes(
+private val TianyanShapes = Shapes(
     extraSmall = RoundedCornerShape(8.dp),
     small = RoundedCornerShape(12.dp),
     medium = RoundedCornerShape(16.dp),
@@ -210,7 +210,7 @@ private val WanXiangShapes = Shapes(
 )
 
 @Composable
-fun WanXiangTheme(
+fun TianyanTheme(
     style: ThemeStyle = ThemeStyle.XUANTONG,
     darkTheme: Boolean = isSystemInDarkTheme(),
     backgroundUri: String? = null,
@@ -237,7 +237,7 @@ fun WanXiangTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = AppTypography,
-        shapes = WanXiangShapes,
+        shapes = TianyanShapes,
     ) {
         if (style == ThemeStyle.CHENGMING) {
             LiquidGlassRoot(content, darkTheme, backgroundUri)

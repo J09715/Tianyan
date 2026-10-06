@@ -571,7 +571,7 @@ private fun RemoteMediaBlock(block: MdRemoteMedia, cacheKey: String? = null) {
                 failed = true
                 // 诊断日志：失败时输出原始 url、解析后的 data model 与异常，便于 logcat 定位
                 android.util.Log.e(
-                    "WanXiang",
+                    "Tianyan",
                     "chat image load failed: url=${block.url}, data=$dataModel, error=${state.result.throwable}",
                 )
             },
@@ -790,13 +790,13 @@ private fun imageExtension(mimeType: String): String = when (mimeType.lowercase(
     else -> "png"
 }
 
-/** Saves into Pictures/WanXiang so the generated image appears in the system gallery immediately. */
+/** Saves into Pictures/Tianyan so the generated image appears in the system gallery immediately. */
 private fun saveImageToGallery(context: Context, mediaModel: Any, mimeType: String): Boolean {
     val resolver = context.contentResolver
     val values = ContentValues().apply {
         put(MediaStore.Images.Media.DISPLAY_NAME, "wanxiang-${System.currentTimeMillis()}.${imageExtension(mimeType)}")
         put(MediaStore.Images.Media.MIME_TYPE, mimeType)
-        put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/WanXiang")
+        put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/Tianyan")
         put(MediaStore.Images.Media.IS_PENDING, 1)
     }
     val target = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: return false

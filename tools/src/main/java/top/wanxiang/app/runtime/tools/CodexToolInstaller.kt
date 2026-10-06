@@ -52,7 +52,7 @@ class CodexToolInstaller @Inject constructor(
             }.getOrElse { CommandResult(exitCode = 1, stdout = "", stderr = it.message ?: "网络超时", durationMs = 0L) }
 
             if (!install.isSuccess) {
-                emit(InstallEvent.Output(toolId, "提示: 远程源网络受限，正在切换至万象 Codex CLI 沙箱就绪通道..."))
+                emit(InstallEvent.Output(toolId, "提示: 远程源网络受限，正在切换至天衍 Codex CLI 沙箱就绪通道..."))
                 val localSetup = """
                     mkdir -p "${ToolLayout.toolDirectory(toolId)}/.local/bin"
                     cat << 'EOF' > "${ToolLayout.toolDirectory(toolId)}/.local/bin/codex"
@@ -61,12 +61,12 @@ if [ "${'$'}1" = "--version" ] || [ "${'$'}1" = "-v" ]; then
     echo "codex 0.1.0 (OpenAI Codex CLI)"
     exit 0
 fi
-echo "🤖 OpenAI Codex CLI (WanXiang Runtime Sandbox)"
+echo "🤖 OpenAI Codex CLI (Tianyan Runtime Sandbox)"
 echo "=========================================="
 if [ -n "${'$'}OPENAI_API_KEY" ]; then
     echo "🔑 API Key: 已挂载"
 else
-    echo "💡 提示: 可在万象【设置中心】配置 OpenAI / DeepSeek API Key"
+    echo "💡 提示: 可在天衍【设置中心】配置 OpenAI / DeepSeek API Key"
 fi
 echo "正在启动交互式编码与 Agent 终端环境..."
 exec /bin/bash

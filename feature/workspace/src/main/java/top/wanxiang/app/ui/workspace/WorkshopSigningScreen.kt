@@ -297,12 +297,12 @@ internal fun generateDefaultSigningDraft(prefixInput: String): WorkshopSigningCr
     val alias = "$safePrefix-key"
     val yearStr = SimpleDateFormat("yyyy", Locale.getDefault()).format(Date())
     val capPrefix = if (safePrefix == "wanxiang-release") {
-        "WanXiang"
+        "Tianyan"
     } else {
         safePrefix.split(Regex("[-_]"))
             .filter { it.isNotBlank() }
             .joinToString("") { it.replaceFirstChar { c -> c.uppercase(Locale.getDefault()) } }
-            .ifBlank { "WanXiang" }
+            .ifBlank { "Tianyan" }
     }
     val randomChars = (('a'..'z') + ('0'..'9')).shuffled().take(4).joinToString("")
     val password = "${capPrefix}#${yearStr}_$randomChars"

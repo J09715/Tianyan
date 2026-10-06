@@ -24,14 +24,14 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
- * 万象高拟真毛玻璃面板 (WanXiang Glass Surface)
+ * 天衍高拟真毛玻璃面板 (Tianyan Glass Surface)
  *
  * 1. 消除暗色模式下死板的粗描边，将整体边框透明度弱化至 0.08f（避免 PPT 描边感）；
  * 2. 顶部独占 1px 镜面受光渐变高光 (Specular Highlight)，模拟真实光打在玻璃顶部的折射；
  * 3. 支持胶囊拼接 (omitTopBorder)，当面板紧贴上方组件时省略顶边与高光，杜绝接缝处双重亮线。
  */
 @Composable
-fun WanXiangGlassPanel(
+fun TianyanGlassPanel(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(20.dp),
     forceDark: Boolean = false,

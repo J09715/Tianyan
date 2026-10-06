@@ -86,7 +86,7 @@ class EnvironmentDoctor @Inject constructor(
             else -> DoctorStatus.HEALTHY
         }
 
-        // 全量写进 AppLogger（logcat WanXiang tag + 公共 Download/WanXiang/runtime.log）：
+        // 全量写进 AppLogger（logcat Tianyan tag + 公共 Download/Tianyan/runtime.log）：
         // 开发者控制台「应用日志抓取」/ 用户直接拷 runtime.log 都能看到体检明细，不必依赖 adb。
         run {
             logger.i("[体检] 总体=$overallStatus 健康=$healthyCount 豆=$warningCount 错=$errorCount")
@@ -261,7 +261,7 @@ class EnvironmentDoctor @Inject constructor(
     }
 
     /**
-     * 沙箱代理健康检查：万象内置代理（或 Android 全局代理）注入沙箱后，若代理进程已关闭/
+     * 沙箱代理健康检查：天衍内置代理（或 Android 全局代理）注入沙箱后，若代理进程已关闭/
      * 电脑离线，curl/apt 会静默等待到超时——表现为"探测全部不可达"。直连可达而代理路径不通
      * 即判死，提示清理。未配置代理时直接健康。
      */

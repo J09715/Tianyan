@@ -128,8 +128,8 @@ class ToolExecutor @Inject constructor(
             false to "工具执行异常：${throwable.message ?: throwable::class.simpleName}"
         }
         val (success, rawOutput) = outcome
-        val finalOutput = if (!success && !rawOutput.contains("【万象") && !rawOutput.contains("【已强制拦截")) {
-            rawOutput + "\n\n【万象 Harness 调试提示】：本次工具调用未成功。请仔细阅读上方错误信息，分析具体原因并在下一步中调整策略，严禁使用相同参数盲目重试。"
+        val finalOutput = if (!success && !rawOutput.contains("【天衍") && !rawOutput.contains("【已强制拦截")) {
+            rawOutput + "\n\n【天衍 Harness 调试提示】：本次工具调用未成功。请仔细阅读上方错误信息，分析具体原因并在下一步中调整策略，严禁使用相同参数盲目重试。"
         } else {
             rawOutput
         }
@@ -277,7 +277,7 @@ class ToolExecutor @Inject constructor(
                 val apiOk = manager.writeSystemSetting(key, value)
                 if (apiOk) {
                     android.util.Log.i(
-                        "WanXiang-Host",
+                        "Tianyan-Host",
                         secretRedactor.redact("action=settings_put via API success: system.$key=$value"),
                     )
                     return true to "mode api · exit 0\n[Android API] settings put system $key = $value"
@@ -402,7 +402,7 @@ class ToolExecutor @Inject constructor(
                     }
                     when (binderOutcome) {
                         is BinderOutcome.Success -> {
-                            android.util.Log.i("WanXiang-Host", "action=$action via binder success pkg=$packageName")
+                            android.util.Log.i("Tianyan-Host", "action=$action via binder success pkg=$packageName")
                             if (action in APP_DATABASE_GUARDED_ACTIONS) androidAppManager?.synchronize()
                             return true to buildString {
                                 append("mode shizuku-api · exit 0")
@@ -430,7 +430,7 @@ class ToolExecutor @Inject constructor(
                     cancelHandle?.dispose()
                 }
                 android.util.Log.i(
-                    "WanXiang-Host",
+                    "Tianyan-Host",
                     secretRedactor.redact(
                         "action=$action exit=${result.exitCode} success=${result.success}\n" +
                             "cmd=$command\nstdout=${result.stdout.take(500)}\nstderr=${result.stderr.take(300)}",

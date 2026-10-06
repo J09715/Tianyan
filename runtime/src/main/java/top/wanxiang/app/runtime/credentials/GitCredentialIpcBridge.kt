@@ -26,7 +26,7 @@ import top.wanxiang.app.runtime.RuntimePathManager
 import java.util.UUID
 
 /**
- * 万象 自定义 git credential helper（容器内 `/wanxiang-ipc/git-credential-wanxiang`）与 app 之间的
+ * 天衍 自定义 git credential helper（容器内 `/wanxiang-ipc/git-credential-wanxiang`）与 app 之间的
  * 文件 IPC 桥。三端（UI 按钮 / AI 里跑的 bash / 交互终端手敲）git 缺凭据时都走这条统一链，
  * 无需逐命令路径适配。
  *

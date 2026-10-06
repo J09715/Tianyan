@@ -153,8 +153,8 @@ import top.wanxiang.app.ui.theme.LocalLiquidGlassSurfaceBackdrop
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
- * 万象 (WanXiang) 四大核心中枢导航定义：
- * 万象（开辟画布）· 智枢（AI 结对）· 工坊（工作区）· 乾坤（设置与模型）
+ * 天衍 (Tianyan) 四大核心中枢导航定义：
+ * 天衍（开辟画布）· 智枢（AI 结对）· 工坊（工作区）· 乾坤（设置与模型）
  */
 enum class MainDestination(val labelRes: Int, val subtitleRes: Int, val icon: RuntimeIconName) {
     Home(R.string.components_nav_home, R.string.components_nav_subtitle_home, RuntimeIconName.NavDashboard),
@@ -164,7 +164,7 @@ enum class MainDestination(val labelRes: Int, val subtitleRes: Int, val icon: Ru
 }
 
 /**
- * 万象 · 核心底部中枢导航栏。
+ * 天衍 · 核心底部中枢导航栏。
  * 默认（玄同主题）为 Material 3 Native NavigationBar；澄明（液态玻璃）主题下渲染为
  * 悬浮磨砂玻璃胶囊：半透明毛玻璃折射底层流光 + 圆角药丸 + 玻璃质感选中项。
  */
@@ -575,7 +575,7 @@ fun Modifier.liquidGlassContent(): Modifier {
 fun isLiquidGlassThemeActive(): Boolean = LocalLiquidGlassBackdrop.current != null
 
 /**
- * 万象品牌 TopBar
+ * 天衍品牌 TopBar
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -596,7 +596,7 @@ fun RuntimeTopBar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                if (onBack == null) WanXiangBrandBadge(30.dp)
+                if (onBack == null) TianyanBrandBadge(30.dp)
                 Column {
                     Text(
                         text = title,
@@ -662,10 +662,10 @@ fun RuntimeTopBar(
 }
 
 /**
- * 万象品牌标志徽章
+ * 天衍品牌标志徽章
  */
 @Composable
-fun WanXiangBrandBadge(size: Dp = 38.dp) {
+fun TianyanBrandBadge(size: Dp = 38.dp) {
     Box(
         modifier = Modifier
             .size(size)
@@ -716,7 +716,7 @@ fun SectionHeader(
 }
 
 /**
- * 万象精制卡片组件：支持自适应表面色与细腻描边
+ * 天衍精制卡片组件：支持自适应表面色与细腻描边
  */
 @Composable
 fun RuntimeCard(

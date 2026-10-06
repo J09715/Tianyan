@@ -113,7 +113,7 @@ private fun warningStatusColor(): Color =
     if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color(0xFFFFB74D) else Color(0xFFE65100)
 
 /**
- * 万象 · 运行仪表盘 (WanXiang Linux Runtime Dashboard)
+ * 天衍 · 运行仪表盘 (Tianyan Linux Runtime Dashboard)
  * 集成沙箱引擎状态、运行环境体检自愈中心、实时内存/存储监控与规格信息
  */
 @Composable
@@ -315,7 +315,7 @@ fun HomeScreen(
                 onToggle = viewModel::toggleWebChat,
             )
 
-            // 3. 运行与开发环境体检自愈中心 (WanXiang Doctor & Auto-Fix)
+            // 3. 运行与开发环境体检自愈中心 (Tianyan Doctor & Auto-Fix)
             EnvironmentDoctorCard(
                 report = doctorReport,
                 isChecking = isCheckingDoctor,
@@ -386,7 +386,7 @@ fun HomeScreen(
     }
 }
 /**
- * 运行与开发环境体检自愈卡片 (WanXiang Doctor & Auto-Fix)
+ * 运行与开发环境体检自愈卡片 (Tianyan Doctor & Auto-Fix)
  */
 @Composable
 private fun EnvironmentDoctorCard(
@@ -881,7 +881,7 @@ private fun AndroidEnvAcquisitionCard(
     }
 }
 
-private const val WANXIANG_QQ_GROUP_ID = "905971993"
+private const val WANXIANG_QQ_GROUP_ID = "000000000"
 
 /** 跳转 QQ 加群；未安装 QQ 时兜底复制群号并提示。 */
 private fun joinQqGroup(context: Context) {
@@ -1083,7 +1083,7 @@ private fun RuntimeEngineStatusCard(
                     isError = true,
                     onCopy = {
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                        clipboard?.setPrimaryClip(ClipData.newPlainText("WanXiang Error", errMsg))
+                        clipboard?.setPrimaryClip(ClipData.newPlainText("Tianyan Error", errMsg))
                         Toast.makeText(context, "错误信息已复制", Toast.LENGTH_SHORT).show()
                     },
                 )

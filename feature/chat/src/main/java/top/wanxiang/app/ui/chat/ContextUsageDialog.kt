@@ -30,7 +30,7 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 /**
- * 上下文用量可视化弹窗（借鉴 taixu v0.13 ContextUsageDialog，适配 万象 三维 ContextUsage）。
+ * 上下文用量可视化弹窗（借鉴 taixu v0.13 ContextUsageDialog，适配 天衍 三维 ContextUsage）。
  *
  * 顶部：整条使用率水平进度条 + 百分比数字 + `已用 / 上限 tokens`；
  * 中部：**分段彩条** —— 系统提示 / 工具与 schema / 对话历史，按占比铺色；

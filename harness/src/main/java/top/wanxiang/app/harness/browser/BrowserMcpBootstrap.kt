@@ -94,6 +94,6 @@ class BrowserMcpBootstrap @Inject constructor(
     }
 
     companion object {
-        const val TAG = "WanXiangMcpBootstrap"
+        const val TAG = "TianyanMcpBootstrap"
     }
 }

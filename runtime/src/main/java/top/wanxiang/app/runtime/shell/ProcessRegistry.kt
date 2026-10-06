@@ -102,9 +102,9 @@ class ProcessRegistryImpl @Inject constructor(
         )
 
         val logKey = toolId ?: id
-        appendLog(logKey, "[WanXiang] 正在启动服务进程...")
+        appendLog(logKey, "[Tianyan] 正在启动服务进程...")
         if (toolId != null && toolId != id) {
-            appendLog(id, "[WanXiang] 正在启动服务进程...")
+            appendLog(id, "[Tianyan] 正在启动服务进程...")
         }
 
         scope.launch {
@@ -121,7 +121,7 @@ class ProcessRegistryImpl @Inject constructor(
                 }
             } catch (_: Exception) {
             } finally {
-                val exitNotice = "[WanXiang] 服务进程已停止"
+                val exitNotice = "[Tianyan] 服务进程已停止"
                 appendLog(logKey, exitNotice)
                 if (toolId != null && toolId != id) {
                     appendLog(id, exitNotice)

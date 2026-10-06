@@ -437,7 +437,7 @@ fun DeveloperScreen(
                             onClick = {
                                 val logs = viewModel.readAgentLogs()
                                 val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("WanXiang Agent Logs", logs))
+                                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Tianyan Agent Logs", logs))
                                 android.widget.Toast.makeText(context, "日志已复制到剪贴板", android.widget.Toast.LENGTH_SHORT).show()
                             },
                             modifier = Modifier.weight(1f),
@@ -562,7 +562,7 @@ fun DeveloperScreen(
             dismissButton = {
                 TextButton(onClick = {
                     val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("WanXiang Agent Logs", agentLogText))
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Tianyan Agent Logs", agentLogText))
                     android.widget.Toast.makeText(context, "日志已复制", android.widget.Toast.LENGTH_SHORT).show()
                 }) { Text("复制") }
             },

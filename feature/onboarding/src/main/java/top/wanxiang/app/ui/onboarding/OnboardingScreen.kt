@@ -84,14 +84,14 @@ import top.wanxiang.app.ui.components.RuntimeIconName
 import top.wanxiang.app.ui.components.RuntimeLinearProgressIndicator
 import top.wanxiang.app.ui.components.RuntimeOutlinedButton
 import top.wanxiang.app.ui.components.RuntimeTextButton
-import top.wanxiang.app.ui.components.WanXiangBrandBadge
+import top.wanxiang.app.ui.components.TianyanBrandBadge
 
 private data class SetupOption(val id: String, val label: String)
 
 private val distributionOptions = DistributionCatalog.supported.map { SetupOption(it.id, it.displayWithVersion) }
 
 /**
- * 万象 · 启程配置向导 (Onboarding Wizard)
+ * 天衍 · 启程配置向导 (Onboarding Wizard)
  */
 @Composable
 fun OnboardingScreen(viewModel: OnboardingViewModel = hiltViewModel()) {
@@ -663,7 +663,7 @@ private fun Intro(title: String, description: String) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        WanXiangBrandBadge(52.dp)
+        TianyanBrandBadge(52.dp)
         Text(title, style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold))
         Text(
             description,

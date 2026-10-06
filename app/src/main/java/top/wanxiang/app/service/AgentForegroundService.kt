@@ -247,7 +247,7 @@ class AgentForegroundService : Service() {
             status
         }
         return runningNotification(
-            title = "万象 · $title",
+            title = "天衍 · $title",
             contentText = contentText,
             stopPendingIntent = stopPending,
         )

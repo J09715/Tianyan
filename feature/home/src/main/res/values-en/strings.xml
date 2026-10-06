@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="home_dashboard_title">WanXiang · Runtime dashboard</string>
+    <string name="home_dashboard_title">Tianyan · Runtime dashboard</string>
     <string name="home_system_resources">System resources</string>
     <string name="home_memory">Memory (RAM)</string>
     <string name="home_memory_total">Total %1$d MB</string>
@@ -26,7 +26,7 @@
     <string name="home_view_checks">View all %1$d diagnostic checks</string>
     <string name="home_repair">Repair automatically</string>
     <string name="home_environment_ready_description">The environment is ready for AI tools such as Claude Code and OpenClaw</string>
-    <string name="home_initialize_description">Initialize the sandbox first. WanXiang will then check DNS, mirrors, and the core development toolchain.</string>
+    <string name="home_initialize_description">Initialize the sandbox first. Tianyan will then check DNS, mirrors, and the core development toolchain.</string>
     <string name="home_runtime_ready">Linux sandbox · Ready</string>
     <string name="home_runtime_error">Sandbox runtime error</string>
     <string name="home_runtime_initializing">Initializing sandbox…</string>
@@ -60,7 +60,7 @@
     <string name="home_android_env_desc">The offline package bundles Android, Flutter, and reverse-engineering toolchains</string>
     <string name="home_android_env_qq">Join group for offline package</string>
     <string name="home_android_env_tool_center">Install via Tool Center</string>
-    <string name="home_qq_clipboard_label">WanXiang official QQ group</string>
+    <string name="home_qq_clipboard_label">Tianyan official QQ group</string>
     <string name="home_qq_copied">QQ group ID copied: %1$s. Search it in QQ to join.</string>
     <string name="home_webchat_title">WebChat desktop collaboration</string>
     <string name="home_webchat_running">LAN service running · kept alive</string>
@@ -70,5 +70,5 @@
     <string name="home_webchat_copy">Copy link</string>
     <string name="home_webchat_copied">Link copied. Open it on your computer to enter the workbench.</string>
     <string name="home_webchat_hint">💡 Tip: the computer must be on the same Wi-Fi as the phone. Devices online: %1$d</string>
-    <string name="home_webchat_intro">No cable needed — connect from a desktop browser over the same Wi-Fi to use the WanXiang Agent, review code, and manage sandbox workspaces.</string>
+    <string name="home_webchat_intro">No cable needed — connect from a desktop browser over the same Wi-Fi to use the Tianyan Agent, review code, and manage sandbox workspaces.</string>
 </resources>

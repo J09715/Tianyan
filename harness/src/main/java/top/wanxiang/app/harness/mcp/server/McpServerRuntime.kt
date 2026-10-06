@@ -177,7 +177,7 @@ class McpServerRuntime @Inject constructor(
             "initialize" -> jsonrpcOk(id, buildJsonObject {
                 put("protocolVersion", JsonPrimitive(MCP_PROTOCOL_VERSION))
                 put("serverInfo", buildJsonObject {
-                    put("name", JsonPrimitive("WanXiang Browser MCP Server"))
+                    put("name", JsonPrimitive("Tianyan Browser MCP Server"))
                     put("version", JsonPrimitive("0.1.0"))
                 })
                 put("capabilities", buildJsonObject {
@@ -242,7 +242,7 @@ class McpServerRuntime @Inject constructor(
     }.toString()
 
     companion object {
-        private const val TAG = "WanXiangMcpServer"
+        private const val TAG = "TianyanMcpServer"
         const val defaultPort = 8787
         const val loopbackHost = "127.0.0.1"
     }

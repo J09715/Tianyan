@@ -71,7 +71,7 @@ import top.wanxiang.app.ui.components.RuntimeTopBar
 import top.wanxiang.app.ui.components.StatusBadge
 
 /**
- * 万象 · 插件配置详情页 (Tool Detail & Configuration Screen)
+ * 天衍 · 插件配置详情页 (Tool Detail & Configuration Screen)
  *
  * 功能概览：
  * - 工具概览与状态
@@ -184,7 +184,7 @@ fun ToolDetailScreen(
                                     color = MaterialTheme.colorScheme.error,
                                 )
                                 Text(
-                                    text = state.error ?: "可呼叫万象 Agent 在 PRoot 沙箱内自主排查与自愈",
+                                    text = state.error ?: "可呼叫天衍 Agent 在 PRoot 沙箱内自主排查与自愈",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 2,
@@ -689,7 +689,7 @@ private fun ServiceLogsCard(
                 ) {
                     logs.forEach { line ->
                         val textColor = when {
-                            line.contains("[WanXiang]") -> Color(0xFF00B4D8)
+                            line.contains("[Tianyan]") -> Color(0xFF00B4D8)
                             line.contains("error", ignoreCase = true) || line.contains("fail", ignoreCase = true) || line.contains("ERR", ignoreCase = true) -> Color(0xFFFF6B6B)
                             line.contains("warn", ignoreCase = true) -> Color(0xFFFFD166)
                             line.contains("http://", ignoreCase = true) || line.contains("https://", ignoreCase = true) -> Color(0xFF06D6A0)

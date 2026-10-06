@@ -117,7 +117,7 @@ class RoomBuildScriptRepository @Inject constructor(
             BuildScriptEntity(
                 id = "builtin-android",
                 name = "标准 Android",
-                description = "万象内置 Android 构建脚本，可复制后适配旧版或新版依赖。",
+                description = "天衍内置 Android 构建脚本，可复制后适配旧版或新版依赖。",
                 projectType = "ANDROID",
                 content = androidScript.ifBlank {
                     "#!/bin/sh\nset -eu\nPROJECT_DIR=\"\${1:-.}\"\nTASK=\"\${2:-assembleDebug}\"\ncd \"\$PROJECT_DIR\"\nif [ -f ./gradlew ]; then\n    chmod +x ./gradlew\n    ./gradlew \"\$TASK\" --no-daemon --max-workers=2\nelif command -v gradle >/dev/null 2>&1; then\n    gradle \"\$TASK\" --no-daemon --max-workers=2\nelif [ -x /opt/wanxiang/bin/gradle ]; then\n    /opt/wanxiang/bin/gradle \"\$TASK\" --no-daemon --max-workers=2\nelse\n    echo '未找到可用的 Gradle 环境，请检查是否已安装 Android 基础套件' >&2\n    exit 127\nfi\n"
@@ -129,7 +129,7 @@ class RoomBuildScriptRepository @Inject constructor(
             BuildScriptEntity(
                 id = "builtin-flutter",
                 name = "标准 Flutter",
-                description = "万象内置 Flutter APK 构建脚本，可复制后定制。",
+                description = "天衍内置 Flutter APK 构建脚本，可复制后定制。",
                 projectType = "FLUTTER",
                 content = flutterScript.ifBlank {
                     "#!/bin/sh\nset -eu\nPROJECT_DIR=\"\${1:-.}\"\nTARGET=\"\${2:-apk --debug}\"\ncd \"\$PROJECT_DIR\"\nflutter pub get\nflutter build \$TARGET\n"

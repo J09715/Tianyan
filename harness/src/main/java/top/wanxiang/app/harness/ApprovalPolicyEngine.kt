@@ -115,7 +115,7 @@ class ApprovalPolicyEngine @Inject constructor(
                     if (isRoutineCommand(command)) ApprovalDecision(false)
                     else ApprovalDecision(true, if (isDestructiveCommand(command)) "critical" else "high", reasonForCommand(command), summary)
                 }
-                "stop" -> ApprovalDecision(true, "high", "停止操作会终止一个由 WanXiang 托管的后台进程。", summary)
+                "stop" -> ApprovalDecision(true, "high", "停止操作会终止一个由 Tianyan 托管的后台进程。", summary)
                 else -> ApprovalDecision(false)
             }
             HarnessTool.DOWNLOAD -> ApprovalDecision(true, "high", "下载会访问外部网络并写入工作区文件。", summary)

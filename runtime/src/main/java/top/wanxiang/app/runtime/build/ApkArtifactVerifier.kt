@@ -34,7 +34,7 @@ object ApkArtifactVerifier {
                         isValid = false,
                         nativeAbis = abis,
                         rejectedEntries = rejected.take(20),
-                        message = "APK 包含非 ARM64 原生库：${abis.filterNot { it in allowedAbis }.joinToString()}。WanXiang 只允许 arm64-v8a。",
+                        message = "APK 包含非 ARM64 原生库：${abis.filterNot { it in allowedAbis }.joinToString()}。Tianyan 只允许 arm64-v8a。",
                     )
                 } else {
                     ApkArtifactVerification(

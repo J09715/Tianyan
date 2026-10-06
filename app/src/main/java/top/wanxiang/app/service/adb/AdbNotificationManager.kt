@@ -123,7 +123,7 @@ class AdbNotificationManager @Inject constructor(
         }
 
         val notif = buildNotification(
-            title = "万象 · 无线 ADB 快捷配对",
+            title = "天衍 · 无线 ADB 快捷配对",
             contentText = contentText,
             isOngoing = true,
             actions = listOf(
@@ -139,7 +139,7 @@ class AdbNotificationManager @Inject constructor(
     fun showPairingInProgress() {
         isManuallyDismissed = false
         val notif = buildNotification(
-            title = "万象 · 正在配对无线 ADB…",
+            title = "天衍 · 正在配对无线 ADB…",
             contentText = "正在与发现的端口进行安全握手 (TLS + SPAKE2)…",
             isOngoing = true,
             showProgress = true,
@@ -152,7 +152,7 @@ class AdbNotificationManager @Inject constructor(
     fun showConnectingInProgress() {
         isManuallyDismissed = false
         val notif = buildNotification(
-            title = "万象 · 正在建立 ADB 连接…",
+            title = "天衍 · 正在建立 ADB 连接…",
             contentText = "正在完成 RSA 密钥认证…",
             isOngoing = true,
             showProgress = true,
@@ -165,7 +165,7 @@ class AdbNotificationManager @Inject constructor(
     fun showConnected(host: String, port: Int) {
         isManuallyDismissed = false
         val notif = buildNotification(
-            title = "万象 · 无线 ADB 已连接",
+            title = "天衍 · 无线 ADB 已连接",
             contentText = "已连接到 $host:$port · 点击返回工作台",
             isOngoing = false,
             actions = listOf(
@@ -180,7 +180,7 @@ class AdbNotificationManager @Inject constructor(
     fun showFailed(errorMessage: String) {
         isManuallyDismissed = false
         val notif = buildNotification(
-            title = "万象 · 无线 ADB 连接/配对异常",
+            title = "天衍 · 无线 ADB 连接/配对异常",
             contentText = errorMessage,
             isOngoing = false,
             actions = listOf(

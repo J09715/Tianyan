@@ -42,7 +42,7 @@ data class AiModelEntity(
     val contextTokens: Int? = null,
     /** 自定义请求头（多行 Key: Value 格式，请求时追加注入）。 */
     val customHeaders: String = "",
-    /** 纯净排查模式：关闭万象系统提示词与工具定义注入，仅发送纯用户消息。 */
+    /** 纯净排查模式：关闭天衍系统提示词与工具定义注入，仅发送纯用户消息。 */
     val pureChatMode: Boolean = false,
     /** 是否支持视觉多模态直接传图（true = 直接以 image_url 发送；false = 提示工具读取）。 */
     val visionEnabled: Boolean = true,

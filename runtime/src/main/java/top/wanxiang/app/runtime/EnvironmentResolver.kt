@@ -13,7 +13,7 @@ import javax.inject.Singleton
  * 这样：
  * - `git clone https://github.com/...` 里的 libcurl 会自动走代理；
  * - 我在 bootstrap 里 `curl https://api.github.com/...`（凭证健康检查 / 仓库列表）也走代理；
- * - 只影响**沙箱内**，宿主 OkHttp（万象自身网络）不受这里控制，走它自己的 ProxySelector。
+ * - 只影响**沙箱内**，宿主 OkHttp（天衍自身网络）不受这里控制，走它自己的 ProxySelector。
  * 用户没设全局代理时（值 null 或空）不注入任何 proxy 变量。
  */
 @Singleton
@@ -71,7 +71,7 @@ class EnvironmentResolver @Inject constructor(
 
     /**
      * 沙箱代理解析优先级：
-     * 1. **用户设置里的 [overrideProxy]**（形如 `http://host:port`）— 万象内置的"沙箱代理"入口。
+     * 1. **用户设置里的 [overrideProxy]**（形如 `http://host:port`）— 天衍内置的"沙箱代理"入口。
      * 2. Android 全局 `Settings.Global.http_proxy`（形如 `host:port`）— 用户手机网络设置层的。
      * 3. 都没有 → null（不注入）。
      */

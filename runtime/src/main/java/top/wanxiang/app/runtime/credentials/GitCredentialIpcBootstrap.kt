@@ -23,7 +23,7 @@ import top.wanxiang.app.runtime.shell.ShellCommand
 import java.net.URLEncoder
 
 /**
- * 万象 Git 凭证 IPC 装配器：负责 3 件事，都幂等：
+ * 天衍 Git 凭证 IPC 装配器：负责 3 件事，都幂等：
  *
  * 1. **提取 helper**：从 `assets/wanxiang/git-credential-wanxiang` 拷到 `<ipcDir>/git-credential-wanxiang` + 可执行位。
  * 2. **注册 git 全局 credential.helper**：向容器 `/root/.gitconfig` 追加两行

@@ -33,7 +33,7 @@ class AiProfileBackupCodec @Inject constructor(
         val bundle = AiModelProfileBundle(
             schemaVersion = 1,
             exportedAt = System.currentTimeMillis(),
-            source = "WanXiang",
+            source = "Tianyan",
             profiles = models.map { entityToExport(it, readKeys(it, includeApiKeys)) },
         )
         return json.encodeToString(bundle)

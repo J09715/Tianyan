@@ -35,7 +35,7 @@ class CrashReporter @Inject constructor(
         .takeIf { it.isFile }
         ?.readText()
 
-    /** Copies reports to Download/WanXiang/crash-reports after the next successful launch. */
+    /** Copies reports to Download/Tianyan/crash-reports after the next successful launch. */
     fun exportPendingReports(): Int {
         val reportDir = reportDirectory()
         val pending = reportDir.listFiles { file ->
@@ -59,7 +59,7 @@ class CrashReporter @Inject constructor(
         runCatching {
             val timestamp = System.currentTimeMillis()
             val rawReport = buildString {
-                appendLine("WanXiang crash report")
+                appendLine("Tianyan crash report")
                 appendLine("reportTime=${formatTimestamp(timestamp)}")
                 appendLine("reportTimeMillis=$timestamp")
                 appendLine("package=${context.packageName}")
@@ -142,7 +142,7 @@ class CrashReporter @Inject constructor(
         const val REPORT_DIRECTORY = "logs/crash/reports"
         const val REPORT_FILE_PREFIX = "wanxiang-crash-"
         const val EXPORTED_MARKER_SUFFIX = ".exported"
-        val EXPORT_RELATIVE_PATH = "${Environment.DIRECTORY_DOWNLOADS}/WanXiang/crash-reports"
+        val EXPORT_RELATIVE_PATH = "${Environment.DIRECTORY_DOWNLOADS}/Tianyan/crash-reports"
         const val MAX_REPORT_CHARS = 256 * 1024
         const val MAX_REPORT_FILES = 20
     }

@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="wanxiang_app_name">万象</string>
+    <string name="wanxiang_app_name">天衍</string>
     <string name="wanxiang_agent_notification_channel">Agent 执行</string>
     <string name="wanxiang_agent_ready">智能体中枢就绪</string>
     <string name="wanxiang_agent_default_title">智枢智能体</string>
-    <string name="wanxiang_agent_background_running">万象 Agent 后台运行中</string>
+    <string name="wanxiang_agent_background_running">天衍 Agent 后台运行中</string>
     <string name="wanxiang_agent_background_locked">智能体后台运行中 · 进程锁已开启</string>
     <string name="wanxiang_notification_stop">停止</string>
     <string name="wanxiang_notification_reply_to">回复给 %1$s</string>
@@ -15,5 +15,5 @@
     <string name="wanxiang_runtime_notification_channel">Linux Runtime</string>
     <string name="wanxiang_runtime_running">Linux Runtime 正在运行</string>
     <string name="wanxiang_runtime_background_available">后台工具和本地服务保持可用</string>
-    <string name="wanxiang_gui_a11y_description">允许万象执行界面手势与读取屏幕节点，用于工作流 GUI 自动点选。可在系统设置中随时关闭。</string>
+    <string name="wanxiang_gui_a11y_description">允许天衍执行界面手势与读取屏幕节点，用于工作流 GUI 自动点选。可在系统设置中随时关闭。</string>
 </resources>

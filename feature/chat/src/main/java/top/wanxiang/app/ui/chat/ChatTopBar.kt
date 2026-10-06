@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import top.wanxiang.app.ui.components.WanXiangBrandBadge
+import top.wanxiang.app.ui.components.TianyanBrandBadge
 import top.wanxiang.app.ui.components.RuntimeIconButton as IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -78,7 +78,7 @@ internal fun ChatTopBar(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.weight(1f, fill = false),
             ) {
-                WanXiangBrandBadge(28.dp)
+                TianyanBrandBadge(28.dp)
                 Column {
                     Text(
                         text = stringResource(R.string.chat_title),

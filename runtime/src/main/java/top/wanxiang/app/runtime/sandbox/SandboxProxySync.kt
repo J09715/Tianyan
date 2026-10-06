@@ -17,7 +17,7 @@ import top.wanxiang.app.runtime.EnvironmentResolver
  * EnvironmentResolver 在 runtime 模块，倒是有依赖），是因为 DataStore 是 Flow 语义 + 需要长驻协程订阅；
  * EnvironmentResolver 是无状态纯函数式构造，塞入订阅会污染其职责。这个 sync 只做"数据搬运"。
  *
- * 生命周期：`@Singleton`，[start] 幂等；由 WanXiangApplication 或首次 git 操作前触发。
+ * 生命周期：`@Singleton`，[start] 幂等；由 TianyanApplication 或首次 git 操作前触发。
  */
 @Singleton
 class SandboxProxySync @Inject constructor(

@@ -191,7 +191,7 @@ class SystemPromptBuilder @Inject constructor(
                 context = context,
                 modelId = providerModelId,
                 modelName = providerModelId,
-                charName = "万象智枢",
+                charName = "天衍智枢",
                 userName = "用户",
             )
             mapOf(
@@ -308,7 +308,7 @@ class SystemPromptBuilder @Inject constructor(
         }
         if (builtinLines.isEmpty() && customLines.isEmpty()) return ""
         return "\n\n## 系统核心 MCP 能力（内置，授权后常驻生效）\n" +
-            "万象内置以下系统级 MCP 能力，默认关闭。任务命中其「使用时机」时应优先考虑该能力：" +
+            "天衍内置以下系统级 MCP 能力，默认关闭。任务命中其「使用时机」时应优先考虑该能力：" +
             "若已启用则直接调用对应 mcp__ 工具（常驻本会话，随时可用）；若未启用则先向用户说明并请求授权开启，未授权前不得绕过。\n" +
             "重要：已启用的 MCP 工具无需 @ 提及即可直接调用（@ 提及只会把当轮注入裁剪到被提及的服务，不是启用开关）；工具名必须原样使用，不可编造。\n" +
             (builtinLines + customLines).joinToString("\n")

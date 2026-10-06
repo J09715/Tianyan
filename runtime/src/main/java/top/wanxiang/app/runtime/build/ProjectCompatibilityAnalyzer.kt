@@ -69,7 +69,7 @@ object ProjectCompatibilityAnalyzer {
             if (compileSdk > 34) findings += CompatibilityFinding(
                 id = "compile_sdk",
                 severity = CompatibilitySeverity.ERROR,
-                message = "项目 compileSdk 高于 WanXiang 内置 Android Platform 34",
+                message = "项目 compileSdk 高于 Tianyan 内置 Android Platform 34",
                 current = compileSdk.toString(),
                 expected = "<= 34",
                 remediation = "由 mobile_project_align 生成最小降级方案，或安装匹配的 ARM64 Platform",
@@ -88,10 +88,10 @@ object ProjectCompatibilityAnalyzer {
         if (wrapperVersion != null && wrapperVersion != "8.14.2") findings += CompatibilityFinding(
             id = "gradle_wrapper",
             severity = CompatibilitySeverity.WARNING,
-            message = "项目 Gradle Wrapper 与 WanXiang 固定版本不同",
+            message = "项目 Gradle Wrapper 与 Tianyan 固定版本不同",
             current = wrapperVersion,
             expected = "8.14.2",
-            remediation = "优先使用 WanXiang 本地 Gradle；需要改项目时先生成对齐计划",
+            remediation = "优先使用 Tianyan 本地 Gradle；需要改项目时先生成对齐计划",
         )
 
         agpPattern.find(allText)?.groupValues?.getOrNull(1)?.let { version ->
@@ -151,7 +151,7 @@ object ProjectCompatibilityAnalyzer {
             id = "offline_cache",
             severity = CompatibilitySeverity.ERROR,
             message = "离线模式已开启，但本地项目依赖缓存不存在",
-            remediation = "先在线完成一次依赖解析，或把项目依赖缓存放入 WanXiang 离线缓存目录",
+            remediation = "先在线完成一次依赖解析，或把项目依赖缓存放入 Tianyan 离线缓存目录",
         )
 
         if (findings.isEmpty()) findings += CompatibilityFinding(

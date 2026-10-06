@@ -181,7 +181,7 @@ class ChatViewModel @Inject constructor(
                                 )
                             }.getOrNull()
                             val out = ((r?.stdout ?: "") + "\n" + (r?.stderr ?: "")).trim().take(2000)
-                            android.util.Log.i("WanxiangDiag", "CMD=${action.command} → EXIT=${r?.exitCode} OUT=$out")
+                            android.util.Log.i("TianyanDiag", "CMD=${action.command} → EXIT=${r?.exitCode} OUT=$out")
                             _gitOpMessage.value = GitOpMessage.Error("诊断：exit=${r?.exitCode}\n$out")
                         }
                     }
@@ -223,14 +223,14 @@ class ChatViewModel @Inject constructor(
                                 is top.wanxiang.app.runtime.sandbox.SandboxTextExtractor.Result.Failed -> "FAIL ${res.error}"
                                 null -> "EXC ${r.exceptionOrNull()?.message}"
                             }
-                            android.util.Log.i("WanxiangDiag", "extract ${action.name} → $msg")
+                            android.util.Log.i("TianyanDiag", "extract ${action.name} → $msg")
                             _gitOpMessage.value = GitOpMessage.Error("抽取 ${action.name}: $msg")
                         }
                     }
                     is top.wanxiang.app.runtime.debug.DebugActionBus.Action.SetProxy -> {
                         viewModelScope.launch(Dispatchers.IO) {
                             fullSettingsStore.setSandboxHttpProxy(action.value)
-                            android.util.Log.i("WanxiangDiag", "SetProxy = '${action.value}'")
+                            android.util.Log.i("TianyanDiag", "SetProxy = '${action.value}'")
                         }
                     }
                     is top.wanxiang.app.runtime.debug.DebugActionBus.Action.SimulateAttachment -> {
@@ -270,14 +270,14 @@ class ChatViewModel @Inject constructor(
                                 appRes.getOrNull()?.let { "OK name=${it.name} linuxPath=${it.linuxPath}" }
                                     ?: "FAIL " + appRes.errorOrNull()?.message
                             } ?: ("EX " + inner.exceptionOrNull()?.message)
-                            android.util.Log.i("WanxiangDiag", "CreateProject '${action.name}'(${action.templateId}) → $detail")
+                            android.util.Log.i("TianyanDiag", "CreateProject '${action.name}'(${action.templateId}) → $detail")
                             _gitOpMessage.value = GitOpMessage.Error("CreateProject: $detail".take(500))
                         }
                     }
                     is top.wanxiang.app.runtime.debug.DebugActionBus.Action.GitRaw -> {
                         viewModelScope.launch(Dispatchers.IO) {
                             val out = runGitRead(currentGitWs(), action.cmd + " 2>&1") ?: "<null>"
-                            android.util.Log.i("WanxiangDiag", "GitRaw '${action.cmd}' → $out")
+                            android.util.Log.i("TianyanDiag", "GitRaw '${action.cmd}' → $out")
                             _gitOpMessage.value = GitOpMessage.Error("GitRaw:\n$out".take(600))
                         }
                     }
@@ -1064,7 +1064,7 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    // ===== AI 生成 commit message（万象独有：把 staged diff 交给当前激活模型，产出 Conventional Commits 消息）=====
+    // ===== AI 生成 commit message（天衍独有：把 staged diff 交给当前激活模型，产出 Conventional Commits 消息）=====
 
     private val _aiCommit = MutableStateFlow<GitAiCommitState>(GitAiCommitState.Idle)
     val aiCommit: StateFlow<GitAiCommitState> = _aiCommit.asStateFlow()

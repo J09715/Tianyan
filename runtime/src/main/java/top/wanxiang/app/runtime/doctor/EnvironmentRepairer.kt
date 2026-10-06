@@ -64,7 +64,7 @@ class EnvironmentRepairer @Inject constructor(
         val logs = mutableListOf<String>()
 
         fun addLog(message: String) {
-            // 双写：UI 日志列表 + AppLogger（logcat WanXiang tag + 公共 Download/WanXiang/runtime.log）
+            // 双写：UI 日志列表 + AppLogger（logcat Tianyan tag + 公共 Download/Tianyan/runtime.log）
             // 让「开发者控制台 → 应用日志抓取」和用户直接拷 runtime.log 都能看到自愈全过程。
             logger.i("[自愈] $message")
             logs.add(message)
@@ -326,7 +326,7 @@ class EnvironmentRepairer @Inject constructor(
                     if [ ! -f /etc/profile.d/wanxiang-android.sh ]; then
                         mkdir -p /etc/profile.d
                         cat << 'EOF' > /etc/profile.d/wanxiang-android.sh
-# WanXiang Android development environment (self-healed by EnvironmentRepairer)
+# Tianyan Android development environment (self-healed by EnvironmentRepairer)
 export JAVA_HOME="${'$'}{JAVA_HOME:-/opt/wanxiang/toolchains/android/jdk}"
 export ANDROID_HOME="/opt/android-sdk"
 export ANDROID_SDK_ROOT="/opt/android-sdk"

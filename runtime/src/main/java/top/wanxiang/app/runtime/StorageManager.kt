@@ -828,9 +828,9 @@ class StorageManager @Inject constructor(
             val rfsLogs = sizeOfDirectoryContents(File(rfs, "var/log"))
 
             // 5. 位于 rfs/opt/wanxiang（若存在）
-            val rfsWanxiangOpt = sizeOf(File(rfs, "opt/wanxiang"))
+            val rfsTianyanOpt = sizeOf(File(rfs, "opt/wanxiang"))
 
-            val pureBaseRfsBytes = (rfsTotalBytes - rfsSdks - rfsCaches - rfsHome - rfsLogs - rfsWanxiangOpt)
+            val pureBaseRfsBytes = (rfsTotalBytes - rfsSdks - rfsCaches - rfsHome - rfsLogs - rfsTianyanOpt)
                 .coerceAtLeast(0L)
 
             StorageEntry(
@@ -854,7 +854,7 @@ class StorageManager @Inject constructor(
             logEntries.add(
                 StorageEntry(
                     id = "host_logs",
-                    name = "万象运行与智能体日志",
+                    name = "天衍运行与智能体日志",
                     detail = "执行轨迹、诊断与调试日志",
                     bytes = hostLogsBytes,
                     cleanable = true,
@@ -912,7 +912,7 @@ class StorageManager @Inject constructor(
         // =========================================================================
         val downloadCacheEntries = mutableListOf<StorageEntry>()
 
-        // 10.1 万象沙箱下载缓存 (linux-runtime/cache)
+        // 10.1 天衍沙箱下载缓存 (linux-runtime/cache)
         val runtimeCacheBytes = sizeOf(pathManager.cacheDir)
         if (runtimeCacheBytes > 0) {
             downloadCacheEntries.add(
@@ -1281,7 +1281,7 @@ class StorageManager @Inject constructor(
                 StorageCategory(
                     id = "logs",
                     name = "系统与智能体日志",
-                    description = "万象运行、诊断与系统执行日志",
+                    description = "天衍运行、诊断与系统执行日志",
                     bytes = logCategoryBytes,
                     cleanable = true,
                     riskLevel = StorageRiskLevel.SAFE,

@@ -46,7 +46,7 @@ class ToolNotificationNotifier @Inject constructor(
             "插件与工具安装进度",
             NotificationManager.IMPORTANCE_LOW,
         ).apply {
-            description = "展示万象 PRoot 沙箱内 AI 工具与插件的安装与更新进度"
+            description = "展示天衍 PRoot 沙箱内 AI 工具与插件的安装与更新进度"
             setShowBadge(false)
         }
         val systemManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
@@ -138,7 +138,7 @@ class ToolNotificationNotifier @Inject constructor(
             "工坊工程构建结果",
             NotificationManager.IMPORTANCE_DEFAULT,
         ).apply {
-            description = "展示万象工坊中 Android / Flutter 工程的编译完成或失败结果"
+            description = "展示天衍工坊中 Android / Flutter 工程的编译完成或失败结果"
             setShowBadge(true)
         }
         val systemManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager

@@ -23,7 +23,7 @@ object BuiltinSkills {
         AgentSkill(
             id = "agent_context",
             name = "上下文与任务记忆规划",
-            description = "万象核心系统能力：提供长期事实记忆 (memory)、任务执行规划 (plan) 与工作草稿便签 (scratchpad)",
+            description = "天衍核心系统能力：提供长期事实记忆 (memory)、任务执行规划 (plan) 与工作草稿便签 (scratchpad)",
             systemPrompt = """
                 【Agent 上下文与任务记忆规划核心指导】：
                 1. 长期记忆 (memory)：当用户表达偏好、架构规范或重要事实时，主动调用 memory(action="save", key=..., value=..., kind="preference"|"rule"|"fact") 持久化存储；
@@ -45,7 +45,7 @@ object BuiltinSkills {
                 【Linux 沙箱运维专精指导】：
                 1. PRoot 环境中没有真实 root 权限，避免执行破坏性内核命令（如 mount、sysctl、chown）。
                 2. dpkg 安装/升级时若提示 unable to securely remove .dpkg-tmp，先清理临时文件并使用 chmod u-s 降低 setuid 属性后再重试。
-                3. 无 systemd 支持；需常驻的后台服务必须通过 WanXiang process 工具注册，并保持前台运行。不要在普通 base 命令中使用 nohup 或 &，PRoot 退出时会回收未托管子进程。
+                3. 无 systemd 支持；需常驻的后台服务必须通过 Tianyan process 工具注册，并保持前台运行。不要在普通 base 命令中使用 nohup 或 &，PRoot 退出时会回收未托管子进程。
             """.trimIndent(),
             triggerCommand = "/ops",
             iconName = "Terminal",
@@ -104,12 +104,12 @@ object BuiltinSkills {
         AgentSkill(
             id = "mobile_build_guard",
             name = "移动端构建环境守卫",
-            description = "Android/Flutter 构建前强制自检，优先使用万象 ARM64 工具链，并在必要时显式切换 QEMU 兼容会话",
+            description = "Android/Flutter 构建前强制自检，优先使用天衍 ARM64 工具链，并在必要时显式切换 QEMU 兼容会话",
             systemPrompt = """
                 【移动端构建环境守卫】：
                 1. 在执行 Android 或 Flutter 构建前，先运行 `wanxiang-build doctor <项目路径>`；不得跳过自检后直接下载或执行未知主机架构的工具。
-                2. 自检通过后统一使用 `wanxiang-build android <项目路径> [Gradle任务]` 或 `wanxiang-build flutter <项目路径> [Flutter参数]`。优先使用万象内置 JDK、Android SDK、Gradle、AAPT2、NDK 与 Flutter SDK。
-                3. 不要用 `apt`、`sdkmanager`、Gradle 自动下载或 Flutter 自动修复去覆盖万象工具链；不要下载 x86/x86_64 AAPT2、JDK、NDK 或 Android 主机工具替代 ARM64 核心资源。
+                2. 自检通过后统一使用 `wanxiang-build android <项目路径> [Gradle任务]` 或 `wanxiang-build flutter <项目路径> [Flutter参数]`。优先使用天衍内置 JDK、Android SDK、Gradle、AAPT2、NDK 与 Flutter SDK。
+                3. 不要用 `apt`、`sdkmanager`、Gradle 自动下载或 Flutter 自动修复去覆盖天衍工具链；不要下载 x86/x86_64 AAPT2、JDK、NDK 或 Android 主机工具替代 ARM64 核心资源。
                 4. 第三方项目版本不匹配时，先读取 Gradle wrapper、AGP、Kotlin、compileSdk、NDK 与 Flutter/Dart 约束，再以当前工具链为基准做最小项目对齐。修改前向用户说明需要升级或降级的文件与版本。
                 5. 只有自检明确报告“x86_64 主机 ELF/Exec format error”且 QEMU 兼容环境已经就绪时，才使用 `wanxiang-build ... --qemu`；QEMU 只运行隔离 x86_64 用户态工具，最终 APK 仍必须只面向 ARM64。
                 6. 如果用户直接要求 `./gradlew` 或 `flutter build apk`，仍先执行 doctor；构建失败时保留原始日志，区分项目源码错误、依赖版本错误、网络错误与主机架构错误，禁止把所有失败都盲目转入 QEMU。
@@ -123,12 +123,12 @@ object BuiltinSkills {
         AgentSkill(
             id = "mobile_project_align",
             name = "移动端项目兼容对齐",
-            description = "分析第三方 Android/Flutter 项目与 WanXiang ARM64 工具链的差异，生成变更计划并在确认后执行最小调整",
+            description = "分析第三方 Android/Flutter 项目与 Tianyan ARM64 工具链的差异，生成变更计划并在确认后执行最小调整",
             systemPrompt = """
                 【移动端项目兼容对齐】：
                 1. 这是只读分析优先的 Skill。先运行 `wanxiang-build analyze <项目路径>`，必要时加 `--offline`，并读取输出中的 compileSdk、Gradle Wrapper、AGP、Kotlin、ABI 与缓存结论。
                 2. 未获得用户确认前，不得修改第三方项目的 Gradle、pubspec、AndroidManifest、ABI 或 Wrapper 文件；先给出明确的变更清单、当前值、目标值和风险。
-                3. WanXiang 默认基准是 ARM64、Android Platform 34、Build-Tools 35、Gradle 8.14.2、Flutter Android arm64。不要为了迁就项目静默下载 x86/x86_64 JDK、AAPT2、NDK 或其他主机工具。
+                3. Tianyan 默认基准是 ARM64、Android Platform 34、Build-Tools 35、Gradle 8.14.2、Flutter Android arm64。不要为了迁就项目静默下载 x86/x86_64 JDK、AAPT2、NDK 或其他主机工具。
                 4. 用户确认对齐后，只做最小修改：优先修改 compileSdk/targetSdk、Wrapper 调度和 ABI 声明；保留业务代码与用户自定义仓库；每个文件修改后立即检查 diff。
                 5. 如果项目依赖版本无法在当前 ARM64/离线缓存中满足，提供三种选择：补齐离线缓存、显式使用 QEMU x86_64 会话、取消构建。不要把网络错误伪装成架构错误。
                 6. 对齐或构建完成后必须运行 `wanxiang-build doctor <项目路径>`，构建 APK 后再运行统一 ABI 验证；最终只接受 arm64-v8a，不接受 x86/x86_64 产物。

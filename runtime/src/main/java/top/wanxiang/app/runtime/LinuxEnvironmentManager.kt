@@ -251,7 +251,7 @@ internal data class LinuxEnvironmentRecord(
 
 /** Stable, shell-sourceable representation with base64 metadata for lossless parsing. */
 internal object LinuxEnvironmentProfile {
-    private const val HEADER = "# Managed by WanXiang. Changes made here are reflected in Settings."
+    private const val HEADER = "# Managed by Tianyan. Changes made here are reflected in Settings."
     private const val RECORD_PREFIX = "# WANXIANG_ENV_V1|"
 
     fun parse(content: String): List<LinuxEnvironmentRecord> = content.lineSequence()

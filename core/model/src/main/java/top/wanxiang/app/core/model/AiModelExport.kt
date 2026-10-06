@@ -36,6 +36,6 @@ data class AiModelProfileExport(
 data class AiModelProfileBundle(
     val schemaVersion: Int = 1,
     val exportedAt: Long = 0L,
-    val source: String = "WanXiang",
+    val source: String = "Tianyan",
     val profiles: List<AiModelProfileExport> = emptyList(),
 )

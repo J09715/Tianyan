@@ -24,7 +24,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import top.wanxiang.app.runtime.gui.WorkflowGuiHudBridge
-import top.wanxiang.app.ui.theme.WanXiangTheme
+import top.wanxiang.app.ui.theme.TianyanTheme
 
 /**
  * Workflow run HUD: current step + stop. Detaches from WindowManager while
@@ -84,7 +84,7 @@ class WorkflowHudService : Service() {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool)
             owner.attach(this)
             setContent {
-                WanXiangTheme {
+                TianyanTheme {
                     val session by hud.session.collectAsState()
                     val current = session
                     LaunchedEffect(current?.active, current?.phase) {

@@ -5,11 +5,11 @@ import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import top.wanxiang.app.runtime.webchat.WebChatAgentGateway
-import top.wanxiang.app.webchat.WanXiangWebChatAgentGateway
+import top.wanxiang.app.webchat.TianyanWebChatAgentGateway
 
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class WebChatModule {
     @Binds
-    abstract fun bindWebChatAgentGateway(impl: WanXiangWebChatAgentGateway): WebChatAgentGateway
+    abstract fun bindWebChatAgentGateway(impl: TianyanWebChatAgentGateway): WebChatAgentGateway
 }

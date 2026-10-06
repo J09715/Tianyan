@@ -41,7 +41,7 @@ class AndroidInAppBrowserEngine(
 
     override val descriptor = top.wanxiang.app.core.browser.BrowserDescriptor(
         family = BrowserFamily.IN_APP,
-        displayName = "WanXiang In-App WebView",
+        displayName = "Tianyan In-App WebView",
         healthy = true,
         capabilities = EngineCapabilities.IN_APP,
         versionTag = "1.0",
@@ -530,7 +530,7 @@ class AndroidInAppBrowserEngine(
         }
         val result = withTimeoutOrNull(timeoutMs) { deferred.await() }
         if (result == null) {
-            android.util.Log.w("WanXiangBrowserEngine", "postMain 超时（${timeoutMs}ms）：操作可能已在页面执行，请勿重试同参数操作")
+            android.util.Log.w("TianyanBrowserEngine", "postMain 超时（${timeoutMs}ms）：操作可能已在页面执行，请勿重试同参数操作")
         }
         return result
     }

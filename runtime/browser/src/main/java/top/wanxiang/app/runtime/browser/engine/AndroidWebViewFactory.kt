@@ -36,7 +36,7 @@ object AndroidWebViewFactory {
         s.allowContentAccess = false
         s.mediaPlaybackRequiresUserGesture = true
         if (desktopUserAgent) {
-            s.userAgentString = s.userAgentString.replace("Mobile", "") + " WanXiangDesktop/1.0"
+            s.userAgentString = s.userAgentString.replace("Mobile", "") + " TianyanDesktop/1.0"
         }
         return view
     }

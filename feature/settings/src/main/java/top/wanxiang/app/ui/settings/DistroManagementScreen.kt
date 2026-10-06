@@ -72,7 +72,7 @@ import top.wanxiang.app.ui.components.StatusBadge
 import top.wanxiang.app.ui.components.distroIconFor
 
 /**
- * 万象 · Linux 发行版与沙箱多实例管理 (Distro Management Hub)
+ * 天衍 · Linux 发行版与沙箱多实例管理 (Distro Management Hub)
  */
 @Composable
 fun DistroManagementScreen(
@@ -123,7 +123,7 @@ fun DistroManagementScreen(
         ) {
             item {
                 NoticeBanner(
-                    text = "万象支持多套 Linux 系统并存。所有系统均自动挂载 /workspace 代码工程，/sdcard 外部存储按「存储挂载与共享」页的开关注入，各发行版软件生态与包管理器完全独立隔离。",
+                    text = "天衍支持多套 Linux 系统并存。所有系统均自动挂载 /workspace 代码工程，/sdcard 外部存储按「存储挂载与共享」页的开关注入，各发行版软件生态与包管理器完全独立隔离。",
                 )
             }
 

@@ -3,7 +3,7 @@ package top.wanxiang.app.ui.theme
 import androidx.compose.ui.graphics.Color
 
 /**
- * 「万象 · WanXiang」Material 3 Expressive 设计系统色板
+ * 「天衍 · Tianyan」Material 3 Expressive 设计系统色板
  * 融合 Google M3 Expressive 的生动高阶色调：
  * 曜石夜空（Obsidian Expressive Dark）与 温润素白（Alabaster Expressive Light）
  */

@@ -73,7 +73,7 @@ class HomeViewModel @Inject constructor(
     private val backgroundTaskRegistry: BackgroundTaskRegistry,
     private val privilegeManager: PrivilegeManager,
     private val logger: AppLogger,
-    private val wanxiangCloudClient: top.wanxiang.app.core.network.WanxiangCloudClient,
+    private val wanxiangCloudClient: top.wanxiang.app.core.network.TianyanCloudClient,
     private val settingsDataStore: top.wanxiang.app.core.datastore.SettingsDataStore,
     private val webChatBridgeServer: top.wanxiang.app.runtime.webchat.WebChatBridgeServer? = null,
 ) : ViewModel() {

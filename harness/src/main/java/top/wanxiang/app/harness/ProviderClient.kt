@@ -1062,7 +1062,7 @@ class ProviderClient @Inject constructor(
             val lowerMsg = errorMsg.lowercase()
             return when {
                 code == 403 && (lowerMsg.contains("free quota") || lowerMsg.contains("quota exhausted") || lowerMsg.contains("free tier")) ->
-                    "API 免费额度已耗尽 (HTTP 403)：请前往模型服务商控制台充值、关闭免费层限制，或在万象中切换其他可用模型。"
+                    "API 免费额度已耗尽 (HTTP 403)：请前往模型服务商控制台充值、关闭免费层限制，或在天衍中切换其他可用模型。"
                 code == 401 || lowerMsg.contains("invalid api key") || lowerMsg.contains("unauthorized") ->
                     "API Key 无效或未授权 (HTTP 401)：请在模型设置中检查并更新该服务商的 API Key。"
                 code == 429 || lowerMsg.contains("rate limit") || lowerMsg.contains("insufficient_quota") || lowerMsg.contains("quota") ->
@@ -1177,7 +1177,7 @@ class ProviderClient @Inject constructor(
             ApiToolDefinition(
                 function = ApiFunctionDefinition(
                     name = "process",
-                    description = "管理需要跨工具调用持续运行的 PRoot 后台进程。start 的命令必须以前台模式运行，由 WanXiang 托管生命周期；不要使用 nohup、& 或自行 daemonize。使用 status/logs/list/stop 查询和停止。",
+                    description = "管理需要跨工具调用持续运行的 PRoot 后台进程。start 的命令必须以前台模式运行，由 Tianyan 托管生命周期；不要使用 nohup、& 或自行 daemonize。使用 status/logs/list/stop 查询和停止。",
                     parameters = Json.parseToJsonElement(
                         """{"type":"object","properties":{"action":{"type":"string","enum":["start","status","logs","list","stop"]},"id":{"type":"string","pattern":"^[a-z0-9][a-z0-9._-]{0,63}$","description":"稳定的进程标识；list 不需要"},"command":{"type":"string","description":"start 时必需，需以前台模式持续运行"},"cwd":{"type":"string","description":"start 的工作目录"},"tail_lines":{"type":"integer","minimum":1,"maximum":500,"description":"logs 返回的末尾行数，默认 120"}},"required":["action"]}""",
                     ).jsonObject,
@@ -1441,7 +1441,7 @@ internal class ThinkTagStreamDemuxer(
 
         if (detectRepetitionLoop(fullReasoning, str)) {
             reasoningMutedDueToLoop = true
-            val notice = "\n[万象提示：检测到思维链重复自旋死循环，已自动截断冗余思考内容并继续执行]\n"
+            val notice = "\n[天衍提示：检测到思维链重复自旋死循环，已自动截断冗余思考内容并继续执行]\n"
             if (fullReasoning.length + notice.length <= maxReasoningChars) {
                 fullReasoning.append(notice)
             }

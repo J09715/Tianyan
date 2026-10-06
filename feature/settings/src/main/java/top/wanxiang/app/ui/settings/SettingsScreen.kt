@@ -101,7 +101,7 @@ import top.wanxiang.app.ui.components.SectionHeader
 import top.wanxiang.app.ui.theme.LocalLiquidGlassBackdrop
 
 /**
- * 万象 · 乾坤配置 (WanXiang Settings & Models)
+ * 天衍 · 乾坤配置 (Tianyan Settings & Models)
  */
 @Composable
 fun SettingsScreen(
@@ -110,7 +110,7 @@ fun SettingsScreen(
     onOpenLinuxEnv: () -> Unit,
     onOpenAppearance: () -> Unit,
     onOpenSystemDev: () -> Unit,
-    onOpenAboutWanxiang: () -> Unit,
+    onOpenAboutTianyan: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val models by viewModel.models.collectAsStateWithLifecycle()
@@ -136,7 +136,7 @@ fun SettingsScreen(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             RuntimeTopBar(
-                title = "万象 · 乾坤",
+                title = "天衍 · 乾坤",
                 statusText = "系统设置与控制中枢",
             )
         },
@@ -215,16 +215,16 @@ fun SettingsScreen(
                 )
             }
 
-            // 5. 关于万象
+            // 5. 关于天衍
             item {
                 SettingsCategoryCard(
                     icon = RuntimeIconName.Info,
                     iconTint = Color(0xFF3B82F6),
                     iconBg = Color(0xFF3B82F6).copy(alpha = 0.12f),
-                    title = "关于万象",
+                    title = "关于天衍",
                     subtitle = "应用版本 · 设备与运行时状态 · 沙箱网络代理",
                     badge = if (appVersionName == "unknown") "版本号未知 · 稳定版" else "v$appVersionName 稳定版",
-                    onClick = onOpenAboutWanxiang,
+                    onClick = onOpenAboutTianyan,
                 )
             }
         }
@@ -552,11 +552,11 @@ fun LinuxEnvironmentSettingsScreen(
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     SettingsRow(
                         icon = RuntimeIconName.Globe,
-                        title = "万象智枢 Web 协作台",
+                        title = "天衍智枢 Web 协作台",
                         subtitle = if (webChatStatus.isRunning) {
                             "运行中 · ${webChatStatus.accessUrl} (PIN: ${webChatStatus.pinCode})"
                         } else {
-                            "在同一 Wi-Fi 下使用电脑浏览器访问万象 Agent 与工作区"
+                            "在同一 Wi-Fi 下使用电脑浏览器访问天衍 Agent 与工作区"
                         },
                         value = if (webChatStatus.isRunning) "已开启" else "未开启",
                         onClick = { showWebChatDialog = true },
@@ -709,7 +709,7 @@ fun EnvironmentVariableSettingsScreen(
                                 color = MaterialTheme.colorScheme.onTertiaryContainer,
                             )
                             Text(
-                                "错误覆盖 JAVA_HOME、GRADLE_HOME、LANG 等变量，可能使终端、构建工具或插件无法启动。请只修改你明确了解用途的变量；WanXiang 运行时关键变量会被强制保护。",
+                                "错误覆盖 JAVA_HOME、GRADLE_HOME、LANG 等变量，可能使终端、构建工具或插件无法启动。请只修改你明确了解用途的变量；Tianyan 运行时关键变量会被强制保护。",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onTertiaryContainer,
                             )
@@ -739,7 +739,7 @@ fun EnvironmentVariableSettingsScreen(
             item {
                 SectionHeader(
                     title = "用户变量",
-                    subtitle = "可编辑的 WanXiang 用户配置",
+                    subtitle = "可编辑的 Tianyan 用户配置",
                     trailing = { Text(entries.size.toString(), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant) },
                 )
             }
@@ -995,7 +995,7 @@ fun SystemDevSettingsScreen(
 
             item {
                 Text(
-                    text = "万象自定义迭代与共建",
+                    text = "天衍自定义迭代与共建",
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
@@ -1003,8 +1003,8 @@ fun SystemDevSettingsScreen(
                 SettingsGroup {
                     SettingsRow(
                         icon = RuntimeIconName.Code,
-                        title = "自定义迭代（WanXiangDev）",
-                        subtitle = "在手机沙盒中调用 AI 开发万象自身并云端构建 APK",
+                        title = "自定义迭代（TianyanDev）",
+                        subtitle = "在手机沙盒中调用 AI 开发天衍自身并云端构建 APK",
                         onClick = onOpenCustomIteration,
                     )
                 }
@@ -1064,6 +1064,7 @@ fun SystemDevSettingsScreen(
 }
 
 
+@Composable
 private fun ExecutionModeDialog(
     currentMode: ExecutionMode,
     switching: Boolean,
@@ -1214,7 +1215,7 @@ private fun BatteryOptimizationDialog(
                     }
                 }
                 Text(
-                    "万象在 Agent 执行期间会启动前台服务并持有 CPU 进程锁，但系统电池优化仍可能在息屏后" +
+                    "天衍在 Agent 执行期间会启动前台服务并持有 CPU 进程锁，但系统电池优化仍可能在息屏后" +
                         "冻结进程，表现为 Agent 推理或命令执行中途停住。建议开启以下两项：",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1429,6 +1430,7 @@ private fun isIgnoringBatteryOptimizations(context: Context): Boolean =
     context.getSystemService(PowerManager::class.java)
         ?.isIgnoringBatteryOptimizations(context.packageName) == true
 
+@Composable
 internal fun SettingsGroup(content: @Composable () -> Unit) {
     RuntimeCard(
         Modifier.fillMaxWidth(),
@@ -1560,7 +1562,7 @@ fun WebChatBridgeDialog(
         title = {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 RuntimeIcon(RuntimeIconName.Globe, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
-                Text("万象智枢 Web 协作台")
+                Text("天衍智枢 Web 协作台")
             }
         },
         text = {
@@ -1569,7 +1571,7 @@ fun WebChatBridgeDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(
-                    text = "在同一 Wi-Fi / 局域网下，通过电脑浏览器连接万象智枢，同步处理 Agent 任务、对话与 Linux 工作区文件。",
+                    text = "在同一 Wi-Fi / 局域网下，通过电脑浏览器连接天衍智枢，同步处理 Agent 任务、对话与 Linux 工作区文件。",
                     style = MaterialTheme.typography.bodyMedium,
                 )
 
@@ -1616,7 +1618,7 @@ fun WebChatBridgeDialog(
                                     TextButton(
                                         onClick = {
                                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                            clipboard.setPrimaryClip(ClipData.newPlainText("万象智枢协作地址", status.accessUrl))
+                                            clipboard.setPrimaryClip(ClipData.newPlainText("天衍智枢协作地址", status.accessUrl))
                                             Toast.makeText(context, "已复制基础链接", Toast.LENGTH_SHORT).show()
                                         }
                                     ) { Text("复制") }
@@ -1649,7 +1651,7 @@ fun WebChatBridgeDialog(
                             Button(
                                 onClick = {
                                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    clipboard.setPrimaryClip(ClipData.newPlainText("万象智枢直连地址", directUrl))
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("天衍智枢直连地址", directUrl))
                                     Toast.makeText(context, "已复制免密直达链接，在电脑浏览器打开即可！", Toast.LENGTH_SHORT).show()
                                 },
                                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp),

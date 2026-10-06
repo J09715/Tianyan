@@ -68,7 +68,7 @@ import top.wanxiang.app.ui.components.RuntimeIconButton
 import top.wanxiang.app.ui.components.RuntimeIconName
 import top.wanxiang.app.ui.components.RuntimeOutlinedButton
 import top.wanxiang.app.ui.components.SyntaxHighlighter
-import top.wanxiang.app.ui.components.WanXiangGlassPanel
+import top.wanxiang.app.ui.components.TianyanGlassPanel
 
 enum class ArtifactViewMode {
     PREVIEW,
@@ -77,7 +77,7 @@ enum class ArtifactViewMode {
 }
 
 /**
- * 万象产物交付与全功能预览浮层 (Artifact Preview Sheet)
+ * 天衍产物交付与全功能预览浮层 (Artifact Preview Sheet)
  *
  * 1. 支持 Markdown 富文本解析与渲染；
  * 2. 支持全语种代码语法高亮与行号显示；
@@ -169,7 +169,7 @@ fun ArtifactPreviewSheet(
                 .heightIn(min = 420.dp, max = 680.dp),
         ) {
             // 1. 顶栏标题与模式切换
-            WanXiangGlassPanel(
+            TianyanGlassPanel(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
             ) {

@@ -62,13 +62,13 @@ fun CustomIterationScreen(
             RuntimeCard(modifier = Modifier.fillMaxWidth()) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = "全面自定义专属的 WanXiangDev",
+                        text = "全面自定义专属的 TianyanDev",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "万象（WanXiang）是一款致力于构建手机端 Linux 运行时与自主 Agent 的开源基础设施。通过「自定义迭代」，你可以在掌中调用万象 AI 修改万象自身、通过云端 GitHub Actions 自动化编译出独立的 WanXiangDev APK，并与社区开发者共同交流贡献。",
+                        text = "天衍（Tianyan）是一款致力于构建手机端 Linux 运行时与自主 Agent 的开源基础设施。通过「自定义迭代」，你可以在掌中调用天衍 AI 修改天衍自身、通过云端 GitHub Actions 自动化编译出独立的 TianyanDev APK，并与社区开发者共同交流贡献。",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 22.sp
@@ -93,7 +93,7 @@ fun CustomIterationScreen(
 
             IterationFeatureItem(
                 title = "GitHub Actions 云端 CI 构建",
-                description = "免去手机端繁琐编译，自动化生成 WanXiangDev（top.wanxiang.app.dev）独立 APK。",
+                description = "免去手机端繁琐编译，自动化生成 TianyanDev（top.wanxiang.app.dev）独立 APK。",
                 badgeColor = MaterialTheme.colorScheme.tertiary
             )
 

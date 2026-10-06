@@ -68,7 +68,7 @@ sealed interface AppDestination : NavKey
 @Serializable data object LinuxEnvSettingsDestination : AppDestination
 @Serializable data object AppearanceSettingsDestination : AppDestination
 @Serializable data object SystemDevSettingsDestination : AppDestination
-@Serializable data object AboutWanxiangDestination : AppDestination
+@Serializable data object AboutTianyanDestination : AppDestination
 @Serializable data object AgentSettingsDestination : AppDestination
 @Serializable data object AgentSubagentSettingsDestination : AppDestination
 @Serializable data object AgentSkillSettingsDestination : AppDestination
@@ -100,11 +100,11 @@ sealed interface AppDestination : NavKey
 ) : AppDestination
 
 /**
- * 万象核心导航分发系统
+ * 天衍核心导航分发系统
  * 采用 Navigation 3，为每个 Tab 独立维护持久回退栈与状态生命周期
  */
 @Composable
-fun WanXiangNavHost(
+fun TianyanNavHost(
     globalNavigationBus: top.wanxiang.app.core.common.navigation.GlobalNavigationBus? = null,
 ) {
     // Root tab entries are removed from composition when another tab becomes active. Keep the
@@ -124,7 +124,7 @@ fun WanXiangNavHost(
     val workspaceStack = rememberNavBackStack(WorkspaceDestination)
     val settingsStack = rememberNavBackStack(SettingsDestination)
     var pendingHealingTask by remember { mutableStateOf<HealingTask?>(null) }
-    var selectedMain by rememberSaveable { mutableStateOf(MainDestination.Home) } // 默认进入万象开辟主界
+    var selectedMain by rememberSaveable { mutableStateOf(MainDestination.Home) } // 默认进入天衍开辟主界
 
     LaunchedEffect(chatViewModel) {
         chatViewModel.workflowLaunchRequests.collect { request ->
@@ -329,7 +329,7 @@ fun WanXiangNavHost(
                         onOpenLinuxEnv = { settingsStack.push(SettingsDestination, LinuxEnvSettingsDestination) },
                         onOpenAppearance = { settingsStack.push(SettingsDestination, AppearanceSettingsDestination) },
                         onOpenSystemDev = { settingsStack.push(SettingsDestination, SystemDevSettingsDestination) },
-                        onOpenAboutWanxiang = { settingsStack.push(SettingsDestination, AboutWanxiangDestination) },
+                        onOpenAboutTianyan = { settingsStack.push(SettingsDestination, AboutTianyanDestination) },
                         viewModel = settingsViewModel,
                     )
                 }
@@ -393,9 +393,9 @@ fun WanXiangNavHost(
                     )
                 }
             }
-            entry<AboutWanxiangDestination> {
-                GuardedEntry(AboutWanxiangDestination) {
-                    top.wanxiang.app.ui.settings.AboutWanxiangScreen(
+            entry<AboutTianyanDestination> {
+                GuardedEntry(AboutTianyanDestination) {
+                    top.wanxiang.app.ui.settings.AboutTianyanScreen(
                         onBack = ::popBack,
                         viewModel = settingsViewModel,
                     )

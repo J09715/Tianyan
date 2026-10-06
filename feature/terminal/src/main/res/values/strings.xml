@@ -7,10 +7,10 @@
     <string name="terminal_clipboard_label">终端输出</string>
     <string name="terminal_copied">已复制终端内容</string>
     <string name="terminal_project_title">矩阵 · %1$s</string>
-    <string name="terminal_console_title">万象 · 矩阵控制台</string>
+    <string name="terminal_console_title">天衍 · 矩阵控制台</string>
     <string name="terminal_copy">复制</string>
     <string name="terminal_paste">粘贴</string>
-    <string name="terminal_starting">启动万象 Linux 环境中…</string>
+    <string name="terminal_starting">启动天衍 Linux 环境中…</string>
     <string name="terminal_reset_complete">已重置并重启终端</string>
     <string name="terminal_default_label">终端 %1$d</string>
     <string name="terminal_quick_main">主终端</string>

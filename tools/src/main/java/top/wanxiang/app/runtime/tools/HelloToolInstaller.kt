@@ -37,7 +37,7 @@ class HelloToolInstaller @Inject constructor(
             val binDir = File(stagingDir, "bin")
             binDir.mkdirs()
             val executable = File(binDir, "hello")
-            executable.writeText("#!/bin/sh\necho 'Hello WanXiang'\n")
+            executable.writeText("#!/bin/sh\necho 'Hello Tianyan'\n")
             executable.setExecutable(true, false)
             emit(InstallEvent.Progress(toolId, "验证 hello 命令", 0.85f, InstallEvent.Phase.VERIFYING_INSTALLATION))
             SafeFileTree.delete(targetDir)
@@ -45,7 +45,7 @@ class HelloToolInstaller @Inject constructor(
                 throw IllegalStateException("无法提交安装事务")
             }
             val result = linuxRuntime.execute(ShellCommand(ToolLayout.toolBinary(toolId, "hello")))
-            if (!result.isSuccess || result.stdout.trim() != "Hello WanXiang") {
+            if (!result.isSuccess || result.stdout.trim() != "Hello Tianyan") {
                 throw IllegalStateException("验证失败：${result.stderr.ifBlank { "输出不匹配" }}")
             }
             emit(InstallEvent.Completed(toolId))

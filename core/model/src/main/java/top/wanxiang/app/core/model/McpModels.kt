@@ -147,7 +147,7 @@ object BuiltinMcpPresets {
         McpServerConfig(
             id = "mcp_apktool",
             name = "Android 逆向与 APK 审计",
-            description = "自动化反编译 APK、解析清单权限、提取硬编码凭据、Smali 敏感代码检索与重打包签名（万象内置 MCP 服务，依赖 android-suite 的 apktool/jadx/aapt 工具链）",
+            description = "自动化反编译 APK、解析清单权限、提取硬编码凭据、Smali 敏感代码检索与重打包签名（天衍内置 MCP 服务，依赖 android-suite 的 apktool/jadx/aapt 工具链）",
             transportType = McpTransportType.STDIO,
             command = "python3",
             args = listOf("-u", "/opt/wanxiang/scripts/apktool_mcp_server.py"),
@@ -167,7 +167,7 @@ object BuiltinMcpPresets {
         McpServerConfig(
             id = "mcp_websearch",
             name = "Web 搜索（Open-WebSearch）",
-            description = "免 API Key 的多引擎网络搜索与网页正文抓取（万象内置零依赖 MCP 服务）：支持 Baidu、Bing、DuckDuckGo 等多引擎直连搜索与正文清洗提取，毫秒级响应，无需 Node.js/npx，开箱即用",
+            description = "免 API Key 的多引擎网络搜索与网页正文抓取（天衍内置零依赖 MCP 服务）：支持 Baidu、Bing、DuckDuckGo 等多引擎直连搜索与正文清洗提取，毫秒级响应，无需 Node.js/npx，开箱即用",
             transportType = McpTransportType.STDIO,
             command = "python3",
             args = listOf("-u", "/opt/wanxiang/scripts/websearch_mcp_server.py"),
@@ -179,8 +179,8 @@ object BuiltinMcpPresets {
         ),
         McpServerConfig(
             id = BROWSER_BUILTIN_ID,
-            name = "WanXiang Browser (Built-in)",
-            description = "WanXiang 内置 in-app WebView 的 MCP server（in-process loopback 127.0.0.1:8787，Streamable HTTP POST /mcp 请求-响应，Bearer 认证）；由 harness 层 BrowserMcpBootstrap 启动，暴露 mcp__browser__* 工具给 Agent 与外接 IDE。",
+            name = "Tianyan Browser (Built-in)",
+            description = "Tianyan 内置 in-app WebView 的 MCP server（in-process loopback 127.0.0.1:8787，Streamable HTTP POST /mcp 请求-响应，Bearer 认证）；由 harness 层 BrowserMcpBootstrap 启动，暴露 mcp__browser__* 工具给 Agent 与外接 IDE。",
             transportType = McpTransportType.SSE,
             serverUrl = "http://127.0.0.1:8787/mcp",
             isEnabled = true,

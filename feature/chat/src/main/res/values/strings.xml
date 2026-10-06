@@ -9,7 +9,7 @@
     <string name="chat_receiving_image">正在接收图片…</string>
     <string name="chat_image_preview">图片预览</string>
     <string name="chat_save_image">保存图片</string>
-    <string name="chat_image_saved">已保存到相册（Pictures/WanXiang）</string>
+    <string name="chat_image_saved">已保存到相册（Pictures/Tianyan）</string>
     <string name="chat_image_save_failed">图片保存失败</string>
     <string name="chat_code_clipboard_label">代码片段</string>
     <string name="chat_code_copied">已复制代码</string>
@@ -61,7 +61,7 @@
     <string name="chat_conversation_messages">对话消息</string>
     <string name="chat_context_over_budget">已超过预算，下一次请求会自动压缩历史</string>
     <string name="chat_context_estimate">估算值 · 发送前仍由 Harness 最终计算</string>
-    <string name="chat_agent_intro">万象智枢可以为你编写代码、读写 Linux 工作区文件、执行 Shell 命令或排查系统故障。</string>
+    <string name="chat_agent_intro">天衍智枢可以为你编写代码、读写 Linux 工作区文件、执行 Shell 命令或排查系统故障。</string>
     <string name="chat_onboarding_sandbox">当前仅 Linux 沙箱可用。想让 Agent 操作手机应用与系统设置？到设置页完成 Shizuku 或 Root 授权。</string>
     <string name="chat_onboarding_unlockable">检测到设备支持 Shizuku / Root 特权。切换执行模式即可解锁打开应用、设闹钟、冻结 App 等手机级操作。</string>
     <string name="chat_onboarding_shizuku">Shizuku 已就绪：试试让我打开某个应用、设定闹钟、冻结耗电 App，或用 device_status 查看电量与前台应用。</string>

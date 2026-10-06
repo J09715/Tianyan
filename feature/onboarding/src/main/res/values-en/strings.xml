@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="onboarding_title">WanXiang · Getting started</string>
+    <string name="onboarding_title">Tianyan · Getting started</string>
     <string name="onboarding_description">Preparing a rootless Linux PRoot sandbox and code workspace.</string>
     <string name="onboarding_distribution">Linux distribution</string>
     <string name="onboarding_mirror">Download mirror</string>
@@ -22,6 +22,6 @@
     <string name="onboarding_model_empty">Refresh or enter a model manually</string>
     <string name="onboarding_model_id">Model ID (manual input supported)</string>
     <string name="onboarding_later">Configure later</string>
-    <string name="onboarding_enter">Enter WanXiang</string>
+    <string name="onboarding_enter">Enter Tianyan</string>
     <string name="onboarding_provider_preset">Provider preset</string>
 </resources>

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="onboarding_title">万象 · 启程准备</string>
+    <string name="onboarding_title">天衍 · 启程准备</string>
     <string name="onboarding_description">正在为你准备纯用户空间 Linux PRoot 沙箱引擎与代码工作区。</string>
     <string name="onboarding_distribution">Linux 发行版</string>
     <string name="onboarding_mirror">镜像加速线路</string>
@@ -22,6 +22,6 @@
     <string name="onboarding_model_empty">请先刷新或手动填写</string>
     <string name="onboarding_model_id">模型 ID（可手动输入）</string>
     <string name="onboarding_later">稍后配置</string>
-    <string name="onboarding_enter">进入万象</string>
+    <string name="onboarding_enter">进入天衍</string>
     <string name="onboarding_provider_preset">服务商预设</string>
 </resources>

@@ -20,10 +20,10 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import top.wanxiang.app.core.network.WanxiangCloudClient
+import top.wanxiang.app.core.network.TianyanCloudClient
 
 @HiltAndroidApp
-class WanXiangApplication : Application() {
+class TianyanApplication : Application() {
     @Inject lateinit var crashReporter: CrashReporter
 
     // 启动性能：HarnessLoop / Room 仓储的构造图很重（DAO、DataStore、Agent 引擎全家桶），
@@ -35,7 +35,7 @@ class WanXiangApplication : Application() {
     @Inject lateinit var pathManagerLazy: Lazy<top.wanxiang.app.runtime.RuntimePathManager>
     @Inject lateinit var privilegeManager: PrivilegeManager
     @Inject lateinit var browserMcpBootstrap: BrowserMcpBootstrap
-    @Inject lateinit var wanxiangCloudClient: WanxiangCloudClient
+    @Inject lateinit var wanxiangCloudClient: TianyanCloudClient
     @Inject lateinit var gitCredentialIpcBootstrap: top.wanxiang.app.runtime.credentials.GitCredentialIpcBootstrap
     @Inject lateinit var sandboxProxySync: top.wanxiang.app.runtime.sandbox.SandboxProxySync
 
@@ -50,7 +50,7 @@ class WanXiangApplication : Application() {
             // 技能入库 / MCP 预设入库），单任务失败不拖垮其他任务。
             coroutineScope {
                 // 上一次未捕获崩溃会先落在应用私有目录；下次启动后复制到公共下载目录，
-                // 方便测试用户直接从 Download/WanXiang/crash-reports 取出并反馈。
+                // 方便测试用户直接从 Download/Tianyan/crash-reports 取出并反馈。
                 launch { runCatching { crashReporter.exportPendingReports() } }
                 launch { runCatching { privilegeManager.reconcilePersistedMode() } }
                 // 启动进程内 MCP HTTP server（loopback 127.0.0.1:8787）供 harness / 外部 IDE 接入浏览器工具
@@ -75,7 +75,7 @@ class WanXiangApplication : Application() {
                             )
                         )
                         if (imported.isNotEmpty()) {
-                            android.util.Log.i("WanXiangApp", "Skill 目录自动发现并导入 ${imported.size} 个：${imported.joinToString { it.name }}")
+                            android.util.Log.i("TianyanApp", "Skill 目录自动发现并导入 ${imported.size} 个：${imported.joinToString { it.name }}")
                         }
                     }
                 }
@@ -86,9 +86,9 @@ class WanXiangApplication : Application() {
                     runCatching {
                         val config = wanxiangCloudClient.getAllConfig().getOrThrow()
                         settingsDataStore.setCloudConfig(wanxiangCloudClient.encodeConfig(config))
-                        android.util.Log.i("WanXiangApp", "云端配置拉取成功：${config.size} 项")
+                        android.util.Log.i("TianyanApp", "云端配置拉取成功：${config.size} 项")
                     }.onFailure {
-                        android.util.Log.w("WanXiangApp", "云端配置拉取失败（静默降级）", it)
+                        android.util.Log.w("TianyanApp", "云端配置拉取失败（静默降级）", it)
                     }
                 }
             }
@@ -106,7 +106,7 @@ class WanXiangApplication : Application() {
             launch {
                 harnessLoop.running.collectLatest { running ->
                     if (running) {
-                        runCatching { AgentForegroundService.start(this@WanXiangApplication) }
+                        runCatching { AgentForegroundService.start(this@TianyanApplication) }
                     }
                 }
             }
@@ -116,10 +116,10 @@ class WanXiangApplication : Application() {
             runCatching {
                 val recovered = harnessLoop.recoverAllInterruptedSessions()
                 if (recovered > 0) {
-                    android.util.Log.i("WanXiangApp", "已恢复 $recovered 个被中断的 Agent 会话/任务")
+                    android.util.Log.i("TianyanApp", "已恢复 $recovered 个被中断的 Agent 会话/任务")
                 }
             }.onFailure {
-                android.util.Log.w("WanXiangApp", "恢复中断会话失败", it)
+                android.util.Log.w("TianyanApp", "恢复中断会话失败", it)
             }
         }
     }
@@ -139,7 +139,7 @@ class WanXiangApplication : Application() {
             field.isAccessible = true
             field.set(null, 100 * 1024 * 1024) // 100MB
         }.onFailure {
-            android.util.Log.w("WanXiangApp", "Failed to configure CursorWindow size", it)
+            android.util.Log.w("TianyanApp", "Failed to configure CursorWindow size", it)
         }
     }
 }

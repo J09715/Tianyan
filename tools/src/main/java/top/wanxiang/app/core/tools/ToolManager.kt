@@ -498,7 +498,7 @@ class ToolManager @Inject constructor(
                     emit(InstallEvent.Progress("components", stepLabel, progress))
 
                     val flutterArchive = if ("setup_flutter.sh" in step) {
-                        appendBundleInstallLog("==> [WanXiang] 使用应用内断点下载器获取 Flutter SDK（不在 PRoot 内调用 curl）...")
+                        appendBundleInstallLog("==> [Tianyan] 使用应用内断点下载器获取 Flutter SDK（不在 PRoot 内调用 curl）...")
                         var lastFlutterLogAt = 0L
                         var lastFlutterLoggedBytes = -1L
                         flutterSdkDownloader.prepare(distroId) { downloaded, total ->
@@ -509,7 +509,7 @@ class ToolManager @Inject constructor(
                             val shouldLog = downloaded == 0L || completed ||
                                 (downloaded > lastFlutterLoggedBytes && now - lastFlutterLogAt >= FLUTTER_DOWNLOAD_LOG_INTERVAL_MS)
                             if (shouldLog) {
-                                appendBundleInstallLog("[WanXiang] Flutter SDK 应用内下载：$downloadedMb MB$totalText")
+                                appendBundleInstallLog("[Tianyan] Flutter SDK 应用内下载：$downloadedMb MB$totalText")
                                 lastFlutterLoggedBytes = downloaded
                                 lastFlutterLogAt = now
                             }

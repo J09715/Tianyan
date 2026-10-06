@@ -82,7 +82,7 @@ import top.wanxiang.app.ui.components.RuntimeTopBar
 import top.wanxiang.app.ui.components.StatusBadge
 
 /**
- * 万象 · 插件与 AI 工具中心 (Tool & Plugin Center)
+ * 天衍 · 插件与 AI 工具中心 (Tool & Plugin Center)
  */
 @Composable
 fun ToolCenterScreen(
@@ -780,7 +780,7 @@ fun ToolCenterScreen(
                         TextButton(
                             onClick = {
                                 val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                                clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("WanXiang Bundle Install Log", componentInstallLog.joinToString("\n")))
+                                clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Tianyan Bundle Install Log", componentInstallLog.joinToString("\n")))
                                 // 与工具日志复制行为保持一致，复制后给出反馈
                                 android.widget.Toast.makeText(context, "日志已复制到剪贴板", android.widget.Toast.LENGTH_SHORT).show()
                             },

@@ -289,7 +289,7 @@ fun AdbLogcatScreen(
                         onClick = { logcatPackage = "top.wanxiang.app" },
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                     ) {
-                        Text("填入万象", style = MaterialTheme.typography.labelSmall)
+                        Text("填入天衍", style = MaterialTheme.typography.labelSmall)
                     }
                     OutlinedButton(
                         onClick = { logcatPackage = "" },

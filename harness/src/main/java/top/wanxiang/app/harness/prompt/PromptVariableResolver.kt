@@ -21,7 +21,7 @@ object PromptVariableResolver {
         context: Context,
         modelId: String = "",
         modelName: String = "",
-        charName: String = "万象智枢",
+        charName: String = "天衍智枢",
         userName: String = "用户",
     ): String {
         if (!template.contains("{{")) return template
@@ -46,7 +46,7 @@ object PromptVariableResolver {
             .replace("{{cur_time}}", curTime)
             .replace("{{cur_datetime}}", curDateTime)
             .replace("{{model_id}}", modelId.ifBlank { "default-model" })
-            .replace("{{model_name}}", modelName.ifBlank { modelId.ifBlank { "WanXiang Model" } })
+            .replace("{{model_name}}", modelName.ifBlank { modelId.ifBlank { "Tianyan Model" } })
             .replace("{{locale}}", locale)
             .replace("{{timezone}}", timezone)
             .replace("{{device_info}}", deviceInfo)

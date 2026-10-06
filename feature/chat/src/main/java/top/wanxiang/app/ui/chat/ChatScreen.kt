@@ -114,7 +114,7 @@ private fun chatBottomInsets(bottomBarHeight: Dp): WindowInsets {
 }
 
 /**
- * 万象 · 智枢对话界面 (WanXiang Agent)
+ * 天衍 · 智枢对话界面 (Tianyan Agent)
  * 智能结对编程、工具自动化调用与代码生成
  */
 @OptIn(

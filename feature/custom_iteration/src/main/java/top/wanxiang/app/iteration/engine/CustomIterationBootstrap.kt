@@ -4,7 +4,7 @@ import android.content.Context
 import java.io.File
 
 /**
- * CustomIterationBootstrap — 万象自定义迭代环境自举引擎。
+ * CustomIterationBootstrap — 天衍自定义迭代环境自举引擎。
  * 
  * 职责：
  * 1. 准备沙盒内隔离的源码工作区路径 `~/custom_wanxiang`；
@@ -15,15 +15,15 @@ import java.io.File
 object CustomIterationBootstrap {
 
     const val WORKSPACE_NAME = "custom_wanxiang"
-    const val OFFICIAL_REPO = "https://github.com/peakSee/Wanxiang"
+    const val OFFICIAL_REPO = "https://github.com/peakSee/Tianyan"
 
-    const val BOOTSTRAP_PROMPT = """我准备在万象（WanXiang）的手机 Linux 虚拟沙盒中进行 WanXiang 自定义迭代。
+    const val BOOTSTRAP_PROMPT = """我准备在天衍（Tianyan）的手机 Linux 虚拟沙盒中进行 天衍（Tianyan）自定义迭代。
 
 请按以下步骤引导我：
 1. 检查本地开发环境：
    - 确认当前命令在 Linux PRoot 沙盒中执行；
    - 确认独立工作区为 ~/custom_wanxiang；
-   - 优先使用 GitHub Actions 构建 WanXiangDev APK，无需在手机本地安装庞大的 Android SDK/NDK。
+   - 优先使用 GitHub Actions 构建 TianyanDev APK，无需在手机本地安装庞大的 Android SDK/NDK。
 
 2. 检查并配置 GitHub 认证：
    - 检查 gh CLI 与 Git 配置；
@@ -36,14 +36,14 @@ object CustomIterationBootstrap {
    - 将 Fork 后的仓库克隆到 ~/custom_wanxiang。
 
 4. 遵循 wanxiang-custom-iteration Skill 开发规范：
-   - 按照万象的 Jetpack Compose、Hilt 和多模块规范进行修改；
+   - 按照天衍的 Jetpack Compose、Hilt 和多模块规范进行修改；
    - 编写或调整功能后运行单元测试验证；
    - 提交修改并推送到 Fork 仓库的特性分支。
 
-5. 通过 GitHub Actions 构建独立的 WanXiangDev APK：
+5. 通过 GitHub Actions 构建独立的 TianyanDev APK：
    - 触发 .github/workflows/wanxiangdev-build.yml 编译；
    - 实时监控构建进度并在成功后下载 APK 至手机；
-   - 校验包名 top.wanxiang.app.dev 和应用名 WanXiangDev，与正式版独立共存。
+   - 校验包名 top.wanxiang.app.dev 和应用名 TianyanDev，与正式版独立共存。
 
 6. 若体验满意，协助我生成标准 PR 提交到 $OFFICIAL_REPO。"""
 

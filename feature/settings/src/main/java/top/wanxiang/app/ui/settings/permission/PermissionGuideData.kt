@@ -80,7 +80,7 @@ enum class KeepaliveTopic(
     LOCK_RECENTS(
         id = "lock_recents",
         title = "多任务卡片加锁",
-        subtitle = "在最近任务列表中锁定万象，防止一键清理时杀死前台服务",
+        subtitle = "在最近任务列表中锁定天衍，防止一键清理时杀死前台服务",
         icon = RuntimeIconName.Shield,
     ),
     FLOATING_OVERLAY(
@@ -107,29 +107,29 @@ object PermissionGuideRepository {
             KeepaliveTopic.AUTOSTART -> when (brand) {
                 OemBrand.XIAOMI -> listOf(
                     PermissionStep("进入「应用设置」", "打开系统【设置】 ➔ 【应用设置】 ➔ 【授权管理】 ➔ 【自启动管理】。"),
-                    PermissionStep("开启「万象」自启动", "在应用列表中找到【万象 (WanXiang)】，将自启动开关切换为【开启】。"),
-                    PermissionStep("允许应用间互相唤醒", "点击进入万象详情，开启【允许关联启动 / 被其他应用唤醒】（HyperOS 推荐）。"),
+                    PermissionStep("开启「天衍」自启动", "在应用列表中找到【天衍 (Tianyan)】，将自启动开关切换为【开启】。"),
+                    PermissionStep("允许应用间互相唤醒", "点击进入天衍详情，开启【允许关联启动 / 被其他应用唤醒】（HyperOS 推荐）。"),
                 )
                 OemBrand.HUAWEI -> listOf(
                     PermissionStep("打开「应用启动管理」", "进入【手机管家】 ➔ 【应用启动管理】。"),
-                    PermissionStep("切换为手动管理", "找到【万象】，关闭「自动管理」开关，在弹出的窗口中开启全部三项：【允许自启动】、【允许关联启动】和【允许后台活动】。"),
+                    PermissionStep("切换为手动管理", "找到【天衍】，关闭「自动管理」开关，在弹出的窗口中开启全部三项：【允许自启动】、【允许关联启动】和【允许后台活动】。"),
                 )
                 OemBrand.VIVO -> listOf(
                     PermissionStep("打开「自启动权限」", "进入系统【设置】 ➔ 【应用与权限】 ➔ 【权限管理】 ➔ 【权限】标签页 ➔ 【自启动】。"),
-                    PermissionStep("开启万象自启动", "找到【万象】并开启自启动允许。"),
-                    PermissionStep("开启高耗电后台运行", "在【设置】 ➔ 【电池】 ➔ 【后台高耗电】中，勾选允许万象继续在后台运行。"),
+                    PermissionStep("开启天衍自启动", "找到【天衍】并开启自启动允许。"),
+                    PermissionStep("开启高耗电后台运行", "在【设置】 ➔ 【电池】 ➔ 【后台高耗电】中，勾选允许天衍继续在后台运行。"),
                 )
                 OemBrand.OPPO -> listOf(
                     PermissionStep("进入「自启动管理」", "进入系统【设置】 ➔ 【应用】 ➔ 【自启动管理】。"),
-                    PermissionStep("允许自启动与关联启动", "找到【万象】，打开【允许自启动】与【允许关联启动】开关。"),
+                    PermissionStep("允许自启动与关联启动", "找到【天衍】，打开【允许自启动】与【允许关联启动】开关。"),
                 )
                 OemBrand.MEIZU -> listOf(
                     PermissionStep("打开「后台管理」", "进入【手机管家】 ➔ 【权限管理】 ➔ 【后台管理】。"),
-                    PermissionStep("保持后台运行", "将【万象】设置为【允许后台运行】或【保持后台唤醒】。"),
+                    PermissionStep("保持后台运行", "将【天衍】设置为【允许后台运行】或【保持后台唤醒】。"),
                 )
                 OemBrand.SAMSUNG -> listOf(
                     PermissionStep("检查「自动运行应用程序」", "进入【设置】 ➔ 【电池】 ➔ 【后台使用限制】。"),
-                    PermissionStep("移出休眠列表", "确保万象没有在「深度休眠应用程序」中，并加入【从不休眠的应用程序】列表。"),
+                    PermissionStep("移出休眠列表", "确保天衍没有在「深度休眠应用程序」中，并加入【从不休眠的应用程序】列表。"),
                 )
                 OemBrand.GENERIC -> listOf(
                     PermissionStep("检查系统启动项", "在系统设置应用详情中，检查是否有「自启动」或「开机启动」权限并予以放行。"),
@@ -137,23 +137,23 @@ object PermissionGuideRepository {
             }
             KeepaliveTopic.BATTERY_UNRESTRICTED -> when (brand) {
                 OemBrand.XIAOMI -> listOf(
-                    PermissionStep("应用详情省电策略", "长按万象桌面图标 ➔ 【应用信息】 ➔ 下滑找到【省电策略】。"),
+                    PermissionStep("应用详情省电策略", "长按天衍桌面图标 ➔ 【应用信息】 ➔ 下滑找到【省电策略】。"),
                     PermissionStep("设为「无限制」", "选择【无限制】（不限制后台活动，最利于 PRoot 编译与 Agent 长思考）。"),
                 )
                 OemBrand.HUAWEI -> listOf(
                     PermissionStep("忽略电池优化", "进入【设置】 ➔ 【应用】 ➔ 【权限管理】 ➔ 右上角菜单【特殊访问权限】 ➔ 【电池优化】。"),
-                    PermissionStep("设为「不允许优化」", "下拉筛选「所有应用」，找到【万象】，设为【不允许】。"),
+                    PermissionStep("设为「不允许优化」", "下拉筛选「所有应用」，找到【天衍】，设为【不允许】。"),
                 )
                 OemBrand.VIVO -> listOf(
                     PermissionStep("后台高耗电允许", "进入【设置】 ➔ 【电池】 ➔ 【后台耗电管理】。"),
-                    PermissionStep("开启高耗电运行", "找到【万象】，选择【允许高耗电后台运行】。"),
+                    PermissionStep("开启高耗电运行", "找到【天衍】，选择【允许高耗电后台运行】。"),
                 )
                 OemBrand.OPPO -> listOf(
-                    PermissionStep("电池耗电管理", "长按万象图标 ➔ 【应用详情】 ➔ 【耗电管理】。"),
+                    PermissionStep("电池耗电管理", "长按天衍图标 ➔ 【应用详情】 ➔ 【耗电管理】。"),
                     PermissionStep("开启所有后台选项", "勾选【允许完全后台行为】、【允许唤醒前台】并关闭「深度省电优化」。"),
                 )
                 OemBrand.SAMSUNG -> listOf(
-                    PermissionStep("电池使用模式", "进入系统【设置】 ➔ 【应用程序】 ➔ 【万象】 ➔ 【电池】。"),
+                    PermissionStep("电池使用模式", "进入系统【设置】 ➔ 【应用程序】 ➔ 【天衍】 ➔ 【电池】。"),
                     PermissionStep("设为「不受限制」", "由默认的「已优化」切换为【不受限制】（Unrestricted）。"),
                 )
                 else -> listOf(
@@ -162,14 +162,14 @@ object PermissionGuideRepository {
             }
             KeepaliveTopic.LOCK_RECENTS -> listOf(
                 PermissionStep("进入多任务后台", "从屏幕底部上滑悬停（或点击多任务导航键），进入多任务卡片视图。"),
-                PermissionStep("锁定万象卡片", "长按万象任务卡片（或向下拉动卡片），点击出现的小锁 🔒 图标进行锁定，防止一键清理后台时被系统杀死。"),
+                PermissionStep("锁定天衍卡片", "长按天衍任务卡片（或向下拉动卡片），点击出现的小锁 🔒 图标进行锁定，防止一键清理后台时被系统杀死。"),
             )
             KeepaliveTopic.FLOATING_OVERLAY -> listOf(
                 PermissionStep("开启悬浮窗 / 显示在其他应用上层", "进入【应用信息】 ➔ 【高级】 ➔ 【显示在其他应用上层 / 悬浮窗】，切换为【允许】。"),
                 PermissionStep("后台弹出界面权限", "对于小米/vivo等系统，在【权限管理】中开启【后台弹出界面】或【桌面快捷方式】权限。"),
             )
             KeepaliveTopic.NOTIFICATION -> listOf(
-                PermissionStep("允许通知与前台服务常驻", "确保万象拥有通知权限，万象会在启动 PRoot 沙箱与 Agent 循环时启动前台常驻服务，保障系统进程优先级。"),
+                PermissionStep("允许通知与前台服务常驻", "确保天衍拥有通知权限，天衍会在启动 PRoot 沙箱与 Agent 循环时启动前台常驻服务，保障系统进程优先级。"),
             )
         }
     }

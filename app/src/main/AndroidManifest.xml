@@ -26,7 +26,7 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- Harness host 工具执行 settings put 修改系统设置（亮度、动画等）；Shizuku shell UID 自带此权限，
          但部分 ROM 下 UserService 可能以 app UID 运行，缺少声明会被 SettingsProvider 静默拒绝。
-         此为特殊权限，用户需在"设置→应用→万象→修改系统设置"中手动授权。 -->
+         此为特殊权限，用户需在"设置→应用→天衍→修改系统设置"中手动授权。 -->
     <uses-permission android:name="android.permission.WRITE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
 

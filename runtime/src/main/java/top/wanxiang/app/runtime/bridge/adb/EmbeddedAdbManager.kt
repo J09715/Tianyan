@@ -277,7 +277,7 @@ class EmbeddedAdbManager @Inject constructor(
             require(pairingCode.matches(PAIRING_CODE)) { "配对码必须是 6 位数字" }
             val endpoint = pairingEndpoint(pairingPort)
             _state.value = ConnectionState.Pairing
-            Kadb.pair(endpoint.host, endpoint.port, pairingCode, "WanXiang")
+            Kadb.pair(endpoint.host, endpoint.port, pairingCode, "Tianyan")
             preferences.setAdbPairedOnce(true)
             Log.i(TAG, "wireless adb pairing succeeded via ${endpoint.host}:${endpoint.port}")
 

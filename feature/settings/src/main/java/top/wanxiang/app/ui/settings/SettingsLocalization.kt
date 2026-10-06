@@ -33,8 +33,8 @@ private fun legacyStringResource(source: String): Int? = when (source) {
         "Base URL（接口地址）" -> R.string.settings_legacy_0011
         "稍后再说" -> R.string.settings_legacy_0012
         "正在下载…" -> R.string.settings_legacy_0013
-        "万象 · 乾坤" -> R.string.settings_legacy_0014
-        "万象 · WanXiang" -> R.string.settings_legacy_0015
+        "天衍 · 乾坤" -> R.string.settings_legacy_0014
+        "天衍 · Tianyan" -> R.string.settings_legacy_0015
         "系统设置与控制中枢" -> R.string.settings_legacy_0016
         "系统与配置分类" -> R.string.settings_legacy_0017
         "智能体与 AI 模型" -> R.string.settings_legacy_0018
@@ -215,7 +215,7 @@ private fun legacyStringResource(source: String): Int? = when (source) {
         "删除子智能体" -> R.string.settings_text_0061
         "删除服务" -> R.string.settings_text_0062
         "删除模型失败" -> R.string.settings_text_0063
-        "加入 QQ 交流群 (905971993)" -> R.string.settings_text_0064
+        "加入 QQ 交流群 (000000000)" -> R.string.settings_text_0064
         "助手名称" -> R.string.settings_text_0065
         "协议: Apache-2.0 License" -> R.string.settings_text_0066
         "单 Key RPM 需为非负整数" -> R.string.settings_text_0067
@@ -226,7 +226,7 @@ private fun legacyStringResource(source: String): Int? = when (source) {
         "压缩策略" -> R.string.settings_text_0072
         "压缩触发阈值（用户轮次）" -> R.string.settings_text_0073
         "参数（空格分隔）" -> R.string.settings_text_0074
-        "可呼叫万象 Agent 在 PRoot 沙箱内自主排查与自愈" -> R.string.settings_text_0075
+        "可呼叫天衍 Agent 在 PRoot 沙箱内自主排查与自愈" -> R.string.settings_text_0075
         "可更新" -> R.string.settings_text_0076
         "后台正在装配开发套件..." -> R.string.settings_text_0077
         "后台电池优化白名单 · 调试监控 · PRoot 控制台" -> R.string.settings_text_0078
@@ -423,7 +423,7 @@ private fun legacyStringResource(source: String): Int? = when (source) {
         "网关服务" -> R.string.settings_text_0269
         "网络下载" -> R.string.settings_text_0270
         "网络下载 GGUF" -> R.string.settings_text_0271
-        "群号: 905971993 · 点击一键加群 / 复制群号" -> R.string.settings_text_0272
+        "群号: 000000000 · 点击一键加群 / 复制群号" -> R.string.settings_text_0272
         "聊天界面中新生成的思考过程将默认展开呈现" -> R.string.settings_text_0273
         "职责简介" -> R.string.settings_text_0274
         "自动 (Auto)" -> R.string.settings_text_0275
@@ -492,10 +492,10 @@ private fun legacyStringResource(source: String): Int? = when (source) {
         "1. 分析上述 PRoot 沙箱内的失败报错（如 dpkg 依赖破损、锁残留、网络下载受阻、commandLinks 软链接缺失或环境缺失）；" -> R.string.settings_long_002
         "2. 直接调用 base 工具执行针对性的修复命令（如清理 /var/lib/dpkg 锁、dpkg --configure -a、apt-get --fix-broken install、手动从备用源拉取或补齐软链接）；" -> R.string.settings_long_003
         "Android 12+ 会监控应用派生的子进程，超过系统上限后可能终止 PRoot、编译器或 Agent 任务。这里解除的是子进程限制，不是 Java/Kotlin 线程数。" -> R.string.settings_long_004
-        "MCP 是开放的标准模型上下文协议。开启后，万象将在 PRoot 沙箱内启动对应的 Stdio 服务或连接本地 SSE 端点，并动态向智枢 Agent 注入专业工具能力。" -> R.string.settings_long_005
-        "https://github.com/peakSee/Wanxiang · 欢迎 Star 支持" -> R.string.settings_long_006
-        "万象在 Agent 执行期间会启动前台服务并持有 CPU 进程锁，但系统电池优化仍可能在息屏后" -> R.string.settings_long_007
-        "万象支持多套 Linux 系统并存。所有系统均自动挂载 /workspace 代码工程，/sdcard 外部存储按「存储挂载与共享」页的开关注入，各发行版软件生态与包管理器完全独立隔离。" -> R.string.settings_long_008
+        "MCP 是开放的标准模型上下文协议。开启后，天衍将在 PRoot 沙箱内启动对应的 Stdio 服务或连接本地 SSE 端点，并动态向智枢 Agent 注入专业工具能力。" -> R.string.settings_long_005
+        "https://github.com/peakSee/Tianyan · 欢迎 Star 支持" -> R.string.settings_long_006
+        "天衍在 Agent 执行期间会启动前台服务并持有 CPU 进程锁，但系统电池优化仍可能在息屏后" -> R.string.settings_long_007
+        "天衍支持多套 Linux 系统并存。所有系统均自动挂载 /workspace 代码工程，/sdcard 外部存储按「存储挂载与共享」页的开关注入，各发行版软件生态与包管理器完全独立隔离。" -> R.string.settings_long_008
         "尚未配置任何模型档案，可前往【设置 → 模型档案管理】添加 Claude、OpenAI 或 DeepSeek 模型" -> R.string.settings_long_009
         "挂载仅作用于 Linux 沙箱内的进程（终端、智枢 Agent、构建任务与后台服务），不影响文件浏览器——文件浏览器始终直接访问宿主存储。挂载在会话启动时注入，修改后新建的终端 / 构建任务才会应用。完整读写还需在系统设置中授予「所有文件访问」权限。" -> R.string.settings_long_010
         "强约束模型思考过程全程使用中文（解决 DeepSeek/Claude 思考总跑英文的问题）" -> R.string.settings_long_011

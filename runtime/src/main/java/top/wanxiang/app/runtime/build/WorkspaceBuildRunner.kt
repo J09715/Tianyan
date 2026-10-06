@@ -207,7 +207,7 @@ class WorkspaceBuildRunner @Inject constructor(
                         isRunning = false,
                         isSuccess = false,
                         message = "Release 构建需要签名文件，请先在【工坊设置 - 签名管理】中创建或导入签名",
-                        logOutput = "[WanXiang Build] ❌ Release 构建未选择签名文件\n",
+                        logOutput = "[Tianyan Build] ❌ Release 构建未选择签名文件\n",
                     )
                 )
                 return@channelFlow
@@ -221,7 +221,7 @@ class WorkspaceBuildRunner @Inject constructor(
                         isRunning = false,
                         isSuccess = false,
                         message = prepared.errorOrNull()?.message ?: "签名文件准备失败",
-                        logOutput = "[WanXiang Build] ❌ ${prepared.errorOrNull()?.message ?: "签名文件准备失败"}\n",
+                        logOutput = "[Tianyan Build] ❌ ${prepared.errorOrNull()?.message ?: "签名文件准备失败"}\n",
                     )
                 )
                 return@channelFlow
@@ -344,15 +344,15 @@ class WorkspaceBuildRunner @Inject constructor(
             }
         }
 
-        log("[WanXiang Build Engine] 开始分析工程: ${project.name} (${project.projectType.displayName})")
-        log("[WanXiang Build] 📄 完整构建日志: ${project.linuxPath}/.wanxiang/logs/${buildLogFile.name} (宿主路径: ${buildLogFile.absolutePath})")
+        log("[Tianyan Build Engine] 开始分析工程: ${project.name} (${project.projectType.displayName})")
+        log("[Tianyan Build] 📄 完整构建日志: ${project.linuxPath}/.wanxiang/logs/${buildLogFile.name} (宿主路径: ${buildLogFile.absolutePath})")
         send(BuildRunProgress(step = "正在分析项目环境...", progress = 0.1f, logOutput = snapshotLogs()))
 
         // finally 兜底：任何 return@channelFlow、异常或用户取消都要落盘并关闭日志文件
         try {
         when (project.projectType) {
             ProjectType.ANDROID -> {
-                log("[WanXiang Build] Linux 路径: ${project.linuxPath}")
+                log("[Tianyan Build] Linux 路径: ${project.linuxPath}")
                 send(BuildRunProgress(step = "正在预检 Android 构建环境...", progress = 0.15f, logOutput = snapshotLogs()))
 
                 // 1. 预检完整 Android 工具链；失败时不启动 Gradle。
@@ -374,16 +374,16 @@ class WorkspaceBuildRunner @Inject constructor(
                     }.getOrNull()
                     if (qemuProbe?.isSuccess == true) {
                         useQemuBuild = true
-                        log("[WanXiang Build] ARM64 工具架构不兼容，QEMU x86_64 环境预检通过")
+                        log("[Tianyan Build] ARM64 工具架构不兼容，QEMU x86_64 环境预检通过")
                     }
                 }
                 if (!probe.isSuccess && !useQemuBuild) {
                     val reason = (probe.stderr + "\n" + probe.stdout).trim().takeLast(800)
                     // 按实际失败项点名，避免把 cmake/ninja/java 等失败误导成"缺 Gradle"
                     val missing = BuildEnvironmentPreflight.describeFailure(reason)
-                    log("[WanXiang Build] ⚠️ 未检测到 Android 构建环境${missing?.let { "：$it" } ?: ""}")
-                    log("[WanXiang Build] 预检原因: $reason")
-                    log("[WanXiang Build] 💡 提示：请先在【插件与工具中心】中装配【Android & 移动全栈开发套件】")
+                    log("[Tianyan Build] ⚠️ 未检测到 Android 构建环境${missing?.let { "：$it" } ?: ""}")
+                    log("[Tianyan Build] 预检原因: $reason")
+                    log("[Tianyan Build] 💡 提示：请先在【插件与工具中心】中装配【Android & 移动全栈开发套件】")
                     send(
                         BuildRunProgress(
                             step = "缺少 Android 构建环境",
@@ -397,7 +397,7 @@ class WorkspaceBuildRunner @Inject constructor(
                     return@channelFlow
                 }
 
-                log("[WanXiang Build] 执行 Gradle 编译 ($androidTask)...")
+                log("[Tianyan Build] 执行 Gradle 编译 ($androidTask)...")
                 send(BuildRunProgress(step = "正在执行 Gradle 编译 ($androidTask)...", progress = 0.3f, logOutput = snapshotLogs()))
 
                 // 构建阶段时长追踪
@@ -491,7 +491,7 @@ class WorkspaceBuildRunner @Inject constructor(
                 )
 
                 if (!useQemuBuild && !outcome.isSuccess && shouldRetryWithQemu(outcome) && qemuEnabled) {
-                    log("[WanXiang Build] ARM64 工具链无法执行，检测到兼容开关已开启，切换隔离 x86_64 QEMU 构建环境...")
+                    log("[Tianyan Build] ARM64 工具链无法执行，检测到兼容开关已开启，切换隔离 x86_64 QEMU 构建环境...")
                     send(BuildRunProgress(step = "正在切换 QEMU x86_64 兼容环境...", progress = 0.25f, logOutput = snapshotLogs()))
                     outcome = runCatching {
                         linuxRuntime.execute(ShellCommand(
@@ -536,7 +536,7 @@ class WorkspaceBuildRunner @Inject constructor(
                         .take(8)
                         .joinToString("\n")
                     val errLog = (diagnostic.ifBlank { rawFailureLog.takeLast(1600) }).takeLast(1600)
-                    log("[WanXiang Build] ❌ Gradle 构建失败，Exit Code: ${outcome.exitCode}")
+                    log("[Tianyan Build] ❌ Gradle 构建失败，Exit Code: ${outcome.exitCode}")
                     recordStepDuration("编译失败")
                     send(
                         BuildRunProgress(
@@ -552,8 +552,8 @@ class WorkspaceBuildRunner @Inject constructor(
                     return@channelFlow
                 }
 
-                log("[WanXiang Build] ✅ Gradle 编译完成，耗时: ${outcome.durationMs}ms")
-                log("[WanXiang Build] 检索 APK 产物...")
+                log("[Tianyan Build] ✅ Gradle 编译完成，耗时: ${outcome.durationMs}ms")
+                log("[Tianyan Build] 检索 APK 产物...")
                 send(BuildRunProgress(step = "编译成功，正在检索 APK 产物...", progress = 0.9f, logOutput = snapshotLogs()))
 
                 // 取最新 mtime 的 APK：目录里可能残留历史构建的旧 APK（目录序
@@ -569,7 +569,7 @@ class WorkspaceBuildRunner @Inject constructor(
                     .maxByOrNull { it.lastModified() }
 
                 if (apkFile == null || !apkFile.exists()) {
-                    log("[WanXiang Build] ❌ 未在 outputs 目录找到 APK 产物")
+                    log("[Tianyan Build] ❌ 未在 outputs 目录找到 APK 产物")
                     send(
                         BuildRunProgress(
                             step = "未找到生成的 APK 产物",
@@ -582,9 +582,9 @@ class WorkspaceBuildRunner @Inject constructor(
                     return@channelFlow
                 }
 
-                log("[WanXiang Build] 校验 APK 产物: ${apkFile.absolutePath} (${apkFile.length() / 1024} KB)")
+                log("[Tianyan Build] 校验 APK 产物: ${apkFile.absolutePath} (${apkFile.length() / 1024} KB)")
                 val artifactVerification = ApkArtifactVerifier.verify(apkFile)
-                log("[WanXiang Build] APK 产物校验: ${artifactVerification.message}")
+                log("[Tianyan Build] APK 产物校验: ${artifactVerification.message}")
                 if (!artifactVerification.isValid) {
                     send(
                         BuildRunProgress(
@@ -598,7 +598,7 @@ class WorkspaceBuildRunner @Inject constructor(
                     return@channelFlow
                 }
 
-                log("[WanXiang Build] 找到 APK: ${apkFile.absolutePath} (${apkFile.length() / 1024} KB)")
+                log("[Tianyan Build] 找到 APK: ${apkFile.absolutePath} (${apkFile.length() / 1024} KB)")
 
                 // 导出到手机公共存储 Download 目录
                 send(BuildRunProgress(step = "正在导出 APK 到手机下载目录...", progress = 0.93f, logOutput = snapshotLogs()))
@@ -614,21 +614,21 @@ class WorkspaceBuildRunner @Inject constructor(
                         ),
                     )
                 }
-                log("[WanXiang Build] APK 已成功导出至: ${targetApk.absolutePath}")
+                log("[Tianyan Build] APK 已成功导出至: ${targetApk.absolutePath}")
 
                 // 多通道安装调度：1. 无线 ADB 直装；2. 调起系统原生 PackageInstaller
                 send(BuildRunProgress(step = "正在安装到手机...", progress = 0.97f, logOutput = snapshotLogs()))
                 var installNotice = "APK 已导出至手机 Download/${targetApk.name}"
                 val adbInstallResult = runCatching { embeddedAdbManager.installApk(targetApk) }
                 if (adbInstallResult.isSuccess) {
-                    log("[WanXiang Build] ✅ 通过内置 ADB 成功直装到手机！")
+                    log("[Tianyan Build] ✅ 通过内置 ADB 成功直装到手机！")
                     installNotice = "已通过内置 ADB 成功直装到手机！"
                     if (project.packageName.isNotBlank()) {
-                        log("[WanXiang Build] 启动应用: ${project.packageName} ...")
+                        log("[Tianyan Build] 启动应用: ${project.packageName} ...")
                         embeddedAdbManager.executeShell("monkey -p ${project.packageName} -c android.intent.category.LAUNCHER 1")
                     }
                 } else {
-                    log("[WanXiang Build] 自动调起系统应用安装器 (PackageInstaller)...")
+                    log("[Tianyan Build] 自动调起系统应用安装器 (PackageInstaller)...")
                     val installerLaunched = launchPackageInstaller(targetApk)
                     if (installerLaunched) {
                         installNotice = "已自动调起系统安装器，请在弹窗中点击【安装】"
@@ -652,7 +652,7 @@ class WorkspaceBuildRunner @Inject constructor(
                 )
             }
             ProjectType.FLUTTER -> {
-                log("[WanXiang Build] Flutter 跨平台编译，环境: PUB_HOSTED_URL=https://pub.flutter-io.cn")
+                log("[Tianyan Build] Flutter 跨平台编译，环境: PUB_HOSTED_URL=https://pub.flutter-io.cn")
                 send(BuildRunProgress(step = "正在预检 Flutter 跨端开发环境...", progress = 0.15f, logOutput = snapshotLogs()))
 
                 // 1. 预检 Flutter、Dart 与 Android ARM64 工具链。
@@ -674,16 +674,16 @@ class WorkspaceBuildRunner @Inject constructor(
                     }.getOrNull()
                     if (qemuProbe?.isSuccess == true) {
                         useQemuBuild = true
-                        log("[WanXiang Build] Flutter ARM64 工具架构不兼容，QEMU x86_64 环境预检通过")
+                        log("[Tianyan Build] Flutter ARM64 工具架构不兼容，QEMU x86_64 环境预检通过")
                     }
                 }
                 if (!probeFlutter.isSuccess && !useQemuBuild) {
                     val reason = (probeFlutter.stderr + "\n" + probeFlutter.stdout).trim().takeLast(800)
                     // 按实际失败项点名，避免把工具链单项缺失误导成整体环境缺失
                     val missing = BuildEnvironmentPreflight.describeFailure(reason)
-                    log("[WanXiang Build] ⚠️ 未检测到 Flutter 构建环境${missing?.let { "：$it" } ?: ""}")
-                    log("[WanXiang Build] 预检原因: $reason")
-                    log("[WanXiang Build] 💡 提示：请先在【插件与工具中心】中装配【Android & 移动全栈开发套件 (含 Flutter)】")
+                    log("[Tianyan Build] ⚠️ 未检测到 Flutter 构建环境${missing?.let { "：$it" } ?: ""}")
+                    log("[Tianyan Build] 预检原因: $reason")
+                    log("[Tianyan Build] 💡 提示：请先在【插件与工具中心】中装配【Android & 移动全栈开发套件 (含 Flutter)】")
                     send(
                         BuildRunProgress(
                             step = "缺少 Flutter 构建环境",
@@ -697,7 +697,7 @@ class WorkspaceBuildRunner @Inject constructor(
                     return@channelFlow
                 }
 
-                log("[WanXiang Build] 执行 Flutter APK 构建 (flutter build $flutterTarget)...")
+                log("[Tianyan Build] 执行 Flutter APK 构建 (flutter build $flutterTarget)...")
                 send(BuildRunProgress(step = "正在执行 Flutter 构建 (flutter build $flutterTarget)...", progress = 0.3f, logOutput = snapshotLogs()))
 
                 heartbeatStep = "正在执行 Flutter 构建 (flutter build $flutterTarget)..."
@@ -733,7 +733,7 @@ class WorkspaceBuildRunner @Inject constructor(
                 )
 
                 if (!useQemuBuild && !outcome.isSuccess && shouldRetryWithQemu(outcome) && qemuEnabled) {
-                    log("[WanXiang Build] Flutter ARM64 工具链无法执行，切换隔离 x86_64 QEMU 构建环境...")
+                    log("[Tianyan Build] Flutter ARM64 工具链无法执行，切换隔离 x86_64 QEMU 构建环境...")
                     send(BuildRunProgress(step = "正在切换 QEMU x86_64 Flutter 环境...", progress = 0.25f, logOutput = snapshotLogs()))
                     outcome = runCatching {
                         linuxRuntime.execute(ShellCommand(
@@ -775,7 +775,7 @@ class WorkspaceBuildRunner @Inject constructor(
                         .take(8)
                         .joinToString("\n")
                     val errLog = (diagnostic.ifBlank { rawFailureLog.takeLast(1600) }).takeLast(1600)
-                    log("[WanXiang Build] ❌ Flutter 构建失败，Exit Code: ${outcome.exitCode}")
+                    log("[Tianyan Build] ❌ Flutter 构建失败，Exit Code: ${outcome.exitCode}")
                     flushLogBuffer()
                     send(
                         BuildRunProgress(
@@ -790,7 +790,7 @@ class WorkspaceBuildRunner @Inject constructor(
                     return@channelFlow
                 }
 
-                log("[WanXiang Build] ✅ Flutter 编译完成，耗时: ${outcome.durationMs}ms")
+                log("[Tianyan Build] ✅ Flutter 编译完成，耗时: ${outcome.durationMs}ms")
                 send(BuildRunProgress(step = "编译成功，正在导出 APK...", progress = 0.8f, logOutput = snapshotLogs()))
 
                 // 取最新 mtime 的 APK（理由同 Android 路径）：flutter-apk 目录可能
@@ -806,7 +806,7 @@ class WorkspaceBuildRunner @Inject constructor(
                     .maxByOrNull { it.lastModified() }
 
                 if (apkFile == null || !apkFile.exists()) {
-                    log("[WanXiang Build] ❌ 未在 outputs 目录找到 Flutter APK 产物")
+                    log("[Tianyan Build] ❌ 未在 outputs 目录找到 Flutter APK 产物")
                     send(
                         BuildRunProgress(
                             step = "未找到生成的 Flutter APK 产物",
@@ -819,9 +819,9 @@ class WorkspaceBuildRunner @Inject constructor(
                     return@channelFlow
                 }
 
-                log("[WanXiang Build] 校验 Flutter APK 产物: ${apkFile.absolutePath} (${apkFile.length() / 1024} KB)")
+                log("[Tianyan Build] 校验 Flutter APK 产物: ${apkFile.absolutePath} (${apkFile.length() / 1024} KB)")
                 val artifactVerification = ApkArtifactVerifier.verify(apkFile)
-                log("[WanXiang Build] Flutter APK 产物校验: ${artifactVerification.message}")
+                log("[Tianyan Build] Flutter APK 产物校验: ${artifactVerification.message}")
                 if (!artifactVerification.isValid) {
                     send(
                         BuildRunProgress(
@@ -835,7 +835,7 @@ class WorkspaceBuildRunner @Inject constructor(
                     return@channelFlow
                 }
 
-                log("[WanXiang Build] 找到 Flutter APK: ${apkFile.absolutePath}")
+                log("[Tianyan Build] 找到 Flutter APK: ${apkFile.absolutePath}")
                 val downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
                 val totalApkBytes = apkFile.length()
                 val targetApk = copyApkAtomically(apkFile, File(downloadDir, "${project.name}.apk")) { copied, _ ->
@@ -848,16 +848,16 @@ class WorkspaceBuildRunner @Inject constructor(
                         ),
                     )
                 }
-                log("[WanXiang Build] Flutter APK 已导出至: ${targetApk.absolutePath}")
+                log("[Tianyan Build] Flutter APK 已导出至: ${targetApk.absolutePath}")
 
                 send(BuildRunProgress(step = "正在安装到手机...", progress = 0.95f, logOutput = snapshotLogs()))
                 var installNotice = "Flutter APK 已导出至手机 Download/${targetApk.name}"
                 val adbInstallResult = runCatching { embeddedAdbManager.installApk(targetApk) }
                 if (adbInstallResult.isSuccess) {
-                    log("[WanXiang Build] ✅ 通过内置 ADB 成功直装 Flutter App！")
+                    log("[Tianyan Build] ✅ 通过内置 ADB 成功直装 Flutter App！")
                     installNotice = "已通过内置 ADB 成功直装 Flutter App 到手机！"
                 } else {
-                    log("[WanXiang Build] 自动调起系统应用安装器 (PackageInstaller)...")
+                    log("[Tianyan Build] 自动调起系统应用安装器 (PackageInstaller)...")
                     val installerLaunched = launchPackageInstaller(targetApk)
                     if (installerLaunched) {
                         installNotice = "已自动调起系统安装器，请在弹窗中点击【安装】"
@@ -879,7 +879,7 @@ class WorkspaceBuildRunner @Inject constructor(
                 )
             }
             ProjectType.REVERSE -> {
-                log("[WanXiang Build] APK 逆向工程，无编译流程；直接提供 jadx / apktool 分析指引")
+                log("[Tianyan Build] APK 逆向工程，无编译流程；直接提供 jadx / apktool 分析指引")
                 send(
                     BuildRunProgress(
                         step = "APK 逆向工程",
@@ -891,13 +891,13 @@ class WorkspaceBuildRunner @Inject constructor(
                 )
             }
             ProjectType.GENERAL -> {
-                log("[WanXiang Build] 通用工程，无默认 APK 打包流程")
+                log("[Tianyan Build] 通用工程，无默认 APK 打包流程")
                 send(
                     BuildRunProgress(
                         step = "通用工程",
                         isRunning = false,
                         isSuccess = true,
-                        message = "通用工程请在万象终端中执行自定义命令或自定义构建脚本",
+                        message = "通用工程请在天衍终端中执行自定义命令或自定义构建脚本",
                         logOutput = snapshotLogs(),
                     )
                 )
@@ -906,7 +906,7 @@ class WorkspaceBuildRunner @Inject constructor(
         } finally {
             // 先停心跳再收尾：保证终态是通道里最后一条消息（见 heartbeatJob 声明处说明）。
             heartbeatJob.cancel()
-            log("[WanXiang Build] 📄 构建结束，完整日志已保存至: ${project.linuxPath}/.wanxiang/logs/${buildLogFile.name}")
+            log("[Tianyan Build] 📄 构建结束，完整日志已保存至: ${project.linuxPath}/.wanxiang/logs/${buildLogFile.name}")
             runCatching {
                 flushLogBuffer()
                 buildLogWriter.flush()
