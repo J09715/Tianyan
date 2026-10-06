@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="app/src/main/res/drawable/tianyan_logo.xml" width="96" alt="Tianyan Logo" />
+  <img src="assets/logo/tianyan-logo.png" width="96" alt="Tianyan Logo" />
 </p>
 
 <h1 align="center">Tianyan · 天衍</h1>
