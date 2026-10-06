@@ -3,7 +3,7 @@ package top.tianyan.app.runtime.browser.hook
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 
 class NetworkBodyStoreTest {
@@ -37,17 +37,53 @@ class NetworkBodyStoreTest {
     @Test
     fun `budget overflow evicts oldest`() {
         val s = NetworkBodyStore(totalBudgetBytes = 150)
-        s.put(body("old", 50, 50))       // 100B
-        Thread.sleep(2)
+        s.put(body("old", 60, 40))       // 100B
         s.put(body("mid", 20, 20))       // 40B → 140B
-        Thread.sleep(2)
-        s.put(body("new", 50, 50))       // 100B → 240B > 150 → 逐出 old（替换为大小标记）
-        val old = s.get("old")
-        assertNotNull(old)
-        assertTrue(old!!.requestBody.startsWith("[evicted"))
-        assertNotNull(s.get("mid"))
+        s.get("old") // Refresh old; mid becomes least-recently used.
+        s.put(body("new", 25, 25))       // 50B → evict mid, retain old and new.
+        assertNull(s.get("mid"))
+        assertNotNull(s.get("old"))
         assertNotNull(s.get("new"))
-        assertTrue(s.totalStoredBytes() <= 150 + 64) // 逐出标记本身占少量字节
+        assertEquals(150L, s.totalStoredBytes())
+    }
+
+    @Test
+    fun `budget counts utf8 bytes and rejects an entry above budget`() {
+        val s = NetworkBodyStore(totalBudgetBytes = 5)
+        s.put(NetworkBodyStore.NetworkBody("emoji", "t", "你", "好"))
+        assertEquals(6L, "你好".toByteArray(Charsets.UTF_8).size.toLong())
+        assertNull(s.get("emoji"))
+        assertEquals(0L, s.totalStoredBytes())
+    }
+
+    @Test
+    fun `replacement adjusts utf8 byte accounting`() {
+        val s = NetworkBodyStore(totalBudgetBytes = 5)
+        s.put(NetworkBodyStore.NetworkBody("replace", "t", "é", ""))
+        assertEquals(2L, s.totalStoredBytes())
+        s.put(NetworkBodyStore.NetworkBody("replace", "t", "你", "好"))
+        assertEquals("é", s.get("replace")?.requestBody)
+        assertEquals(2L, s.totalStoredBytes())
+    }
+
+    @Test
+    fun `zero budget accepts only empty bodies`() {
+        val s = NetworkBodyStore(totalBudgetBytes = 0)
+        s.put(NetworkBodyStore.NetworkBody("empty", "t", "", ""))
+        s.put(NetworkBodyStore.NetworkBody("text", "t", "x", ""))
+        assertNotNull(s.get("empty"))
+        assertNull(s.get("text"))
+        assertEquals(0L, s.totalStoredBytes())
+    }
+
+    @Test
+    fun `negative budget is rejected`() {
+        try {
+            NetworkBodyStore(totalBudgetBytes = -1)
+            fail("negative budget must be rejected")
+        } catch (_: IllegalArgumentException) {
+            // expected
+        }
     }
 
     @Test
