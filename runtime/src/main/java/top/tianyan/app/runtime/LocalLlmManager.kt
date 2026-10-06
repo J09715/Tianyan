@@ -136,17 +136,26 @@ class LocalLlmManager @Inject constructor(
         }
     }
 
+    /**
+     * 导入 GGUF 模型。
+     *
+     * [openInput] 是工厂而非现成的流：资源必须由本 Flow 自己打开和关闭。
+     * 若由调用方先打开再传进来，句柄会在 `collect` 到 `.flowOn(Dispatchers.IO)`
+     * 真正开始执行之间一直开着，这段窗口里取消就再没人关闭它。
+     */
     fun import(
         displayName: String,
-        input: InputStream,
+        openInput: () -> InputStream,
         totalBytes: Long? = null,
     ): Flow<LocalModelTransfer> = flow {
-        val destination = resolveModelFile(displayName)
-        val partial = File("${destination.absolutePath}.import.part")
-        emit(LocalModelTransfer.Started)
-        try {
-            var copied = 0L
-            input.use { source ->
+        // use 必须包住整个流程体：emit(Started) 会挂起、resolveModelFile 可能抛异常，
+        // 只把 use 套在拷贝循环外的话，这两种情况都会漏掉关闭。
+        openInput().use { source ->
+            val destination = resolveModelFile(displayName)
+            val partial = File("${destination.absolutePath}.import.part")
+            emit(LocalModelTransfer.Started)
+            try {
+                var copied = 0L
                 partial.outputStream().buffered().use { output ->
                     val buffer = ByteArray(COPY_BUFFER_BYTES)
                     while (true) {
@@ -159,18 +168,18 @@ class LocalLlmManager @Inject constructor(
                         emit(LocalModelTransfer.Progress(copied, totalBytes))
                     }
                 }
+                emit(LocalModelTransfer.Verifying)
+                validateGguf(partial)
+                commit(partial, destination)
+                refresh()
+                emit(LocalModelTransfer.Completed(requireModel(destination.name)))
+            } catch (cancellation: CancellationException) {
+                partial.delete()
+                throw cancellation
+            } catch (throwable: Throwable) {
+                partial.delete()
+                throw throwable
             }
-            emit(LocalModelTransfer.Verifying)
-            validateGguf(partial)
-            commit(partial, destination)
-            refresh()
-            emit(LocalModelTransfer.Completed(requireModel(destination.name)))
-        } catch (cancellation: CancellationException) {
-            partial.delete()
-            throw cancellation
-        } catch (throwable: Throwable) {
-            partial.delete()
-            throw throwable
         }
     }.flowOn(Dispatchers.IO)
 
@@ -178,7 +187,7 @@ class LocalLlmManager @Inject constructor(
         val source = File(path.trim()).canonicalFile
         require(source.isFile && source.canRead()) { "文件不存在或不可读取：${source.absolutePath}" }
         require(source.extension.equals(GGUF_EXTENSION, ignoreCase = true)) { "请选择 .gguf 模型文件" }
-        return import(source.name, FileInputStream(source), source.length())
+        return import(source.name, { FileInputStream(source) }, source.length())
     }
 
     suspend fun start(fileName: String) = serviceMutex.withLock {

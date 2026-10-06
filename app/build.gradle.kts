@@ -272,10 +272,14 @@ tasks.configureEach {
             // 重建），所以只在真正产出 APK 的构建里强制要求。挂在 preBuild 上无条件
             // 检查会让 `./gradlew test` 因为一个与测试无关的原生库缺失而整条失败，
             // 本地根本跑不了单元测试。
+            // 用 AGP 的原生库合并任务作为"正在产出 APK"的判据。
+            // 不能靠任务名前缀猜：:app:testDebugUnitTest 的依赖里既有
+            // packageDebugUnitTestForUnitTest，也有 bundleDebugClassesToRuntimeJar
+            // 和 packageDebugResources，按 assemble/bundle/package 前缀判断会把跑测试
+            // 误判成打包，于是本地和 CI 的 `./gradlew test` 全部失败。
+            // merge<Variant>JniLibFolders 只在真正打包 APK 时才进入任务图。
             val packagingApk = gradle.taskGraph.allTasks.any { task ->
-                val n = task.name
-                n.startsWith("assemble") || n.startsWith("bundle") ||
-                    n.startsWith("package") || n.startsWith("install")
+                task.name.startsWith("merge") && task.name.endsWith("JniLibFolders")
             }
             if (packagingApk) {
                 check(bundledPtyNative.asFile.isFile) {

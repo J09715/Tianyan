@@ -133,8 +133,11 @@ class LocalLlmViewModel @Inject constructor(
         val displayName = metadata?.first ?: uri.lastPathSegment?.substringAfterLast('/') ?: "model.gguf"
         val size = metadata?.second
         startTransfer("正在导入模型") {
-            val input = resolver.openInputStream(uri) ?: error("无法读取所选文件")
-            localLlmManager.import(displayName, input, size)
+            localLlmManager.import(
+                displayName,
+                { resolver.openInputStream(uri) ?: error("无法读取所选文件") },
+                size,
+            )
         }
     }
 
