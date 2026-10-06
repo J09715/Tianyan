@@ -104,6 +104,8 @@ class WsFrameDecoder(
     private val maxFrameBytes: Int = 16 * 1024 * 1024,
 ) {
     private var buffer = ByteArray(0)
+    private var fragmentedOpcode: Int? = null
+    private var fragmentedBytes = 0L
 
     init {
         require(maxFrameBytes in 0..(64 * 1024 * 1024)) {
@@ -175,6 +177,19 @@ class WsFrameDecoder(
         if (opcode >= WsFrameCodec.OP_CLOSE && (!fin || payloadLen > 125L || opcode == WsFrameCodec.OP_CLOSE && payloadLen == 1L)) {
             throw IllegalStateException("invalid websocket control frame")
         }
+        if (opcode < WsFrameCodec.OP_CLOSE) {
+            val activeOpcode = fragmentedOpcode
+            when {
+                opcode == WsFrameCodec.OP_CONTINUATION && activeOpcode == null ->
+                    throw IllegalStateException("unexpected websocket continuation frame")
+                opcode != WsFrameCodec.OP_CONTINUATION && activeOpcode != null ->
+                    throw IllegalStateException("new websocket data frame before fragmented message completed")
+            }
+            val messageBytes = if (opcode == WsFrameCodec.OP_CONTINUATION) fragmentedBytes + payloadLen else payloadLen
+            if (messageBytes > maxFrameBytes.toLong()) {
+                throw IllegalStateException("websocket message exceeds limit: $messageBytes bytes (limit $maxFrameBytes)")
+            }
+        }
         if (payloadLen > maxFrameBytes.toLong()) {
             throw IllegalStateException("websocket frame too large: $payloadLen bytes (limit $maxFrameBytes)")
         }
@@ -194,6 +209,19 @@ class WsFrameDecoder(
             payload = ByteArray(payload.size) { i -> (payload[i].toInt() xor mask[i and 3].toInt()).toByte() }
         }
         buffer = buffer.copyOfRange(total, buffer.size)
+        if (opcode < WsFrameCodec.OP_CLOSE) {
+            when {
+                opcode == WsFrameCodec.OP_CONTINUATION && fin -> {
+                    fragmentedOpcode = null
+                    fragmentedBytes = 0
+                }
+                opcode == WsFrameCodec.OP_CONTINUATION -> fragmentedBytes += payloadLen
+                !fin -> {
+                    fragmentedOpcode = opcode
+                    fragmentedBytes = payloadLen
+                }
+            }
+        }
         return WsFrameCodec.Frame(fin, opcode, payload)
     }
 
