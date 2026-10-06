@@ -271,37 +271,24 @@ fun HomeScreen(
                 onOpenModeSettings = { onNavigate(MainDestination.Settings) },
             )
 
-            // 2. WebChat 电脑大屏协作卡片 (Dashboard Bridge Card)
-            WebChatDashboardCard(
-                status = webChatStatus,
-                onToggle = viewModel::toggleWebChat,
-            )
-
-            // 3. 运行与开发环境体检自愈中心 (Tianyan Doctor & Auto-Fix)
-            EnvironmentDoctorCard(
-                report = doctorReport,
-                isChecking = isCheckingDoctor,
-                isRepairing = isRepairing,
-                repairProgress = repairProgress,
-                runtimeReady = state is RuntimeState.Ready,
-                onRunCheck = viewModel::runDoctorCheck,
-                onStartAutoRepair = {
-                    if (doctorReport?.items?.any { it.id == "host_all_files_access" && it.status != DoctorStatus.HEALTHY } == true) {
-                        requestAllFilesAccess()
-                    }
-                    viewModel.startAutoRepair()
-                },
-                onCancelRepair = viewModel::cancelAutoRepair,
-                onRequestAllFilesAccess = requestAllFilesAccess,
-                onOpenToolCenter = onOpenToolCenter,
-            )
-
-            // 3. 核心指标看板 (Live Resource Metrics Grid)
-            Text(
-                text = stringResource(R.string.home_system_resources),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onBackground,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = stringResource(R.string.home_system_resources),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                Text(
+                    text = "${metrics.cpuArch} · ${metrics.linuxDistro}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -333,6 +320,31 @@ fun HomeScreen(
                     icon = RuntimeIconName.Storage,
                 )
             }
+
+
+            // 3. 运行与开发环境体检自愈中心 (Tianyan Doctor & Auto-Fix)
+            EnvironmentDoctorCard(
+                report = doctorReport,
+                isChecking = isCheckingDoctor,
+                isRepairing = isRepairing,
+                repairProgress = repairProgress,
+                runtimeReady = state is RuntimeState.Ready,
+                onRunCheck = viewModel::runDoctorCheck,
+                onStartAutoRepair = {
+                    if (doctorReport?.items?.any { it.id == "host_all_files_access" && it.status != DoctorStatus.HEALTHY } == true) {
+                        requestAllFilesAccess()
+                    }
+                    viewModel.startAutoRepair()
+                },
+                onCancelRepair = viewModel::cancelAutoRepair,
+                onRequestAllFilesAccess = requestAllFilesAccess,
+                onOpenToolCenter = onOpenToolCenter,
+            )
+
+            WebChatDashboardCard(
+                status = webChatStatus,
+                onToggle = viewModel::toggleWebChat,
+            )
 
             // 4. 活跃任务与服务监控卡片
             ActiveTasksStatusCard(
@@ -891,9 +903,17 @@ private fun RuntimeEngineStatusCard(
         else -> MaterialTheme.colorScheme.outline
     }
 
+    val statusContainerColor = when {
+        error -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.28f)
+        ready -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.22f)
+        initializing != null -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.24f)
+        else -> MaterialTheme.colorScheme.surfaceContainer
+    }
+
     RuntimeCard(
         modifier = Modifier.fillMaxWidth(),
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        containerColor = statusContainerColor,
+        borderColor = statusColor.copy(alpha = if (ready || error || initializing != null) 0.34f else 0f),
         contentPadding = PaddingValues(18.dp),
     ) {
         Column(
@@ -1224,7 +1244,7 @@ private fun ResourceMetricCard(
 
             Text(
                 text = primaryValue,
-                style = MaterialTheme.typography.titleMedium.copy(
+                style = MaterialTheme.typography.titleLarge.copy(
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
                 ),
@@ -1241,12 +1261,28 @@ private fun ResourceMetricCard(
                 trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
             )
 
-            Text(
-                text = "$progressText · $secondaryValue",
-                style = MaterialTheme.typography.labelSmall,
-                color = if (progress >= 0.8f) effectiveAccent else MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = progressText,
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = if (progress >= 0.8f) effectiveAccent else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = secondaryValue,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                    modifier = Modifier.weight(1f),
+                )
+            }
 
             Text(
                 text = if (progress >= 0.9f) stringResource(R.string.home_cleanup_recommended, extraInfo) else extraInfo,
