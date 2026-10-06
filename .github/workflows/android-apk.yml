@@ -82,7 +82,7 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 || secrets.RELEASE_KEYSTORE_BASE64 }}
           STORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD || secrets.RELEASE_STORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS || secrets.RELEASE_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD || secrets.RELEASE_KEY_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD || secrets.RELEASE_STORE_PASSWORD }}
         run: |
           set -euo pipefail
           for value in KEYSTORE_BASE64 STORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
@@ -96,6 +96,7 @@ jobs:
           echo "TIANYAN_RELEASE_STORE_PASSWORD=$STORE_PASSWORD" >> "$GITHUB_ENV"
           echo "TIANYAN_RELEASE_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
           echo "TIANYAN_RELEASE_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
+          keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$STORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
 
       - name: Build signed Release APK
         run: |
@@ -109,7 +110,8 @@ jobs:
           APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
           [ -f "$APK_PATH" ] || { echo "::error::No release APK generated"; exit 1; }
           "$ANDROID_HOME/build-tools/37.0.0/zipalign" -c -P 16 -v 4 "$APK_PATH"
-          "$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --verbose "$APK_PATH"
+          "$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --verbose --print-certs "$APK_PATH" | tee /tmp/apk-signature.txt
+          grep -q 'certificate SHA-256 digest: a391e0f58385b4691c643b52d34f58032e60ddeb3439b4452beee38f2c705da' /tmp/apk-signature.txt
           "$ANDROID_HOME/build-tools/37.0.0/aapt" dump badging "$APK_PATH" | grep -q "package: name='top.tianyan.app'"
           mkdir -p output
           cp "$APK_PATH" output/Tianyan-arm64-release.apk
@@ -127,7 +129,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: app/build/outputs/apk/debug/*.apk
+          files: output/Tianyan-arm64-release.apk output/Tianyan-arm64-release.apk.sha256
           append_body: true
 
   # 单元测试此前从未在 CI 里跑过——仓库有 800+ 个测试，但没有任何 workflow 执行它们，
