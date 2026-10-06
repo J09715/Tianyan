@@ -48,8 +48,8 @@
     <application
         android:name=".TianyanApplication"
         android:allowBackup="false"
-        android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:icon="@mipmap/tianyan_ic_launcher"
+        android:roundIcon="@mipmap/tianyan_ic_launcher_round"
         android:label="${appLabel}"
         android:localeConfig="@xml/tianyan_locales_config"
         android:networkSecurityConfig="@xml/tianyan_network_security_config"
