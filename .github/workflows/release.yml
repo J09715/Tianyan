@@ -141,8 +141,8 @@ jobs:
         id: changelog
         run: |
           CURRENT_TAG="${{ env.TARGET_TAG }}"
-          # 找到上一个版本标签
-          PREV_TAG=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -vx "$CURRENT_TAG" | head -n 1 || true)
+          # Use the first-parent history boundary; repository tags include legacy parallel version lines.
+          PREV_TAG=$(git tag --merged "$CURRENT_TAG" --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -vx "$CURRENT_TAG" | head -n 1 || true)
           echo "当前版本：$CURRENT_TAG，上一版本：$PREV_TAG"
 
           if git rev-parse "$CURRENT_TAG" >/dev/null 2>&1; then
