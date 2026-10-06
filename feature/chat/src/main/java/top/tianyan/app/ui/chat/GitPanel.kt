@@ -214,12 +214,7 @@ fun GitPanel(
         RuntimeTopBar(
             title = if (showCredentialsPage) "凭据与署名" else stringResource(R.string.chat_git_panel_title),
             onBack = { if (showCredentialsPage) showCredentialsPage = false else onDismiss() },
-            statusText = if (showCredentialsPage) null else state.branch?.let { b ->
-                val ab = state.aheadBehind?.let { (a, bh) -> "  ↑$a ↓$bh" } ?: ""
-                val n = state.staged.size + state.unstaged.size + state.untracked.size
-                val badge = if (n > 0 || state.untrackedOverflow) "  ● ${if (state.untrackedOverflow) "99+" else n}" else ""
-                "$b$ab$badge"
-            },
+            statusText = null,
             actions = {
                 if (!showCredentialsPage) {
                     RuntimeIconButton(onClick = { showCredentialsPage = true }) {
@@ -252,6 +247,10 @@ fun GitPanel(
             // Git 流式进度内嵌在面板顶部（用户在 panel 里点 clone/pull/push，不用回 chat 主页面看）
             progress?.let { p ->
                 GitProgressBanner(progress = p, onCancel = onCancelProgress)
+            }
+
+            if (!state.loading && !state.notARepo && state.branch != null && state.error == null) {
+                GitWorkspaceHeader(state = state)
             }
 
             // AiCode 布局：3 页 HorizontalPager + 底部悬浮 FloatingTabBar（状态/分支/提交）
@@ -712,6 +711,63 @@ private fun DiffText(text: String) {
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 1.dp),
             )
         }
+    }
+}
+
+@Composable
+private fun GitWorkspaceHeader(state: GitPanelState) {
+    val untrackedCount = state.untrackedCount.coerceAtLeast(state.untracked.size)
+    val totalChanges = state.staged.size + state.unstaged.size + untrackedCount
+    val syncText = state.aheadBehind?.let { (ahead, behind) -> "↑$ahead  ↓$behind" } ?: "已同步"
+    RuntimeCard(
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.34f),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top,
+            ) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(
+                        "当前会话 · Git 工作区",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.74f),
+                    )
+                    Text(
+                        state.branch ?: "未命名分支",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Text(
+                    if (totalChanges == 0) "干净" else "${if (state.untrackedOverflow) "99+" else totalChanges} 项改动",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = if (totalChanges == 0) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary,
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                GitHeaderMetric("暂存", state.staged.size.toString(), Modifier.weight(1f))
+                GitHeaderMetric("修改", state.unstaged.size.toString(), Modifier.weight(1f))
+                GitHeaderMetric("未跟踪", if (state.untrackedOverflow) "99+" else untrackedCount.toString(), Modifier.weight(1f))
+                GitHeaderMetric("同步", syncText, Modifier.weight(1.3f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun GitHeaderMetric(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(value, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onPrimaryContainer, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f), maxLines = 1)
     }
 }
 
