@@ -100,11 +100,25 @@ object WsFrameCodec {
  * 不完整帧留在内部缓冲等待后续字节（跨 TCP/LocalSocket 分包）。
  * 线程安全由调用方保证（单读协程喂入）。
  */
-class WsFrameDecoder {
+class WsFrameDecoder(
+    private val maxFrameBytes: Int = 16 * 1024 * 1024,
+) {
     private var buffer = ByteArray(0)
 
+    init {
+        require(maxFrameBytes in 0..(64 * 1024 * 1024)) {
+            "maxFrameBytes must be between 0 and 64 MiB"
+        }
+    }
+
     fun feed(bytes: ByteArray, offset: Int = 0, length: Int = bytes.size - offset): List<WsFrameCodec.Frame> {
+        require(offset >= 0 && length >= 0 && offset <= bytes.size - length) {
+            "invalid byte range: offset=$offset length=$length size=${bytes.size}"
+        }
         if (length > 0) {
+            if (buffer.size.toLong() + length > maxFrameBytes.toLong() + 14L) {
+                throw IllegalStateException("websocket buffered data exceeds limit: $maxFrameBytes bytes")
+            }
             buffer += bytes.copyOfRange(offset, offset + length)
         }
         val frames = ArrayList<WsFrameCodec.Frame>(2)
@@ -121,6 +135,17 @@ class WsFrameDecoder {
         val b1 = buffer[1].toInt() and 0xFF
         val fin = (b0 and 0x80) != 0
         val opcode = b0 and 0x0F
+        if ((b0 and 0x70) != 0) throw IllegalStateException("websocket RSV bits must be zero")
+        val supportedOpcode = when (opcode) {
+            WsFrameCodec.OP_CONTINUATION,
+            WsFrameCodec.OP_TEXT,
+            WsFrameCodec.OP_BINARY,
+            WsFrameCodec.OP_CLOSE,
+            WsFrameCodec.OP_PING,
+            WsFrameCodec.OP_PONG -> true
+            else -> false
+        }
+        if (!supportedOpcode) throw IllegalStateException("unsupported websocket opcode: $opcode")
         val masked = (b1 and 0x80) != 0
         val len7 = b1 and 0x7F
 
@@ -134,6 +159,9 @@ class WsFrameDecoder {
             }
             127 -> {
                 if (buffer.size < pos + 8) return null
+                if ((buffer[pos].toInt() and 0x80) != 0) {
+                    throw IllegalStateException("websocket payload length uses reserved high bit")
+                }
                 var v = 0L
                 repeat(8) { i -> v = (v shl 8) or (buffer[pos + i].toLong() and 0xFF) }
                 pos += 8
@@ -141,8 +169,14 @@ class WsFrameDecoder {
             }
             else -> len7.toLong()
         }
-        if (payloadLen > Int.MAX_VALUE) {
-            throw IllegalStateException("websocket frame too large: $payloadLen bytes")
+        if (len7 == 126 && payloadLen < 126L || len7 == 127 && payloadLen < 65536L) {
+            throw IllegalStateException("non-canonical websocket payload length")
+        }
+        if (opcode >= WsFrameCodec.OP_CLOSE && (!fin || payloadLen > 125L || opcode == WsFrameCodec.OP_CLOSE && payloadLen == 1L)) {
+            throw IllegalStateException("invalid websocket control frame")
+        }
+        if (payloadLen > maxFrameBytes.toLong()) {
+            throw IllegalStateException("websocket frame too large: $payloadLen bytes (limit $maxFrameBytes)")
         }
 
         // 掩码 key（客户端实现按协议不收掩码帧，但健壮性起见仍按规范解）
