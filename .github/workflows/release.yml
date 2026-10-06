@@ -55,13 +55,13 @@ jobs:
           java-version: '21'
           cache: 'gradle'
 
-      - name: Install Android SDK components
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install required Android SDK packages
         run: |
           set -euo pipefail
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          [ -x "$SDKMANAGER" ] || SDKMANAGER="$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager"
-          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
-          "$SDKMANAGER" --install "ndk;30.0.15729638" "cmake;3.22.1" "platforms;android-37" "build-tools;37.0.0" | tail -5
+          sdkmanager --install "ndk;30.0.15729638" "cmake;3.22.1" "platforms;android-37" "build-tools;37.0.0"
 
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
