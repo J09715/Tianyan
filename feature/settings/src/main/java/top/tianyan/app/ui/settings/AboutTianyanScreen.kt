@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.tianyan.app.core.model.RuntimeState
 import top.tianyan.app.ui.components.RuntimeCard
+import top.tianyan.app.ui.components.TianyanBrandBadge
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeTopBar
@@ -77,6 +78,17 @@ fun AboutTianyanScreen(
         item {
             SectionHeader("应用信息")
             RuntimeCard(Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    TianyanBrandBadge(size = 52.dp)
+                    Column {
+                        Text("天衍 · Tianyan", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("黑白观象，知行相衍", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
                 Column(Modifier.padding(vertical = 4.dp)) {
                     SettingsRowLocal(
                         icon = RuntimeIconName.Info,

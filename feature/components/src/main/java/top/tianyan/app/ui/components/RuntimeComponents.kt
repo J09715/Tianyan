@@ -670,7 +670,7 @@ fun TianyanBrandBadge(size: Dp = 38.dp) {
         modifier = Modifier
             .size(size)
             .clip(RoundedCornerShape(size * 0.22f))
-            .background(Color.White)
+            .background(Color.Black)
             .padding(size * 0.10f),
         contentAlignment = Alignment.Center,
     ) {
