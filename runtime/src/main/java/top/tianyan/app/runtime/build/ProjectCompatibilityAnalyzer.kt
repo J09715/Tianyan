@@ -1,7 +1,7 @@
-package top.wanxiang.app.runtime.build
+package top.tianyan.app.runtime.build
 
 import java.io.File
-import top.wanxiang.app.runtime.ProjectType
+import top.tianyan.app.runtime.ProjectType
 
 enum class CompatibilitySeverity {
     INFO,

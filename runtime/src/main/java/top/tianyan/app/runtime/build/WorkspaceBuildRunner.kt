@@ -1,4 +1,4 @@
-package top.wanxiang.app.runtime.build
+package top.tianyan.app.runtime.build
 
 import android.content.Context
 import android.content.ClipData
@@ -6,14 +6,14 @@ import android.content.Intent
 import android.os.Environment
 import androidx.core.content.FileProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
-import top.wanxiang.app.core.common.logging.AppLogger
-import top.wanxiang.app.runtime.LinuxRuntime
-import top.wanxiang.app.runtime.ProjectType
-import top.wanxiang.app.runtime.WorkspaceProject
-import top.wanxiang.app.runtime.bridge.adb.EmbeddedAdbManager
-import top.wanxiang.app.runtime.shell.ShellCommand
-import top.wanxiang.app.core.datastore.RuntimePreferences
-import top.wanxiang.app.core.database.BuildScriptRepository
+import top.tianyan.app.core.common.logging.AppLogger
+import top.tianyan.app.runtime.LinuxRuntime
+import top.tianyan.app.runtime.ProjectType
+import top.tianyan.app.runtime.WorkspaceProject
+import top.tianyan.app.runtime.bridge.adb.EmbeddedAdbManager
+import top.tianyan.app.runtime.shell.ShellCommand
+import top.tianyan.app.core.datastore.RuntimePreferences
+import top.tianyan.app.core.database.BuildScriptRepository
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -130,9 +130,9 @@ class WorkspaceBuildRunner @Inject constructor(
     @ApplicationContext private val context: Context,
     private val linuxRuntime: LinuxRuntime,
     private val embeddedAdbManager: EmbeddedAdbManager,
-    private val assetSynchronizer: top.wanxiang.app.runtime.scripts.RuntimeAssetSynchronizer,
+    private val assetSynchronizer: top.tianyan.app.runtime.scripts.RuntimeAssetSynchronizer,
     private val runtimePreferences: RuntimePreferences,
-    private val workshopPreferences: top.wanxiang.app.core.datastore.WorkshopPreferences,
+    private val workshopPreferences: top.tianyan.app.core.datastore.WorkshopPreferences,
     private val buildScriptRepository: BuildScriptRepository,
     private val signingManager: WorkshopSigningManager,
     private val logger: AppLogger,
@@ -172,7 +172,7 @@ class WorkspaceBuildRunner @Inject constructor(
     fun runProject(
         project: WorkspaceProject,
         buildType: WorkshopBuildType = WorkshopBuildType.DEBUG,
-        keystore: top.wanxiang.app.core.datastore.WorkshopKeystore? = null,
+        keystore: top.tianyan.app.core.datastore.WorkshopKeystore? = null,
     ): Flow<BuildRunProgress> = channelFlow {
         // 确保每次构建前，沙箱内部的 Shell 资产脚本永远最新且无 BOM 污染
         runCatching {
@@ -189,10 +189,10 @@ class WorkspaceBuildRunner @Inject constructor(
             ?.let { "workshop-managed-$it.sh" }
         val androidScriptPath = workshopAndroidScript.takeIf { it.isNotBlank() }?.let {
             runCatching { assetSynchronizer.syncWorkshopScript(linuxRuntime.activeDistroId.value, boundFileName ?: "workshop-build-android.sh", it) }.getOrNull()
-        } ?: "/opt/wanxiang/scripts/wanxiang-build.sh"
+        } ?: "/opt/tianyan/scripts/tianyan-build.sh"
         val flutterScriptPath = workshopFlutterScript.takeIf { it.isNotBlank() }?.let {
             runCatching { assetSynchronizer.syncWorkshopScript(linuxRuntime.activeDistroId.value, boundFileName ?: "workshop-build-flutter.sh", it) }.getOrNull()
-        } ?: "/opt/wanxiang/scripts/wanxiang-build.sh"
+        } ?: "/opt/tianyan/scripts/tianyan-build.sh"
         val isRelease = buildType == WorkshopBuildType.RELEASE
         val androidTask = if (isRelease) "assembleRelease" else "assembleDebug"
         val flutterTarget = if (isRelease) "apk --release --target-platform android-arm64" else "apk --debug --target-platform android-arm64"
@@ -230,16 +230,16 @@ class WorkspaceBuildRunner @Inject constructor(
         }
         val workshopEnvironment = buildMap {
             workshopPreferences.androidSdkPath.first().takeIf { it.isNotBlank() }?.let { put("ANDROID_HOME", it); put("ANDROID_SDK_ROOT", it) }
-            workshopPreferences.ndkPath.first().takeIf { it.isNotBlank() }?.let { put("ANDROID_NDK_HOME", it); put("WANXIANG_NDK_PATH", it) }
+            workshopPreferences.ndkPath.first().takeIf { it.isNotBlank() }?.let { put("ANDROID_NDK_HOME", it); put("TIANYAN_NDK_PATH", it) }
             workshopPreferences.flutterSdkPath.first().takeIf { it.isNotBlank() }?.let { put("FLUTTER_HOME", it) }
             workshopPreferences.javaPath.first().takeIf { it.isNotBlank() }?.let { put("JAVA_HOME", it) }
             workshopPreferences.gradlePath.first().takeIf { it.isNotBlank() }?.let { put("GRADLE_HOME", it) }
-            workshopPreferences.cmakePath.first().takeIf { it.isNotBlank() }?.let { put("WANXIANG_CMAKE_HOME", it) }
-            workshopPreferences.ninjaPath.first().takeIf { it.isNotBlank() }?.let { put("WANXIANG_NINJA_HOME", it) }
-            workshopPreferences.aapt2Path.first().takeIf { it.isNotBlank() }?.let { put("WANXIANG_AAPT2_PATH", it) }
+            workshopPreferences.cmakePath.first().takeIf { it.isNotBlank() }?.let { put("TIANYAN_CMAKE_HOME", it) }
+            workshopPreferences.ninjaPath.first().takeIf { it.isNotBlank() }?.let { put("TIANYAN_NINJA_HOME", it) }
+            workshopPreferences.aapt2Path.first().takeIf { it.isNotBlank() }?.let { put("TIANYAN_AAPT2_PATH", it) }
             workshopPreferences.gradleUserHome.first().takeIf { it.isNotBlank() }?.let { put("GRADLE_USER_HOME", it) }
             workshopPreferences.pubCache.first().takeIf { it.isNotBlank() }?.let { put("PUB_CACHE", it) }
-            workshopPreferences.toolDir.first().takeIf { it.isNotBlank() }?.let { put("WANXIANG_TOOL_DIR", it) }
+            workshopPreferences.toolDir.first().takeIf { it.isNotBlank() }?.let { put("TIANYAN_TOOL_DIR", it) }
             putAll(signingEnvironment)
         }
 
@@ -264,9 +264,9 @@ class WorkspaceBuildRunner @Inject constructor(
 
         // 持久化构建日志：进程输出在 flush 时同步落盘，构建卡死/失败/被取消后
         // 仍有完整日志可查（UI 内存日志会随对话框关闭丢失）。
-        // 写到项目目录的 .wanxiang/logs/ 下：工作区文件浏览器与沙箱终端都能直接查看，
-        // 沙箱内路径为 <linuxPath>/.wanxiang/logs/<文件名>。
-        val buildLogDir = File(project.path, ".wanxiang/logs").apply { mkdirs() }
+        // 写到项目目录的 .tianyan/logs/ 下：工作区文件浏览器与沙箱终端都能直接查看，
+        // 沙箱内路径为 <linuxPath>/.tianyan/logs/<文件名>。
+        val buildLogDir = File(project.path, ".tianyan/logs").apply { mkdirs() }
         buildLogDir.listFiles()?.filter { it.isFile }?.sortedBy { it.lastModified() }
             ?.dropLast(KEEP_BUILD_LOG_FILES)?.forEach { runCatching { it.delete() } }
         val buildLogFile = File(buildLogDir, "build-$buildStartedAt.log")
@@ -345,7 +345,7 @@ class WorkspaceBuildRunner @Inject constructor(
         }
 
         log("[Tianyan Build Engine] 开始分析工程: ${project.name} (${project.projectType.displayName})")
-        log("[Tianyan Build] 📄 完整构建日志: ${project.linuxPath}/.wanxiang/logs/${buildLogFile.name} (宿主路径: ${buildLogFile.absolutePath})")
+        log("[Tianyan Build] 📄 完整构建日志: ${project.linuxPath}/.tianyan/logs/${buildLogFile.name} (宿主路径: ${buildLogFile.absolutePath})")
         send(BuildRunProgress(step = "正在分析项目环境...", progress = 0.1f, logOutput = snapshotLogs()))
 
         // finally 兜底：任何 return@channelFlow、异常或用户取消都要落盘并关闭日志文件
@@ -417,7 +417,7 @@ class WorkspaceBuildRunner @Inject constructor(
 
                 heartbeatStep = "正在执行 Gradle 编译 ($androidTask)..."
                 heartbeatProgress = 0.35f
-                val buildCmd = if (androidScriptPath.endsWith("wanxiang-build.sh")) {
+                val buildCmd = if (androidScriptPath.endsWith("tianyan-build.sh")) {
                     "/bin/sh $androidScriptPath android \"${project.linuxPath}\" $androidTask"
                 } else {
                     "/bin/sh $androidScriptPath \"${project.linuxPath}\" $androidTask"
@@ -495,7 +495,7 @@ class WorkspaceBuildRunner @Inject constructor(
                     send(BuildRunProgress(step = "正在切换 QEMU x86_64 兼容环境...", progress = 0.25f, logOutput = snapshotLogs()))
                     outcome = runCatching {
                         linuxRuntime.execute(ShellCommand(
-                            commandLine = if (androidScriptPath.endsWith("wanxiang-build.sh")) "/bin/sh $androidScriptPath android \"${project.linuxPath}\" $androidTask --qemu" else "/bin/sh $androidScriptPath \"${project.linuxPath}\" $androidTask --qemu",
+                            commandLine = if (androidScriptPath.endsWith("tianyan-build.sh")) "/bin/sh $androidScriptPath android \"${project.linuxPath}\" $androidTask --qemu" else "/bin/sh $androidScriptPath \"${project.linuxPath}\" $androidTask --qemu",
                             environment = workshopEnvironment,
                             forcePty = true,
                             timeoutMs = 1800_000L,
@@ -514,7 +514,7 @@ class WorkspaceBuildRunner @Inject constructor(
                             },
                         ))
                     }.getOrElse { error ->
-                        top.wanxiang.app.runtime.shell.CommandResult(-1, "", error.message ?: "QEMU 兼容环境启动失败", 0L)
+                        top.tianyan.app.runtime.shell.CommandResult(-1, "", error.message ?: "QEMU 兼容环境启动失败", 0L)
                     }
                 }
 
@@ -702,7 +702,7 @@ class WorkspaceBuildRunner @Inject constructor(
 
                 heartbeatStep = "正在执行 Flutter 构建 (flutter build $flutterTarget)..."
                 heartbeatProgress = 0.5f
-                val buildCmd = if (flutterScriptPath.endsWith("wanxiang-build.sh")) {
+                val buildCmd = if (flutterScriptPath.endsWith("tianyan-build.sh")) {
                     "/bin/sh $flutterScriptPath flutter \"${project.linuxPath}\" $flutterTarget"
                 } else {
                     "/bin/sh $flutterScriptPath \"${project.linuxPath}\" \"$flutterTarget\""
@@ -737,7 +737,7 @@ class WorkspaceBuildRunner @Inject constructor(
                     send(BuildRunProgress(step = "正在切换 QEMU x86_64 Flutter 环境...", progress = 0.25f, logOutput = snapshotLogs()))
                     outcome = runCatching {
                         linuxRuntime.execute(ShellCommand(
-                            commandLine = if (flutterScriptPath.endsWith("wanxiang-build.sh")) "/bin/sh $flutterScriptPath flutter \"${project.linuxPath}\" --qemu" else "/bin/sh $flutterScriptPath \"${project.linuxPath}\" --qemu",
+                            commandLine = if (flutterScriptPath.endsWith("tianyan-build.sh")) "/bin/sh $flutterScriptPath flutter \"${project.linuxPath}\" --qemu" else "/bin/sh $flutterScriptPath \"${project.linuxPath}\" --qemu",
                             environment = workshopEnvironment,
                             forcePty = true,
                             timeoutMs = 1800_000L,
@@ -756,7 +756,7 @@ class WorkspaceBuildRunner @Inject constructor(
                             },
                         ))
                     }.getOrElse { error ->
-                        top.wanxiang.app.runtime.shell.CommandResult(-1, "", error.message ?: "QEMU 兼容环境启动失败", 0L)
+                        top.tianyan.app.runtime.shell.CommandResult(-1, "", error.message ?: "QEMU 兼容环境启动失败", 0L)
                     }
                 }
 
@@ -906,7 +906,7 @@ class WorkspaceBuildRunner @Inject constructor(
         } finally {
             // 先停心跳再收尾：保证终态是通道里最后一条消息（见 heartbeatJob 声明处说明）。
             heartbeatJob.cancel()
-            log("[Tianyan Build] 📄 构建结束，完整日志已保存至: ${project.linuxPath}/.wanxiang/logs/${buildLogFile.name}")
+            log("[Tianyan Build] 📄 构建结束，完整日志已保存至: ${project.linuxPath}/.tianyan/logs/${buildLogFile.name}")
             runCatching {
                 flushLogBuffer()
                 buildLogWriter.flush()
@@ -915,7 +915,7 @@ class WorkspaceBuildRunner @Inject constructor(
         }
     }.flowOn(Dispatchers.IO)
 
-    private fun shouldRetryWithQemu(outcome: top.wanxiang.app.runtime.shell.CommandResult): Boolean {
+    private fun shouldRetryWithQemu(outcome: top.tianyan.app.runtime.shell.CommandResult): Boolean {
         val text = (outcome.stdout + "\n" + outcome.stderr).lowercase()
         // not_elf / 包装脚本回环 = 工具链文件本身被损坏（典型：exec 回环把
         // JDK 启动器覆盖成脚本）。这是中毒信号，不是架构兼容问题——
@@ -931,10 +931,10 @@ class WorkspaceBuildRunner @Inject constructor(
             text.contains("exec format") ||
             text.contains("not executable") ||
             text.contains("wrong elf class") ||
-            text.contains("wanxiang_preflight_fail: java_arch") ||
-            text.contains("wanxiang_preflight_fail: aapt2_arch") ||
-            text.contains("wanxiang_preflight_fail: ndk_arch") ||
-            text.contains("wanxiang_preflight_fail: dart_arch") ||
+            text.contains("tianyan_preflight_fail: java_arch") ||
+            text.contains("tianyan_preflight_fail: aapt2_arch") ||
+            text.contains("tianyan_preflight_fail: ndk_arch") ||
+            text.contains("tianyan_preflight_fail: dart_arch") ||
             text.contains("elf 架构不匹配") ||
             text.contains("不是 arm64 elf") ||
             text.contains("aarch64") && text.contains("架构") ||

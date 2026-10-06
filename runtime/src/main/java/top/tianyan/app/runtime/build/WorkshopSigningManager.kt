@@ -1,4 +1,4 @@
-package top.wanxiang.app.runtime.build
+package top.tianyan.app.runtime.build
 
 import android.content.Context
 import android.net.Uri
@@ -11,15 +11,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
-import top.wanxiang.app.core.common.result.AppError
-import top.wanxiang.app.core.common.result.AppResult
-import top.wanxiang.app.core.common.result.ErrorCode
-import top.wanxiang.app.core.datastore.WorkshopKeystore
-import top.wanxiang.app.core.datastore.WorkshopPreferences
-import top.wanxiang.app.runtime.LinuxRuntime
-import top.wanxiang.app.runtime.RuntimePathManager
-import top.wanxiang.app.runtime.scripts.RuntimeAssetSynchronizer
-import top.wanxiang.app.runtime.shell.ShellCommand
+import top.tianyan.app.core.common.result.AppError
+import top.tianyan.app.core.common.result.AppResult
+import top.tianyan.app.core.common.result.ErrorCode
+import top.tianyan.app.core.datastore.WorkshopKeystore
+import top.tianyan.app.core.datastore.WorkshopPreferences
+import top.tianyan.app.runtime.LinuxRuntime
+import top.tianyan.app.runtime.RuntimePathManager
+import top.tianyan.app.runtime.scripts.RuntimeAssetSynchronizer
+import top.tianyan.app.runtime.shell.ShellCommand
 
 /** 工坊 Android 应用构建类型。 */
 enum class WorkshopBuildType(val displayName: String) {
@@ -34,7 +34,7 @@ enum class WorkshopBuildType(val displayName: String) {
  * - 创建通过沙箱内 keytool（复用工坊配置的 JDK）生成 PKCS12 密钥库；
  * - 导入通过 SAF URI 复制宿主文件，并用 keytool -list 校验口令；
  * - Release 构建前由 [prepareReleaseSigning] 把密钥库同步进当前沙箱
- *   /opt/wanxiang/keystores/，并安装 Gradle init 签名策略 + 注入环境变量。
+ *   /opt/tianyan/keystores/，并安装 Gradle init 签名策略 + 注入环境变量。
  */
 @Singleton
 class WorkshopSigningManager @Inject constructor(
@@ -49,15 +49,15 @@ class WorkshopSigningManager @Inject constructor(
     /** 宿主主副本目录（应用私有目录，不随沙箱销毁）。 */
     private fun hostKeystoreDir(): File = File(pathManager.baseDir, "workshop/keystores")
 
-    /** 沙箱内可见的密钥库目录（PRoot 绑定 distroDir/opt/wanxiang -> /opt/wanxiang）。 */
+    /** 沙箱内可见的密钥库目录（PRoot 绑定 distroDir/opt/tianyan -> /opt/tianyan）。 */
     private fun sandboxKeystoreDir(distroId: String): File =
-        File(pathManager.wanxiangRootDir(distroId), "keystores")
+        File(pathManager.tianyanRootDir(distroId), "keystores")
 
     /** keytool 在沙箱内可访问的密钥库路径（必须使用沙箱内路径，而非宿主绝对路径）。 */
-    private fun sandboxKeystorePath(fileName: String): String = "/opt/wanxiang/keystores/$fileName"
+    private fun sandboxKeystorePath(fileName: String): String = "/opt/tianyan/keystores/$fileName"
 
     private suspend fun javaHome(): String =
-        preferences.javaPath.first().ifBlank { "/opt/wanxiang/toolchains/android/jdk" }
+        preferences.javaPath.first().ifBlank { "/opt/tianyan/toolchains/android/jdk" }
 
     suspend fun createKeystore(
         name: String,
@@ -231,10 +231,10 @@ class WorkshopSigningManager @Inject constructor(
 
     /**
      * Release 构建前的签名准备：
-     * 1. 同步资产脚本，保证 /opt/wanxiang/scripts/wanxiang-release-signing.gradle 存在；
-     * 2. 把密钥库主副本复制进当前沙箱 /opt/wanxiang/keystores/；
+     * 1. 同步资产脚本，保证 /opt/tianyan/scripts/tianyan-release-signing.gradle 存在；
+     * 2. 把密钥库主副本复制进当前沙箱 /opt/tianyan/keystores/；
      * 3. 把签名 init 脚本安装到 ARM64 (/root/.gradle) 与 QEMU (compat) 两套 Gradle 用户目录；
-     * 4. 返回注入构建命令的 WANXIANG_KEYSTORE_* 环境变量。
+     * 4. 返回注入构建命令的 TIANYAN_KEYSTORE_* 环境变量。
      */
     suspend fun prepareReleaseSigning(keystore: WorkshopKeystore): AppResult<Map<String, String>> =
         withContext(Dispatchers.IO) {
@@ -256,7 +256,7 @@ class WorkshopSigningManager @Inject constructor(
                 return@withContext AppResult.Failure(AppError(ErrorCode.IO, "签名同步进沙箱不完整"))
             }
             // 安装签名 init 脚本：兼容 ARM64 主路径与 QEMU x86_64 兼容路径。
-            val scriptSource = File(pathManager.wanxiangScriptsDir(distroId), SIGNING_INIT_SCRIPT_NAME)
+            val scriptSource = File(pathManager.tianyanScriptsDir(distroId), SIGNING_INIT_SCRIPT_NAME)
             if (!scriptSource.isFile) {
                 return@withContext AppResult.Failure(
                     AppError(ErrorCode.IO, "沙箱内缺少签名策略脚本 $SIGNING_INIT_SCRIPT_NAME，请先同步工坊资产"),
@@ -265,7 +265,7 @@ class WorkshopSigningManager @Inject constructor(
             val scriptContent = scriptSource.readText(Charsets.UTF_8)
             val initTargets = listOf(
                 File(pathManager.rootfsDir(distroId), "root/.gradle/init.d/$SIGNING_INIT_SCRIPT_NAME"),
-                File(pathManager.wanxiangRootDir(distroId), "compat/x86_64/cache/gradle/init.d/$SIGNING_INIT_SCRIPT_NAME"),
+                File(pathManager.tianyanRootDir(distroId), "compat/x86_64/cache/gradle/init.d/$SIGNING_INIT_SCRIPT_NAME"),
             )
             initTargets.forEach { target ->
                 runCatching {
@@ -275,10 +275,10 @@ class WorkshopSigningManager @Inject constructor(
             }
             AppResult.Success(
                 mapOf(
-                    "WANXIANG_KEYSTORE_FILE" to "/opt/wanxiang/keystores/${keystore.fileName}",
-                    "WANXIANG_KEYSTORE_STORE_PASSWORD" to keystore.storePassword,
-                    "WANXIANG_KEYSTORE_KEY_ALIAS" to keystore.alias,
-                    "WANXIANG_KEYSTORE_KEY_PASSWORD" to keystore.keyPassword,
+                    "TIANYAN_KEYSTORE_FILE" to "/opt/tianyan/keystores/${keystore.fileName}",
+                    "TIANYAN_KEYSTORE_STORE_PASSWORD" to keystore.storePassword,
+                    "TIANYAN_KEYSTORE_KEY_ALIAS" to keystore.alias,
+                    "TIANYAN_KEYSTORE_KEY_PASSWORD" to keystore.keyPassword,
                 ),
             )
         }
@@ -292,7 +292,7 @@ class WorkshopSigningManager @Inject constructor(
         name.replace(Regex("[^A-Za-z0-9._-]+"), "_").trim('_').ifBlank { "keystore" }
 
     private companion object {
-        const val SIGNING_INIT_SCRIPT_NAME = "wanxiang-release-signing.gradle"
+        const val SIGNING_INIT_SCRIPT_NAME = "tianyan-release-signing.gradle"
     }
 }
 

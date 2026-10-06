@@ -1,6 +1,6 @@
-package top.wanxiang.app.runtime.build
+package top.tianyan.app.runtime.build
 
-import top.wanxiang.app.runtime.ProjectType
+import top.tianyan.app.runtime.ProjectType
 
 /**
  * Generates a side-effect-free command used before a build starts. Keeping
@@ -18,7 +18,7 @@ object BuildEnvironmentPreflight {
         val project = shellQuote(projectPath)
         val lines = mutableListOf(
             "set -eu",
-            "fail() { echo \"WANXIANG_PREFLIGHT_FAIL: ${'$'}1\"; exit 2; }",
+            "fail() { echo \"TIANYAN_PREFLIGHT_FAIL: ${'$'}1\"; exit 2; }",
             "PROJECT_PATH=$project",
             "test -x /bin/sh || fail shell",
             "test -d \"\$PROJECT_PATH\" || fail project_missing",
@@ -35,14 +35,14 @@ object BuildEnvironmentPreflight {
 
         if (qemu) {
             lines += "test \"\$(uname -m)\" = x86_64 || fail qemu_guest"
-            lines += "COMPAT_ROOT=/opt/wanxiang/compat/x86_64"
+            lines += "COMPAT_ROOT=/opt/tianyan/compat/x86_64"
             lines += "JAVA_HOME=\$COMPAT_ROOT/jdk-17"
             lines += "ANDROID_HOME=\$COMPAT_ROOT/android-sdk"
             lines += "GRADLE_HOME=\$COMPAT_ROOT/gradle-8.14.2"
             lines += "JAVA_BIN=\$JAVA_HOME/bin/java"
             lines += "test -x \"\$JAVA_BIN\" || fail java_missing"
             lines += "JAVA_MACHINE=\$(java_arch_machine \"\$JAVA_BIN\")"
-            lines += "test \"\$JAVA_MACHINE\" = $X86_64_ELF_MACHINE || { echo \"WANXIANG_PREFLIGHT_FAIL: java_arch path=\$JAVA_BIN machine=\${JAVA_MACHINE:-unreadable} expected=$X86_64_ELF_MACHINE\"; exit 2; }"
+            lines += "test \"\$JAVA_MACHINE\" = $X86_64_ELF_MACHINE || { echo \"TIANYAN_PREFLIGHT_FAIL: java_arch path=\$JAVA_BIN machine=\${JAVA_MACHINE:-unreadable} expected=$X86_64_ELF_MACHINE\"; exit 2; }"
             lines += "test -f \"\$ANDROID_HOME/platforms/android-34/android.jar\" || fail android_platform"
             lines += "AAPT2=\$ANDROID_HOME/build-tools/35.0.0/aapt2"
             lines += "test -x \"\$AAPT2\" || fail aapt2_missing"
@@ -58,30 +58,30 @@ object BuildEnvironmentPreflight {
             }
         } else {
             lines += "ANDROID_HOME=\${ANDROID_HOME:-/opt/android-sdk}"
-            lines += "# default JAVA_BIN=/opt/wanxiang/toolchains/android/jdk/bin/java"
-            lines += "JAVA_BIN=\${JAVA_HOME:-/opt/wanxiang/toolchains/android/jdk}/bin/java"
+            lines += "# default JAVA_BIN=/opt/tianyan/toolchains/android/jdk/bin/java"
+            lines += "JAVA_BIN=\${JAVA_HOME:-/opt/tianyan/toolchains/android/jdk}/bin/java"
             lines += "test -x \"\$JAVA_BIN\" || JAVA_BIN=\$(command -v java 2>/dev/null || true)"
             lines += "test -n \"\$JAVA_BIN\" -a -x \"\$JAVA_BIN\" || fail java_missing"
             lines += "JAVA_MACHINE=\$(java_arch_machine \"\$JAVA_BIN\")"
-            lines += "test \"\$JAVA_MACHINE\" = $ARM64_ELF_MACHINE || { echo \"WANXIANG_PREFLIGHT_FAIL: java_arch path=\$JAVA_BIN machine=\${JAVA_MACHINE:-unreadable} expected=$ARM64_ELF_MACHINE\"; exit 2; }"
+            lines += "test \"\$JAVA_MACHINE\" = $ARM64_ELF_MACHINE || { echo \"TIANYAN_PREFLIGHT_FAIL: java_arch path=\$JAVA_BIN machine=\${JAVA_MACHINE:-unreadable} expected=$ARM64_ELF_MACHINE\"; exit 2; }"
             lines += "test -f \"\$ANDROID_HOME/platforms/android-34/android.jar\" || fail android_platform"
             lines += "test -f \"\$ANDROID_HOME/build-tools/35.0.0/lib/d8.jar\" || fail build_tools"
-            lines += "AAPT2=\${WANXIANG_AAPT2_PATH:-\$ANDROID_HOME/build-tools/35.0.0/aapt2}"
+            lines += "AAPT2=\${TIANYAN_AAPT2_PATH:-\$ANDROID_HOME/build-tools/35.0.0/aapt2}"
             lines += "test -x \"\$AAPT2\" -a \"\$(elf_machine \"\$AAPT2\")\" = $ARM64_ELF_MACHINE || fail aapt2_arch"
-            lines += "NDK_PATH=\${WANXIANG_NDK_PATH:-\${ANDROID_NDK_HOME:-/opt/wanxiang/toolchains/android/ndk}}"
+            lines += "NDK_PATH=\${TIANYAN_NDK_PATH:-\${ANDROID_NDK_HOME:-/opt/tianyan/toolchains/android/ndk}}"
             lines += "NDK_CLANG=\$(find \"\$NDK_PATH/toolchains/llvm/prebuilt\" \\( -type f -o -type l \\) -name clang -print -quit 2>/dev/null)"
             lines += "NDK_STRIP=\$(find \"\$NDK_PATH/toolchains/llvm/prebuilt\" \\( -type f -o -type l \\) -name llvm-strip -print -quit 2>/dev/null)"
             lines += "test -f \"\$NDK_PATH/source.properties\" -a -x \"\$NDK_CLANG\" -a -x \"\$NDK_STRIP\" || fail ndk_missing"
             lines += "test \"\$(elf_machine \"\$NDK_CLANG\")\" = $ARM64_ELF_MACHINE -a \"\$(elf_machine \"\$NDK_STRIP\")\" = $ARM64_ELF_MACHINE || fail ndk_arch"
-            // CMake/Ninja 只对含 native 代码的工程是硬需求（与 wanxiang-build.sh doctor
+            // CMake/Ninja 只对含 native 代码的工程是硬需求（与 tianyan-build.sh doctor
             // 的 has_native 口径一致）。在线装配（android-core）不安装它们到固定路径，
             // 无条件强校验会把纯 Kotlin/Java 工程误杀成"缺少构建环境"。
             lines += "has_native=0"
             lines += "if test -f \"\$PROJECT_PATH/CMakeLists.txt\" -o -f \"\$PROJECT_PATH/app/CMakeLists.txt\" -o -d \"\$PROJECT_PATH/app/src/main/cpp\" -o -d \"\$PROJECT_PATH/app/src/main/jni\"; then has_native=1; fi"
             lines += "if grep -Eq 'externalNativeBuild|ndkBuild' \"\$PROJECT_PATH/build.gradle\" \"\$PROJECT_PATH/build.gradle.kts\" \"\$PROJECT_PATH/app/build.gradle\" \"\$PROJECT_PATH/app/build.gradle.kts\" 2>/dev/null; then has_native=1; fi"
             lines += "if [ \"\$has_native\" = 1 ]; then"
-            lines += "CMAKE_HOME=\${WANXIANG_CMAKE_HOME:-/opt/wanxiang/tools/android-suite-offline/cmake}"
-            lines += "NINJA_HOME=\${WANXIANG_NINJA_HOME:-/opt/wanxiang/tools/android-suite-offline/bin}"
+            lines += "CMAKE_HOME=\${TIANYAN_CMAKE_HOME:-/opt/tianyan/tools/android-suite-offline/cmake}"
+            lines += "NINJA_HOME=\${TIANYAN_NINJA_HOME:-/opt/tianyan/tools/android-suite-offline/bin}"
             lines += "test -x \"\$CMAKE_HOME/bin/cmake\" -o -x /usr/bin/cmake -o -x /usr/local/bin/cmake || fail cmake_missing"
             lines += "test -x \"\$NINJA_HOME/ninja\" -o -x /usr/bin/ninja -o -x /usr/local/bin/ninja || fail ninja_missing"
             lines += "fi"
@@ -97,7 +97,7 @@ object BuildEnvironmentPreflight {
                 lines += "test \"\$(elf_machine \"\$DART\")\" = $ARM64_ELF_MACHINE || fail dart_arch"
             }
         }
-        lines += "echo WANXIANG_PREFLIGHT_OK"
+        lines += "echo TIANYAN_PREFLIGHT_OK"
         return lines.joinToString("; ")
     }
 
@@ -139,5 +139,5 @@ object BuildEnvironmentPreflight {
 
     private fun shellQuote(value: String): String = "'${value.replace("'", "'\\\''")}'"
 
-    private val PREFLIGHT_FAIL = Regex("WANXIANG_PREFLIGHT_FAIL:\\s*(\\S.*)")
+    private val PREFLIGHT_FAIL = Regex("TIANYAN_PREFLIGHT_FAIL:\\s*(\\S.*)")
 }

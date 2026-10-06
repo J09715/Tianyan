@@ -1,4 +1,4 @@
-package top.wanxiang.app.runtime.build
+package top.tianyan.app.runtime.build
 
 import java.io.File
 import java.util.zip.ZipFile
