@@ -48,11 +48,11 @@ jobs:
           echo "TARGET_TAG=$TAG" >> "$GITHUB_ENV"
           echo "Using version tag: $TAG"
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
           cache: 'gradle'
 
       - name: Set up Android SDK
@@ -78,11 +78,11 @@ jobs:
           fi
           echo "TIANYAN_RELEASE_STORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
 
-      - name: Build Release APK
+      - name: Build Stable-Signed Debug APK
         env:
           TIANYAN_RELEASE_STORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD || secrets.RELEASE_STORE_PASSWORD }}
           TIANYAN_RELEASE_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS || secrets.RELEASE_KEY_ALIAS }}
-          TIANYAN_RELEASE_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD || secrets.RELEASE_KEY_PASSWORD }}
+          TIANYAN_RELEASE_KEY_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD || secrets.RELEASE_STORE_PASSWORD }}
         run: |
           set -euo pipefail
           for variable in \
@@ -99,22 +99,25 @@ jobs:
             -keystore "$TIANYAN_RELEASE_STORE_FILE" \
             -storepass:env TIANYAN_RELEASE_STORE_PASSWORD \
             -alias "$TIANYAN_RELEASE_KEY_ALIAS" > /dev/null
-          ./gradlew assembleRelease --no-daemon --stacktrace
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
       - name: Identify and Rename Output APK
         run: |
           mkdir -p output
-          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
-          if [ -f "$APK_PATH" ]; then
-            TAG="${{ env.TARGET_TAG }}"
-            cp "$APK_PATH" "output/Tianyan-arm64-${TAG}.apk"
-            sha256sum "output/Tianyan-arm64-${TAG}.apk" > "output/Tianyan-arm64-${TAG}.apk.sha256"
-            echo "APK_FILE=output/Tianyan-arm64-${TAG}.apk" >> $GITHUB_ENV
-            echo "SHA_FILE=output/Tianyan-arm64-${TAG}.apk.sha256" >> $GITHUB_ENV
-            echo "TAG=$TAG" >> $GITHUB_ENV
-          else
-            echo "Error: No release APK generated!" && exit 1
-          fi
+          set -euo pipefail
+          APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          [ -f "$APK_PATH" ] || { echo "Error: No debug APK generated!"; exit 1; }
+          TAG="${{ env.TARGET_TAG }}"
+          APK_NAME="Tianyan-${TAG}-debug.apk"
+          cp "$APK_PATH" "output/$APK_NAME"
+          "$ANDROID_HOME/build-tools/37.0.0/zipalign" -c -P 16 -v 4 "output/$APK_NAME"
+          "$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --verbose --print-certs "output/$APK_NAME" | tee /tmp/apk-signature.txt
+          grep -q 'certificate SHA-256 digest: a391e0f58385b4691c643b52d34f58032e60ddeb3439b44552beee38f2c705da' /tmp/apk-signature.txt
+          "$ANDROID_HOME/build-tools/37.0.0/aapt" dump badging "output/$APK_NAME" | grep -q "package: name='top.tianyan.app.debug'"
+          sha256sum "output/$APK_NAME" > "output/$APK_NAME.sha256"
+          echo "APK_FILE=output/$APK_NAME" >> "$GITHUB_ENV"
+          echo "SHA_FILE=output/$APK_NAME.sha256" >> "$GITHUB_ENV"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
 
       # 生成两个相邻版本标签之间的 git 提交日志作为 Release Notes
       - name: Generate Changelog
