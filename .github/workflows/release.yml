@@ -55,6 +55,14 @@ jobs:
           java-version: '21'
           cache: 'gradle'
 
+      - name: Install NDK 30.0.15729638
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SDKMANAGER" ] || SDKMANAGER="$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" --install "ndk;30.0.15729638" "platforms;android-37" "build-tools;37.0.0"
+
       - name: Rebuild libpty_native.so from source
         run: |
           set -euo pipefail
