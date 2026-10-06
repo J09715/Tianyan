@@ -10,6 +10,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import top.tianyan.app.core.common.logging.AppLogger
 import top.tianyan.app.core.common.logging.SensitiveDataRedactor
 import top.tianyan.app.core.datastore.SettingsDataStore
@@ -21,6 +22,7 @@ import top.tianyan.app.runtime.doctor.EnvironmentRepairer
 import top.tianyan.app.runtime.shell.CommandResult
 
 @RunWith(RobolectricTestRunner::class)
+@Config(sdk = [36])
 class EnvironmentDoctorTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
     private val logger = AppLogger(context, SensitiveDataRedactor { it })
