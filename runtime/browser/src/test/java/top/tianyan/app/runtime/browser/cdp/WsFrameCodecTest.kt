@@ -197,6 +197,61 @@ class WsFrameCodecTest {
     }
 
     @Test
+    fun `fragmented messages accept continuation frames and reset after final`() {
+        val decoder = WsFrameDecoder()
+        val first = decoder.feed(byteArrayOf(0x01, 3, 'h'.code.toByte(), 'e'.code.toByte(), 'l'.code.toByte()))
+        val middle = decoder.feed(byteArrayOf(0x00, 1, 'l'.code.toByte()))
+        val last = decoder.feed(byteArrayOf(0x80.toByte(), 1, 'o'.code.toByte()))
+        assertEquals(WsFrameCodec.OP_TEXT, first.single().opcode)
+        assertFalse(first.single().fin)
+        assertEquals(WsFrameCodec.OP_CONTINUATION, middle.single().opcode)
+        assertFalse(middle.single().fin)
+        assertEquals(WsFrameCodec.OP_CONTINUATION, last.single().opcode)
+        assertTrue(last.single().fin)
+        assertEquals("hello", (first + middle + last).filter { it.opcode == WsFrameCodec.OP_CONTINUATION }
+            .flatMap { it.payload.toList() }.toByteArray().let {
+                String(first.single().payload + it, Charsets.UTF_8)
+            })
+
+        val standalone = decoder.feed(byteArrayOf(0x81.toByte(), 1, 'x'.code.toByte()))
+        assertEquals("x", String(standalone.single().payload, Charsets.UTF_8))
+    }
+
+    @Test
+    fun `continuation without a fragmented message is rejected`() {
+        try {
+            WsFrameDecoder().feed(byteArrayOf(0x80.toByte(), 0))
+            fail("unexpected continuation must be rejected")
+        } catch (_: IllegalStateException) {
+            // expected
+        }
+    }
+
+    @Test
+    fun `new data frame cannot interrupt a fragmented message`() {
+        val decoder = WsFrameDecoder()
+        decoder.feed(byteArrayOf(0x01, 1, 'a'.code.toByte()))
+        try {
+            decoder.feed(byteArrayOf(0x81.toByte(), 1, 'b'.code.toByte()))
+            fail("interleaved data message must be rejected")
+        } catch (_: IllegalStateException) {
+            // expected
+        }
+    }
+
+    @Test
+    fun `fragmented message cumulative size is limited`() {
+        val decoder = WsFrameDecoder(maxFrameBytes = 3)
+        decoder.feed(byteArrayOf(0x01, 2, 'a'.code.toByte(), 'b'.code.toByte()))
+        try {
+            decoder.feed(byteArrayOf(0x80.toByte(), 2, 'c'.code.toByte(), 'd'.code.toByte()))
+            fail("oversized fragmented message must be rejected")
+        } catch (_: IllegalStateException) {
+            // expected
+        }
+    }
+
+    @Test
     fun `frame limit is capped to keep buffer arithmetic bounded`() {
         try {
             WsFrameDecoder(maxFrameBytes = Int.MAX_VALUE)
