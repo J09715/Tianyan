@@ -272,6 +272,11 @@ private class StreamWsConnection(
                 }
                 WsFrameCodec.OP_CONTINUATION -> {
                     textBuffer.write(f.payload)
+                    if (f.fin) {
+                        val text = textBuffer.toString("UTF-8")
+                        textBuffer.reset()
+                        dispatchText(text)
+                    }
                 }
                 WsFrameCodec.OP_PING -> synchronized(conn) {
                     conn.output.write(WsFrameCodec.encodePong(f.payload))
