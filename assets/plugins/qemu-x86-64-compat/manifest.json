@@ -8,7 +8,7 @@
   "version": "1.0.0",
   "latestVersion": "1.0.0",
   "enabled": true,
-  "publisher": "WanXiang",
+  "publisher": "Tianyan",
   "category": "DEVELOPER_TOOL",
   "architectures": ["ARM64"],
   "permissions": ["WORKSPACE_READ", "WORKSPACE_WRITE"],
@@ -17,17 +17,17 @@
   "offlineOnly": true,
   "installMethod": "LOCAL_PACKAGE",
   "installSteps": [
-    "/bin/sh \"$WANXIANG_PLUGIN_PAYLOAD/scripts/install-qemu-x86-64-compat.sh\""
+    "/bin/sh \"$TIANYAN_PLUGIN_PAYLOAD/scripts/install-qemu-x86-64-compat.sh\""
   ],
   "uninstallSteps": [
-    "/bin/sh \"$WANXIANG_PLUGIN_PAYLOAD/scripts/uninstall-qemu-x86-64-compat.sh\""
+    "/bin/sh \"$TIANYAN_PLUGIN_PAYLOAD/scripts/uninstall-qemu-x86-64-compat.sh\""
   ],
-  "verifyCommand": "/bin/sh \"$WANXIANG_PLUGIN_PAYLOAD/scripts/verify-qemu-x86-64-compat.sh\"",
+  "verifyCommand": "/bin/sh \"$TIANYAN_PLUGIN_PAYLOAD/scripts/verify-qemu-x86-64-compat.sh\"",
   "launchCommand": "qemu-x86_64 --version",
   "commandLinks": ["qemu-x86_64"],
   "environment": {
-    "WANXIANG_QEMU_COMPAT_ROOT": "/opt/wanxiang/compat/x86_64",
-    "WANXIANG_QEMU_COMPAT_QEMU": "/opt/wanxiang/compat/x86_64/qemu-x86_64",
-    "WANXIANG_QEMU_COMPAT_ROOTFS": "/opt/wanxiang/compat/x86_64/rootfs"
+    "TIANYAN_QEMU_COMPAT_ROOT": "/opt/tianyan/compat/x86_64",
+    "TIANYAN_QEMU_COMPAT_QEMU": "/opt/tianyan/compat/x86_64/qemu-x86_64",
+    "TIANYAN_QEMU_COMPAT_ROOTFS": "/opt/tianyan/compat/x86_64/rootfs"
   }
 }

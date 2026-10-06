@@ -14,6 +14,6 @@
     { "name": "packagePath", "label": "Package path" }
   ],
   "validation": {
-    "requiredFiles": ["android/app/src/main/kotlin/WANXIANG_PACKAGE_PATH/MainActivity.kt"]
+    "requiredFiles": ["android/app/src/main/kotlin/TIANYAN_PACKAGE_PATH/MainActivity.kt"]
   }
 }

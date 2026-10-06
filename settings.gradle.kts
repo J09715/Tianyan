@@ -61,7 +61,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "WanXiang"
+rootProject.name = "Tianyan"
 include(":app")
 include(":baselineprofile")
 include(":core:common")

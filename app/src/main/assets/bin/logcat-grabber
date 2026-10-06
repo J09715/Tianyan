@@ -1,5 +1,5 @@
 #!/bin/sh
-# WanXiang Logcat Grabber — 优先通过宿主桥接 (无线 ADB / Shizuku) 抓取应用日志
+# Tianyan Logcat Grabber — 优先通过宿主桥接 (无线 ADB / Shizuku) 抓取应用日志
 set -eu
 
 show_help() {
@@ -49,7 +49,7 @@ while [ $# -gt 0 ]; do
 done
 
 BRIDGE_URL="http://127.0.0.1:7980"
-KEY_FILE="/opt/wanxiang/.bridge-key"
+KEY_FILE="/opt/tianyan/.bridge-key"
 AUTH=""
 if [ -f "$KEY_FILE" ]; then
     AUTH="Authorization: Bearer $(cat "$KEY_FILE" 2>/dev/null | tr -d '[:space:]')"

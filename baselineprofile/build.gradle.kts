@@ -16,7 +16,7 @@ plugins {
 // 若需要完全隔离的无人值守流程，可在下方追加 testOptions.managedDevices.localDevices
 // 定义受管模拟器并设置 baselineProfile.useConnectedDevices = false。
 extensions.configure<TestExtension> {
-    namespace = "top.wanxiang.app.baselineprofile"
+    namespace = "top.tianyan.app.baselineprofile"
     compileSdk = 37
 
     defaultConfig {

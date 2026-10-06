@@ -21,7 +21,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import top.tianyan.app.MainActivity
 import top.tianyan.app.R
-import top.wanxiang.app.runtime.bridge.adb.EmbeddedAdbManager
+import top.tianyan.app.runtime.bridge.adb.EmbeddedAdbManager
 
 /**
  * 无线 ADB 通知栏助手管理器。
@@ -33,7 +33,7 @@ import top.wanxiang.app.runtime.bridge.adb.EmbeddedAdbManager
 class AdbNotificationManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val embeddedAdbManager: EmbeddedAdbManager,
-    private val preferences: top.wanxiang.app.core.datastore.RuntimePreferences,
+    private val preferences: top.tianyan.app.core.datastore.RuntimePreferences,
 ) {
     private val notificationManager: NotificationManager =
         context.getSystemService(NotificationManager::class.java)
@@ -220,7 +220,7 @@ class AdbNotificationManager @Inject constructor(
         )
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.wanxiang_notification)
+            .setSmallIcon(R.drawable.tianyan_notification)
             .setContentTitle(title)
             .setContentText(contentText)
             .setStyle(NotificationCompat.BigTextStyle().bigText(contentText))
@@ -260,7 +260,7 @@ class AdbNotificationManager @Inject constructor(
             .build()
 
         return NotificationCompat.Action.Builder(
-            R.drawable.wanxiang_notification,
+            R.drawable.tianyan_notification,
             if (isRetry) "重试输入配对码" else "输入配对码",
             pairPendingIntent,
         ).addRemoteInput(remoteInput).build()
@@ -277,7 +277,7 @@ class AdbNotificationManager @Inject constructor(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         return NotificationCompat.Action.Builder(
-            R.drawable.wanxiang_notification,
+            R.drawable.tianyan_notification,
             "连接",
             connectPendingIntent,
         ).build()
@@ -294,7 +294,7 @@ class AdbNotificationManager @Inject constructor(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         return NotificationCompat.Action.Builder(
-            R.drawable.wanxiang_notification,
+            R.drawable.tianyan_notification,
             "断开",
             disconnectPendingIntent,
         ).build()
@@ -311,7 +311,7 @@ class AdbNotificationManager @Inject constructor(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         return NotificationCompat.Action.Builder(
-            R.drawable.wanxiang_notification,
+            R.drawable.tianyan_notification,
             "关闭通知",
             dismissPendingIntent,
         ).build()
@@ -330,7 +330,7 @@ class AdbNotificationManager @Inject constructor(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         return NotificationCompat.Action.Builder(
-            R.drawable.wanxiang_notification,
+            R.drawable.tianyan_notification,
             "打开工作台",
             openPendingIntent,
         ).build()
@@ -343,14 +343,14 @@ class AdbNotificationManager @Inject constructor(
     }
 
     companion object {
-        const val CHANNEL_ID = "wanxiang_wireless_adb"
+        const val CHANNEL_ID = "tianyan_wireless_adb"
         const val NOTIFICATION_ID = 2005
 
-        const val ACTION_PAIR_INPUT = "top.wanxiang.app.action.ADB_PAIR_INPUT"
-        const val ACTION_CONNECT = "top.wanxiang.app.action.ADB_CONNECT"
-        const val ACTION_DISCONNECT = "top.wanxiang.app.action.ADB_DISCONNECT"
-        const val ACTION_DISMISS = "top.wanxiang.app.action.ADB_DISMISS"
-        const val ACTION_OPEN_ADB_LOGCAT = "top.wanxiang.app.action.OPEN_ADB_LOGCAT"
+        const val ACTION_PAIR_INPUT = "top.tianyan.app.action.ADB_PAIR_INPUT"
+        const val ACTION_CONNECT = "top.tianyan.app.action.ADB_CONNECT"
+        const val ACTION_DISCONNECT = "top.tianyan.app.action.ADB_DISCONNECT"
+        const val ACTION_DISMISS = "top.tianyan.app.action.ADB_DISMISS"
+        const val ACTION_OPEN_ADB_LOGCAT = "top.tianyan.app.action.OPEN_ADB_LOGCAT"
 
         const val KEY_PAIRING_CODE = "adb_pairing_code"
         const val EXTRA_NAVIGATE_TO = "navigate_to"

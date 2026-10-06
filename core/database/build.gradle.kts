@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "top.wanxiang.app.core.database"
+    namespace = "top.tianyan.app.core.database"
     resourcePrefix = "database_"
     compileSdk = 37
     defaultConfig { minSdk = 29 }

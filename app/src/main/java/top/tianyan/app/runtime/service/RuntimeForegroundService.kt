@@ -12,10 +12,10 @@ import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import top.tianyan.app.R
-import top.wanxiang.app.runtime.service.LocalServiceLauncher
-import top.wanxiang.app.runtime.shell.ProcessRegistry
-import top.wanxiang.app.runtime.SshServiceManager
-import top.wanxiang.app.runtime.FtpServiceManager
+import top.tianyan.app.runtime.service.LocalServiceLauncher
+import top.tianyan.app.runtime.shell.ProcessRegistry
+import top.tianyan.app.runtime.SshServiceManager
+import top.tianyan.app.runtime.FtpServiceManager
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
@@ -45,7 +45,7 @@ class RuntimeForegroundService : Service() {
         val manager = getSystemService(NotificationManager::class.java)
         val channel = NotificationChannel(
             CHANNEL_ID,
-            getString(R.string.wanxiang_runtime_notification_channel),
+            getString(R.string.tianyan_runtime_notification_channel),
             NotificationManager.IMPORTANCE_HIGH,
         ).apply {
             description = "用于展示 Linux 沙箱后台运行状态的常驻通知"
@@ -143,17 +143,17 @@ class RuntimeForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.wanxiang_notification)
+            .setSmallIcon(R.drawable.tianyan_notification)
             .setContentTitle("Linux 沙箱")
-            .setContentText(getString(R.string.wanxiang_runtime_running))
+            .setContentText(getString(R.string.tianyan_runtime_running))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setAutoCancel(false)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .addAction(
                 NotificationCompat.Action(
-                    R.drawable.wanxiang_notification,
-                    getString(R.string.wanxiang_notification_stop),
+                    R.drawable.tianyan_notification,
+                    getString(R.string.tianyan_notification_stop),
                     stopPending,
                 ),
             )
@@ -161,13 +161,13 @@ class RuntimeForegroundService : Service() {
     }
 
     companion object {
-        const val ACTION_STOP = "top.wanxiang.app.action.STOP_RUNTIME_SERVICE"
-        private const val CHANNEL_ID = "wanxiang-runtime-v5"
-        private const val LEGACY_CAPSULE_CHANNEL_ID = "wanxiang-runtime-capsule-v4"
+        const val ACTION_STOP = "top.tianyan.app.action.STOP_RUNTIME_SERVICE"
+        private const val CHANNEL_ID = "tianyan-runtime-v5"
+        private const val LEGACY_CAPSULE_CHANNEL_ID = "tianyan-runtime-capsule-v4"
         private const val NOTIFICATION_ID = 1001
         private const val TAG = "RuntimeForegroundService"
-        private const val WAKE_LOCK_TAG = "wanxiang:runtime-service"
-        private const val WIFI_LOCK_TAG = "wanxiang:runtime-wifi"
+        private const val WAKE_LOCK_TAG = "tianyan:runtime-service"
+        private const val WIFI_LOCK_TAG = "tianyan:runtime-wifi"
         /** 唤醒锁超时：8 小时兜底，避免异常情况下永久持有。 */
         private const val LOCK_TIMEOUT_MS = 8 * 60 * 60 * 1000L
     }

@@ -2,13 +2,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
         <receiver
-            android:name="top.wanxiang.app.debug.DebugReceiver"
+            android:name="top.tianyan.app.debug.DebugReceiver"
             android:exported="true">
             <intent-filter>
-                <action android:name="top.wanxiang.app.DEBUG_CLONE" />
-                <action android:name="top.wanxiang.app.DEBUG_DIAG" />
-                <action android:name="top.wanxiang.app.DEBUG_GIT" />
-                <action android:name="top.wanxiang.app.DEBUG_RESET_COOLDOWN" />
+                <action android:name="top.tianyan.app.DEBUG_CLONE" />
+                <action android:name="top.tianyan.app.DEBUG_DIAG" />
+                <action android:name="top.tianyan.app.DEBUG_GIT" />
+                <action android:name="top.tianyan.app.DEBUG_RESET_COOLDOWN" />
             </intent-filter>
         </receiver>
     </application>

@@ -1,12 +1,12 @@
 #!/bin/sh
 # ==============================================================================
-# WanXiang (LinuxAIRuntime) - Self-Adaptive Gradle Wrapper
+# Tianyan (LinuxAIRuntime) - Self-Adaptive Gradle Wrapper
 # ==============================================================================
 DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # 优先加载插件装配期固化的环境变量
-if [ -f /etc/profile.d/wanxiang-android.sh ]; then
-    . /etc/profile.d/wanxiang-android.sh
+if [ -f /etc/profile.d/tianyan-android.sh ]; then
+    . /etc/profile.d/tianyan-android.sh
 fi
 
 JAVA_BIN=$(which java 2>/dev/null || ls /usr/lib/jvm/*/bin/java 2>/dev/null | head -n 1 || true)

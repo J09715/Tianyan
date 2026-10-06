@@ -2,7 +2,7 @@
 
 ## 目标
 
-万象设备与默认构建工具链保持 `arm64-v8a`。QEMU 兼容环境只处理第三方项目依赖的 **x86_64 Linux 主机构建工具**，不会让最终 APK 自动包含 x86 ABI。
+天衍设备与默认构建工具链保持 `arm64-v8a`。QEMU 兼容环境只处理第三方项目依赖的 **x86_64 Linux 主机构建工具**，不会让最终 APK 自动包含 x86 ABI。
 
 ## 启用方式
 
@@ -21,7 +21,7 @@
 ## 隔离目录
 
 ```text
-/opt/wanxiang/compat/x86_64/
+/opt/tianyan/compat/x86_64/
 ├── qemu-x86_64       # ARM64 可执行文件
 └── rootfs/            # x86_64 Linux 用户态
 ```
@@ -41,7 +41,7 @@ QEMU user-mode 并不是 `proot-distro` 专属能力。`proot-distro` 只是替�
 proot -q /path/to/qemu-x86_64 -r /path/to/x86_64-rootfs /bin/sh
 ```
 
-先进入普通 ARM64 Linux，再执行一次 `proot-distro` 的 QEMU 关联命令，不会让当前 Linux 永久或全局获得 x86_64 能力。每个需要运行 x86_64 ELF 的进程都必须位于带 `-q` 的专用 PRoot 会话里。万象因此使用隔离的 x86_64 RootFS 会话，而不会给普通 ARM64 RootFS 全局追加 QEMU。
+先进入普通 ARM64 Linux，再执行一次 `proot-distro` 的 QEMU 关联命令，不会让当前 Linux 永久或全局获得 x86_64 能力。每个需要运行 x86_64 ELF 的进程都必须位于带 `-q` 的专用 PRoot 会话里。天衍因此使用隔离的 x86_64 RootFS 会话，而不会给普通 ARM64 RootFS 全局追加 QEMU。
 
 ## 当前边界
 

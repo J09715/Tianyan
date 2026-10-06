@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "top.wanxiang.app.feature.browser"
+    namespace = "top.tianyan.app.feature.browser"
     resourcePrefix = "fbrowser_"
     compileSdk = 37
     defaultConfig { minSdk = 29 }

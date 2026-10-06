@@ -18,9 +18,9 @@ export function LoginView({ initialToken, busy, error, onLogin }: LoginViewProps
 
   return (
     <main className="login-view">
-      <section className="login-panel" aria-label="连接万象智枢">
+      <section className="login-panel" aria-label="连接天衍智枢">
         <form className="login-form" onSubmit={submit}>
-          <label htmlFor="token-input">万象智枢配对码</label>
+          <label htmlFor="token-input">天衍智枢配对码</label>
           <input
             id="token-input"
             name="token"

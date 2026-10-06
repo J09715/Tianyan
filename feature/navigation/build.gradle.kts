@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "top.wanxiang.app.feature.navigation"
+    namespace = "top.tianyan.app.feature.navigation"
     resourcePrefix = "navigation_"
     compileSdk = 37
     defaultConfig { minSdk = 29 }

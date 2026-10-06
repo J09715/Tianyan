@@ -1,5 +1,5 @@
 /*
- * Real PTY backend for the WanXiang terminal.
+ * Real PTY backend for the Tianyan terminal.
  *
  * Termux-style forkpty semantics: the app creates a master/slave pair and
  * execs the command with the slave as its controlling terminal, so job
@@ -50,7 +50,7 @@ static void throw_io(JNIEnv *env, const char *what) {
  * The child becomes a session leader with the slave as controlling terminal.
  */
 JNIEXPORT jintArray JNICALL
-Java_top_wanxiang_app_runtime_pty_NativePty_openAndExec(
+Java_top_tianyan_app_runtime_pty_NativePty_openAndExec(
     JNIEnv *env, jclass clazz,
     jobjectArray argv, jobjectArray envp, jstring cwd,
     jint columns, jint rows) {
@@ -108,7 +108,7 @@ Java_top_wanxiang_app_runtime_pty_NativePty_openAndExec(
 
 /* Reads up to buffer.length bytes from the master; returns bytes read or -1. */
 JNIEXPORT jint JNICALL
-Java_top_wanxiang_app_runtime_pty_NativePty_readFd(
+Java_top_tianyan_app_runtime_pty_NativePty_readFd(
     JNIEnv *env, jclass clazz, jint fd, jbyteArray buffer) {
     jsize len = (*env)->GetArrayLength(env, buffer);
     if (len <= 0) return 0;
@@ -123,7 +123,7 @@ Java_top_wanxiang_app_runtime_pty_NativePty_readFd(
 }
 
 JNIEXPORT jint JNICALL
-Java_top_wanxiang_app_runtime_pty_NativePty_writeFd(
+Java_top_tianyan_app_runtime_pty_NativePty_writeFd(
     JNIEnv *env, jclass clazz, jint fd, jbyteArray buffer, jint offset, jint length) {
     if (length <= 0) return 0;
     jbyte *tmp = (jbyte *)malloc((size_t)length);
@@ -135,7 +135,7 @@ Java_top_wanxiang_app_runtime_pty_NativePty_writeFd(
 }
 
 JNIEXPORT jint JNICALL
-Java_top_wanxiang_app_runtime_pty_NativePty_resizeFd(
+Java_top_tianyan_app_runtime_pty_NativePty_resizeFd(
     JNIEnv *env, jclass clazz, jint fd, jint columns, jint rows) {
     struct winsize ws;
     memset(&ws, 0, sizeof(ws));
@@ -149,7 +149,7 @@ Java_top_wanxiang_app_runtime_pty_NativePty_resizeFd(
  * Signal 0 is used as an existence probe: 0 means alive, -1 means gone.
  */
 JNIEXPORT jint JNICALL
-Java_top_wanxiang_app_runtime_pty_NativePty_killPid(
+Java_top_tianyan_app_runtime_pty_NativePty_killPid(
     JNIEnv *env, jclass clazz, jint pid, jint sig) {
     if (pid <= 0) return -1;
     if (kill(-pid, sig) == 0) return 0;
@@ -157,14 +157,14 @@ Java_top_wanxiang_app_runtime_pty_NativePty_killPid(
 }
 
 JNIEXPORT void JNICALL
-Java_top_wanxiang_app_runtime_pty_NativePty_closeFd(
+Java_top_tianyan_app_runtime_pty_NativePty_closeFd(
     JNIEnv *env, jclass clazz, jint fd) {
     if (fd >= 0) close(fd);
 }
 
 /* Reaps an already-dead child so it does not linger as a zombie. */
 JNIEXPORT void JNICALL
-Java_top_wanxiang_app_runtime_pty_NativePty_waitPid(
+Java_top_tianyan_app_runtime_pty_NativePty_waitPid(
     JNIEnv *env, jclass clazz, jint pid) {
     if (pid > 0) {
         int status = 0;

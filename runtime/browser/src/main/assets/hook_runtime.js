@@ -1,10 +1,10 @@
 /*
- * WanXiang 注入式 hook 运行时（阶段 1）。
+ * Tianyan 注入式 hook 运行时（阶段 1）。
  *
  * 约束：ES5 语法（无反引号 / 无模板字符串 / 无箭头函数 / 无 let-const），
- * 单 IIFE，幂等（window.__wanxiangHooks 守卫），仅顶层 frame。
+ * 单 IIFE，幂等（window.__tianyanHooks 守卫），仅顶层 frame。
  *
- * 桥协议（window.WanxiangBridge，addJavascriptInterface 注入）：
+ * 桥协议（window.TianyanBridge，addJavascriptInterface 注入）：
  *   - T.onEvent(json)：异步上报事件 envelope {v, seq, ts, kind, data}，绝不阻塞；
  *   - T.getRules()：同步返回规则 payload JSON（页内同步决策 block/mock 的关键）。
  *
@@ -14,8 +14,8 @@
 (function () {
   'use strict';
 
-  if (window.__wanxiangHooks) { return; }
-  var T = window.WanxiangBridge;
+  if (window.__tianyanHooks) { return; }
+  var T = window.TianyanBridge;
   if (!T) { return; }
   if (window.top !== window.self) { return; } // 仅顶层 frame
 
@@ -395,7 +395,7 @@
         statusText: status === 0 ? '' : 'OK',
         responseText: body,
         response: body,
-        responseURL: xhr.__wanxiangUrl || ''
+        responseURL: xhr.__tianyanUrl || ''
       };
       for (var k in props) {
         if (Object.prototype.hasOwnProperty.call(props, k)) {
@@ -422,7 +422,7 @@
 
   function installXhrWrapper() {
     if (!OrigXHR) { return; }
-    function WanxiangXHR() {
+    function TianyanXHR() {
       var xhr = new OrigXHR();
       var meta = { url: '', method: 'GET', id: '', t0: 0, reqHeaders: {} };
 
@@ -431,7 +431,7 @@
         try {
           meta.method = String(m || 'GET').toUpperCase();
           meta.url = String(u || '');
-          xhr.__wanxiangUrl = meta.url;
+          xhr.__tianyanUrl = meta.url;
         } catch (e) { /* 保持原行为 */ }
         return origOpen.apply(xhr, arguments);
       };
@@ -470,7 +470,7 @@
           try {
             target = d.redirect ? d.redirect.url : meta.url;
             origOpen.call(xhr, meta.method, target); // 重定向：以新 URL 重新 open（保持默认异步）
-            xhr.__wanxiangUrl = target;
+            xhr.__tianyanUrl = target;
             if (d.modify) {
               var merged = mergeHeaders(meta.reqHeaders, d.modify.request || {});
               for (var k in merged) {
@@ -511,12 +511,12 @@
 
       return xhr;
     }
-    try { WanxiangXHR.prototype = OrigXHR.prototype; } catch (e) {}
+    try { TianyanXHR.prototype = OrigXHR.prototype; } catch (e) {}
     var consts = ['UNSENT', 'OPENED', 'HEADERS_RECEIVED', 'LOADING', 'DONE'];
     for (var i = 0; i < consts.length; i++) {
-      try { WanxiangXHR[consts[i]] = OrigXHR[consts[i]]; } catch (e) {}
+      try { TianyanXHR[consts[i]] = OrigXHR[consts[i]]; } catch (e) {}
     }
-    window.XMLHttpRequest = WanxiangXHR;
+    window.XMLHttpRequest = TianyanXHR;
   }
 
   // ===== WebSocket wrapper =====
@@ -530,7 +530,7 @@
 
   function installWebSocketWrapper() {
     if (!OrigWS) { return; }
-    function WanxiangWS(url, protocols) {
+    function TianyanWS(url, protocols) {
       var u = String(url);
       var d = wsDecide(u);
       if (d && d.block) {
@@ -558,12 +558,12 @@
       }
       return ws;
     }
-    try { WanxiangWS.prototype = OrigWS.prototype; } catch (e) {}
+    try { TianyanWS.prototype = OrigWS.prototype; } catch (e) {}
     var wsConsts = ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'];
     for (var i = 0; i < wsConsts.length; i++) {
-      try { WanxiangWS[wsConsts[i]] = OrigWS[wsConsts[i]]; } catch (e) {}
+      try { TianyanWS[wsConsts[i]] = OrigWS[wsConsts[i]]; } catch (e) {}
     }
-    window.WebSocket = WanxiangWS;
+    window.WebSocket = TianyanWS;
   }
 
   // ===== Storage wrapper =====
@@ -887,11 +887,11 @@
   installCryptoWrapper();
 
   try {
-    Object.defineProperty(window, '__wanxiangHooks', { value: state, enumerable: false, configurable: false });
-    Object.defineProperty(window, '__wanxiangApplyRules', { value: applyRules, enumerable: false, configurable: false });
+    Object.defineProperty(window, '__tianyanHooks', { value: state, enumerable: false, configurable: false });
+    Object.defineProperty(window, '__tianyanApplyRules', { value: applyRules, enumerable: false, configurable: false });
   } catch (e) { /* 不可定义则退化为直接赋值 */ 
-    window.__wanxiangHooks = state;
-    window.__wanxiangApplyRules = applyRules;
+    window.__tianyanHooks = state;
+    window.__tianyanApplyRules = applyRules;
   }
 
   try {

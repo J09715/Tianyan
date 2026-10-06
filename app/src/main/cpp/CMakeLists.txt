@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22.1)
-project(wanxiang_pty C)
+project(tianyan_pty C)
 
 add_library(pty_native SHARED pty_native.c)
 

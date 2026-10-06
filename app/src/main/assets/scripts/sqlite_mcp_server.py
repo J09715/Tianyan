@@ -65,7 +65,7 @@ def main():
             method = req.get("method")
             req_id = req.get("id")
             if method == "initialize":
-                result = {"protocolVersion": PROTOCOL_VERSION, "capabilities": {"tools": {}}, "serverInfo": {"name": "wanxiang-sqlite", "version": "1.0.0"}}
+                result = {"protocolVersion": PROTOCOL_VERSION, "capabilities": {"tools": {}}, "serverInfo": {"name": "tianyan-sqlite", "version": "1.0.0"}}
                 out = response(req_id, result)
             elif method == "notifications/initialized":
                 continue

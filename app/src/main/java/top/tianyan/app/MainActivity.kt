@@ -1,8 +1,8 @@
 package top.tianyan.app
 
-import top.wanxiang.app.ui.components.RuntimeAlertDialog
-import top.wanxiang.app.ui.onboarding.OnboardingScreen
-import top.wanxiang.app.ui.onboarding.OnboardingViewModel
+import top.tianyan.app.ui.components.RuntimeAlertDialog
+import top.tianyan.app.ui.onboarding.OnboardingScreen
+import top.tianyan.app.ui.onboarding.OnboardingViewModel
 
 import android.Manifest
 import android.content.Intent
@@ -32,15 +32,15 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
-import top.wanxiang.app.core.datastore.AppearancePreferences
+import top.tianyan.app.core.datastore.AppearancePreferences
 import top.tianyan.app.runtime.service.RuntimeServiceController
-import top.wanxiang.app.ui.navigation.TianyanNavHost
-import top.wanxiang.app.ui.theme.TianyanTheme
+import top.tianyan.app.ui.navigation.TianyanNavHost
+import top.tianyan.app.ui.theme.TianyanTheme
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 
 import javax.inject.Inject
-import top.wanxiang.app.core.common.navigation.AppNavigationTarget
-import top.wanxiang.app.core.common.navigation.GlobalNavigationBus
+import top.tianyan.app.core.common.navigation.AppNavigationTarget
+import top.tianyan.app.core.common.navigation.GlobalNavigationBus
 import top.tianyan.app.service.adb.AdbNotificationManager
 
 @AndroidEntryPoint
@@ -58,7 +58,7 @@ class MainActivity : AppCompatActivity() {
     lateinit var adbNotificationManager: AdbNotificationManager
 
     @Inject
-    lateinit var gitCredentialIpcBridge: top.wanxiang.app.runtime.credentials.GitCredentialIpcBridge
+    lateinit var gitCredentialIpcBridge: top.tianyan.app.runtime.credentials.GitCredentialIpcBridge
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -100,7 +100,7 @@ class MainActivity : AppCompatActivity() {
                 ),
             ) {
                 TianyanTheme(
-                    style = top.wanxiang.app.ui.theme.ThemeStyle.fromId(themeStyle),
+                    style = top.tianyan.app.ui.theme.ThemeStyle.fromId(themeStyle),
                     darkTheme = isDark,
                     backgroundUri = chengmingBackgroundUri,
                 ) {
@@ -127,7 +127,7 @@ class MainActivity : AppCompatActivity() {
                     else -> OnboardingScreen(onboardingViewModel)
                 }
                 // 全局 git 凭据弹窗宿主：容器 helper 走文件 IPC 请求凭据时，无论在哪个页面都能立即弹出。
-                top.wanxiang.app.ui.chat.GlobalCredentialDialogHost(gitCredentialIpcBridge)
+                top.tianyan.app.ui.chat.GlobalCredentialDialogHost(gitCredentialIpcBridge)
                 }
             }
         }
@@ -137,7 +137,7 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         // 主应用回到前台时，自动关闭智枢桌面悬浮小窗，避免主界面与悬浮窗重叠
         runCatching {
-            top.wanxiang.app.ui.chat.floating.FloatingChatService.stop(this)
+            top.tianyan.app.ui.chat.floating.FloatingChatService.stop(this)
         }
     }
 
@@ -151,9 +151,9 @@ class MainActivity : AppCompatActivity() {
         val intentToHandle = targetIntent ?: intent ?: return
         val action = intentToHandle.action
         val navigateTo = intentToHandle.getStringExtra("navigate_to")
-        val isAdbLogcat = action == "top.wanxiang.app.action.OPEN_ADB_LOGCAT" || navigateTo == "adb_logcat"
+        val isAdbLogcat = action == "top.tianyan.app.action.OPEN_ADB_LOGCAT" || navigateTo == "adb_logcat"
         if (isAdbLogcat) {
-            globalNavigationBus.navigateTo(top.wanxiang.app.core.common.navigation.AppNavigationTarget.AdbLogcat)
+            globalNavigationBus.navigateTo(top.tianyan.app.core.common.navigation.AppNavigationTarget.AdbLogcat)
         }
     }
 

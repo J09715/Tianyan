@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # ==============================================================================
-# WanXiang (LinuxAIRuntime) - 内置 Web 搜索与网页抓取 MCP 服务端 (stdio transport)
+# Tianyan (LinuxAIRuntime) - 内置 Web 搜索与网页抓取 MCP 服务端 (stdio transport)
 # ------------------------------------------------------------------------------
 # 零依赖纯 Python 实现，开箱即用，无需 Node.js / npx 或外部 pip 包。
 # 提供免 API Key 的多引擎网络搜索（Baidu / Bing / DuckDuckGo / Sogou）与网页正文提取。
@@ -302,7 +302,7 @@ def handle_line(line):
         return rpc_response(req_id, {
             "protocolVersion": "2025-06-18",
             "capabilities": {"tools": {}},
-            "serverInfo": {"name": "wanxiang-websearch-mcp", "version": "1.0.0"},
+            "serverInfo": {"name": "tianyan-websearch-mcp", "version": "1.0.0"},
         })
     if method == "tools/list":
         return rpc_response(req_id, {

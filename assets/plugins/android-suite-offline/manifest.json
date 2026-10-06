@@ -6,7 +6,7 @@
   "version": "1.0.1",
   "latestVersion": "1.0.1",
   "enabled": true,
-  "publisher": "WanXiang",
+  "publisher": "Tianyan",
   "category": "DEVELOPER",
   "launchType": "command",
   "architectures": ["ARM64"],
@@ -16,28 +16,28 @@
   "offlineOnly": true,
   "installMethod": "LOCAL_PACKAGE",
   "installSteps": [
-    "/bin/sh \"$WANXIANG_PLUGIN_PAYLOAD/scripts/install-android-suite.sh\""
+    "/bin/sh \"$TIANYAN_PLUGIN_PAYLOAD/scripts/install-android-suite.sh\""
   ],
   "uninstallSteps": [
-    "/bin/sh \"$WANXIANG_PLUGIN_PAYLOAD/scripts/uninstall-android-suite.sh\""
+    "/bin/sh \"$TIANYAN_PLUGIN_PAYLOAD/scripts/uninstall-android-suite.sh\""
   ],
   "launchCommand": "gradle --version",
-  "verifyCommand": "/bin/sh \"$WANXIANG_PLUGIN_PAYLOAD/scripts/verify-android-suite.sh\"",
+  "verifyCommand": "/bin/sh \"$TIANYAN_PLUGIN_PAYLOAD/scripts/verify-android-suite.sh\"",
   "commandLinks": [
     "java", "javac", "gradle", "cmake", "ninja", "adb", "flutter", "dart",
     "rustc", "cargo", "rustdoc", "apksigner", "zipalign", "jarsigner", "keytool",
     "aapt", "aapt2", "dexdump", "readelf", "objdump", "nm", "strings", "cxxfilt",
-    "uber-apk-signer", "smali", "baksmali", "wanxiang-apk-sign", "jadx", "apktool",
+    "uber-apk-signer", "smali", "baksmali", "tianyan-apk-sign", "jadx", "apktool",
     "d2j-dex2jar", "d2j-baksmali", "d2j-smali", "rg"
   ],
   "environment": {
     "ANDROID_HOME": "/opt/android-sdk",
     "ANDROID_SDK_ROOT": "/opt/android-sdk",
     "GRADLE_HOME": "/opt/gradle-8.14.2",
-    "JAVA_HOME": "/opt/wanxiang/toolchains/android/jdk",
-    "ANDROID_NDK_HOME": "/opt/wanxiang/toolchains/android/ndk",
-    "RUSTUP_HOME": "/opt/wanxiang/toolchains/rust",
+    "JAVA_HOME": "/opt/tianyan/toolchains/android/jdk",
+    "ANDROID_NDK_HOME": "/opt/tianyan/toolchains/android/ndk",
+    "RUSTUP_HOME": "/opt/tianyan/toolchains/rust",
     "CARGO_HOME": "/root/.cargo",
-    "PATH": "/opt/wanxiang/bin:/opt/wanxiang/toolchains/rust/bin:/opt/wanxiang/tools/android-suite-offline/bin:/opt/wanxiang/toolchains/android/jdk/bin:/opt/gradle-8.14.2/bin:$PATH"
+    "PATH": "/opt/tianyan/bin:/opt/tianyan/toolchains/rust/bin:/opt/tianyan/tools/android-suite-offline/bin:/opt/tianyan/toolchains/android/jdk/bin:/opt/gradle-8.14.2/bin:$PATH"
   }
 }

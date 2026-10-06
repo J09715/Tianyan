@@ -248,7 +248,7 @@ footer small { grid-column: 1 / -1; padding-top: 22px; border-top: 1px solid var
   .reveal { opacity: 1; transform: none; }
 }
 
-/* WanXiang website v2 — restrained product page with real screenshots and liquid-glass surfaces. */
+/* Tianyan website v2 — restrained product page with real screenshots and liquid-glass surfaces. */
 :root {
   --paper: #f8f8f9;
   --paper-warm: #f0f1f3;
@@ -444,4 +444,17 @@ body {
   .screen-gallery { grid-template-columns: 1fr; gap: 18px; }.screen-shot { padding: 6px; border-radius: 24px; }.screen-shot a { border-radius: 18px; }.screen-shot figcaption { padding: 12px 6px 7px; }.screen-shot span { font-size: 7px; }
   .plugins { gap: 45px; }.plugin-steps { padding: 18px; }.plugin-steps > div { grid-template-columns: 28px 1fr; }.plugin-steps > div span { grid-column: 2; }
   .docs-main { padding: 115px 20px 70px; }.docs-content pre { font-size: 10px; }.docs-content table { display: block; overflow-x: auto; }
+}
+
+/* 截图待补充占位（上游实机图已移除，改用自有截图） */
+.shot-pending{
+  display:flex;align-items:center;justify-content:center;
+  aspect-ratio:9/19;border-radius:22px;
+  border:1px dashed color-mix(in srgb,currentColor 28%,transparent);
+  background:
+    repeating-linear-gradient(135deg,
+      color-mix(in srgb,currentColor 5%,transparent) 0 12px,
+      transparent 12px 24px);
+  color:color-mix(in srgb,currentColor 55%,transparent);
+  font-size:.8rem;letter-spacing:.14em;
 }

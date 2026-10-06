@@ -1,4 +1,4 @@
-# 万象 (WanXiang) 项目全局代码审查报告
+# 天衍 (Tianyan) 项目全局代码审查报告
 
 > 审查时间：2026-08-31
 > 审查范围：全模块（app / core / runtime / tools / harness / feature）
@@ -19,7 +19,7 @@
 
 ### C2. HostBridge 路径穿越：沙箱可访问宿主任意文件路径
 
-**位置**：`runtime/src/main/java/top/wanxiang/app/runtime/bridge/HostBridge.kt:305-315`
+**位置**：`runtime/src/main/java/top/tianyan/app/runtime/bridge/HostBridge.kt:305-315`
 
 **问题**：
 ```kotlin
@@ -34,11 +34,11 @@ private fun resolveSandboxPath(sandboxPath: String): String {
 ```
 
 `handleInstallApk` 接收沙箱传入的路径，`resolveSandboxPath` 对非标准前缀的路径**原样返回**。这意味着沙箱内进程可以传入：
-- `/data/data/top.wanxiang.app/databases/wanxiang.db`（应用私有数据库）
+- `/data/data/top.tianyan.app/databases/tianyan.db`（应用私有数据库）
 - `/data/app/.../base.apk`（其他应用的 APK）
 - `/system/...`（系统分区）
 
-虽然有 Bearer Token 认证，但 token 写入 `/opt/wanxiang/.bridge-key`，沙箱内 root 用户可直接读取。
+虽然有 Bearer Token 认证，但 token 写入 `/opt/tianyan/.bridge-key`，沙箱内 root 用户可直接读取。
 
 **影响**：沙箱逃逸，可读取/安装宿主任意路径的 APK 文件。
 
@@ -60,7 +60,7 @@ private fun resolveSandboxPath(sandboxPath: String): String? {
 
 ### H1. `runBlocking` 在 suspend 函数中可能导致死锁
 
-**位置**：`runtime/src/main/java/top/wanxiang/app/runtime/LinuxRuntimeImpl.kt:783`
+**位置**：`runtime/src/main/java/top/tianyan/app/runtime/LinuxRuntimeImpl.kt:783`
 
 **问题**：
 ```kotlin
@@ -82,7 +82,7 @@ private fun configureRootfs(distroId: String = "ubuntu") {
 
 ### H2. `ProcessRegistry` 并发访问 `LinkedHashMap` 导致崩溃
 
-**位置**：`runtime/src/main/java/top/wanxiang/app/runtime/shell/ProcessRegistry.kt:159`
+**位置**：`runtime/src/main/java/top/tianyan/app/runtime/shell/ProcessRegistry.kt:159`
 
 **问题**：
 ```kotlin
@@ -105,7 +105,7 @@ override fun list(): List<ManagedProcess> = synchronized(processes) {
 
 ### H3. `ProcessRegistry` 空 catch 块吞掉所有异常
 
-**位置**：`runtime/src/main/java/top/wanxiang/app/runtime/shell/ProcessRegistry.kt:122`
+**位置**：`runtime/src/main/java/top/tianyan/app/runtime/shell/ProcessRegistry.kt:122`
 
 **问题**：
 ```kotlin
@@ -135,7 +135,7 @@ scope.launch {
 
 ### H4. `NativePtySession.close()` 存在竞态条件
 
-**位置**：`runtime/src/main/java/top/wanxiang/app/runtime/pty/NativePtySession.kt:106-119`
+**位置**：`runtime/src/main/java/top/tianyan/app/runtime/pty/NativePtySession.kt:106-119`
 
 **问题**：
 ```kotlin
@@ -165,7 +165,7 @@ NativePty.closeFd(masterFd)
 
 ### H5. `WorkspaceFileAccess` 写入时 TOCTOU 符号链接攻击
 
-**位置**：`harness/src/main/java/top/wanxiang/app/harness/WorkspaceFileAccess.kt:80-99`
+**位置**：`harness/src/main/java/top/tianyan/app/harness/WorkspaceFileAccess.kt:80-99`
 
 **问题**：
 ```kotlin
@@ -191,7 +191,7 @@ suspend fun write(path: String, content: String): AppResult<Unit> {
 
 ### M1. `SecretManager.decrypt()` 返回类型语义不一致
 
-**位置**：`core/security/src/main/java/top/wanxiang/app/core/security/SecretManager.kt:25-33`
+**位置**：`core/security/src/main/java/top/tianyan/app/core/security/SecretManager.kt:25-33`
 
 **问题**：
 ```kotlin
@@ -209,7 +209,7 @@ fun decrypt(value: String): String? = runCatching {
 
 ### M2. `HostBridge` HTTP 请求解析缺少长度限制
 
-**位置**：`runtime/src/main/java/top/wanxiang/app/runtime/bridge/HostBridge.kt:140-174`
+**位置**：`runtime/src/main/java/top/tianyan/app/runtime/bridge/HostBridge.kt:140-174`
 
 **问题**：
 - `reader.readLine()` 读取请求行和 header 行无长度限制
@@ -222,7 +222,7 @@ fun decrypt(value: String): String? = runCatching {
 
 ### M3. MCP 工具发现超时过短，沙箱冷启动时频繁失败
 
-**位置**：`harness/src/main/java/top/wanxiang/app/harness/mcp/McpManager.kt:136`
+**位置**：`harness/src/main/java/top/tianyan/app/harness/mcp/McpManager.kt:136`
 
 **问题**：
 ```kotlin
@@ -240,7 +240,7 @@ MCP STDIO 传输需要在沙箱内启动进程（可能涉及 PRoot 启动、Pyt
 
 ### M4. `ToolExecutor` 使用字段注入，初始化顺序不安全
 
-**位置**：`harness/src/main/java/top/wanxiang/app/harness/ToolExecutor.kt:65-66`
+**位置**：`harness/src/main/java/top/tianyan/app/harness/ToolExecutor.kt:65-66`
 
 **问题**：
 ```kotlin
@@ -256,7 +256,7 @@ lateinit var settingsDataStore: AgentPreferences
 
 ### M5. `HttpClientProvider` 缺少连接池和拦截器配置
 
-**位置**：`core/network/src/main/java/top/wanxiang/app/core/network/HttpClientProvider.kt:13-17`
+**位置**：`core/network/src/main/java/top/tianyan/app/core/network/HttpClientProvider.kt:13-17`
 
 **问题**：
 ```kotlin
@@ -278,7 +278,7 @@ fun create(): OkHttpClient = OkHttpClient.Builder()
 
 ### M6. `ProotCommandBuilder.build()` 有副作用（创建目录）
 
-**位置**：`runtime/src/main/java/top/wanxiang/app/runtime/proot/ProotCommandBuilder.kt:62`
+**位置**：`runtime/src/main/java/top/tianyan/app/runtime/proot/ProotCommandBuilder.kt:62`
 
 **问题**：
 ```kotlin
@@ -293,7 +293,7 @@ attachmentsDir.mkdirs()  // ← 在"构建命令"的纯函数中创建目录
 
 ### M7. `ChatViewModel` 重复 import 和未使用的 import
 
-**位置**：`feature/chat/src/main/java/top/wanxiang/app/ui/chat/ChatViewModel.kt:46,53,55,61`
+**位置**：`feature/chat/src/main/java/top/tianyan/app/ui/chat/ChatViewModel.kt:46,53,55,61`
 
 **问题**：
 - 第 46 行和第 53 行重复 `import kotlinx.coroutines.flow.asStateFlow`
@@ -335,18 +335,18 @@ return HttpResponse(404, errorJson("APK file not found: $apkPath (resolved: $hos
 
 每次 `configureRootfs` 都遍历整个 rootfs（可能数万文件），在初始化时阻塞数秒到数十秒。建议：
 - 首次初始化时执行一次
-- 后续通过 `dpkg` hook（已有 `99wanxiang-strip-setuid`）增量处理
+- 后续通过 `dpkg` hook（已有 `99tianyan-strip-setuid`）增量处理
 - 或在后台异步执行，不阻塞初始化流程
 
 ---
 
 ### L4. 缺少全局异常处理器和 ANR 防护
 
-**位置**：`app/src/main/java/top/wanxiang/app/WanXiangApplication.kt`
+**位置**：`app/src/main/java/top/tianyan/app/TianyanApplication.kt`
 
 项目有 `CrashReporter`（`core/common/.../CrashReporter.kt`），但未确认是否在 Application 中注册 `Thread.setDefaultUncaughtExceptionHandler`。前台服务中运行的 Agent 循环如果抛出未捕获异常，可能导致进程崩溃而无日志。
 
-**修复建议**：确认 `WanXiangApplication.onCreate()` 中初始化了 `CrashReporter`，并为前台服务添加独立的异常处理。
+**修复建议**：确认 `TianyanApplication.onCreate()` 中初始化了 `CrashReporter`，并为前台服务添加独立的异常处理。
 
 ---
 

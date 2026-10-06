@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "top.wanxiang.app.template"
+    namespace = "top.tianyan.app.template"
     compileSdk = 37
     defaultConfig { minSdk = 29 }
     compileOptions {

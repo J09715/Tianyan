@@ -1,17 +1,17 @@
 <p align="center">
-  <img src="app/src/main/res/drawable/wanxiang_logo.xml" width="96" alt="WanXiang Logo" />
+  <img src="app/src/main/res/drawable/tianyan_logo.xml" width="96" alt="Tianyan Logo" />
 </p>
 
 <h1 align="center">Tianyan · 天衍</h1>
 
-<p align="center"><strong>Android Linux sandbox & AI Agent harness. Upstream: WanXiang (万象).</strong></p>
+<p align="center"><strong>Android Linux sandbox & AI Agent harness.</strong></p>
 
 <p align="center">
   Android No-Root Linux Runtime · Native Agent Harness · PTY Terminal · Mobile Dev Workspace · Wireless ADB Diagnostics
 </p>
 
 <p align="center">
-  <code>v0.11.0</code> · <code>Android 10+ (SDK 29+)</code> · <code>arm64-v8a</code> · <code>Kotlin 2.4</code> · <code>Jetpack Compose</code>
+  <code>v0.14.0</code> · <code>Android 10+ (SDK 29+)</code> · <code>arm64-v8a</code> · <code>Kotlin 2.4</code> · <code>Jetpack Compose</code>
 </p>
 
 <p align="center">
@@ -20,13 +20,13 @@
 
 ---
 
-## 🌌 Prologue: What is WanXiang
+## 🌌 Prologue: What is Tianyan
 
 In *Liezi: Questions of Tang*, it is written:
 
 > To the east of the Bohai Sea... there is a vast ravine, indeed a bottomless valley. Its depths are unfathomable, and it is called GuiXu (The Return to the Void). The waters of the eight horizons and nine heavens, the flow of the celestial river, all pour into it, yet it neither increases nor diminishes.
 
-**WanXiang (万象)** borrows its name and spirit from this: within the strictly sandboxed boundaries of Android, it builds a **runnable, observable, self-healing, and continuously evolving** Linux world.
+**Tianyan (天衍)** borrows its name and spirit from this: within the strictly sandboxed boundaries of Android, it builds a **runnable, observable, self-healing, and continuously evolving** Linux world.
 
 It is neither a superficial chat wrapper nor a toy terminal emulator. It allows LLMs, MCP tools, the Linux user space, native PTY terminals, and project workspaces to share an isomorphic execution context and causality chain—turning natural language intent into verifiable files, living processes, validated code, and deliverable Android / Flutter build artifacts.
 
@@ -48,7 +48,7 @@ Human Intent ─→ Task Decomposition (TaskPlan) ─→ Tools / MCP / Linux / B
 | **Agent Harness** | Compatible with **OpenAI standards** and **Anthropic Messages API**; SSE streaming, chain-of-thought (`reasoning_content` / DeepSeek / Claude), task plan progress cards (TaskPlanCard), and multi-tier tool approval workflows. |
 | **Dialogue Rewind & Checkpoints** | One-click **Dialogue Rewind** based on **SessionFork tree branching**; automatic disk-persisted **file snapshots (Checkpoints)** before each conversational turn for instant rollback of risky refactoring. |
 | **Semantic Memory & Subagents** | Semantic memory model (conflict resolution, revisions, pinned items, recency scoring); multi-subagent coordination with **write-lease wave scheduling**, structured facts pack aggregation, and pagination spill-over protection. |
-| **Native PTY Terminal** | Low-level JNI `openpty`/`forkpty` bridge (`libwanxiang_pty.so`) with real process lifecycles, control terminals, ANSI/VT100 state machines, haptic keybars, and multi-session persistence; fallback to `script` PTY if needed. |
+| **Native PTY Terminal** | Low-level JNI `openpty`/`forkpty` bridge (`libtianyan_pty.so`) with real process lifecycles, control terminals, ANSI/VT100 state machines, haptic keybars, and multi-session persistence; fallback to `script` PTY if needed. |
 | **In-App Browser & CDP DevTools** | Integrated WebView multi-tab pool and in-process Browser MCP; script-based **injection Hook engine**, **CDP breakpoints**, **Worker-level Fetch interception**, and visual Network Timeline inspector. |
 | **Wireless ADB & Diagnostics** | Dedicated first-tier **Wireless ADB Workbench**; **notification bar pairing code input** without leaving current screen, mDNS local discovery, unified PRoot / Android logcat streaming, and one-click hardware health checks. |
 | **Workspaces & Build Engine** | Empty project creation, ZIP import (with Zip Slip security validation), and **GitHub repo import with live clone progress**; code browsing, line-level visual Diff, background Gradle / Flutter compilation, and APK signing. |
@@ -59,7 +59,7 @@ Human Intent ─→ Task Decomposition (TaskPlan) ─→ Tools / MCP / Linux / B
 
 ## 🚀 Quick Start
 
-1. **Install & Launch**: Download and install the [Latest Release APK](https://github.com/peakSee/Wanxiang/releases) on an ARM64 Android 10+ device (Android 12+ recommended).
+1. **Install & Launch**: Download and install the [Latest Release APK](https://github.com/J09715/Tianyan/releases) on an ARM64 Android 10+ device (Android 12+ recommended).
 2. **Initialize Sandbox**: Follow the Onboarding Wizard to select a distribution (e.g., Ubuntu 24.04) and complete the initial RootFS setup over network.
 3. **Configure Model**: Add your LLM API Key (DeepSeek, Claude, OpenAI, SiliconFlow, etc.) in Settings, or run local GGUF models via `llama.cpp` in the sandbox.
 4. **Open Workspace**: Create a project in the Workshop or import an existing repository from GitHub / local ZIP.
@@ -92,9 +92,9 @@ $env:JAVA_HOME="C:\Program Files\Android\Android Studio\jbr"
 .\gradlew.bat assembleDebug --console=plain
 ```
 
-Debug APK output: `app/build/outputs/apk/debug/wanxiang-v0.11.0-debug.apk`
+Debug APK output: `app/build/outputs/apk/debug/tianyan-v0.14.0-debug.apk`
 
-> 📦 **WanXiangDev Dual-Package Build**: Set `$env:WANXIANG_DEV_BUILD="1"` in CI or local environment to build the preview APK `top.wanxiang.app.dev`, which can be installed side-by-side with the release package.
+> 📦 **TianyanDev Dual-Package Build**: Set `$env:TIANYAN_DEV_BUILD="1"` in CI or local environment to build the preview APK `top.tianyan.app.dev`, which can be installed side-by-side with the release package.
 
 ---
 
@@ -146,3 +146,12 @@ Constraints never truly disappear; but the freedom that engineering provides oft
 
 Welcome to submit Issues, Pull Requests, or share your real-device experiences!
 
+---
+
+## Origin and License
+
+Tianyan is derived from [WanXiang (万象)](https://github.com/peakSee/Wanxiang), which carries
+no license declaration. All branding, icons, copy and documentation in this repository have been
+independently rewritten. See [`NOTICE`](NOTICE) for the itemised third-party attributions.
+
+This repository ships **no LICENSE file** — all rights are reserved until one is chosen and declared.

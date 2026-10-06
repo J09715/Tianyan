@@ -7,17 +7,17 @@
 ## 一、模块架构与核心组件
 
 ```
-wanxiang-custom-iteration-module/
+tianyan-custom-iteration-module/
 ├── build.gradle.kts                        # Gradle 多模块依赖配置（对齐天衍规范）
 ├── README.md                               # 完整模块架构与接入文档
 ├── templates/
 │   └── workflows/
-│       └── wanxiangdev-build.yml              # GitHub Actions 自动化云端构建 CI 模板
+│       └── tianyandev-build.yml              # GitHub Actions 自动化云端构建 CI 模板
 └── src/
     ├── main/
     │   ├── assets/
     │   │   └── skills/
-    │   │       └── wanxiang-custom-iteration/
+    │   │       └── tianyan-custom-iteration/
     │   │           └── SKILL.md            # Agent 专有开发与 PR 规范 Skill
     │   └── java/top/J09715/Tianyan/
     │       ├── iteration/engine/
@@ -33,14 +33,14 @@ wanxiang-custom-iteration-module/
 ## 二、核心特性与设计规范（零降级）
 
 1. **工作区物理隔离**：
-   * 自动在 Linux 沙盒家目录创建隔离目录 `~/custom_wanxiang`，开发行为完全不破坏运行中的宿主系统。
+   * 自动在 Linux 沙盒家目录创建隔离目录 `~/custom_tianyan`，开发行为完全不破坏运行中的宿主系统。
 2. **专属 Agent Skill 约束 (`SKILL.md`)**：
    * 指导 AI Agent 严格遵守天衍的多模块 Kotlin DSL 规范、Material3 Compose 规范、协程设计及凭证安全规则。
-3. **GitHub Actions 云端 CI 构建 (`wanxiangdev-build.yml`)**：
+3. **GitHub Actions 云端 CI 构建 (`tianyandev-build.yml`)**：
    * 免去手机端部署 Android SDK/NDK 的庞大体积开销；
    * 云端 Runner（`ubuntu-24.04` + JDK 17）自动编译，并通过 `gh run watch` / `gh run download` 将产物回传手机。
 4. **双包共存（Dual-Flavor）**：
-   * 编译产物包名自动重命名为 `top.wanxiang.app.dev`，应用名显示为 `TianyanDev`；
+   * 编译产物包名自动重命名为 `top.tianyan.app.dev`，应用名显示为 `TianyanDev`；
    * 测试版与手机中的正式版天衍共存运行、互不覆盖。
 5. **开源 PR 交付闭环**：
    * 本地真机体验通过后，Agent 协助生成标准格式 PR 提交到 `TensorHub-ORG/Tianyan:main`。

@@ -1,4 +1,4 @@
-# ⚡ 万象 (WanXiang) — 核心调用链路与执行时序 (Execution Traces)
+# ⚡ 天衍 (Tianyan) — 核心调用链路与执行时序 (Execution Traces)
 
 ---
 
@@ -120,9 +120,9 @@ WorkspaceScreen / ToolCenterScreen
   └─► ToolManager.batchInstallComponents() / GenericRecipeInstaller
         ├─► LocalPluginPayloadManager 流式复制 payload，并按字节上报 [COPY] 进度
         └─► android-suite-offline manifest + install-android-suite.sh
-              ├─► [WANXIANG_PROGRESS:n] 协议 ➔ InstallEvent.Progress
+              ├─► [TIANYAN_PROGRESS:n] 协议 ➔ InstallEvent.Progress
               ├─► 安装不可变 JDK / SDK / AAPT2 / NDK / Gradle / CMake / Ninja / Flutter
-              ├─► /root/.gradle/init.d/wanxiang-android-ndk.gradle 唯一注入 android.ndkPath
+              ├─► /root/.gradle/init.d/tianyan-android-ndk.gradle 唯一注入 android.ndkPath
               └─► gradle.properties 固定移动端资源策略
                     ├─► daemon=false / parallel=false / workers.max=2
                     └─► Gradle Xmx=1024m / Metaspace=384m / SerialGC
@@ -149,7 +149,7 @@ Harness host(action=logcat)
   ├─► 优先 EmbeddedAdbManager（无需 Shizuku/Root）
   └─► 无线 ADB 不可用时回退 PrivilegeManager
 
-PRoot 沙箱 /opt/wanxiang/bin/logcat-grabber & wanxiang-host logcat
+PRoot 沙箱 /opt/tianyan/bin/logcat-grabber & tianyan-host logcat
   └─► HostBridge (127.0.0.1:7980)
         ├─► POST /api/logcat ➔ EmbeddedAdbManager.captureLogcat()
         ├─► POST /api/shell ➔ 内置无线 ADB 回退（无 Shizuku 亦可执行 Shell）

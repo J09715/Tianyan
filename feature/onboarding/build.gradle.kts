@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "top.wanxiang.app.feature.onboarding"
+    namespace = "top.tianyan.app.feature.onboarding"
     resourcePrefix = "onboarding_"
     compileSdk = 37
     defaultConfig { minSdk = 29 }

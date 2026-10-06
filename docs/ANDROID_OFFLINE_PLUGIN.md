@@ -10,10 +10,10 @@
 
 相关实现：
 
-- [ToolManifest.kt](../core/model/src/main/java/top/wanxiang/app/core/model/ToolManifest.kt)
-- [ToolRegistry.kt](../tools/src/main/java/top/wanxiang/app/core/tools/ToolRegistry.kt)
-- [GenericRecipeInstaller.kt](../tools/src/main/java/top/wanxiang/app/runtime/tools/GenericRecipeInstaller.kt)
-- [RuntimeAssetSynchronizer.kt](../runtime/src/main/java/top/wanxiang/app/runtime/scripts/RuntimeAssetSynchronizer.kt)
+- [ToolManifest.kt](../core/model/src/main/java/top/tianyan/app/core/model/ToolManifest.kt)
+- [ToolRegistry.kt](../tools/src/main/java/top/tianyan/app/core/tools/ToolRegistry.kt)
+- [GenericRecipeInstaller.kt](../tools/src/main/java/top/tianyan/app/runtime/tools/GenericRecipeInstaller.kt)
+- [RuntimeAssetSynchronizer.kt](../runtime/src/main/java/top/tianyan/app/runtime/scripts/RuntimeAssetSynchronizer.kt)
 
 ## 1. 推荐目录
 
@@ -41,7 +41,7 @@ android-suite-offline/
     │   └── uninstall-android-suite.sh
     └── config/
         ├── gradle.properties
-        └── wanxiang-android-ndk.gradle
+        └── tianyan-android-ndk.gradle
 ```
 
 ### 资源是否必须提供
@@ -126,20 +126,20 @@ sha256sum payload/archives/* > payload/checksums/SHA256SUMS
   "offlineOnly": true,
   "installMethod": "LOCAL_PACKAGE",
   "installSteps": [
-    "/bin/sh \"$WANXIANG_PLUGIN_PAYLOAD/scripts/install-android-suite.sh\""
+    "/bin/sh \"$TIANYAN_PLUGIN_PAYLOAD/scripts/install-android-suite.sh\""
   ],
   "uninstallSteps": [
-    "/bin/sh \"$WANXIANG_PLUGIN_PAYLOAD/scripts/uninstall-android-suite.sh\""
+    "/bin/sh \"$TIANYAN_PLUGIN_PAYLOAD/scripts/uninstall-android-suite.sh\""
   ],
   "launchCommand": "gradle --version",
-  "verifyCommand": "test -x \"$WANXIANG_TOOL_DIR/bin/java\" && java -version && gradle --version && test -f /opt/android-sdk/platforms/android-34/android.jar && test -f /opt/gradle-8.14.2/lib/gradle-launcher-8.14.2.jar",
+  "verifyCommand": "test -x \"$TIANYAN_TOOL_DIR/bin/java\" && java -version && gradle --version && test -f /opt/android-sdk/platforms/android-34/android.jar && test -f /opt/gradle-8.14.2/lib/gradle-launcher-8.14.2.jar",
   "commandLinks": ["java", "javac", "gradle", "adb", "flutter", "dart"],
   "environment": {
     "ANDROID_HOME": "/opt/android-sdk",
     "ANDROID_SDK_ROOT": "/opt/android-sdk",
     "GRADLE_HOME": "/opt/gradle-8.14.2",
-    "JAVA_HOME": "/opt/wanxiang/toolchains/android/jdk",
-    "ANDROID_NDK_HOME": "/opt/wanxiang/toolchains/android/ndk"
+    "JAVA_HOME": "/opt/tianyan/toolchains/android/jdk",
+    "ANDROID_NDK_HOME": "/opt/tianyan/toolchains/android/ndk"
   }
 }
 ```
@@ -160,17 +160,17 @@ payload/scripts/install-android-suite.sh
 #!/bin/sh
 set -eu
 
-PAYLOAD="${WANXIANG_PLUGIN_PAYLOAD:?missing WANXIANG_PLUGIN_PAYLOAD}"
+PAYLOAD="${TIANYAN_PLUGIN_PAYLOAD:?missing TIANYAN_PLUGIN_PAYLOAD}"
 ARCHIVES="$PAYLOAD/archives"
 CHECKSUMS="$PAYLOAD/checksums/SHA256SUMS"
-TOOL_DIR="${WANXIANG_TOOL_DIR:?missing WANXIANG_TOOL_DIR}"
+TOOL_DIR="${TIANYAN_TOOL_DIR:?missing TIANYAN_TOOL_DIR}"
 ANDROID_HOME="/opt/android-sdk"
-TOOLCHAIN_ROOT="/opt/wanxiang/toolchains/android"
+TOOLCHAIN_ROOT="/opt/tianyan/toolchains/android"
 JDK_HOME="$TOOLCHAIN_ROOT/jdk"
 NDK_HOME="$TOOLCHAIN_ROOT/ndk"
 GRADLE_VERSION="8.14.2"
 
-mkdir -p "$TOOL_DIR/bin" "$ANDROID_HOME" "$TOOLCHAIN_ROOT" /opt/wanxiang/bin
+mkdir -p "$TOOL_DIR/bin" "$ANDROID_HOME" "$TOOLCHAIN_ROOT" /opt/tianyan/bin
 
 # 1. 校验所有内置归档，不联网、不调用 apt。
 if [ -f "$CHECKSUMS" ]; then
@@ -260,17 +260,17 @@ if [ -s "$ARCHIVES/flutter-linux-arm64.tar.xz" ]; then
     ln -sfn /opt/flutter/bin/dart "$TOOL_DIR/bin/dart"
 fi
 
-ln -sfn "$TOOL_DIR/bin/java" /opt/wanxiang/bin/java
-ln -sfn "$TOOL_DIR/bin/javac" /opt/wanxiang/bin/javac
-ln -sfn "$TOOL_DIR/bin/gradle" /opt/wanxiang/bin/gradle
-[ -e "$TOOL_DIR/bin/adb" ] && ln -sfn "$TOOL_DIR/bin/adb" /opt/wanxiang/bin/adb || true
-[ -e "$TOOL_DIR/bin/flutter" ] && ln -sfn "$TOOL_DIR/bin/flutter" /opt/wanxiang/bin/flutter || true
-[ -e "$TOOL_DIR/bin/dart" ] && ln -sfn "$TOOL_DIR/bin/dart" /opt/wanxiang/bin/dart || true
+ln -sfn "$TOOL_DIR/bin/java" /opt/tianyan/bin/java
+ln -sfn "$TOOL_DIR/bin/javac" /opt/tianyan/bin/javac
+ln -sfn "$TOOL_DIR/bin/gradle" /opt/tianyan/bin/gradle
+[ -e "$TOOL_DIR/bin/adb" ] && ln -sfn "$TOOL_DIR/bin/adb" /opt/tianyan/bin/adb || true
+[ -e "$TOOL_DIR/bin/flutter" ] && ln -sfn "$TOOL_DIR/bin/flutter" /opt/tianyan/bin/flutter || true
+[ -e "$TOOL_DIR/bin/dart" ] && ln -sfn "$TOOL_DIR/bin/dart" /opt/tianyan/bin/dart || true
 
 mkdir -p /root/.gradle
 cp "$PAYLOAD/config/gradle.properties" /root/.gradle/gradle.properties
 mkdir -p /root/.gradle/init.d
-cp "$PAYLOAD/config/wanxiang-android-ndk.gradle" /root/.gradle/init.d/wanxiang-android-ndk.gradle
+cp "$PAYLOAD/config/tianyan-android-ndk.gradle" /root/.gradle/init.d/tianyan-android-ndk.gradle
 printf '%s\n' 'android.builder.sdkDownload=false' >> /root/.gradle/gradle.properties
 
 test -x "$TOOL_DIR/bin/java"
@@ -289,18 +289,18 @@ test -x "$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
 #!/bin/sh
 set -eu
 
-TOOL_DIR="${WANXIANG_TOOL_DIR:?missing WANXIANG_TOOL_DIR}"
-rm -f /opt/wanxiang/bin/java /opt/wanxiang/bin/javac /opt/wanxiang/bin/gradle
-rm -f /opt/wanxiang/bin/adb /opt/wanxiang/bin/flutter /opt/wanxiang/bin/dart
+TOOL_DIR="${TIANYAN_TOOL_DIR:?missing TIANYAN_TOOL_DIR}"
+rm -f /opt/tianyan/bin/java /opt/tianyan/bin/javac /opt/tianyan/bin/gradle
+rm -f /opt/tianyan/bin/adb /opt/tianyan/bin/flutter /opt/tianyan/bin/dart
 rm -rf "$TOOL_DIR"
 rm -rf /opt/android-sdk
 rm -rf /opt/gradle-8.14.2
-rm -rf /opt/wanxiang/toolchains/android
+rm -rf /opt/tianyan/toolchains/android
 rm -rf /opt/flutter
-rm -f /root/.gradle/init.d/wanxiang-android-ndk.gradle
+rm -f /root/.gradle/init.d/tianyan-android-ndk.gradle
 ```
 
-如果希望保留用户项目和 Gradle 缓存，不要删除 `/root/.gradle/caches`，也不要删除 `$WANXIANG_TOOL_DATA`。
+如果希望保留用户项目和 Gradle 缓存，不要删除 `/root/.gradle/caches`，也不要删除 `$TIANYAN_TOOL_DATA`。
 
 ## 6. 打包
 

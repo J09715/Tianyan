@@ -13,7 +13,7 @@ interface ConversationSidebarProps {
 }
 
 const STATUS_LABELS: Record<ConnectionStatus, string> = {
-  online: "已连接万象",
+  online: "已连接天衍",
   offline: "连接中断，正在重试",
   connecting: "正在连接实时消息",
 };

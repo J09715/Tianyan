@@ -1,4 +1,4 @@
-# 🏗️ 万象 (WanXiang) — 系统架构与模块拓扑 (Architecture & Modules)
+# 🏗️ 天衍 (Tianyan) — 系统架构与模块拓扑 (Architecture & Modules)
 
 ---
 
@@ -13,7 +13,7 @@
   - **状态与异步**：Kotlin Coroutines, StateFlow, SharedFlow
   - **本地存储**：Jetpack DataStore (Preferences), Room Database (SQLite)
 - **底层运行时 (Runtime & Native)**：
-  - **C/C++ JNI**：`app/src/main/cpp/pty.c` (openpty, fork, exec, ioctl 终端 PTY 桥接，编译为 `libwanxiang_pty.so`, `arm64-v8a`)
+  - **C/C++ JNI**：`app/src/main/cpp/pty.c` (openpty, fork, exec, ioctl 终端 PTY 桥接，编译为 `libtianyan_pty.so`, `arm64-v8a`)
   - **Linux 容器**：内置 PRoot 引擎，启动 Debian rootfs
   - **宿主存储映射**：PRoot `-b <host>:<guest>` 原生绑定机制（Download, Documents, /sdcard）
 - **AI 智能体引擎 (Agent Harness)**：
@@ -42,7 +42,7 @@ LinuxAIRuntime/
 ├── harness/              # Agent 智能体核心：Agent 循环、流式推理、内置工具/审批、MCP
 ├── tools/                # 工具生态中心：Registry、本地插件、安装事务、批量组件安装、Provider 安全
 └── feature/              # Compose UI 业务特性层
-    ├── components/      # 万象 M3 Expressive 设计规范、通用组件 (RuntimeCard, TopBar, Icons)
+    ├── components/      # 天衍 M3 Expressive 设计规范、通用组件 (RuntimeCard, TopBar, Icons)
     ├── theme/           # Material 3 调色板、字体、主题配置
     ├── home/            # 首页运行仪表盘：Linux 系统状态、内存/磁盘/进程实时监控
     ├── chat/            # 智枢 Agent 对话界面、TaskPlanCard 任务拆解卡片、宽屏双栏布局

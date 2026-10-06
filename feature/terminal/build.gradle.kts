@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "top.wanxiang.app.feature.terminal"
+    namespace = "top.tianyan.app.feature.terminal"
     resourcePrefix = "terminal_"
     compileSdk = 37
     defaultConfig { minSdk = 29 }

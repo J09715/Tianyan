@@ -43,6 +43,31 @@ jobs:
           bash tools/prepare-proot-runtime.sh
           ls -la app/src/main/jniLibs/arm64-v8a/ | grep -E "libproot" || true
 
+      - name: Rebuild libpty_native.so from source (JNI symbols must match current package)
+        run: |
+          set -euo pipefail
+          NDK="$ANDROID_HOME/ndk/30.0.15729638"
+          HOST_TAG="linux-x86_64"
+          [ -d "$NDK/toolchains/llvm/prebuilt/$HOST_TAG" ] || HOST_TAG="$(ls "$NDK/toolchains/llvm/prebuilt" | head -1)"
+          CC="$NDK/toolchains/llvm/prebuilt/$HOST_TAG/bin/aarch64-linux-android30-clang"
+          [ -x "$CC" ] || { echo "clang not found: $CC"; exit 1; }
+          SRC="app/src/main/cpp/pty_native.c"
+          OUT="app/src/main/jniLibs/arm64-v8a/libpty_native.so"
+          echo "  CC   : $CC"
+          echo "  SRC  : $SRC"
+          "$CC" -shared -fPIC -O2 -Wall -Werror=implicit-function-declaration -o "$OUT" "$SRC"
+          echo "  -> rebuilt $OUT"
+          ls -la "$OUT"
+          # 校验：导出的 JNI 符号必须与当前包名一致（top_tianyan_app_runtime_pty）
+          if ! "${NDK}/toolchains/llvm/prebuilt/$HOST_TAG/bin/llvm-nm" -D --defined-only "$OUT" \
+               | grep -q "Java_top_tianyan_app_runtime_pty_NativePty_openAndExec"; then
+            echo "!! 重建后的 .so 未导出 top_tianyan JNI 符号，JNI 将无法绑定"; exit 1
+          fi
+          if nm -D --defined-only "$OUT" 2>/dev/null | grep -q "top_wanxiang"; then
+            echo "!! 重建后的 .so 仍含旧包名符号"; exit 1
+          fi
+          echo "  JNI 符号校验通过"
+
       - name: Build Debug APK
         run: |
           chmod +x gradlew
@@ -51,7 +76,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: wanxiang-debug-apk-${{ github.ref_name }}
+          name: tianyan-debug-apk-${{ github.ref_name }}
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 90

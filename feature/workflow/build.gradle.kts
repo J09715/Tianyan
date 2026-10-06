@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "top.wanxiang.app.feature.workflow"
+    namespace = "top.tianyan.app.feature.workflow"
     resourcePrefix = "workflow_"
     compileSdk = 37
     defaultConfig { minSdk = 29 }

@@ -5,7 +5,7 @@ plugins {
     alias(libs.plugins.hilt)
 }
 android {
-    namespace = "top.wanxiang.app.harness"
+    namespace = "top.tianyan.app.harness"
     resourcePrefix = "harness_"
     compileSdk = 37
 

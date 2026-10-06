@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dependency-free Git MCP server for the WanXiang sandbox."""
+"""Dependency-free Git MCP server for the Tianyan sandbox."""
 import argparse
 import json
 import subprocess
@@ -36,7 +36,7 @@ def main():
             req = json.loads(line)
             method, req_id = req.get("method"), req.get("id")
             if method == "initialize":
-                out = response(req_id, {"protocolVersion": PROTOCOL_VERSION, "capabilities": {"tools": {}}, "serverInfo": {"name": "wanxiang-git", "version": "1.0.0"}})
+                out = response(req_id, {"protocolVersion": PROTOCOL_VERSION, "capabilities": {"tools": {}}, "serverInfo": {"name": "tianyan-git", "version": "1.0.0"}})
             elif method == "notifications/initialized":
                 continue
             elif method == "tools/list":

@@ -17,7 +17,7 @@
   ],
   "validation": {
     "requiredFiles": [
-      "app/src/main/java/WANXIANG_PACKAGE_PATH/MainHook.kt",
+      "app/src/main/java/TIANYAN_PACKAGE_PATH/MainHook.kt",
       "app/src/main/assets/xposed_init"
     ],
     "contentRules": [

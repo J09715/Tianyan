@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "top.wanxiang.app.core.security"
+    namespace = "top.tianyan.app.core.security"
     resourcePrefix = "security_"
     compileSdk = 37
     defaultConfig { minSdk = 29 }

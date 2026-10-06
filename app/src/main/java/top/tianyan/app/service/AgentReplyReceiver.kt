@@ -4,7 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import androidx.core.app.RemoteInput
-import top.wanxiang.app.harness.HarnessLoop
+import top.tianyan.app.harness.HarnessLoop
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 

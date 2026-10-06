@@ -1,4 +1,4 @@
-# 🧭 万象 (WanXiang / LinuxAIRuntime) — AI 语义导航总览 (AI Master Navigation)
+# 🧭 天衍 (Tianyan / LinuxAIRuntime) — AI 语义导航总览 (AI Master Navigation)
 
 > **专供 AI Coding Assistant (Antigravity / Cursor / Claude / GPT / Copilot) 全局感知与按需读取**  
 > 本文档为轻量级语义导航中心。详细架构、调用链、文件速查、铁律与命令已全面模块化拆分，请点击对应文档按需深入：

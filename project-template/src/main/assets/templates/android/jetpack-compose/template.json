@@ -14,6 +14,6 @@
     { "name": "packagePath", "label": "Package path" }
   ],
   "validation": {
-    "requiredFiles": ["app/src/main/java/WANXIANG_PACKAGE_PATH/MainActivity.kt"]
+    "requiredFiles": ["app/src/main/java/TIANYAN_PACKAGE_PATH/MainActivity.kt"]
   }
 }

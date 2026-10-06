@@ -1,10 +1,10 @@
-# WanXiang 插件开发准则
+# Tianyan 插件开发准则
 
-本文档描述当前 WanXiang 插件导入器、Registry、安装器和 PRoot 运行环境的真实行为。除明确标记为“建议”的内容外，示例均以当前实现为准。
+本文档描述当前 Tianyan 插件导入器、Registry、安装器和 PRoot 运行环境的真实行为。除明确标记为“建议”的内容外，示例均以当前实现为准。
 
 ## 1. 插件来源
 
-WanXiang 将插件分为两类：
+Tianyan 将插件分为两类：
 
 | 来源 | `source` | 安装方式 | 资源位置 |
 | --- | --- | --- | --- |
@@ -48,7 +48,7 @@ my-plugin.txplugin
 导入后，包会解压到应用私有的版本目录；安装前，`payload/` 会复制到当前发行版：
 
 ```text
-/opt/wanxiang/imports/<id>
+/opt/tianyan/imports/<id>
 ```
 
 ## 3. `manifest.json`
@@ -60,7 +60,7 @@ my-plugin.txplugin
   "schemaVersion": 1,
   "id": "hello-arm64",
   "name": "Hello ARM64",
-  "description": "WanXiang 本地插件示例",
+  "description": "Tianyan 本地插件示例",
   "version": "1.0.0",
   "publisher": "Your Name",
   "category": "DEVELOPER",
@@ -72,10 +72,10 @@ my-plugin.txplugin
   "offlineOnly": true,
   "installMethod": "LOCAL_PACKAGE",
   "installSteps": [
-    "/bin/sh \"$WANXIANG_PLUGIN_PAYLOAD/scripts/install.sh\""
+    "/bin/sh \"$TIANYAN_PLUGIN_PAYLOAD/scripts/install.sh\""
   ],
   "uninstallSteps": [
-    "/bin/sh \"$WANXIANG_PLUGIN_PAYLOAD/scripts/uninstall.sh\""
+    "/bin/sh \"$TIANYAN_PLUGIN_PAYLOAD/scripts/uninstall.sh\""
   ],
   "launchCommand": "hello",
   "verifyCommand": "hello",
@@ -103,18 +103,18 @@ my-plugin.txplugin
 ## 4. 安装器提供的环境变量
 
 ```text
-$WANXIANG_TOOL_ID         当前插件 ID
-$WANXIANG_TOOL_DIR        /opt/wanxiang/tools/<id>
-$WANXIANG_TOOL_DATA       /opt/wanxiang/data/<id>
-$WANXIANG_PLUGIN_PAYLOAD  /opt/wanxiang/imports/<id>（仅本地插件）
+$TIANYAN_TOOL_ID         当前插件 ID
+$TIANYAN_TOOL_DIR        /opt/tianyan/tools/<id>
+$TIANYAN_TOOL_DATA       /opt/tianyan/data/<id>
+$TIANYAN_PLUGIN_PAYLOAD  /opt/tianyan/imports/<id>（仅本地插件）
 ```
 
-程序文件放在 `$WANXIANG_TOOL_DIR`；用户配置、缓存、模型或项目数据放在 `$WANXIANG_TOOL_DATA`。后者在普通卸载时默认保留。
+程序文件放在 `$TIANYAN_TOOL_DIR`；用户配置、缓存、模型或项目数据放在 `$TIANYAN_TOOL_DATA`。后者在普通卸载时默认保留。
 
 `commandLinks` 中的每个名称默认指向：
 
 ```text
-$WANXIANG_TOOL_DIR/bin/<command>
+$TIANYAN_TOOL_DIR/bin/<command>
 ```
 
 因此脚本必须创建对应文件并恢复可执行权限。
@@ -163,7 +163,7 @@ hello-arm64/
 
 ```sh
 #!/bin/sh
-echo "hello from WanXiang"
+echo "hello from Tianyan"
 ```
 
 清单中的安装步骤：
@@ -171,13 +171,13 @@ echo "hello from WanXiang"
 ```json
 {
   "installSteps": [
-    "test -f \"$WANXIANG_PLUGIN_PAYLOAD/bin/hello\"",
-    "mkdir -p \"$WANXIANG_TOOL_DIR/bin\"",
-    "cp \"$WANXIANG_PLUGIN_PAYLOAD/bin/hello\" \"$WANXIANG_TOOL_DIR/bin/hello\"",
-    "chmod 755 \"$WANXIANG_TOOL_DIR/bin/hello\""
+    "test -f \"$TIANYAN_PLUGIN_PAYLOAD/bin/hello\"",
+    "mkdir -p \"$TIANYAN_TOOL_DIR/bin\"",
+    "cp \"$TIANYAN_PLUGIN_PAYLOAD/bin/hello\" \"$TIANYAN_TOOL_DIR/bin/hello\"",
+    "chmod 755 \"$TIANYAN_TOOL_DIR/bin/hello\""
   ],
   "uninstallSteps": [
-    "rm -f \"$WANXIANG_TOOL_DIR/bin/hello\""
+    "rm -f \"$TIANYAN_TOOL_DIR/bin/hello\""
   ],
   "launchCommand": "hello",
   "verifyCommand": "hello",
@@ -193,7 +193,7 @@ echo "hello from WanXiang"
 #!/bin/sh
 set -eu
 
-archive="$WANXIANG_PLUGIN_PAYLOAD/archives/flutter-arm64.tar.gz"
+archive="$TIANYAN_PLUGIN_PAYLOAD/archives/flutter-arm64.tar.gz"
 expected_sha256="<SHA256>"
 
 test -s "$archive"
@@ -221,13 +221,13 @@ mv /opt/flutter.staging/flutter /opt/flutter
 安装器会记录阶段事件、标准输出和标准错误。插件脚本可以输出结构化相对进度：
 
 ```text
-[WANXIANG_PROGRESS:47] [EXTRACT] 正在解压 Android NDK r29
+[TIANYAN_PROGRESS:47] [EXTRACT] 正在解压 Android NDK r29
 ```
 
 格式：
 
 ```text
-[WANXIANG_PROGRESS:<0..100>] <用户可读消息>
+[TIANYAN_PROGRESS:<0..100>] <用户可读消息>
 ```
 
 进度必须单调递增。推荐消息标签：
@@ -296,7 +296,7 @@ Web 服务应显式声明端口和路径：
 安装事务只快照和恢复：
 
 ```text
-/opt/wanxiang/tools/<id>
+/opt/tianyan/tools/<id>
 ```
 
 插件写入的 `/opt/android-sdk`、`/opt/flutter`、`/root/.gradle` 或其他全局目录不在框架事务快照中。因此：
@@ -304,7 +304,7 @@ Web 服务应显式声明端口和路径：
 - 全局资源必须自行使用 staging、校验和提交。
 - 失败时脚本应通过 `trap` 清理 staging。
 - 日志出现 `ROLLED_BACK` 不代表插件创建的所有全局文件都已恢复。
-- `uninstallSteps` 必须删除插件拥有的全局程序文件，但默认保留 `$WANXIANG_TOOL_DATA`。
+- `uninstallSteps` 必须删除插件拥有的全局程序文件，但默认保留 `$TIANYAN_TOOL_DATA`。
 
 ## 12. 发布前检查
 
@@ -335,7 +335,7 @@ Web 服务应显式声明端口和路径：
 
 ### `cannot create .../bin/...`
 
-确保安装前创建 `$WANXIANG_TOOL_DIR/bin`。当前通用安装器也会提前创建该目录。
+确保安装前创建 `$TIANYAN_TOOL_DIR/bin`。当前通用安装器也会提前创建该目录。
 
 ### `xz: Cannot exec`
 
@@ -351,4 +351,4 @@ RootFS 没有 `xz`。改用 `.tar.gz`，或随插件提供可运行的 ARM64 解
 
 ### 日志显示回滚但全局文件仍存在
 
-框架事务仅覆盖 `$WANXIANG_TOOL_DIR`。插件拥有的全局路径必须由插件脚本自行清理。
+框架事务仅覆盖 `$TIANYAN_TOOL_DIR`。插件拥有的全局路径必须由插件脚本自行清理。

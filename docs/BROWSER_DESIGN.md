@@ -1,8 +1,8 @@
-# 🌐 万象 (WanXiang) — 内置浏览器与 Harness 集成方案 (Browser Design)
+# 🌐 天衍 (Tianyan) — 内置浏览器与 Harness 集成方案 (Browser Design)
 
-> **范围**：在 Android 无 Root WanXiang 内置一个 `in-app WebView`，并让 harness 通过 MCP 协议像 Codex 操纵内置 In-App Browser 一样驱动它；可同时被桌面 Claude / Cursor / Copilot 通过 `adb reverse` 接入。
+> **范围**：在 Android 无 Root Tianyan 内置一个 `in-app WebView`，并让 harness 通过 MCP 协议像 Codex 操纵内置 In-App Browser 一样驱动它；可同时被桌面 Claude / Cursor / Copilot 通过 `adb reverse` 接入。
 > **状态**：v0.9.0-MVP 落地切片（首期实现 in-app 一族 + 文件系统一族）。
-> **作者**：WanXiang Architecture Team
+> **作者**：Tianyan Architecture Team
 > **创建日期**：2026-09-02
 
 ---
@@ -11,7 +11,7 @@
 
 ### 1.1 目标
 
-让 WanXiang 的 Agent Harness 能像 Codex desktop 内置浏览器那样：
+让 Tianyan 的 Agent Harness 能像 Codex desktop 内置浏览器那样：
 
 1. **内置可见**：用户能在 App 内打开一个真正的浏览器页面（多 Tab、URL Bar、Co-browsing 状态条）。
 2. **AI 可控**：harness 内的 LLM 通过 MCP 工具（`mcp__browser__open` / `navigate` / `snapshot` / `click` / `type` / `screenshot` …）调度同一个浏览器实例。
@@ -21,7 +21,7 @@
 
 ### 1.2 Codex 对位
 
-| Codex desktop | WanXiang（本方案） |
+| Codex desktop | Tianyan（本方案） |
 | --- | --- |
 | `agent.browsers.list()` / `get(name)` / `getForUrl()` / `getDefault()` | `BrowserRegistry.listFamilies()` / `get(family)` / `getForUrl()` / `getDefault()` |
 | 内置 In-App Browser（XAML / WKWebView） | in-app `WebView`（`androidx.webkit`） |
@@ -32,7 +32,7 @@
 
 ### 1.3 与 WebReverse-MCP 的关系
 
-本方案**借鉴**其模块切分粒度 / 工具动词集 / 风险矩阵 / Evidence Store 设计；**不复用其代码**（他们的 `pluginManagement` 与 `gradle 7.x` 配置不适配 WanXiang），后续若有强需求可独立 PR 借鉴特定模块。
+本方案**借鉴**其模块切分粒度 / 工具动词集 / 风险矩阵 / Evidence Store 设计；**不复用其代码**（他们的 `pluginManagement` 与 `gradle 7.x` 配置不适配 Tianyan），后续若有强需求可独立 PR 借鉴特定模块。
 
 ---
 
@@ -112,9 +112,9 @@ mcp__browser__file_*              ── 工作目录读/写/搜/hash/zip/share�
 
 ### 3.3 Screenshot 返回
 
-`ToolResult.imageAttachments[0] = ToolImageRef(uri = "screenshots://wanxiang-browser/t1/2026-09-02T11-09-09.png", mime = "image/png", w = 1080, h = 2400)`。
+`ToolResult.imageAttachments[0] = ToolImageRef(uri = "screenshots://tianyan-browser/t1/2026-09-02T11-09-09.png", mime = "image/png", w = 1080, h = 2400)`。
 
-UI 用 `Coil` 渲染缩略图，点击进入 `BrowserActionCard` 全屏预览。文件落到 `/data/data/<app>/cache/wanxiang-browser/screenshots/...`；**不外发**，符合"敏感数据不出本地"原则。
+UI 用 `Coil` 渲染缩略图，点击进入 `BrowserActionCard` 全屏预览。文件落到 `/data/data/<app>/cache/tianyan-browser/screenshots/...`；**不外发**，符合"敏感数据不出本地"原则。
 
 ### 3.4 MCP Resources（外部 AI / IDE 可订阅）
 
@@ -211,7 +211,7 @@ BrowserScreen
 ### 新增模块与目录
 
 ```
-core/browser/src/main/java/top/wanxiang/app/core/browser/
+core/browser/src/main/java/top/tianyan/app/core/browser/
     BrowserFamily.kt
     BrowserRisk.kt
     BrowserCapability.kt
@@ -221,11 +221,11 @@ core/browser/src/main/java/top/wanxiang/app/core/browser/
     BrowserSelectionPolicy.kt          (Pure Kotlin, 单测覆盖)
     BrowserPreferences.kt              (Pure Kotlin 配置数据类)
 
-core/browser/src/test/java/top/wanxiang/app/core/browser/
+core/browser/src/test/java/top/tianyan/app/core/browser/
     BrowserSelectionPolicyTest.kt
     SnapshotRefTest.kt
 
-runtime/browser/src/main/java/top/wanxiang/app/runtime/browser/
+runtime/browser/src/main/java/top/tianyan/app/runtime/browser/
     BrowserRegistry.kt                (interface)
     BrowserRegistryImpl.kt            (@Singleton)
     BrowserSessionToken.kt            (按 agent session 绑定)
@@ -248,7 +248,7 @@ runtime/browser/src/main/java/top/wanxiang/app/runtime/browser/
 
 runtime/browser/src/main/AndroidManifest.xml
 
-feature/browser/src/main/java/top/wanxiang/app/ui/browser/
+feature/browser/src/main/java/top/tianyan/app/ui/browser/
     BrowserScreen.kt
     BrowserViewModel.kt
     BrowserTopBar.kt                  (URL Bar / Forward / Back / Refresh / Co-browsing toggle)
@@ -258,7 +258,7 @@ feature/browser/src/main/java/top/wanxiang/app/ui/browser/
     snapshot/SnapshotSheet.kt         (全屏 snapshot 预览)
     BrowserNavRoute.kt
 
-harness/src/main/java/top/wanxiang/app/harness/mcp/server/
+harness/src/main/java/top/tianyan/app/harness/mcp/server/
     McpInProcessServer.kt             (Ktor 起服，POST /mcp/sse + Bearer auth)
     McpAuthFilter.kt
     McpToolDispatcher.kt              (mcp__<server>__<tool> → 路由到 BrowserMcpTools)
@@ -266,7 +266,7 @@ harness/src/main/java/top/wanxiang/app/harness/mcp/server/
     McpServerRuntime.kt               (singleton, 启停)
     di/McpServerModule.kt
 
-harness/src/main/java/top/wanxiang/app/harness/browser/
+harness/src/main/java/top/tianyan/app/harness/browser/
     BrowserMcpBootstrap.kt            (McpManager.bootstrapBuiltinBrowser())
 ```
 
@@ -281,7 +281,7 @@ core/datastore/.../PreferenceFacades.kt                   ── 新增 BrowserP
 harness/.../McpManager.kt                                 ── init { ... } 阶段调用 McpServerRuntime.bootstrap()
 app/build.gradle.kts                                      ── implementation(project(":runtime:browser"))
 runtime/build.gradle.kts                                  ── implementation(project(":core:browser"))
-feature/navigation/.../WanXiangNavHost.kt                    ── 注册 BrowserRoute
+feature/navigation/.../TianyanNavHost.kt                    ── 注册 BrowserRoute
 feature/home/.../HomeScreen.kt                            ── 入口 RuntimeCard
 feature/chat/.../ChatToolCards.kt                         ── 复用 BrowserActionCard
 docs/AI_NAVIGATION.md, docs/ARCHITECTURE.md, docs/FILE_INDEX.md ── 同步新增模块
@@ -325,7 +325,7 @@ docs/AI_NAVIGATION.md, docs/ARCHITECTURE.md, docs/FILE_INDEX.md ── 同步新
 
 ### 9.5.1 注入式 Hook 引擎（阶段 1，allowHooks 门禁）
 
-- **架构**：`hook/` 包 + assets `hook_runtime.js`。规则存 `HookRuleStore`（线程安全），经 `HookInstaller` 以 document-start（`WebViewCompat.addDocumentStartJavaScript`，WebView 105+；古董版本降级 onPageStarted 补种）注入页面；页面侧改写 fetch/XHR/函数/属性，经 `WanxiangHookBridge`（addJavascriptInterface）回吐事件到 `HookEventPipeline` → `BrowserEventBus`。
+- **架构**：`hook/` 包 + assets `hook_runtime.js`。规则存 `HookRuleStore`（线程安全），经 `HookInstaller` 以 document-start（`WebViewCompat.addDocumentStartJavaScript`，WebView 105+；古董版本降级 onPageStarted 补种）注入页面；页面侧改写 fetch/XHR/函数/属性，经 `TianyanHookBridge`（addJavascriptInterface）回吐事件到 `HookEventPipeline` → `BrowserEventBus`。
 - **动作集**：网络类规则支持 `log / block / redirect / mock / modify_headers` + `captureBody`；body 存 `NetworkBodyStore`（LRU，总字节预算）。
 - **MCP 工具**：`browser.hook_create / hook_list / hook_remove / hook_reset / hook_hits / inject_script / network_detail`。
 - **降级链**：document-start 不可用 → onPageStarted 注入 → onPageFinished 幂等校验补种。
@@ -333,7 +333,7 @@ docs/AI_NAVIGATION.md, docs/ARCHITECTURE.md, docs/FILE_INDEX.md ── 同步新
 ### 9.5.2 CDP 断点与 Worker 级拦截（阶段 2，allowCdp 门禁）
 
 - **传输**：`CdpTransport`（LocalSocket 连 `webview_devtools_remote_<pid>`）→ 自实现 WS 握手与帧编解码（`WsFrameCodec`）→ `CdpSession`（命令关联/事件分发/断连清理）。
-- **生命周期**：`CdpManager` 管理 attach（上限 + DevTools socket 引用计数，`setWebContentsDebuggingEnabled` 按需开关）；`CdpTargetMatcher` 通过 `window.__wanxiangTabId` 标记把 MCP tab 匹配到 CDP target；`CdpTabConnection` 持单 tab 连接 + Worker 子会话（`Target.setAutoAttach` flatten）。
+- **生命周期**：`CdpManager` 管理 attach（上限 + DevTools socket 引用计数，`setWebContentsDebuggingEnabled` 按需开关）；`CdpTargetMatcher` 通过 `window.__tianyanTabId` 标记把 MCP tab 匹配到 CDP target；`CdpTabConnection` 持单 tab 连接 + Worker 子会话（`Target.setAutoAttach` flatten）。
 - **断点**：`CdpDebugController` —— set/remove/list 断点、暂停状态、单步（over/into/out）、暂停帧求值（`debug_eval`，可读写局部变量）、作用域读取。断点在 detach 后重 attach 自动重放。
 - **Worker 级拦截**：`CdpFetchInterceptor` 用 `Fetch.requestPaused` 做引擎级网络改写，与注入式规则共享 `HookRuleStore` 决策（`CdpFetchDecision`），覆盖 Worker/Service Worker 与注入盲区子资源。
 - **MCP 工具**：`browser.debug_attach / detach / set_breakpoint / remove_breakpoint / list_breakpoints / resume / step / state / eval / scope / status` 共 11 个。
@@ -349,10 +349,10 @@ docs/AI_NAVIGATION.md, docs/ARCHITECTURE.md, docs/FILE_INDEX.md ── 同步新
 ## 10. 📜 决策记录（ADR 摘要）
 
 - **ADR-001**：工具暴露走 MCP，**不**走原生工具（`HarnessTool.BROWSER`）。理由：与 harness 既有 `McpManager` 流水线零冲突；未来工具集可平滑扩到 200+。
-- **ADR-002**：MCP server 跑在 WanXiang 自己的 Android 进程内（loopback），使用 Ktor 起服。理由：无需 fork WebReverse-MCP；与现有 `McpHttpTransport` 同协议同形态；外接零开发。
+- **ADR-002**：MCP server 跑在 Tianyan 自己的 Android 进程内（loopback），使用 Ktor 起服。理由：无需 fork WebReverse-MCP；与现有 `McpHttpTransport` 同协议同形态；外接零开发。
 - **ADR-003**：内建 server 默认 `isBuiltin=true` 且 `isEnabled=true`，但配置写入 `McpServerRepository`。理由：与用户对 MCP server 的"启用/禁用"心智模型一致；用户关闭时不影响其它 MCP server。
 - **ADR-004**：ref 不暴露真实 selector；用户和 AI 操作共用一张 `refMap`，ref 在 tab 重建时归零。理由：防止 prompt 里出现内部 path / 减少幻觉、同时支持 co-browsing。
-- **ADR-005**：第一版 MVP **不**实现 CDP hub、断点、hook、JSVMP/WASM、Evidence Graph。理由：WanXiang 主要用例是"AI 打开网页、读 DOM、读 API、点击登录"，不必要求 web 逆向工程能力。**（2026-09 演进：阶段 1 注入式 Hook 引擎与阶段 2 CDP 断点/Worker 级拦截已落地，见 §9.5；JSVMP/WASM 与 Evidence Graph 仍未实现）**
+- **ADR-005**：第一版 MVP **不**实现 CDP hub、断点、hook、JSVMP/WASM、Evidence Graph。理由：Tianyan 主要用例是"AI 打开网页、读 DOM、读 API、点击登录"，不必要求 web 逆向工程能力。**（2026-09 演进：阶段 1 注入式 Hook 引擎与阶段 2 CDP 断点/Worker 级拦截已落地，见 §9.5；JSVMP/WASM 与 Evidence Graph 仍未实现）**
 
 ---
 
@@ -363,6 +363,6 @@ docs/AI_NAVIGATION.md, docs/ARCHITECTURE.md, docs/FILE_INDEX.md ── 同步新
 - 数据流与时序：[`EXECUTION_TRACES.md`](EXECUTION_TRACES.md)
 - 架构铁律：[`ARCHITECTURE_RULES.md`](ARCHITECTURE_RULES.md)
 - 文件索引：[`FILE_INDEX.md`](FILE_INDEX.md)
-- MCP 既有实现：`harness/src/main/java/top/wanxiang/app/harness/mcp/`
-- 工具执行器：`harness/src/main/java/top/wanxiang/app/harness/ToolExecutor.kt`
-- 审批引擎：`harness/src/main/java/top/wanxiang/app/harness/ApprovalPolicyEngine.kt`
+- MCP 既有实现：`harness/src/main/java/top/tianyan/app/harness/mcp/`
+- 工具执行器：`harness/src/main/java/top/tianyan/app/harness/ToolExecutor.kt`
+- 审批引擎：`harness/src/main/java/top/tianyan/app/harness/ApprovalPolicyEngine.kt`

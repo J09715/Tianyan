@@ -246,11 +246,11 @@
     <string name="workspace_spec_manifest">清单要求</string>
     <string name="workspace_spec_manifest_body">id 只能使用小写字母、数字、点、下划线和短横线；builtin. 为系统保留前缀。 projectType 支持 ANDROID、FLUTTER、GENERAL。category 用于模板分组。</string>
     <string name="workspace_spec_variables">变量与文件</string>
-    <string name="workspace_spec_variables_body">项目名称和创建路径由工坊统一填写。模板通过 variables 声明动态字段，支持 TEXT、MULTILINE、NUMBER、BOOLEAN、SELECT、SECRET。文件内容和路径可使用 {{variableName}}；任意文本文件都可添加 .template 后缀，生成时会移除该后缀。包目录使用 WANXIANG_PACKAGE_PATH。隐藏必填变量必须有默认值，系统派生变量除外。</string>
+    <string name="workspace_spec_variables_body">项目名称和创建路径由工坊统一填写。模板通过 variables 声明动态字段，支持 TEXT、MULTILINE、NUMBER、BOOLEAN、SELECT、SECRET。文件内容和路径可使用 {{variableName}}；任意文本文件都可添加 .template 后缀，生成时会移除该后缀。包目录使用 TIANYAN_PACKAGE_PATH。隐藏必填变量必须有默认值，系统派生变量除外。</string>
     <string name="workspace_spec_preview">预览图</string>
     <string name="workspace_spec_preview_body">支持 PNG、JPEG、WebP、GIF，单图不超过 4 MiB。预览图统一为 1:1，尺寸必须是 270×270 px。</string>
     <string name="workspace_spec_hooks">构造脚本</string>
-    <string name="workspace_spec_hooks_body">beforeCreate 和 afterCreate 必须指向 template-hooks/ 下的脚本。脚本只有在用户创建工程时明确授权才会执行，运行于 Linux 沙箱的新工程目录，最长 60 秒。变量通过 WANXIANG_VAR_&lt;大写变量名&gt; 环境变量传入，工程路径为 WANXIANG_PROJECT_DIR。</string>
+    <string name="workspace_spec_hooks_body">beforeCreate 和 afterCreate 必须指向 template-hooks/ 下的脚本。脚本只有在用户创建工程时明确授权才会执行，运行于 Linux 沙箱的新工程目录，最长 60 秒。变量通过 TIANYAN_VAR_&lt;大写变量名&gt; 环境变量传入，工程路径为 TIANYAN_PROJECT_DIR。</string>
     <string name="workspace_spec_validation">结果校验</string>
     <string name="workspace_spec_validation_body">validation 可声明 requiredFiles、forbiddenFiles 和 contentRules；路径及内容支持模板变量。校验在 afterCreate 完成后执行。</string>
     <string name="workspace_spec_footer">可先导出任意内置模板作为完整样例；导入前需要修改 id，并移除保留的 builtin. 前缀。</string>

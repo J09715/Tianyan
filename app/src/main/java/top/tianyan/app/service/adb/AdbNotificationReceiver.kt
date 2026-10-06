@@ -11,7 +11,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import top.wanxiang.app.runtime.bridge.adb.EmbeddedAdbManager
+import top.tianyan.app.runtime.bridge.adb.EmbeddedAdbManager
 
 /**
  * 接收来自系统通知栏的无线 ADB 操作：
@@ -28,7 +28,7 @@ class AdbNotificationReceiver : BroadcastReceiver() {
     lateinit var adbNotificationManager: AdbNotificationManager
 
     @Inject
-    lateinit var preferences: top.wanxiang.app.core.datastore.RuntimePreferences
+    lateinit var preferences: top.tianyan.app.core.datastore.RuntimePreferences
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 

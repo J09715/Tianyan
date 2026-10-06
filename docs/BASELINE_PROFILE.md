@@ -1,6 +1,6 @@
 # Baseline Profile 启动优化指南
 
-> 万象冷启动优化第二阶段：安装时预编译（AOT）热点方法，消除首次启动 JIT 现场编译开销。
+> 天衍冷启动优化第二阶段：安装时预编译（AOT）热点方法，消除首次启动 JIT 现场编译开销。
 
 ## 原理
 
@@ -45,7 +45,7 @@ adb -s emulator-5554 shell settings put secure user_setup_complete 1
 adb -s emulator-5554 shell settings put global device_provisioned 1
 ```
 
-x86_64 模拟器可以运行 arm64-only 应用（模拟器 37+ 自动二进制翻译），万象仅 arm64-v8a 不受影响。
+x86_64 模拟器可以运行 arm64-only 应用（模拟器 37+ 自动二进制翻译），天衍仅 arm64-v8a 不受影响。
 
 ## 已知坑位
 
@@ -59,7 +59,7 @@ x86_64 模拟器可以运行 arm64-only 应用（模拟器 37+ 自动二进制�
 ## 收益验证
 
 ```powershell
-adb install -r app/build/outputs/apk/release/wanxiang-v0.12.0-release.apk
-adb shell am start -W top.wanxiang.app/.MainActivity   # 对比 TotalTime
-adb logcat -s WanXiangStartup                            # splash dismissed 耗时
+adb install -r app/build/outputs/apk/release/tianyan-v0.12.0-release.apk
+adb shell am start -W top.tianyan.app/.MainActivity   # 对比 TotalTime
+adb logcat -s TianyanStartup                            # splash dismissed 耗时
 ```

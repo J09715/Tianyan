@@ -39,7 +39,7 @@
     <string name="developer_text_0037" formatted="false">Failed</string>
     <string name="developer_text_0038" formatted="false">Storage usage</string>
     <string name="developer_text_0039" formatted="false">The current Linux RootFS, installed tools, and sandboxed cache will be deleted, but the/workspace project and phone shared storage will be preserved.This action cannot be undone.</string>
-    <string name="developer_text_0040" formatted="false">The new version will be downloaded and verified online, leaving/root and/opt/wanxiang.The background Linux process stops during the update and automatically restores the old version if it fails.</string>
+    <string name="developer_text_0040" formatted="false">The new version will be downloaded and verified online, leaving/root and/opt/tianyan.The background Linux process stops during the update and automatically restores the old version if it fails.</string>
     <string name="developer_text_0041" formatted="false">The shared runtime that is not referenced by the tool will be removed and cannot be automatically recovered.</string>
     <string name="developer_text_0042" formatted="false">Workspace</string>
     <string name="developer_text_0043" formatted="false">Workspace writable</string>

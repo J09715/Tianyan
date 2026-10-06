@@ -5,10 +5,10 @@
 ## 新能力
 
 ```sh
-wanxiang-build analyze /workspace/project
-wanxiang-build analyze /workspace/project --offline
-wanxiang-build android /workspace/project assembleDebug --offline
-wanxiang-build flutter /workspace/project apk --debug --offline
+tianyan-build analyze /workspace/project
+tianyan-build analyze /workspace/project --offline
+tianyan-build android /workspace/project assembleDebug --offline
+tianyan-build flutter /workspace/project apk --debug --offline
 ```
 
 `analyze` 是只读检查，报告：

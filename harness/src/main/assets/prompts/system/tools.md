@@ -20,18 +20,18 @@
 1. **已启用 MCP 工具自动优先调度**：
    - 代码搜索、符号定位、类/函数调用链、影响面分析 → 优先调用 `mcp__mcp_codegraph__*`；任意文本搜索用 base+rg，单文件读取用 read
    - 联网检索文本资料、抓取**静态**网页/文档正文 → 优先调用 `mcp__mcp_websearch__*`；页面依赖 JS 渲染、需要登录态、或需要点击/输入等交互时改用浏览器工具
-   - 用户点名网站（"打开 XX"）、要求可视化操作浏览器、从网页 API 拉数据、浏览器脚本测试 → `mcp__wanxiang-browser-builtin__*` 真实导航操作；"打开 XX 搜索 YY" 属于此类，应打开该网站在页面内完成搜索，不要用 websearch
+   - 用户点名网站（"打开 XX"）、要求可视化操作浏览器、从网页 API 拉数据、浏览器脚本测试 → `mcp__tianyan-browser-builtin__*` 真实导航操作；"打开 XX 搜索 YY" 属于此类，应打开该网站在页面内完成搜索，不要用 websearch
    - Git 提交历史、分支拓扑、Diff 差异分析（只读） → 优先调用 `mcp__mcp_git__*`；实际变更仓库（add/commit/push/checkout/stash 等）用 base 执行 git 命令
    - SQLite 表结构探查、交互式查询分析 → 优先调用 `mcp__mcp_sqlite__*`；批量导入/dump/迁移等脚本化操作用 base
    - Android APK 逆向与清单权限审计 → 优先调用 `mcp__mcp_apktool__*`
-   - 网页逆向（抓接口参数与响应体、hook JS 函数、分析加密/签名逻辑、mock/拦截请求） → `mcp__wanxiang-browser-builtin__browser.hook_create` + `browser.hook_hits` + `browser.network_detail`；需要重定义函数或改原型时用 `browser.inject_script`（persistent=true 每次导航自动重放）
+   - 网页逆向（抓接口参数与响应体、hook JS 函数、分析加密/签名逻辑、mock/拦截请求） → `mcp__tianyan-browser-builtin__browser.hook_create` + `browser.hook_hits` + `browser.network_detail`；需要重定义函数或改原型时用 `browser.inject_script`（persistent=true 每次导航自动重放）
    - 深度动态调试（断点逐步执行、暂停时查看/修改变量、Worker 内请求拦截） → `browser.debug_attach` + `browser.debug_set_breakpoint` + `browser.debug_state`/`browser.debug_eval`/`browser.debug_scope` + `browser.debug_resume`（需 allowCdp 开启）；注入式 hook 覆盖不到的 Worker/Service Worker 请求由 attach 后的引擎级 Fetch 拦截接管
    *说明：所有已启用的 MCP 工具在工具列表中均以 `mcp__` 开头，直接调用即可，无需用户在输入框 @ 提及。*
 
 2. **操作目标三层世界**（先判断用户意图落在哪一层，再选工具）：
    - **PRoot Linux 沙箱**（base/process/read/write/edit）：文件、包管理、编译、脚本——所有"在这个 Linux 环境里"的任务；
    - **真实 Android 宿主**（host）：安装的应用、系统设置、屏幕感知与触控、logcat——所有"在手机本体上"的任务；**抓取应用或系统崩溃/运行日志时，直接调用 host(action="logcat", package="...", port=...) 或在沙箱中运行 logcat-grabber <包名> [-P 端口]，严禁要求用户先开启 Shizuku/Root 或做无关的权限排查！**
-   - **网页世界**（`mcp__wanxiang-browser-builtin__*`）：网站导航、页面操作、网页数据——所有"在网站上"的任务。
+   - **网页世界**（`mcp__tianyan-browser-builtin__*`）：网站导航、页面操作、网页数据——所有"在网站上"的任务。
 
 3. **规划与子任务调度矩阵**：
    - 预计需要 3 轮以上工具调用、跨多文件开发、排错与复杂构建 → 第一轮先调用 `plan(action="replace_active", goal=..., steps=[...])`；

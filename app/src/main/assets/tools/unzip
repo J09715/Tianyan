@@ -1,5 +1,5 @@
 #!/bin/sh
-# WanXiang bundled unzip adapter. OpenJDK's jar reader handles ZIP/deflate
+# Tianyan bundled unzip adapter. OpenJDK's jar reader handles ZIP/deflate
 # archives without installing the fragile Ubuntu unzip package.
 set -e
 

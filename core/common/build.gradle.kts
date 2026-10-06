@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "top.wanxiang.app.core.common"
+    namespace = "top.tianyan.app.core.common"
     resourcePrefix = "common_"
     compileSdk = 37
     defaultConfig { minSdk = 29 }

@@ -11,7 +11,7 @@ SRC_LICENSE = os.path.join(ROOT_DIR, "app", "src", "main", "assets", "licenses",
 
 PLUGIN_DIR = os.path.join(ROOT_DIR, "assets", "plugins", "rtk-suite-offline")
 DIST_DIR = os.path.join(ROOT_DIR, "dist", "plugins")
-OUTPUT_PACKAGE = os.path.join(DIST_DIR, "wanxiang-plugin-rtk-v1.0.0-arm64.txplugin")
+OUTPUT_PACKAGE = os.path.join(DIST_DIR, "tianyan-plugin-rtk-v1.0.0-arm64.txplugin")
 
 def sha256_file(filepath):
     h = hashlib.sha256()
@@ -77,13 +77,13 @@ def build_plugin():
         "schemaVersion": 1,
         "id": "rtk-suite-offline",
         "name": "RTK 终端命令优化器",
-        "description": "万象内置 Agent 终端命令重写优化套件（ARM64 Linux 离线包），支持智能重写 git/cargo/find/grep 等命令并压缩输出，减少大体积结果的 Token 消耗。",
+        "description": "天衍内置 Agent 终端命令重写优化套件（ARM64 Linux 离线包），支持智能重写 git/cargo/find/grep 等命令并压缩输出，减少大体积结果的 Token 消耗。",
         "dependencies": [],
         "launchType": "command",
         "version": "1.0.0",
         "latestVersion": "1.0.0",
         "enabled": True,
-        "publisher": "WanXiang",
+        "publisher": "Tianyan",
         "category": "DEVELOPER_TOOL",
         "architectures": ["ARM64"],
         "permissions": ["WORKSPACE_READ", "WORKSPACE_WRITE"],
@@ -92,18 +92,18 @@ def build_plugin():
         "offlineOnly": True,
         "installMethod": "LOCAL_PACKAGE",
         "installSteps": [
-            "/bin/sh \"$WANXIANG_PLUGIN_PAYLOAD/scripts/install-rtk.sh\""
+            "/bin/sh \"$TIANYAN_PLUGIN_PAYLOAD/scripts/install-rtk.sh\""
         ],
         "uninstallSteps": [
-            "/bin/sh \"$WANXIANG_PLUGIN_PAYLOAD/scripts/uninstall-rtk.sh\""
+            "/bin/sh \"$TIANYAN_PLUGIN_PAYLOAD/scripts/uninstall-rtk.sh\""
         ],
-        "verifyCommand": "/bin/sh \"$WANXIANG_PLUGIN_PAYLOAD/scripts/verify-rtk.sh\"",
+        "verifyCommand": "/bin/sh \"$TIANYAN_PLUGIN_PAYLOAD/scripts/verify-rtk.sh\"",
         "launchCommand": "rtk --version",
         "commandLinks": ["rtk"],
         "environment": {
             "RTK_TEE": "0",
-            "XDG_CONFIG_HOME": "/opt/wanxiang/data/rtk/config",
-            "XDG_DATA_HOME": "/opt/wanxiang/data/rtk/data"
+            "XDG_CONFIG_HOME": "/opt/tianyan/data/rtk/config",
+            "XDG_DATA_HOME": "/opt/tianyan/data/rtk/data"
         }
     }
     
@@ -123,11 +123,11 @@ def build_plugin():
     install_script = """#!/bin/sh
 set -eu
 
-PAYLOAD="${WANXIANG_PLUGIN_PAYLOAD:?missing WANXIANG_PLUGIN_PAYLOAD}"
-TOOL_DIR="${WANXIANG_TOOL_DIR:?missing WANXIANG_TOOL_DIR}"
+PAYLOAD="${TIANYAN_PLUGIN_PAYLOAD:?missing TIANYAN_PLUGIN_PAYLOAD}"
+TOOL_DIR="${TIANYAN_TOOL_DIR:?missing TIANYAN_TOOL_DIR}"
 
 need() { test -s "$1" || { echo "missing offline resource: ${2:-$1}" >&2; exit 2; }; }
-progress() { percent="$1"; shift; printf '[WANXIANG_PROGRESS:%s] %s\\n' "$percent" "$*"; }
+progress() { percent="$1"; shift; printf '[TIANYAN_PROGRESS:%s] %s\\n' "$percent" "$*"; }
 
 need "$PAYLOAD/checksums/SHA256SUMS"
 need "$PAYLOAD/bin/rtk"
@@ -135,15 +135,15 @@ need "$PAYLOAD/bin/rtk"
 progress 20 "[VERIFY] 校验 RTK 二进制哈希"
 (cd "$PAYLOAD" && sha256sum -c checksums/SHA256SUMS)
 
-progress 60 "[INSTALL] 部署 RTK 二进制到 /opt/wanxiang/bin 与工具目录"
-mkdir -p "$TOOL_DIR/bin" /opt/wanxiang/bin /opt/wanxiang/data/rtk/config/rtk /opt/wanxiang/data/rtk/data
+progress 60 "[INSTALL] 部署 RTK 二进制到 /opt/tianyan/bin 与工具目录"
+mkdir -p "$TOOL_DIR/bin" /opt/tianyan/bin /opt/tianyan/data/rtk/config/rtk /opt/tianyan/data/rtk/data
 cp "$PAYLOAD/bin/rtk" "$TOOL_DIR/bin/rtk"
 chmod 755 "$TOOL_DIR/bin/rtk"
-ln -sfn "$TOOL_DIR/bin/rtk" /opt/wanxiang/bin/rtk
+ln -sfn "$TOOL_DIR/bin/rtk" /opt/tianyan/bin/rtk
 
 if [ -f "$PAYLOAD/config/rtk/config.toml" ]; then
-    cp "$PAYLOAD/config/rtk/config.toml" /opt/wanxiang/data/rtk/config/rtk/config.toml
-    chmod 644 /opt/wanxiang/data/rtk/config/rtk/config.toml
+    cp "$PAYLOAD/config/rtk/config.toml" /opt/tianyan/data/rtk/config/rtk/config.toml
+    chmod 644 /opt/tianyan/data/rtk/config/rtk/config.toml
 fi
 
 progress 90 "[VERIFY] 验证 RTK 命令"
@@ -157,11 +157,11 @@ progress 100 "[VERIFY] RTK 终端命令优化插件已就绪"
     uninstall_script = """#!/bin/sh
 set -eu
 
-TOOL_DIR="${WANXIANG_TOOL_DIR:?missing WANXIANG_TOOL_DIR}"
+TOOL_DIR="${TIANYAN_TOOL_DIR:?missing TIANYAN_TOOL_DIR}"
 
-rm -f /opt/wanxiang/bin/rtk
+rm -f /opt/tianyan/bin/rtk
 rm -f "$TOOL_DIR/bin/rtk"
-rm -rf /opt/wanxiang/data/rtk
+rm -rf /opt/tianyan/data/rtk
 echo "RTK 终端命令优化插件已卸载"
 """
     with open(os.path.join(scripts_dir, "uninstall-rtk.sh"), "w", encoding="utf-8", newline="\n") as f:
@@ -171,8 +171,8 @@ echo "RTK 终端命令优化插件已卸载"
     verify_script = """#!/bin/sh
 set -eu
 
-test -x /opt/wanxiang/bin/rtk || { echo "rtk binary is missing or not executable" >&2; exit 1; }
-/opt/wanxiang/bin/rtk --version || exit 1
+test -x /opt/tianyan/bin/rtk || { echo "rtk binary is missing or not executable" >&2; exit 1; }
+/opt/tianyan/bin/rtk --version || exit 1
 """
     with open(os.path.join(scripts_dir, "verify-rtk.sh"), "w", encoding="utf-8", newline="\n") as f:
         f.write(verify_script)

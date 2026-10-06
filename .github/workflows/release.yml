@@ -76,29 +76,29 @@ jobs:
             echo "::error::Decoded release keystore is empty"
             exit 1
           fi
-          echo "WANXIANG_RELEASE_STORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          echo "TIANYAN_RELEASE_STORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
 
       - name: Build Release APK
         env:
-          WANXIANG_RELEASE_STORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD || secrets.RELEASE_STORE_PASSWORD }}
-          WANXIANG_RELEASE_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS || secrets.RELEASE_KEY_ALIAS }}
-          WANXIANG_RELEASE_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD || secrets.RELEASE_KEY_PASSWORD }}
+          TIANYAN_RELEASE_STORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD || secrets.RELEASE_STORE_PASSWORD }}
+          TIANYAN_RELEASE_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS || secrets.RELEASE_KEY_ALIAS }}
+          TIANYAN_RELEASE_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD || secrets.RELEASE_KEY_PASSWORD }}
         run: |
           set -euo pipefail
           for variable in \
-            WANXIANG_RELEASE_STORE_FILE \
-            WANXIANG_RELEASE_STORE_PASSWORD \
-            WANXIANG_RELEASE_KEY_ALIAS \
-            WANXIANG_RELEASE_KEY_PASSWORD; do
+            TIANYAN_RELEASE_STORE_FILE \
+            TIANYAN_RELEASE_STORE_PASSWORD \
+            TIANYAN_RELEASE_KEY_ALIAS \
+            TIANYAN_RELEASE_KEY_PASSWORD; do
             if [ -z "${!variable:-}" ]; then
               echo "::error::$variable is not configured"
               exit 1
             fi
           done
           keytool -list \
-            -keystore "$WANXIANG_RELEASE_STORE_FILE" \
-            -storepass:env WANXIANG_RELEASE_STORE_PASSWORD \
-            -alias "$WANXIANG_RELEASE_KEY_ALIAS" > /dev/null
+            -keystore "$TIANYAN_RELEASE_STORE_FILE" \
+            -storepass:env TIANYAN_RELEASE_STORE_PASSWORD \
+            -alias "$TIANYAN_RELEASE_KEY_ALIAS" > /dev/null
           ./gradlew assembleRelease --no-daemon --stacktrace
 
       - name: Identify and Rename Output APK
@@ -107,10 +107,10 @@ jobs:
           APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
           if [ -f "$APK_PATH" ]; then
             TAG="${{ env.TARGET_TAG }}"
-            cp "$APK_PATH" "output/WanXiang-arm64-${TAG}.apk"
-            sha256sum "output/WanXiang-arm64-${TAG}.apk" > "output/WanXiang-arm64-${TAG}.apk.sha256"
-            echo "APK_FILE=output/WanXiang-arm64-${TAG}.apk" >> $GITHUB_ENV
-            echo "SHA_FILE=output/WanXiang-arm64-${TAG}.apk.sha256" >> $GITHUB_ENV
+            cp "$APK_PATH" "output/Tianyan-arm64-${TAG}.apk"
+            sha256sum "output/Tianyan-arm64-${TAG}.apk" > "output/Tianyan-arm64-${TAG}.apk.sha256"
+            echo "APK_FILE=output/Tianyan-arm64-${TAG}.apk" >> $GITHUB_ENV
+            echo "SHA_FILE=output/Tianyan-arm64-${TAG}.apk.sha256" >> $GITHUB_ENV
             echo "TAG=$TAG" >> $GITHUB_ENV
           else
             echo "Error: No release APK generated!" && exit 1
@@ -144,7 +144,7 @@ jobs:
           CHORE=$(echo "$LOG" | grep -Eiv "^- feat|^- fix|^- perf|^- refactor|^- improve" || true)
 
           {
-            echo "## 万象 $CURRENT_TAG 更新说明"
+            echo "## 天衍 $CURRENT_TAG 更新说明"
             echo ""
             if [ -n "$PREV_TAG" ]; then
               echo "> 本版本包含自 \`$PREV_TAG\` 起的全部变更"
@@ -190,7 +190,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TARGET_TAG }}
-          name: "万象 ${{ env.TARGET_TAG }}"
+          name: "天衍 ${{ env.TARGET_TAG }}"
           body_path: release_notes.md
           files: |
             ${{ env.APK_FILE }}

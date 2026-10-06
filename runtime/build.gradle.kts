@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "top.wanxiang.app.runtime"
+    namespace = "top.tianyan.app.runtime"
     resourcePrefix = "runtime_"
     compileSdk = 37
 

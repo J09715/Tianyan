@@ -1,10 +1,10 @@
 package top.tianyan.app.di
 
-import top.wanxiang.app.core.tools.ToolRuntimeAdapter
-import top.wanxiang.app.runtime.tools.CodexToolInstaller
-import top.wanxiang.app.runtime.tools.HelloToolInstaller
-import top.wanxiang.app.runtime.tools.HermesToolInstaller
-import top.wanxiang.app.runtime.tools.OpenClawToolInstaller
+import top.tianyan.app.core.tools.ToolRuntimeAdapter
+import top.tianyan.app.runtime.tools.CodexToolInstaller
+import top.tianyan.app.runtime.tools.HelloToolInstaller
+import top.tianyan.app.runtime.tools.HermesToolInstaller
+import top.tianyan.app.runtime.tools.OpenClawToolInstaller
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn

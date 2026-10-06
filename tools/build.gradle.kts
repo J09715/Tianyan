@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "top.wanxiang.app.tools"
+    namespace = "top.tianyan.app.tools"
     resourcePrefix = "tools_"
     compileSdk = 37
 

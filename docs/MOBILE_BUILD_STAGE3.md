@@ -2,16 +2,16 @@
 
 ## 目标
 
-第三阶段把 Android/Flutter 构建入口统一到同一套环境策略。无论用户从工作区构建按钮、Agent，还是 PRoot 控制台开始构建，都应先确认当前工具链可用，并优先使用万象安装的 ARM64 资源。
+第三阶段把 Android/Flutter 构建入口统一到同一套环境策略。无论用户从工作区构建按钮、Agent，还是 PRoot 控制台开始构建，都应先确认当前工具链可用，并优先使用天衍安装的 ARM64 资源。
 
 ## 标准入口
 
 ```sh
-wanxiang-build doctor /workspace/project
-wanxiang-build android /workspace/project assembleDebug
-wanxiang-build flutter /workspace/project apk --debug
-wanxiang-build analyze /workspace/project
-wanxiang-build android /workspace/project assembleDebug --offline
+tianyan-build doctor /workspace/project
+tianyan-build android /workspace/project assembleDebug
+tianyan-build flutter /workspace/project apk --debug
+tianyan-build analyze /workspace/project
+tianyan-build android /workspace/project assembleDebug --offline
 ```
 
 `doctor` 至少检查：
@@ -36,4 +36,4 @@ wanxiang-build android /workspace/project assembleDebug --offline
 
 ## 控制台说明
 
-普通 Shell 不可能在用户输入任意绝对路径命令时做到百分之百拦截。因此第三阶段通过 `/opt/wanxiang/bin` 包装器、统一 `wanxiang-build` 命令和 Agent Skill 覆盖常规 `gradle`、`gradlew`、`flutter` 构建路径。用户显式绕开包装器执行 SDK 内部绝对路径时，视为高级手动操作。
+普通 Shell 不可能在用户输入任意绝对路径命令时做到百分之百拦截。因此第三阶段通过 `/opt/tianyan/bin` 包装器、统一 `tianyan-build` 命令和 Agent Skill 覆盖常规 `gradle`、`gradlew`、`flutter` 构建路径。用户显式绕开包装器执行 SDK 内部绝对路径时，视为高级手动操作。

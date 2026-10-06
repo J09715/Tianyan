@@ -51,7 +51,7 @@ tasks.register("architectureCheck") {
                 .forEach { target -> violations += "feature:${moduleDir.name} must not depend on feature:$target" }
         }
 
-        val forbiddenDaoImport = Regex("import\\s+top\\.peakSee\\.wanxiang\\.core\\.database\\.\\w+Dao")
+        val forbiddenDaoImport = Regex("import\\s+top\\.J09715\\.tianyan\\.core\\.database\\.\\w+Dao")
         listOf(file("feature"), file("runtime/src/main"), file("harness/src/main")).forEach { sourceRoot ->
             sourceRoot.walkTopDown().filter { it.isFile && it.extension == "kt" }.forEach { source ->
                 if (forbiddenDaoImport.containsMatchIn(source.readText())) {

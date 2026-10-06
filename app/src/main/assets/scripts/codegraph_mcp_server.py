@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Dependency-free CodeGraph MCP Server for the WanXiang / LinuxAIRuntime sandbox.
+Dependency-free CodeGraph MCP Server for the Tianyan / LinuxAIRuntime sandbox.
 
 Indexes workspace symbols, call hierarchies, inheritance, and dependencies into SQLite.
 Exposes MCP tools for single-step structural code intelligence (codegraph_explore,
@@ -762,7 +762,7 @@ def main():
                 out = response(req_id, {
                     "protocolVersion": PROTOCOL_VERSION,
                     "capabilities": {"tools": {}},
-                    "serverInfo": {"name": "wanxiang-codegraph", "version": "1.0.0"}
+                    "serverInfo": {"name": "tianyan-codegraph", "version": "1.0.0"}
                 })
             elif method == "notifications/initialized":
                 continue

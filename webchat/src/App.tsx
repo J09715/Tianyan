@@ -32,7 +32,7 @@ import type {
   WorkspaceListing,
 } from "./types";
 
-const TOKEN_STORAGE_KEY = "wanxiang_webchat_token";
+const TOKEN_STORAGE_KEY = "tianyan_webchat_token";
 const MOBILE_SECTION_ICON = {
   chat: "agent",
   workspace: "workspace",

@@ -1,4 +1,4 @@
-# 📚 万象 (WanXiang) — 关键文件索引速查 (File Index)
+# 📚 天衍 (Tianyan) — 关键文件索引速查 (File Index)
 
 > 用于 AI 编码助手快速定位某个功能/类。详细架构细节见 [`ARCHITECTURE.md`](ARCHITECTURE.md)。
 
@@ -34,7 +34,7 @@
 | `runtime/browser/storage/StorageController.kt` | Cookie + local/session 操作 | WebView eval |
 | `runtime/browser/secret/SecretRedactingInterceptor.kt` | 接入现有 `SecretRedactor` | 工具产物脱敏 |
 | `runtime/browser/hook/HookRuleStore.kt` | Hook 规则存储（线程安全） | 规则 CRUD + payload 生成 |
-| `runtime/browser/hook/HookInstaller.kt` | `WanxiangBridge` + document-start 注入 | 页面侧 runtime 安装 |
+| `runtime/browser/hook/HookInstaller.kt` | `TianyanBridge` + document-start 注入 | 页面侧 runtime 安装 |
 | `runtime/browser/hook/HookEventPipeline.kt` | 桥事件 → 事件总线 | hook 命中/网络捕获合并 |
 | `runtime/browser/hook/NetworkBodyStore.kt` | 请求/响应体 LRU 缓存 | 字节预算内 body 存取 |
 | `runtime/browser/hook/hook_runtime.js`（assets） | 页面侧 fetch/XHR/fn/prop 拦截 | 网络改写 + 函数 hook |

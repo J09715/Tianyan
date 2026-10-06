@@ -1,18 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="wanxiang_app_name">Tianyan</string>
-    <string name="wanxiang_agent_notification_channel">Agent execution</string>
-    <string name="wanxiang_agent_ready">Agent center ready</string>
-    <string name="wanxiang_agent_default_title">Tianyan Agent</string>
-    <string name="wanxiang_agent_background_running">Tianyan Agent is running in the background</string>
-    <string name="wanxiang_agent_background_locked">Agent is running in the background · Process lock enabled</string>
-    <string name="wanxiang_notification_stop">Stop</string>
-    <string name="wanxiang_notification_reply_to">Reply to %1$s</string>
-    <string name="wanxiang_notification_reply">Reply</string>
-    <string name="wanxiang_agent_task_completed">[%1$s] Task completed</string>
-    <string name="wanxiang_agent_next_task_hint">Reply below with the next task</string>
-    <string name="wanxiang_agent_thinking">Agent is thinking…</string>
-    <string name="wanxiang_runtime_notification_channel">Linux Runtime</string>
-    <string name="wanxiang_runtime_running">Linux Runtime is running</string>
-    <string name="wanxiang_runtime_background_available">Background tools and local services remain available</string>
+    <string name="tianyan_app_name">Tianyan</string>
+    <string name="tianyan_agent_notification_channel">Agent execution</string>
+    <string name="tianyan_agent_ready">Agent center ready</string>
+    <string name="tianyan_agent_default_title">Tianyan Agent</string>
+    <string name="tianyan_agent_background_running">Tianyan Agent is running in the background</string>
+    <string name="tianyan_agent_background_locked">Agent is running in the background · Process lock enabled</string>
+    <string name="tianyan_notification_stop">Stop</string>
+    <string name="tianyan_notification_reply_to">Reply to %1$s</string>
+    <string name="tianyan_notification_reply">Reply</string>
+    <string name="tianyan_agent_task_completed">[%1$s] Task completed</string>
+    <string name="tianyan_agent_next_task_hint">Reply below with the next task</string>
+    <string name="tianyan_agent_thinking">Agent is thinking…</string>
+    <string name="tianyan_runtime_notification_channel">Linux Runtime</string>
+    <string name="tianyan_runtime_running">Linux Runtime is running</string>
+    <string name="tianyan_runtime_background_available">Background tools and local services remain available</string>
 </resources>

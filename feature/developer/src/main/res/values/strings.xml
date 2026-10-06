@@ -39,7 +39,7 @@
     <string name="developer_text_0037" formatted="false">失败</string>
     <string name="developer_text_0038" formatted="false">存储占用</string>
     <string name="developer_text_0039" formatted="false">将删除当前 Linux RootFS、已安装工具和沙箱缓存，但保留 /workspace 工程和手机共享存储。此操作不可撤销。</string>
-    <string name="developer_text_0040" formatted="false">将在线下载并校验新版本，保留 /root 与 /opt/wanxiang。更新期间后台 Linux 进程会停止，失败时自动恢复旧版本。</string>
+    <string name="developer_text_0040" formatted="false">将在线下载并校验新版本，保留 /root 与 /opt/tianyan。更新期间后台 Linux 进程会停止，失败时自动恢复旧版本。</string>
     <string name="developer_text_0041" formatted="false">将移除未被工具引用的共享 Runtime，此操作无法自动恢复。</string>
     <string name="developer_text_0042" formatted="false">工作区</string>
     <string name="developer_text_0043" formatted="false">工作区可写</string>

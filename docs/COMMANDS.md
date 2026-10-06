@@ -1,4 +1,4 @@
-# 🛠️ 万象 (WanXiang) — 常用开发与自动化命令速查 (Runbook & Commands)
+# 🛠️ 天衍 (Tianyan) — 常用开发与自动化命令速查 (Runbook & Commands)
 
 ---
 
@@ -35,7 +35,7 @@ $env:JAVA_HOME="F:\AndroidDev\jdk\jdk-25.0.3+9"; .\gradlew.bat assembleDebug --c
 $env:JAVA_HOME="F:\AndroidDev\jdk\jdk-25.0.3+9"; .\gradlew.bat architectureCheck --console=plain
 
 # 7. 仅验证 Harness 内置工具契约与执行策略
-$env:JAVA_HOME="F:\AndroidDev\jdk\jdk-25.0.3+9"; .\gradlew.bat :harness:testDebugUnitTest --tests "top.wanxiang.app.harness.*" --console=plain
+$env:JAVA_HOME="F:\AndroidDev\jdk\jdk-25.0.3+9"; .\gradlew.bat :harness:testDebugUnitTest --tests "top.tianyan.app.harness.*" --console=plain
 ```
 
 ---
@@ -44,11 +44,11 @@ $env:JAVA_HOME="F:\AndroidDev\jdk\jdk-25.0.3+9"; .\gradlew.bat :harness:testDebu
 
 ```powershell
 # 1. 安装 Debug APK 到已连接的真机或模拟器
-adb install -r app/build/outputs/apk/debug/wanxiang-v0.12.0-debug.apk
+adb install -r app/build/outputs/apk/debug/tianyan-v0.12.0-debug.apk
 
-# 2. 启动万象主入口 Activity
-adb shell am start -n top.wanxiang.app/.MainActivity
+# 2. 启动天衍主入口 Activity
+adb shell am start -n top.tianyan.app/.MainActivity
 
-# 3. 实时过滤万象运行时与智能体核心日志
-adb logcat -s WanXiang:V HarnessLoop:V ProotProcess:V
+# 3. 实时过滤天衍运行时与智能体核心日志
+adb logcat -s Tianyan:V HarnessLoop:V ProotProcess:V
 ```

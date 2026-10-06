@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "top.wanxiang.app.feature.components"
+    namespace = "top.tianyan.app.feature.components"
     resourcePrefix = "components_"
     compileSdk = 37
     defaultConfig { minSdk = 29 }

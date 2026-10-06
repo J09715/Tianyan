@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "top.wanxiang.app.core.datastore"
+    namespace = "top.tianyan.app.core.datastore"
     resourcePrefix = "datastore_"
     compileSdk = 37
     defaultConfig { minSdk = 29 }

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://wanxiang.local/schema/project-template-v1.json",
-  "title": "WanXiang Project Template Manifest v1",
+  "$id": "https://tianyan.local/schema/project-template-v1.json",
+  "title": "Tianyan Project Template Manifest v1",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "id", "name", "version"],

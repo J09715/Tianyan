@@ -164,7 +164,7 @@
     <string name="chat_android_check_prompt">请检查当前 Android 工程结构、Gradle 配置、Manifest、包名和构建环境；发现问题直接编辑文件修复并验证。</string>
     <string name="chat_android_build">编译并安装到手机</string>
     <string name="chat_android_build_description">构建 Debug APK，导出并调起手机安装器</string>
-    <string name="chat_android_build_prompt">请构建当前 Android 工程，成功后将 APK 导出到手机并调起安装器；优先使用当前工作区的构建脚本和 wanxiang-host install-apk。</string>
+    <string name="chat_android_build_prompt">请构建当前 Android 工程，成功后将 APK 导出到手机并调起安装器；优先使用当前工作区的构建脚本和 tianyan-host install-apk。</string>
     <string name="chat_android_debug">排查 Android 构建</string>
     <string name="chat_android_debug_description">定位 Gradle、Kotlin、AAPT2 或安装问题</string>
     <string name="chat_android_debug_prompt">请读取最近一次 Android 构建日志，定位真实错误并直接编辑脚本或工程文件修复，然后重新验证。</string>
@@ -173,7 +173,7 @@
     <string name="chat_flutter_check_prompt">请检查当前 Flutter 工程的 pubspec.yaml、Dart 入口和 Android Gradle 配置，发现问题直接修复并验证。</string>
     <string name="chat_flutter_build">编译并安装 Flutter</string>
     <string name="chat_flutter_build_description">拉取依赖、构建 APK 并调起安装器</string>
-    <string name="chat_flutter_build_prompt">请执行 Flutter 依赖检查和 Debug APK 构建，成功后将 APK 导出到手机并调起 wanxiang-host install-apk。</string>
+    <string name="chat_flutter_build_prompt">请执行 Flutter 依赖检查和 Debug APK 构建，成功后将 APK 导出到手机并调起 tianyan-host install-apk。</string>
     <string name="chat_flutter_debug">排查 Flutter 构建</string>
     <string name="chat_flutter_debug_description">定位依赖、Gradle 或 AAPT2 错误</string>
     <string name="chat_flutter_debug_prompt">请读取 Flutter 最近一次构建错误，定位依赖、Gradle 或 AAPT2 根因，直接修改工程并重新验证。</string>

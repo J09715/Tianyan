@@ -14,9 +14,9 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
 import top.tianyan.app.R
-import top.wanxiang.app.core.database.HarnessSessionRepository
-import top.wanxiang.app.core.model.SessionRunState
-import top.wanxiang.app.harness.HarnessLoop
+import top.tianyan.app.core.database.HarnessSessionRepository
+import top.tianyan.app.core.model.SessionRunState
+import top.tianyan.app.harness.HarnessLoop
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
@@ -59,7 +59,7 @@ class AgentForegroundService : Service() {
             val manager = getSystemService(NotificationManager::class.java)
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                getString(R.string.wanxiang_agent_notification_channel),
+                getString(R.string.tianyan_agent_notification_channel),
                 NotificationManager.IMPORTANCE_HIGH,
             ).apply {
                 description = "用于展示 AI 深度思考与任务进度的常驻通知"
@@ -88,7 +88,7 @@ class AgentForegroundService : Service() {
                 return START_NOT_STICKY
             }
             else -> {
-                safeStartForeground(PRIMARY_NOTIFICATION_ID, placeholderNotification(getString(R.string.wanxiang_agent_ready)))
+                safeStartForeground(PRIMARY_NOTIFICATION_ID, placeholderNotification(getString(R.string.tianyan_agent_ready)))
                 acquireProcessLock()
                 if (!collecting) {
                     collecting = true
@@ -107,8 +107,8 @@ class AgentForegroundService : Service() {
                                     activeNotifSessionIds.add(sessionId)
                                     sessionStartTimes.putIfAbsent(sessionId, now)
                                     val notifId = sessionNotificationId(sessionId)
-                                    val sessionTitle = sessionDao.findById(sessionId)?.title ?: getString(R.string.wanxiang_agent_default_title)
-                                    val statusText = statuses[sessionId]?.takeIf { it.isNotBlank() } ?: getString(R.string.wanxiang_agent_thinking)
+                                    val sessionTitle = sessionDao.findById(sessionId)?.title ?: getString(R.string.tianyan_agent_default_title)
+                                    val statusText = statuses[sessionId]?.takeIf { it.isNotBlank() } ?: getString(R.string.tianyan_agent_thinking)
                                     latestSessionStatuses[sessionId] = statusText
                                     val startTime = sessionStartTimes[sessionId] ?: now
                                     val elapsedSeconds = (now - startTime) / 1000L
@@ -126,7 +126,7 @@ class AgentForegroundService : Service() {
                                     // 常驻通知保持最后一次状态（通常是"等待用户批准"）直到恢复运行。
                                     if (runStates[sessionId] == SessionRunState.WAITING_APPROVAL) return@forEach
                                     val notifId = sessionNotificationId(sessionId)
-                                    val sessionTitle = sessionDao.findById(sessionId)?.title ?: getString(R.string.wanxiang_agent_default_title)
+                                    val sessionTitle = sessionDao.findById(sessionId)?.title ?: getString(R.string.tianyan_agent_default_title)
                                     safeNotify(notifId, completedNotification(sessionId, sessionTitle))
                                 }
                                 releaseProcessLock()
@@ -165,8 +165,8 @@ class AgentForegroundService : Service() {
                     val elapsedSeconds = (now - startTime) / 1000L
                     val notifId = sessionNotificationId(sessionId)
                     val sessionTitle = runCatching { sessionDao.findById(sessionId)?.title }
-                        .getOrNull() ?: getString(R.string.wanxiang_agent_default_title)
-                    val currentStatus = latestSessionStatuses[sessionId] ?: getString(R.string.wanxiang_agent_thinking)
+                        .getOrNull() ?: getString(R.string.tianyan_agent_default_title)
+                    val currentStatus = latestSessionStatuses[sessionId] ?: getString(R.string.tianyan_agent_thinking)
                     val notif = sessionNotification(
                         sessionId = sessionId,
                         title = sessionTitle,
@@ -220,7 +220,7 @@ class AgentForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         return runningNotification(
-            title = getString(R.string.wanxiang_agent_default_title),
+            title = getString(R.string.tianyan_agent_default_title),
             contentText = status,
             stopPendingIntent = stopPending,
         )
@@ -258,7 +258,7 @@ class AgentForegroundService : Service() {
         contentText: String,
         stopPendingIntent: PendingIntent,
     ): Notification = NotificationCompat.Builder(this, CHANNEL_ID)
-        .setSmallIcon(R.drawable.wanxiang_notification)
+        .setSmallIcon(R.drawable.tianyan_notification)
         .setContentTitle(title)
         .setContentText(contentText)
         .setOngoing(true)
@@ -270,8 +270,8 @@ class AgentForegroundService : Service() {
         .setProgress(0, 0, true)
         .addAction(
             NotificationCompat.Action(
-                R.drawable.wanxiang_notification,
-                getString(R.string.wanxiang_notification_stop),
+                R.drawable.tianyan_notification,
+                getString(R.string.tianyan_notification_stop),
                 stopPendingIntent,
             ),
         )
@@ -290,20 +290,20 @@ class AgentForegroundService : Service() {
                 .putExtra(EXTRA_SESSION_ID, sessionId),
             flags,
         )
-        val remoteInput = RemoteInput.Builder(KEY_REPLY).setLabel(getString(R.string.wanxiang_notification_reply_to, title)).build()
+        val remoteInput = RemoteInput.Builder(KEY_REPLY).setLabel(getString(R.string.tianyan_notification_reply_to, title)).build()
         val replyAction = NotificationCompat.Action.Builder(
-            R.drawable.wanxiang_notification,
-            getString(R.string.wanxiang_notification_reply),
+            R.drawable.tianyan_notification,
+            getString(R.string.tianyan_notification_reply),
             replyPending,
         ).addRemoteInput(remoteInput).build()
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.wanxiang_notification)
-            .setContentTitle(getString(R.string.wanxiang_agent_task_completed, title))
-            .setContentText(getString(R.string.wanxiang_agent_next_task_hint))
+            .setSmallIcon(R.drawable.tianyan_notification)
+            .setContentTitle(getString(R.string.tianyan_agent_task_completed, title))
+            .setContentText(getString(R.string.tianyan_agent_next_task_hint))
             .setStyle(
                 NotificationCompat.BigTextStyle()
-                    .bigText(getString(R.string.wanxiang_agent_next_task_hint)),
+                    .bigText(getString(R.string.tianyan_agent_next_task_hint)),
             )
             .setAutoCancel(true)
             .setOngoing(false)
@@ -336,15 +336,15 @@ class AgentForegroundService : Service() {
     }
 
     companion object {
-        const val ACTION_START = "top.wanxiang.app.action.AGENT_START"
-        const val ACTION_STOP = "top.wanxiang.app.action.AGENT_STOP"
+        const val ACTION_START = "top.tianyan.app.action.AGENT_START"
+        const val ACTION_STOP = "top.tianyan.app.action.AGENT_STOP"
         const val EXTRA_SESSION_ID = "extra_session_id"
         const val KEY_REPLY = "agent_reply"
-        private const val CHANNEL_ID = "wanxiang-agent-v5"
-        private const val LEGACY_CAPSULE_CHANNEL_ID = "wanxiang-agent-capsule-v4"
+        private const val CHANNEL_ID = "tianyan-agent-v5"
+        private const val LEGACY_CAPSULE_CHANNEL_ID = "tianyan-agent-capsule-v4"
         private const val PRIMARY_NOTIFICATION_ID = 2001
         private const val TAG = "AgentForegroundService"
-        private const val WAKE_LOCK_TAG = "wanxiang:agent-execution"
+        private const val WAKE_LOCK_TAG = "tianyan:agent-execution"
         private const val LOCK_TIMEOUT_MS = 4 * 60 * 60 * 1000L
         /** 运行期间通知刷新间隔：2 秒，平滑更新状态与运行时长。 */
         private const val NOTIFICATION_REFRESH_INTERVAL_MS = 2_000L

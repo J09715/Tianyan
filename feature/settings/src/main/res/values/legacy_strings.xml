@@ -13,8 +13,8 @@
     <string name="settings_legacy_0011" formatted="false">Base URL（接口地址）</string>
     <string name="settings_legacy_0012" formatted="false">稍后再说</string>
     <string name="settings_legacy_0013" formatted="false">正在下载…</string>
-    <string name="settings_legacy_0014" formatted="false">万象 · 乾坤</string>
-    <string name="settings_legacy_0015" formatted="false">万象 · WanXiang</string>
+    <string name="settings_legacy_0014" formatted="false">天衍 · 乾坤</string>
+    <string name="settings_legacy_0015" formatted="false">天衍 · Tianyan</string>
     <string name="settings_legacy_0016" formatted="false">系统设置与控制中枢</string>
     <string name="settings_legacy_0017" formatted="false">系统与配置分类</string>
     <string name="settings_legacy_0018" formatted="false">智能体与 AI 模型</string>
@@ -103,7 +103,7 @@
     <string name="settings_legacy_0102" formatted="false">开发者调试与控制台</string>
     <string name="settings_legacy_0103" formatted="false">实时查看 PRoot 进程与命令追踪</string>
     <string name="settings_legacy_0104" formatted="false">关于与社区</string>
-    <string name="settings_legacy_0105" formatted="false">关于万象 · WanXiang</string>
+    <string name="settings_legacy_0105" formatted="false">关于天衍 · Tianyan</string>
     <string name="settings_legacy_0106" formatted="false">关于、更新与官方社区</string>
     <string name="settings_legacy_0107" formatted="false">应用版本与更新</string>
     <string name="settings_legacy_0108" formatted="false">检查新版本</string>
@@ -114,7 +114,7 @@
     <string name="settings_legacy_0113" formatted="false">应用启动时在后台静默检测新版本</string>
     <string name="settings_legacy_0114" formatted="false">官方社区与开源</string>
     <string name="settings_legacy_0115" formatted="false">GitHub 开源项目</string>
-    <string name="settings_legacy_0116" formatted="false">万象官方交流群</string>
+    <string name="settings_legacy_0116" formatted="false">天衍官方交流群</string>
     <string name="settings_legacy_0117" formatted="false">官方 QQ 交流群</string>
     <string name="settings_legacy_0118" formatted="false">前往 GitHub 下载</string>
     <string name="settings_legacy_0119" formatted="false">运行平稳</string>
@@ -220,7 +220,7 @@
     <string name="settings_text_0072" formatted="false">压缩策略</string>
     <string name="settings_text_0073" formatted="false">压缩触发阈值（用户轮次）</string>
     <string name="settings_text_0074" formatted="false">参数（空格分隔）</string>
-    <string name="settings_text_0075" formatted="false">可呼叫万象 Agent 在 PRoot 沙箱内自主排查与自愈</string>
+    <string name="settings_text_0075" formatted="false">可呼叫天衍 Agent 在 PRoot 沙箱内自主排查与自愈</string>
     <string name="settings_text_0076" formatted="false">可更新</string>
     <string name="settings_text_0077" formatted="false">后台正在装配开发套件...</string>
     <string name="settings_text_0078" formatted="false">后台电池优化白名单 · 调试监控 · PRoot 控制台</string>
@@ -486,10 +486,10 @@
     <string name="settings_long_002" formatted="false">1. 分析上述 PRoot 沙箱内的失败报错（如 dpkg 依赖破损、锁残留、网络下载受阻、commandLinks 软链接缺失或环境缺失）；</string>
     <string name="settings_long_003" formatted="false">2. 直接调用 base 工具执行针对性的修复命令（如清理 /var/lib/dpkg 锁、dpkg --configure -a、apt-get --fix-broken install、手动从备用源拉取或补齐软链接）；</string>
     <string name="settings_long_004" formatted="false">Android 12+ 会监控应用派生的子进程，超过系统上限后可能终止 PRoot、编译器或 Agent 任务。这里解除的是子进程限制，不是 Java/Kotlin 线程数。</string>
-    <string name="settings_long_005" formatted="false">MCP 是开放的标准模型上下文协议。开启后，万象将在 PRoot 沙箱内启动对应的 Stdio 服务或连接本地 SSE 端点，并动态向智枢 Agent 注入专业工具能力。</string>
-    <string name="settings_long_006" formatted="false">https://github.com/peakSee/Wanxiang · 欢迎 Star 支持</string>
-    <string name="settings_long_007" formatted="false">万象在 Agent 执行期间会启动前台服务并持有 CPU 进程锁，但系统电池优化仍可能在息屏后</string>
-    <string name="settings_long_008" formatted="false">万象支持多套 Linux 系统并存。所有系统均自动挂载 /workspace 代码工程，/sdcard 外部存储按「存储挂载与共享」页的开关注入，各发行版软件生态与包管理器完全独立隔离。</string>
+    <string name="settings_long_005" formatted="false">MCP 是开放的标准模型上下文协议。开启后，天衍将在 PRoot 沙箱内启动对应的 Stdio 服务或连接本地 SSE 端点，并动态向智枢 Agent 注入专业工具能力。</string>
+    <string name="settings_long_006" formatted="false">https://github.com/J09715/Tianyan · 欢迎 Star 支持</string>
+    <string name="settings_long_007" formatted="false">天衍在 Agent 执行期间会启动前台服务并持有 CPU 进程锁，但系统电池优化仍可能在息屏后</string>
+    <string name="settings_long_008" formatted="false">天衍支持多套 Linux 系统并存。所有系统均自动挂载 /workspace 代码工程，/sdcard 外部存储按「存储挂载与共享」页的开关注入，各发行版软件生态与包管理器完全独立隔离。</string>
     <string name="settings_long_009" formatted="false">尚未配置任何模型档案，可前往【设置 → 模型档案管理】添加 Claude、OpenAI 或 DeepSeek 模型</string>
     <string name="settings_long_010" formatted="false">挂载仅作用于 Linux 沙箱内的进程（终端、智枢 Agent、构建任务与后台服务），不影响文件浏览器——文件浏览器始终直接访问宿主存储。挂载在会话启动时注入，修改后新建的终端 / 构建任务才会应用。完整读写还需在系统设置中授予「所有文件访问」权限。</string>
     <string name="settings_long_011" formatted="false">强约束模型思考过程全程使用中文（解决 DeepSeek/Claude 思考总跑英文的问题）</string>

@@ -13,8 +13,8 @@
     <string name="settings_legacy_0011" formatted="false">Base URL</string>
     <string name="settings_legacy_0012" formatted="false">Later</string>
     <string name="settings_legacy_0013" formatted="false">Downloading…</string>
-    <string name="settings_legacy_0014" formatted="false">WanXiang · Settings</string>
-    <string name="settings_legacy_0015" formatted="false">WanXiang</string>
+    <string name="settings_legacy_0014" formatted="false">Tianyan · Settings</string>
+    <string name="settings_legacy_0015" formatted="false">Tianyan</string>
     <string name="settings_legacy_0016" formatted="false">System settings and control center</string>
     <string name="settings_legacy_0017" formatted="false">System &amp; configuration</string>
     <string name="settings_legacy_0018" formatted="false">Agent &amp; AI models</string>
@@ -78,7 +78,7 @@
     <string name="settings_legacy_0077" formatted="false">Background reliability &amp; diagnostics</string>
     <string name="settings_legacy_0078" formatted="false">Background reliability &amp; diagnostics</string>
     <string name="settings_legacy_0079" formatted="false">Battery optimization &amp; background operation</string>
-    <string name="settings_legacy_0080" formatted="false">Exempt WanXiang from battery restrictions so the agent can keep running</string>
+    <string name="settings_legacy_0080" formatted="false">Exempt Tianyan from battery restrictions so the agent can keep running</string>
     <string name="settings_legacy_0081" formatted="false">Android 12 child-process limit</string>
     <string name="settings_legacy_0082" formatted="false">Remove the 32 phantom-process background limit</string>
     <string name="settings_legacy_0083" formatted="false">Removed</string>
@@ -103,7 +103,7 @@
     <string name="settings_legacy_0102" formatted="false">Developer debugging &amp; console</string>
     <string name="settings_legacy_0103" formatted="false">Inspect PRoot processes and command traces in real time</string>
     <string name="settings_legacy_0104" formatted="false">About &amp; community</string>
-    <string name="settings_legacy_0105" formatted="false">About WanXiang</string>
+    <string name="settings_legacy_0105" formatted="false">About Tianyan</string>
     <string name="settings_legacy_0106" formatted="false">About, updates, and community</string>
     <string name="settings_legacy_0107" formatted="false">App version &amp; updates</string>
     <string name="settings_legacy_0108" formatted="false">Check for updates</string>
@@ -114,7 +114,7 @@
     <string name="settings_legacy_0113" formatted="false">Silently check for new versions when the app starts</string>
     <string name="settings_legacy_0114" formatted="false">Community &amp; open source</string>
     <string name="settings_legacy_0115" formatted="false">Open-source project on GitHub</string>
-    <string name="settings_legacy_0116" formatted="false">WanXiang community</string>
+    <string name="settings_legacy_0116" formatted="false">Tianyan community</string>
     <string name="settings_legacy_0117" formatted="false">Official QQ group</string>
     <string name="settings_legacy_0118" formatted="false">Download from GitHub</string>
     <string name="settings_legacy_0119" formatted="false">Running normally</string>
@@ -487,9 +487,9 @@
     <string name="settings_long_003" formatted="false">2. Directly call the base tool to execute targeted repair commands (such as cleaning up the/var/lib/dpkg lock, dpkg --configure -a, apt-get --fix-broken install, manually pulling or patching soft links from alternate sources);</string>
     <string name="settings_long_004" formatted="false">Android 12 + monitors app-derived subprocesses and may terminate PRoot, compiler, or Agent tasks after the system limit is exceeded.The child process limit is lifted here, not the number of Java/Kotlin threads.</string>
     <string name="settings_long_005" formatted="false">MCP is an open standard model context protocol.After opening, Taihui will start the corresponding Stdio service or connect the local SSE endpoint in the PRoot sandbox, and dynamically inject professional tool capabilities into the intelligent agent.</string>
-    <string name="settings_long_006" formatted="false">https://github.com/peakSee/Wanxiang · Welcome Star Support</string>
+    <string name="settings_long_006" formatted="false">https://github.com/J09715/Tianyan · Welcome Star Support</string>
     <string name="settings_long_007" formatted="false">Taihui will start the front desk service and hold the CPU process lock during Agent execution, but the system battery optimization may still be behind the screen.</string>
-    <string name="settings_long_008" formatted="false">WanXiang supports multiple Linux systems side by side. Every system automatically mounts the /workspace projects; /sdcard external storage is injected according to the toggles in Storage Mounts &amp; Sharing. Each distro keeps its own package manager and software ecosystem fully isolated.</string>
+    <string name="settings_long_008" formatted="false">Tianyan supports multiple Linux systems side by side. Every system automatically mounts the /workspace projects; /sdcard external storage is injected according to the toggles in Storage Mounts &amp; Sharing. Each distro keeps its own package manager and software ecosystem fully isolated.</string>
     <string name="settings_long_009" formatted="false">You have not configured any model archives, you can add Claude, OpenAI or DeepSeek → models by going to [Setting up model archive management]</string>
     <string name="settings_long_010" formatted="false">Mounts only affect processes inside the Linux sandbox (terminal, agent, builds and background services), not the file explorer, which always accesses host storage directly. Mounts are injected at session startup; only new terminals and builds pick up changes. Full read-write access additionally requires the "All files access" permission in system settings.</string>
     <string name="settings_long_011" formatted="false">Use Chinese throughout the strongly constrained model thinking process (solve the problem of DeepSeek/Claude thinking about running English)</string>

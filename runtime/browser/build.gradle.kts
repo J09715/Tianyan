@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "top.wanxiang.app.runtime.browser"
+    namespace = "top.tianyan.app.runtime.browser"
     resourcePrefix = "rtbrowser_"
     compileSdk = 37
     defaultConfig { minSdk = 29 }

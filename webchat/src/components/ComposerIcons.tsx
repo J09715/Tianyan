@@ -4,7 +4,7 @@ interface ComposerIconProps {
   className?: string;
 }
 
-/** 万象附件按钮图标。 */
+/** 天衍附件按钮图标。 */
 export function ComposerAttachmentIcon({ className }: ComposerIconProps) {
   return (
     <svg
@@ -39,7 +39,7 @@ function DarkSendArrow(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-/** 万象发送按钮图标。 */
+/** 天衍发送按钮图标。 */
 export function ComposerSendIcon({ className }: ComposerIconProps) {
   return (
     <span aria-hidden="true" className={`composer-action-visual${className ? ` ${className}` : ""}`}>
@@ -79,7 +79,7 @@ export function ComposerSendIcon({ className }: ComposerIconProps) {
   );
 }
 
-/** 万象停止按钮图标。 */
+/** 天衍停止按钮图标。 */
 export function ComposerStopIcon({ className }: ComposerIconProps) {
   return (
     <span aria-hidden="true" className={`composer-action-visual stop${className ? ` ${className}` : ""}`}>

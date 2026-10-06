@@ -1,24 +1,24 @@
 #!/bin/sh
 # ==============================================================================
-# WanXiang (LinuxAIRuntime) - Flutter SDK Environment Setup
+# Tianyan (LinuxAIRuntime) - Flutter SDK Environment Setup
 # ==============================================================================
 set -e
 
-echo "==> [WanXiang] 正在初始化 Flutter 跨端开发环境..."
+echo "==> [Tianyan] 正在初始化 Flutter 跨端开发环境..."
 
-mkdir -p /opt/wanxiang/locks
+mkdir -p /opt/tianyan/locks
 command -v flock >/dev/null 2>&1 || {
-    echo "!! [WanXiang] 缺少 flock，无法安全装配 Flutter 工具链"
+    echo "!! [Tianyan] 缺少 flock，无法安全装配 Flutter 工具链"
     exit 1
 }
-exec 9>/opt/wanxiang/locks/android-toolchain.lock
+exec 9>/opt/tianyan/locks/android-toolchain.lock
 flock -x -w 1800 9 || {
-    echo "!! [WanXiang] Android/Flutter 工具链正被构建任务使用，等待超时"
+    echo "!! [Tianyan] Android/Flutter 工具链正被构建任务使用，等待超时"
     exit 1
 }
 
 # 引入共享镜像库（全量节点 + 并行测速函数）
-. /opt/wanxiang/scripts/wanxiang-mirror-lib.sh
+. /opt/tianyan/scripts/tianyan-mirror-lib.sh
 
 # Flutter's artifact and pub mirrors avoid routing the large SDK cache through
 # GitHub/pub.dev when the Android suite is installed in mainland China.
@@ -29,41 +29,41 @@ mkdir -p /opt/flutter /usr/local/bin /usr/bin 2>/dev/null || true
 
 # The official Linux archive is x86_64-only.  Always require the community
 # native ARM64 archive marker so an older x86_64 installation is replaced.
-FLUTTER_ARM64_MARKER=/opt/flutter/.wanxiang-arm64
+FLUTTER_ARM64_MARKER=/opt/flutter/.tianyan-arm64
 
 if [ ! -f "${ANDROID_HOME:-/opt/android-sdk}/platforms/android-34/android.jar" ]; then
-    echo "!! [WanXiang] Flutter APK 构建依赖 Android 核心基础环境 (Platform 34)，请先安装 android-core"
+    echo "!! [Tianyan] Flutter APK 构建依赖 Android 核心基础环境 (Platform 34)，请先安装 android-core"
 fi
 
 # 1. 下载 Flutter SDK 压缩包（HTTP Range 分片 + 断点续传）
 if [ ! -f /opt/flutter/bin/flutter ] || [ ! -f "$FLUTTER_ARM64_MARKER" ]; then
-    if [ -n "${WANXIANG_FLUTTER_ARCHIVE:-}" ] && [ -s "$WANXIANG_FLUTTER_ARCHIVE" ]; then
-        echo "==> [WanXiang] 使用应用内下载器已准备的 Flutter SDK 压缩包：$WANXIANG_FLUTTER_ARCHIVE"
-        FLUTTER_ARCHIVE="$WANXIANG_FLUTTER_ARCHIVE"
+    if [ -n "${TIANYAN_FLUTTER_ARCHIVE:-}" ] && [ -s "$TIANYAN_FLUTTER_ARCHIVE" ]; then
+        echo "==> [Tianyan] 使用应用内下载器已准备的 Flutter SDK 压缩包：$TIANYAN_FLUTTER_ARCHIVE"
+        FLUTTER_ARCHIVE="$TIANYAN_FLUTTER_ARCHIVE"
     else
-    echo "==> [WanXiang] 正在获取 Flutter stable SDK 发布信息 (固定版本)..."
+    echo "==> [Tianyan] 正在获取 Flutter stable SDK 发布信息 (固定版本)..."
     # 固定到特定 tag，避免 latest 每次更新抬高 Gradle/AGP/Kotlin 最低版本要求。
     # 本版本对应的最低工具链：Gradle 8.14+ / AGP 8.11.1+ / Kotlin 2.2.20+。
     FLUTTER_PINNED_TAG="flutter-3.47.1-87-linux"
-    FLUTTER_META="/tmp/wanxiang-flutter-releases.json"
+    FLUTTER_META="/tmp/tianyan-flutter-releases.json"
     FLUTTER_META_URL="https://api.github.com/repos/MohamedAlkindi/flutter-native-arm64/releases/tags/${FLUTTER_PINNED_TAG}"
     rm -f "$FLUTTER_META"
     curl -fsSL --retry 4 --retry-all-errors --connect-timeout 20 --max-time 120 \
         "$FLUTTER_META_URL" -o "$FLUTTER_META" || \
     curl -fsSL --retry 4 --retry-all-errors --connect-timeout 20 --max-time 120 \
         "https://gh.dpik.top/$FLUTTER_META_URL" -o "$FLUTTER_META" || {
-        echo "!! [WanXiang] Flutter 发布信息获取失败"
+        echo "!! [Tianyan] Flutter 发布信息获取失败"
         exit 1
     }
     command -v jq >/dev/null 2>&1 || {
-        echo "!! [WanXiang] 缺少 jq，无法解析 Flutter 发布索引"
+        echo "!! [Tianyan] 缺少 jq，无法解析 Flutter 发布索引"
         exit 1
     }
     FLUTTER_ARCHIVE_REL=$(jq -r '[.assets[] | select(.name | contains("linux_arm64_android_web_sdk"))][0].browser_download_url // empty' "$FLUTTER_META")
     FLUTTER_SHA256=""
     rm -f "$FLUTTER_META"
     [ -n "$FLUTTER_ARCHIVE_REL" ] || {
-        echo "!! [WanXiang] 未找到可用的 Flutter stable Linux SDK"
+        echo "!! [Tianyan] 未找到可用的 Flutter stable Linux SDK"
         exit 1
     }
 
@@ -95,7 +95,7 @@ if [ ! -f /opt/flutter/bin/flutter ] || [ ! -f "$FLUTTER_ARM64_MARKER" ]; then
 
     download_flutter_archive() {
         archive_url="$1"
-        echo "==> [WanXiang] 尝试 Flutter SDK 压缩包: $archive_url"
+        echo "==> [Tianyan] 尝试 Flutter SDK 压缩包: $archive_url"
         header_file="${FLUTTER_ARCHIVE}.headers"
         curl -fsSL --retry 3 --retry-all-errors --connect-timeout 20 --max-time 60 \
             -r 0-0 -D "$header_file" -o /dev/null "$archive_url" || return 1
@@ -157,16 +157,16 @@ if [ ! -f /opt/flutter/bin/flutter ] || [ ! -f "$FLUTTER_ARM64_MARKER" ]; then
         /tmp/*) rm -f "$FLUTTER_ARCHIVE" ;;
     esac
     # 候选镜像：github.akams.cn 节点 + 国内代理，末尾官方直连兜底。
-    echo "==> [WanXiang] 正在并行测速选择最快镜像 (github.akams.cn 全量节点)..."
+    echo "==> [Tianyan] 正在并行测速选择最快镜像 (github.akams.cn 全量节点)..."
     FLUTTER_FAST_BASE=$(pick_fastest_mirror "$FLUTTER_ARCHIVE_REL")
     FLUTTER_CANDIDATES=""
     if [ -n "$FLUTTER_FAST_BASE" ]; then
         FLUTTER_CANDIDATES="${FLUTTER_FAST_BASE}${FLUTTER_ARCHIVE_REL}"
-        echo "==> [WanXiang] 已选择最快镜像: $FLUTTER_FAST_BASE"
+        echo "==> [Tianyan] 已选择最快镜像: $FLUTTER_FAST_BASE"
     else
-        echo "==> [WanXiang] 镜像全部不可用，直接官方直连"
+        echo "==> [Tianyan] 镜像全部不可用，直接官方直连"
     fi
-    for FLUTTER_BASE in $WANXIANG_MIRROR_NODES; do
+    for FLUTTER_BASE in $TIANYAN_MIRROR_NODES; do
         [ -n "$FLUTTER_BASE" ] || continue
         FLUTTER_CANDIDATES="$FLUTTER_CANDIDATES ${FLUTTER_BASE}${FLUTTER_ARCHIVE_REL}"
     done
@@ -176,18 +176,18 @@ if [ ! -f /opt/flutter/bin/flutter ] || [ ! -f "$FLUTTER_ARM64_MARKER" ]; then
             FLUTTER_SDK_READY=1
             break
         fi
-        echo "!! [WanXiang] Flutter SDK 压缩包下载或校验失败，切换线路"
+        echo "!! [Tianyan] Flutter SDK 压缩包下载或校验失败，切换线路"
         rm -f "$FLUTTER_ARCHIVE"
         rm -rf "${FLUTTER_ARCHIVE}.chunks"
     done
     [ "$FLUTTER_SDK_READY" -eq 1 ] || {
-        echo "!! [WanXiang] Flutter SDK 下载失败，未执行 Git 全量克隆"
+        echo "!! [Tianyan] Flutter SDK 下载失败，未执行 Git 全量克隆"
         exit 1
     }
     fi
 
-    echo "==> [WanXiang] 正在校验并解压 Flutter SDK..."
-    FLUTTER_STAGING="/tmp/wanxiang-flutter-staging"
+    echo "==> [Tianyan] 正在校验并解压 Flutter SDK..."
+    FLUTTER_STAGING="/tmp/tianyan-flutter-staging"
     rm -rf "$FLUTTER_STAGING"
     mkdir -p "$FLUTTER_STAGING"
     # The community ARM64 release is tar.gz, while official Flutter releases
@@ -196,33 +196,33 @@ if [ ! -f /opt/flutter/bin/flutter ] || [ ! -f "$FLUTTER_ARM64_MARKER" ]; then
     case "$FLUTTER_ARCHIVE" in
         *.tar.gz|*.tgz|*.gz)
             gzip -t "$FLUTTER_ARCHIVE" || {
-                echo "!! [WanXiang] Flutter SDK gzip 压缩包损坏：$FLUTTER_ARCHIVE"
+                echo "!! [Tianyan] Flutter SDK gzip 压缩包损坏：$FLUTTER_ARCHIVE"
                 exit 1
             }
             tar -xzf "$FLUTTER_ARCHIVE" -C "$FLUTTER_STAGING"
             ;;
         *.tar.xz|*.txz|*.xz)
             xz -t "$FLUTTER_ARCHIVE" || {
-                echo "!! [WanXiang] Flutter SDK xz 压缩包损坏：$FLUTTER_ARCHIVE"
+                echo "!! [Tianyan] Flutter SDK xz 压缩包损坏：$FLUTTER_ARCHIVE"
                 exit 1
             }
             tar -xJf "$FLUTTER_ARCHIVE" -C "$FLUTTER_STAGING"
             ;;
         *.tar)
             tar -tf "$FLUTTER_ARCHIVE" >/dev/null || {
-                echo "!! [WanXiang] Flutter SDK tar 包损坏：$FLUTTER_ARCHIVE"
+                echo "!! [Tianyan] Flutter SDK tar 包损坏：$FLUTTER_ARCHIVE"
                 exit 1
             }
             tar -xf "$FLUTTER_ARCHIVE" -C "$FLUTTER_STAGING"
             ;;
         *)
-            echo "!! [WanXiang] 无法识别 Flutter SDK 压缩格式：$FLUTTER_ARCHIVE"
+            echo "!! [Tianyan] 无法识别 Flutter SDK 压缩格式：$FLUTTER_ARCHIVE"
             file "$FLUTTER_ARCHIVE" 2>/dev/null || true
             exit 1
             ;;
     esac
     [ -f "$FLUTTER_STAGING/flutter/bin/flutter" ] || {
-        echo "!! [WanXiang] Flutter SDK 压缩包结构无效"
+        echo "!! [Tianyan] Flutter SDK 压缩包结构无效"
         exit 1
     }
     rm -rf /opt/flutter
@@ -241,7 +241,7 @@ if [ -f /opt/flutter/bin/flutter ]; then
     ln -sf /opt/flutter/bin/flutter /usr/bin/flutter 2>/dev/null || true
     ln -sf /opt/flutter/bin/dart /usr/local/bin/dart 2>/dev/null || true
     ln -sf /opt/flutter/bin/dart /usr/bin/dart 2>/dev/null || true
-    echo "==> [WanXiang] Flutter & Dart 软链接配置就绪"
+    echo "==> [Tianyan] Flutter & Dart 软链接配置就绪"
     /opt/flutter/bin/flutter config --no-analytics >/dev/null 2>&1 || true
     PUB_HOSTED_URL="$PUB_HOSTED_URL" FLUTTER_STORAGE_BASE_URL="$FLUTTER_STORAGE_BASE_URL" \
         /opt/flutter/bin/flutter precache --android >/dev/null 2>&1 || true
@@ -254,14 +254,14 @@ if [ -f /opt/flutter/bin/flutter ]; then
             mkdir -p "$target_dir" 2>/dev/null || true
             if [ ! -e "$target_dir/gen_snapshot" ]; then
                 ln -sf "$ENGINE_DIR/linux-arm64/gen_snapshot" "$target_dir/gen_snapshot" 2>/dev/null || true
-                echo "==> [WanXiang] 已链接原生 ARM64 gen_snapshot -> $target_dir/gen_snapshot"
+                echo "==> [Tianyan] 已链接原生 ARM64 gen_snapshot -> $target_dir/gen_snapshot"
             fi
         done
     fi
 fi
 
 if [ ! -f /opt/flutter/bin/flutter ]; then
-    echo "!! [WanXiang] Flutter SDK 未就位，安装失败"
+    echo "!! [Tianyan] Flutter SDK 未就位，安装失败"
     exit 1
 fi
-echo "==> [WanXiang] ✅ Flutter 跨端开发环境配置完成！"
+echo "==> [Tianyan] ✅ Flutter 跨端开发环境配置完成！"

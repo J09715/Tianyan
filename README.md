@@ -1,21 +1,21 @@
 <p align="center">
-  <img src="app/src/main/res/drawable/wanxiang_logo.xml" width="96" alt="万象 Logo" />
+  <img src="app/src/main/res/drawable/tianyan_logo.xml" width="96" alt="天衍 Logo" />
 </p>
 
 <h1 align="center">天衍 · Tianyan</h1>
 
-<p align="center"><strong>掌中沙盒 · 自主 Agent · 上游：万象（WanXiang）</strong></p>
+<p align="center"><strong>掌中沙盒 · 自主 Agent</strong></p>
 
 <p align="center">
   Android 无 Root Linux Runtime · 智能体引擎 (Agent Harness) · 原生 PTY 终端 · 移动开发工作区 · 无线 ADB 诊断
 </p>
 
 <p align="center">
-  <code>v0.13.35</code> · <code>Android 10+ (SDK 29+)</code> · <code>arm64-v8a</code> · <code>Kotlin · Jetpack Compose</code>
+  <code>v0.14.0</code> · <code>Android 10+ (SDK 29+)</code> · <code>arm64-v8a</code> · <code>Kotlin · Jetpack Compose</code>
 </p>
 
 <p align="center">
-  🐧 <strong>官方 QQ 交流群：000000000</strong>
+  <strong>交流群：待公布</strong>
 </p>
 
 <p align="center">
@@ -24,15 +24,15 @@
 
 ---
 
-## 🌌 何为万象
+## 🌌 何为天衍
 
 《道德经》云：“道生一，一生二，二生三，三生万物。”
 
-**万象**取意于此：以一句自然语言为“道”，在 Android 严格受限的应用沙盒与权限边界内，衍生出真实进程、物理文件、经过验证的代码与可交付的构建产物——万物皆可由此而生。
+**天衍**取意于此：以一句自然语言为“道”，在 Android 严格受限的应用沙盒与权限边界内，衍生出真实进程、物理文件、经过验证的代码与可交付的构建产物——万物皆可由此而生。
 
 它不是给 LLM 聊天简单套壳，也不是玩具式的终端模拟器。它让大模型、MCP 工具、Linux 系统、原生 PTY 终端与项目工作区共享同构的执行上下文与因果链——使一句自然语言意图，能够落成物理文件、真实进程、经过验证的代码与可交付的 Android / Flutter 构建产物。
 
-> 掌中方寸，森罗万象。
+> 掌中方寸，森罗天衍。
 
 ```text
 人的意图 (Intent) ─→ 计划拆解 (TaskPlan) ─→ 工具 / MCP / Linux / 浏览器 ─→ 结果验证 (Verification)
@@ -51,7 +51,7 @@
 | **对话回退与快照** | 基于 **SessionFork 会话树派生** 实现一键「撤回到此轮」（Rewind）；配套每轮对话前的 **Checkpoints 文件快照安全网** 并磁盘持久化，重大代码重构与指令随时可安全回滚。 |
 | **语义记忆与子智能体** | Agent 记忆语义模型（冲突消解、版本 revision、置顶 pinned、新鲜度 recency）；支持多子智能体协同调度（文件写租约波式调度、结构化 facts pack 回传与超限分页落盘）。 |
 | **Git 可视化工作台** | 提交拓扑图（泳道贝塞尔连线 / 分支标签 / 合并节点）、暂存与回退、分支 / 标签 / 远端管理、提交详情与行级 Diff、凭据加密托管与署名配置——手机上完整的 Git 体验。 |
-| **原生 PTY 终端** | JNI `openpty`/`forkpty` 底层桥接（`libwanxiang_pty.so`），提供真实 Linux 进程生命周期、控制终端、ANSI/VT100 增量解析、触觉反馈按键条与多会话后台持久化；原生不可用时自动回退至 `script` PTY。 |
+| **原生 PTY 终端** | JNI `openpty`/`forkpty` 底层桥接（`libtianyan_pty.so`），提供真实 Linux 进程生命周期、控制终端、ANSI/VT100 增量解析、触觉反馈按键条与多会话后台持久化；原生不可用时自动回退至 `script` PTY。 |
 | **内置浏览器与 CDP 调试** | 内置 WebView 多 Tab 池与 In-process 浏览器 MCP 服务；支持页面脚本**注入式 Hook 引擎**、**CDP 断点**与 **Worker 级 Fetch 拦截**，提供可视化的网络请求时间线面板与调试状态横幅。 |
 | **无线 ADB 与日志工作台** | 独立常驻一级工作台入口；支持**通知栏免切屏输入配对码**秒级配对无线 ADB、mDNS 局域网调试服务自动发现、PRoot / Android 双端日志实时抓取、设备状态一键体检与系统 Intent 诊断。 |
 | **移动工作区与构建** | 支持创建空项目、本地 ZIP 导入（防 Zip Slip 校验）与 **GitHub 仓库导入（带实时 clone 进度）**；提供代码浏览、可视化行级 Diff 比对、沙箱内 Gradle / Flutter 后台静默构建与 APK 签名安装。 |
@@ -76,7 +76,7 @@
 ## 📦 版本与更新
 
 - **更新通道**：App 内「设置 → 关于 → 检查新版本」支持应用内直接更新（HTTPS 加密通道，公共网络下也可完整校验）。
-- **更新公告**：App 内「万象公告」与 QQ 群公告同步推送，含每个版本的变更明细。
+- **更新公告**：App 内「天衍公告」与 QQ 群公告同步推送，含每个版本的变更明细。
 - **离线插件包**：Android / Flutter / 反编译三大开发环境的全量离线包在群文件发布，免在线安装、免特殊网络环境。
 
 ---
@@ -106,7 +106,7 @@ $env:JAVA_HOME="C:\Program Files\Android\Studio\jbr"
 .\gradlew.bat assembleDebug --console=plain
 ```
 
-构建产物位于：`app/build/outputs/apk/debug/wanxiang-v0.13.35-debug.apk`
+构建产物位于：`app/build/outputs/apk/debug/tianyan-v0.14.0-debug.apk`
 
 > ☁️ **免本地环境**：本仓库已内置 GitHub Actions 工作流 `.github/workflows/android-apk.yml`——在仓库 **Actions** 页手动运行 `Android APK 构建`，几分钟后在产物（Artifacts）区直接下载未签名 Debug APK，无需本地装任何工具链。
 
@@ -118,13 +118,13 @@ $env:JAVA_HOME="C:\Program Files\Android\Studio\jbr"
 - **用户态沙箱**：PRoot 是基于 `ptrace` 的用户态系统调用拦截与路径重写机制，不是硬件虚拟化或完整 KVM 虚拟机，不提供 Root 特权或底层内核模块加载能力。
 - **环境兼容性**：复杂 TUI（如部分全屏 curses 应用）、特定软键盘组合键及重型 C/C++ 交叉编译仍需依据具体 ARM64 设备性能与内存情况调优。
 - **网络安全**：模型 API 及远程下载端点强制遵循安全传输协议；请妥善保管私有 API Key 与凭据。
-- **许可说明**：万象为**闭源软件**，本仓库页面仅作产品介绍与分发引导之用。
+- **许可说明**：天衍为**闭源软件**，本仓库页面仅作产品介绍与分发引导之用。
 
 ---
 
 ## 📜 注脚
 
-> 须弥纳于芥子，万象纳于掌中。
+> 须弥纳于芥子，天衍纳于掌中。
 
 限制从未真正消失；但自由可以来自身处限制之中，仍有能力去构筑、去验证属于自己的世界。
 
@@ -136,4 +136,14 @@ $env:JAVA_HOME="C:\Program Files\Android\Studio\jbr"
 
 本项目 fork 自开源项目 **太墟 · TaiXu**，并在此之上持续演进（Git 可视化工作台、可视化工作流引擎、环境体检自愈、云控分发等）。感谢上游以 GPL-3.0 协议开源。
 
-- 上游仓库：**[wkbin/taixu](https://github.com/wkbin/taixu)** —— 掌中归墟，万象可期。
+- 上游仓库：**[wkbin/taixu](https://github.com/wkbin/taixu)** —— 掌中归墟，天衍可期。
+
+---
+
+## 来源与许可
+
+天衍（Tianyan）派生自开源项目 [万象 WanXiang](https://github.com/peakSee/Wanxiang)。
+上游项目未附带任何开源许可证声明；本仓库对全部品牌标识、图标、文案与文档做了独立重写，
+并在 [`NOTICE`](NOTICE) 中逐项列出了随包分发的第三方组件及其版权声明。
+
+本仓库当前**尚未附带 LICENSE 文件**——在选择并声明许可证之前，默认保留全部权利。

@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "top.wanxiang.app.feature.chat"
+    namespace = "top.tianyan.app.feature.chat"
     resourcePrefix = "chat_"
     compileSdk = 37
     defaultConfig { minSdk = 29 }

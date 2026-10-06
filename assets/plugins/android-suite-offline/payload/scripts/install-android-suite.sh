@@ -1,12 +1,12 @@
 #!/bin/sh
 set -eu
 
-PAYLOAD="${WANXIANG_PLUGIN_PAYLOAD:?missing WANXIANG_PLUGIN_PAYLOAD}"
+PAYLOAD="${TIANYAN_PLUGIN_PAYLOAD:?missing TIANYAN_PLUGIN_PAYLOAD}"
 ARCHIVES="$PAYLOAD/archives"
 CHECKSUMS="$PAYLOAD/checksums/SHA256SUMS"
-TOOL_DIR="${WANXIANG_TOOL_DIR:?missing WANXIANG_TOOL_DIR}"
+TOOL_DIR="${TIANYAN_TOOL_DIR:?missing TIANYAN_TOOL_DIR}"
 ANDROID_HOME="/opt/android-sdk"
-TOOLCHAIN_ROOT="/opt/wanxiang/toolchains/android"
+TOOLCHAIN_ROOT="/opt/tianyan/toolchains/android"
 JDK_HOME="$TOOLCHAIN_ROOT/jdk"
 NDK_HOME="$TOOLCHAIN_ROOT/ndk"
 GRADLE_VERSION="8.14.2"
@@ -24,7 +24,7 @@ need() {
 progress() {
     progress_percent="$1"
     shift
-    printf '[WANXIANG_PROGRESS:%s] %s\n' "$progress_percent" "$*"
+    printf '[TIANYAN_PROGRESS:%s] %s\n' "$progress_percent" "$*"
 }
 
 # Read ELF headers directly instead of depending on the optional `file` package.
@@ -33,7 +33,7 @@ elf_bytes() { od -An -t x1 "$@" 2>/dev/null | tr -d ' \n'; }
 is_elf() { test "$(elf_bytes -N 4 "$1")" = "7f454c46"; }
 is_aarch64_elf() { test "$(elf_bytes -j 18 -N 2 "$1")" = "b700"; }
 
-mkdir -p "$TOOL_DIR/bin" "$ANDROID_HOME" "$TOOLCHAIN_ROOT" /opt/wanxiang/bin /opt/wanxiang/locks
+mkdir -p "$TOOL_DIR/bin" "$ANDROID_HOME" "$TOOLCHAIN_ROOT" /opt/tianyan/bin /opt/tianyan/locks
 need "$CHECKSUMS"
 
 # 构建进程持有本锁的共享端 (flock -s)，装配必须持有独占端：杜绝“边构建边
@@ -42,7 +42,7 @@ command -v flock >/dev/null 2>&1 || {
     echo "missing flock: refusing to mutate the toolchain without a lock" >&2
     exit 8
 }
-exec 9>/opt/wanxiang/locks/android-toolchain.lock
+exec 9>/opt/tianyan/locks/android-toolchain.lock
 flock -x -w 300 9 || {
     echo "android toolchain is busy (a build may be running); lock wait timed out" >&2
     exit 8
@@ -96,7 +96,7 @@ extract_zip() {
 }
 
 # Flutter 工具链自身依赖 unzip 解压引擎缓存（bin/cache/downloads/*.zip）。
-# 精简 rootfs 不含 unzip，且构建 PATH 只保证 /opt/wanxiang/bin 可见——把基于
+# 精简 rootfs 不含 unzip，且构建 PATH 只保证 /opt/tianyan/bin 可见——把基于
 # JDK jar 的常驻兼容层部署到那里，避免 "Missing unzip tool" 中断 Flutter 构建。
 if ! command -v unzip >/dev/null 2>&1; then
     printf '%s\n' \
@@ -114,9 +114,9 @@ if ! command -v unzip >/dev/null 2>&1; then
         '[ -n "$archive" ] || exit 2' \
         'mkdir -p "$dest"' \
         "(cd \"\$dest\" && '$JDK_HOME/bin/jar' xf \"\$archive\")" \
-        > /opt/wanxiang/bin/unzip
-    chmod 755 /opt/wanxiang/bin/unzip
-    progress 16 "[COMMAND] unzip 兼容层已部署（基于 JDK jar）：/opt/wanxiang/bin/unzip"
+        > /opt/tianyan/bin/unzip
+    chmod 755 /opt/tianyan/bin/unzip
+    progress 16 "[COMMAND] unzip 兼容层已部署（基于 JDK jar）：/opt/tianyan/bin/unzip"
 fi
 
 # Gradle.
@@ -136,29 +136,29 @@ progress 23 "[COMMAND] Gradle $GRADLE_VERSION 安装完成"
 # Android Platform 34.
 progress 25 "[EXTRACT] 正在解压 Android Platform 34：platform-34-ext7_r03.zip"
 need "$ARCHIVES/platform-34-ext7_r03.zip"
-rm -rf /tmp/wanxiang-android-platform
-mkdir -p /tmp/wanxiang-android-platform
-extract_zip "$ARCHIVES/platform-34-ext7_r03.zip" /tmp/wanxiang-android-platform
-PLATFORM_SOURCE=$(find /tmp/wanxiang-android-platform -type f -name android.jar -print -quit | xargs -r dirname)
+rm -rf /tmp/tianyan-android-platform
+mkdir -p /tmp/tianyan-android-platform
+extract_zip "$ARCHIVES/platform-34-ext7_r03.zip" /tmp/tianyan-android-platform
+PLATFORM_SOURCE=$(find /tmp/tianyan-android-platform -type f -name android.jar -print -quit | xargs -r dirname)
 need "$PLATFORM_SOURCE/android.jar"
 rm -rf "$ANDROID_HOME/platforms/android-34"
 mkdir -p "$ANDROID_HOME/platforms"
 mv "$PLATFORM_SOURCE" "$ANDROID_HOME/platforms/android-34"
-rm -rf /tmp/wanxiang-android-platform
+rm -rf /tmp/tianyan-android-platform
 progress 30 "[COMMAND] Android Platform 34 安装完成"
 
 # Java Build-Tools 35 and ARM64 native SDK tools.
 progress 32 "[EXTRACT] 正在解压 Build Tools $BUILD_TOOLS_VERSION：build-tools_r35_linux.zip"
 need "$ARCHIVES/build-tools_r35_linux.zip"
-rm -rf /tmp/wanxiang-build-tools
-mkdir -p /tmp/wanxiang-build-tools
-extract_zip "$ARCHIVES/build-tools_r35_linux.zip" /tmp/wanxiang-build-tools
-BUILD_SOURCE=$(find /tmp/wanxiang-build-tools -type f -name source.properties -print -quit | xargs -r dirname)
+rm -rf /tmp/tianyan-build-tools
+mkdir -p /tmp/tianyan-build-tools
+extract_zip "$ARCHIVES/build-tools_r35_linux.zip" /tmp/tianyan-build-tools
+BUILD_SOURCE=$(find /tmp/tianyan-build-tools -type f -name source.properties -print -quit | xargs -r dirname)
 need "$BUILD_SOURCE/lib/d8.jar"
 rm -rf "$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION"
 mkdir -p "$ANDROID_HOME/build-tools"
 mv "$BUILD_SOURCE" "$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION"
-rm -rf /tmp/wanxiang-build-tools
+rm -rf /tmp/tianyan-build-tools
 
 # The Google archive may contain x86 host ELF helpers. Keep Java/JAR assets,
 # then remove every non-AArch64 ELF before installing the ARM64 replacements.
@@ -171,10 +171,10 @@ find "$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION" -type f |
 
 progress 38 "[EXTRACT] 正在解压 ARM64 SDK 工具：android-sdk-tools-static-aarch64.zip"
 need "$ARCHIVES/android-sdk-tools-static-aarch64.zip"
-rm -rf /tmp/wanxiang-arm64-tools
-mkdir -p /tmp/wanxiang-arm64-tools
-extract_zip "$ARCHIVES/android-sdk-tools-static-aarch64.zip" /tmp/wanxiang-arm64-tools
-AAPT2=$(find /tmp/wanxiang-arm64-tools -type f -name aapt2 -print -quit)
+rm -rf /tmp/tianyan-arm64-tools
+mkdir -p /tmp/tianyan-arm64-tools
+extract_zip "$ARCHIVES/android-sdk-tools-static-aarch64.zip" /tmp/tianyan-arm64-tools
+AAPT2=$(find /tmp/tianyan-arm64-tools -type f -name aapt2 -print -quit)
 need "$AAPT2"
 is_aarch64_elf "$AAPT2" || {
     echo "AAPT2 is not ARM64: $AAPT2" >&2
@@ -186,7 +186,7 @@ for executable in aapt aapt2 aidl zipalign d8 apksigner dexdump split-select llv
         chmod 755 "$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/$executable"
     fi
 done
-rm -rf /tmp/wanxiang-arm64-tools
+rm -rf /tmp/tianyan-arm64-tools
 progress 45 "[VERIFY] AAPT2 ARM64 校验完成"
 
 # ARM64 NDK. Find llvm tools dynamically; do not assume an x86 directory name.
@@ -213,14 +213,14 @@ progress 61 "[VERIFY] Android NDK r29 ARM64 工具链校验完成"
 # Linux AArch64 CMake and Ninja.
 progress 63 "[EXTRACT] 正在解压 CMake ARM64：cmake-linux-aarch64.tar.gz"
 need "$ARCHIVES/cmake-linux-aarch64.tar.gz"
-rm -rf /tmp/wanxiang-cmake
-mkdir -p /tmp/wanxiang-cmake
-tar -xzf "$ARCHIVES/cmake-linux-aarch64.tar.gz" -C /tmp/wanxiang-cmake
-CMAKE_BIN=$(find /tmp/wanxiang-cmake -type f -path '*/bin/cmake' -print -quit)
+rm -rf /tmp/tianyan-cmake
+mkdir -p /tmp/tianyan-cmake
+tar -xzf "$ARCHIVES/cmake-linux-aarch64.tar.gz" -C /tmp/tianyan-cmake
+CMAKE_BIN=$(find /tmp/tianyan-cmake -type f -path '*/bin/cmake' -print -quit)
 need "$CMAKE_BIN"
 cp -a "$(dirname "$(dirname "$CMAKE_BIN")")" "$TOOL_DIR/cmake"
 ln -sfn "$TOOL_DIR/cmake/bin/cmake" "$TOOL_DIR/bin/cmake"
-rm -rf /tmp/wanxiang-cmake
+rm -rf /tmp/tianyan-cmake
 
 progress 69 "[EXTRACT] 正在解压 Ninja ARM64：ninja-linux-aarch64.zip"
 need "$ARCHIVES/ninja-linux-aarch64.zip"
@@ -232,19 +232,19 @@ progress 73 "[COMMAND] CMake 与 Ninja 安装完成"
 progress 75 "[EXTRACT] 正在解包 ADB：android-tools_aarch64.deb"
 need "$ARCHIVES/android-tools_aarch64.deb"
 if [ -s "$ARCHIVES/android-tools_aarch64.deb" ]; then
-    rm -rf /tmp/wanxiang-adb
-    mkdir -p /tmp/wanxiang-adb
+    rm -rf /tmp/tianyan-adb
+    mkdir -p /tmp/tianyan-adb
     if command -v dpkg-deb >/dev/null 2>&1; then
-        dpkg-deb -x "$ARCHIVES/android-tools_aarch64.deb" /tmp/wanxiang-adb
+        dpkg-deb -x "$ARCHIVES/android-tools_aarch64.deb" /tmp/tianyan-adb
     elif command -v ar >/dev/null 2>&1; then
-        (cd /tmp/wanxiang-adb && ar x "$ARCHIVES/android-tools_aarch64.deb" && tar -xf data.tar.* 2>/dev/null)
+        (cd /tmp/tianyan-adb && ar x "$ARCHIVES/android-tools_aarch64.deb" && tar -xf data.tar.* 2>/dev/null)
     fi
-    ADB_SOURCE=$(find /tmp/wanxiang-adb -type f -name adb -print -quit)
+    ADB_SOURCE=$(find /tmp/tianyan-adb -type f -name adb -print -quit)
     need "$ADB_SOURCE"
     is_aarch64_elf "$ADB_SOURCE" || { echo "ADB is not ARM64" >&2; exit 5; }
     cp "$ADB_SOURCE" "$TOOL_DIR/bin/adb"
     chmod +x "$TOOL_DIR/bin/adb"
-    rm -rf /tmp/wanxiang-adb
+    rm -rf /tmp/tianyan-adb
 fi
 progress 80 "[VERIFY] ADB ARM64 校验完成"
 
@@ -269,14 +269,14 @@ fi
 progress 82 "[EXTRACT] 正在解压 Flutter Android ARM64 SDK"
 need "$ARCHIVES/flutter-linux-arm64-android-only-slim.tar.gz"
 if [ -s "$ARCHIVES/flutter-linux-arm64-android-only-slim.tar.gz" ]; then
-    rm -rf /tmp/wanxiang-flutter
-    mkdir -p /tmp/wanxiang-flutter
-    tar -xzf "$ARCHIVES/flutter-linux-arm64-android-only-slim.tar.gz" -C /tmp/wanxiang-flutter
-    FLUTTER_SOURCE=$(find /tmp/wanxiang-flutter -type f -path '*/bin/flutter' -print -quit | xargs -r dirname | xargs -r dirname)
+    rm -rf /tmp/tianyan-flutter
+    mkdir -p /tmp/tianyan-flutter
+    tar -xzf "$ARCHIVES/flutter-linux-arm64-android-only-slim.tar.gz" -C /tmp/tianyan-flutter
+    FLUTTER_SOURCE=$(find /tmp/tianyan-flutter -type f -path '*/bin/flutter' -print -quit | xargs -r dirname | xargs -r dirname)
     need "$FLUTTER_SOURCE/bin/flutter"
     rm -rf /opt/flutter
     mv "$FLUTTER_SOURCE" /opt/flutter
-    rm -rf /tmp/wanxiang-flutter
+    rm -rf /tmp/tianyan-flutter
     ln -sfn /opt/flutter/bin/flutter "$TOOL_DIR/bin/flutter"
     ln -sfn /opt/flutter/bin/dart "$TOOL_DIR/bin/dart"
 
@@ -297,25 +297,25 @@ progress 85 "[COMMAND] Flutter Android ARM64 SDK 安装完成"
 # Rust ARM64 独立工具链与 aarch64-linux-android 交叉编译目标库
 RUST_STANDALONE=$(find "$ARCHIVES" -maxdepth 1 -type f -name 'rust-*-aarch64-unknown-linux-gnu.tar.*' -print -quit 2>/dev/null || true)
 RUST_STD_ANDROID=$(find "$ARCHIVES" -maxdepth 1 -type f -name 'rust-std-*-aarch64-linux-android.tar.*' -print -quit 2>/dev/null || true)
-RUST_HOME="/opt/wanxiang/toolchains/rust"
+RUST_HOME="/opt/tianyan/toolchains/rust"
 if [ -n "$RUST_STANDALONE" ] && [ -f "$RUST_STANDALONE" ]; then
     progress 86 "[EXTRACT] 正在解压 Rust ARM64 独立开发工具链：$(basename "$RUST_STANDALONE")"
-    rm -rf /tmp/wanxiang-rust "$RUST_HOME"
-    mkdir -p /tmp/wanxiang-rust "$RUST_HOME"
-    tar -xf "$RUST_STANDALONE" -C /tmp/wanxiang-rust --strip-components=1 2>/dev/null || tar -xzf "$RUST_STANDALONE" -C /tmp/wanxiang-rust --strip-components=1
-    if [ -x /tmp/wanxiang-rust/install.sh ]; then
-        sh /tmp/wanxiang-rust/install.sh --prefix="$RUST_HOME" --components=rustc,cargo,rust-std-aarch64-unknown-linux-gnu --disable-ldconfig >/dev/null 2>&1
+    rm -rf /tmp/tianyan-rust "$RUST_HOME"
+    mkdir -p /tmp/tianyan-rust "$RUST_HOME"
+    tar -xf "$RUST_STANDALONE" -C /tmp/tianyan-rust --strip-components=1 2>/dev/null || tar -xzf "$RUST_STANDALONE" -C /tmp/tianyan-rust --strip-components=1
+    if [ -x /tmp/tianyan-rust/install.sh ]; then
+        sh /tmp/tianyan-rust/install.sh --prefix="$RUST_HOME" --components=rustc,cargo,rust-std-aarch64-unknown-linux-gnu --disable-ldconfig >/dev/null 2>&1
     fi
-    rm -rf /tmp/wanxiang-rust
+    rm -rf /tmp/tianyan-rust
 
     if [ -n "$RUST_STD_ANDROID" ] && [ -f "$RUST_STD_ANDROID" ]; then
         progress 87 "[EXTRACT] 正在配置 Rust aarch64-linux-android 交叉编译目标库：$(basename "$RUST_STD_ANDROID")"
-        mkdir -p /tmp/wanxiang-rust-android
-        tar -xf "$RUST_STD_ANDROID" -C /tmp/wanxiang-rust-android --strip-components=1 2>/dev/null || tar -xzf "$RUST_STD_ANDROID" -C /tmp/wanxiang-rust-android --strip-components=1
-        if [ -x /tmp/wanxiang-rust-android/install.sh ]; then
-            sh /tmp/wanxiang-rust-android/install.sh --prefix="$RUST_HOME" --disable-ldconfig >/dev/null 2>&1
+        mkdir -p /tmp/tianyan-rust-android
+        tar -xf "$RUST_STD_ANDROID" -C /tmp/tianyan-rust-android --strip-components=1 2>/dev/null || tar -xzf "$RUST_STD_ANDROID" -C /tmp/tianyan-rust-android --strip-components=1
+        if [ -x /tmp/tianyan-rust-android/install.sh ]; then
+            sh /tmp/tianyan-rust-android/install.sh --prefix="$RUST_HOME" --disable-ldconfig >/dev/null 2>&1
         fi
-        rm -rf /tmp/wanxiang-rust-android
+        rm -rf /tmp/tianyan-rust-android
     fi
 
     if [ -x "$RUST_HOME/bin/rustc" ]; then
@@ -323,14 +323,14 @@ if [ -n "$RUST_STANDALONE" ] && [ -f "$RUST_STANDALONE" ]; then
         for cmd in rustc cargo rustdoc; do
             if [ -x "$RUST_HOME/bin/$cmd" ]; then
                 ln -sfn "$RUST_HOME/bin/$cmd" "$TOOL_DIR/bin/$cmd"
-                ln -sfn "$RUST_HOME/bin/$cmd" "/opt/wanxiang/bin/$cmd"
+                ln -sfn "$RUST_HOME/bin/$cmd" "/opt/tianyan/bin/$cmd"
             fi
         done
         mkdir -p /root/.cargo
         cat << 'EOF' > /root/.cargo/config.toml
 [target.aarch64-linux-android]
-linker = "/opt/wanxiang/toolchains/android/ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android29-clang"
-ar = "/opt/wanxiang/toolchains/android/ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+linker = "/opt/tianyan/toolchains/android/ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android29-clang"
+ar = "/opt/tianyan/toolchains/android/ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
 
 [source.crates-io]
 replace-with = 'tuna'
@@ -345,33 +345,33 @@ fi
 # Ripgrep (rg) ARM64: 毫秒级极速搜索
 if [ -f "$ARCHIVES/ripgrep-15.2.0-aarch64-unknown-linux-musl.tar.gz" ]; then
     progress 89 "[EXTRACT] 正在解压 Ripgrep 极速代码搜索工具：ripgrep-15.2.0-aarch64-unknown-linux-musl.tar.gz"
-    rm -rf /tmp/wanxiang-ripgrep
-    mkdir -p /tmp/wanxiang-ripgrep
-    tar -xzf "$ARCHIVES/ripgrep-15.2.0-aarch64-unknown-linux-musl.tar.gz" -C /tmp/wanxiang-ripgrep
-    RG_BIN=$(find /tmp/wanxiang-ripgrep -type f -name rg -print -quit)
+    rm -rf /tmp/tianyan-ripgrep
+    mkdir -p /tmp/tianyan-ripgrep
+    tar -xzf "$ARCHIVES/ripgrep-15.2.0-aarch64-unknown-linux-musl.tar.gz" -C /tmp/tianyan-ripgrep
+    RG_BIN=$(find /tmp/tianyan-ripgrep -type f -name rg -print -quit)
     need "$RG_BIN" "ripgrep binary"
     is_aarch64_elf "$RG_BIN" || { echo "Ripgrep is not ARM64" >&2; exit 5; }
     cp "$RG_BIN" "$TOOL_DIR/bin/rg"
     chmod 755 "$TOOL_DIR/bin/rg"
-    ln -sfn "$TOOL_DIR/bin/rg" "/opt/wanxiang/bin/rg"
-    rm -rf /tmp/wanxiang-ripgrep
+    ln -sfn "$TOOL_DIR/bin/rg" "/opt/tianyan/bin/rg"
+    rm -rf /tmp/tianyan-ripgrep
     progress 90 "[COMMAND] Ripgrep (rg) ARM64 安装完成"
 fi
 
 # JADX 1.5.0 CLI: Java 反编译工具
 if [ -f "$ARCHIVES/jadx-1.5.0.zip" ]; then
     progress 91 "[EXTRACT] 正在解压 JADX 1.5.0 反编译套件：jadx-1.5.0.zip"
-    rm -rf "$TOOL_DIR/jadx" /tmp/wanxiang-jadx
-    mkdir -p /tmp/wanxiang-jadx
-    extract_zip "$ARCHIVES/jadx-1.5.0.zip" /tmp/wanxiang-jadx
-    JADX_BIN=$(find /tmp/wanxiang-jadx -type f -name jadx -print -quit)
+    rm -rf "$TOOL_DIR/jadx" /tmp/tianyan-jadx
+    mkdir -p /tmp/tianyan-jadx
+    extract_zip "$ARCHIVES/jadx-1.5.0.zip" /tmp/tianyan-jadx
+    JADX_BIN=$(find /tmp/tianyan-jadx -type f -name jadx -print -quit)
     need "$JADX_BIN" "jadx launcher"
     mkdir -p "$TOOL_DIR/jadx"
     cp -a "$(dirname "$(dirname "$JADX_BIN")")/." "$TOOL_DIR/jadx/"
     chmod +x "$TOOL_DIR/jadx/bin/jadx" "$TOOL_DIR/jadx/bin/jadx-gui" 2>/dev/null || true
     ln -sfn "$TOOL_DIR/jadx/bin/jadx" "$TOOL_DIR/bin/jadx"
-    ln -sfn "$TOOL_DIR/jadx/bin/jadx" "/opt/wanxiang/bin/jadx"
-    rm -rf /tmp/wanxiang-jadx
+    ln -sfn "$TOOL_DIR/jadx/bin/jadx" "/opt/tianyan/bin/jadx"
+    rm -rf /tmp/tianyan-jadx
     progress 92 "[COMMAND] JADX 1.5.0 安装完成"
 fi
 
@@ -382,17 +382,17 @@ if [ -f "$ARCHIVES/apktool_2.10.0.jar" ]; then
     cp "$ARCHIVES/apktool_2.10.0.jar" "$TOOL_DIR/lib/apktool.jar"
     printf '#!/usr/bin/env sh\nexec "%s/bin/java" -jar "%s/lib/apktool.jar" "$@"\n' "$JDK_HOME" "$TOOL_DIR" > "$TOOL_DIR/bin/apktool"
     chmod 755 "$TOOL_DIR/bin/apktool"
-    ln -sfn "$TOOL_DIR/bin/apktool" "/opt/wanxiang/bin/apktool"
+    ln -sfn "$TOOL_DIR/bin/apktool" "/opt/tianyan/bin/apktool"
     progress 94 "[COMMAND] Apktool 2.10.0 安装完成"
 fi
 
 # dex-tools 2.4 (dex2jar): DEX 转换与字节码工具
 if [ -f "$ARCHIVES/dex-tools-v2.4.zip" ]; then
     progress 95 "[EXTRACT] 正在解压 dex-tools 2.4 (dex2jar)：dex-tools-v2.4.zip"
-    rm -rf "$TOOL_DIR/dex-tools" /tmp/wanxiang-d2j
-    mkdir -p /tmp/wanxiang-d2j
-    extract_zip "$ARCHIVES/dex-tools-v2.4.zip" /tmp/wanxiang-d2j
-    D2J_SCRIPT=$(find /tmp/wanxiang-d2j -type f -name "d2j-dex2jar.sh" -print -quit)
+    rm -rf "$TOOL_DIR/dex-tools" /tmp/tianyan-d2j
+    mkdir -p /tmp/tianyan-d2j
+    extract_zip "$ARCHIVES/dex-tools-v2.4.zip" /tmp/tianyan-d2j
+    D2J_SCRIPT=$(find /tmp/tianyan-d2j -type f -name "d2j-dex2jar.sh" -print -quit)
     need "$D2J_SCRIPT" "d2j-dex2jar script"
     mkdir -p "$TOOL_DIR/dex-tools"
     cp -a "$(dirname "$D2J_SCRIPT")/." "$TOOL_DIR/dex-tools/"
@@ -402,11 +402,11 @@ if [ -f "$ARCHIVES/dex-tools-v2.4.zip" ]; then
             base_cmd=$(basename "$script" .sh)
             ln -sfn "$script" "$TOOL_DIR/bin/$base_cmd"
             ln -sfn "$script" "$TOOL_DIR/bin/$base_cmd.sh"
-            ln -sfn "$script" "/opt/wanxiang/bin/$base_cmd"
-            ln -sfn "$script" "/opt/wanxiang/bin/$base_cmd.sh"
+            ln -sfn "$script" "/opt/tianyan/bin/$base_cmd"
+            ln -sfn "$script" "/opt/tianyan/bin/$base_cmd.sh"
         fi
     done
-    rm -rf /tmp/wanxiang-d2j
+    rm -rf /tmp/tianyan-d2j
     progress 96 "[COMMAND] dex-tools (d2j-dex2jar) 安装完成"
 fi
 
@@ -440,7 +440,7 @@ if [ -n "$NDK_BIN_DIR" ] && [ -d "$NDK_BIN_DIR" ]; then
     if [ -x "$NDK_BIN_DIR/llvm-cxxfilt" ]; then
         ln -sfn "$NDK_BIN_DIR/llvm-cxxfilt" "$TOOL_DIR/bin/cxxfilt"
         ln -sfn "$NDK_BIN_DIR/llvm-cxxfilt" "$TOOL_DIR/bin/c++filt"
-        ln -sfn "$NDK_BIN_DIR/llvm-cxxfilt" "/opt/wanxiang/bin/c++filt"
+        ln -sfn "$NDK_BIN_DIR/llvm-cxxfilt" "/opt/tianyan/bin/c++filt"
     fi
 fi
 
@@ -469,13 +469,13 @@ if [ -n "$BAKSMALI_JAR" ] && [ -f "$BAKSMALI_JAR" ]; then
     chmod 755 "$TOOL_DIR/bin/baksmali"
 fi
 
-# wanxiang-apk-sign: 内置一键自动化回包对齐与签名命令
-cat << 'EOF' > "$TOOL_DIR/bin/wanxiang-apk-sign"
+# tianyan-apk-sign: 内置一键自动化回包对齐与签名命令
+cat << 'EOF' > "$TOOL_DIR/bin/tianyan-apk-sign"
 #!/bin/sh
 set -eu
 if [ $# -lt 1 ]; then
-    echo "用法: wanxiang-apk-sign <输入未签名APK> [输出已签名APK]"
-    echo "示例: wanxiang-apk-sign app-unsigned.apk app-signed.apk"
+    echo "用法: tianyan-apk-sign <输入未签名APK> [输出已签名APK]"
+    echo "示例: tianyan-apk-sign app-unsigned.apk app-signed.apk"
     exit 1
 fi
 INPUT_APK="$1"
@@ -488,31 +488,31 @@ KS_DIR="/root/.android"
 KS_PATH="$KS_DIR/debug.keystore"
 if [ ! -f "$KS_PATH" ]; then
     mkdir -p "$KS_DIR"
-    echo "==> [wanxiang-apk-sign] 正在生成标准 Android Debug Keystore..."
+    echo "==> [tianyan-apk-sign] 正在生成标准 Android Debug Keystore..."
     keytool -genkeypair -v -keystore "$KS_PATH" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" >/dev/null 2>&1
 fi
-TMP_ALIGNED="/tmp/wanxiang-aligned-$$.apk"
-echo "==> [wanxiang-apk-sign] 正在执行 4-byte 字节对齐 (zipalign)..."
+TMP_ALIGNED="/tmp/tianyan-aligned-$$.apk"
+echo "==> [tianyan-apk-sign] 正在执行 4-byte 字节对齐 (zipalign)..."
 zipalign -p -f 4 "$INPUT_APK" "$TMP_ALIGNED"
-echo "==> [wanxiang-apk-sign] 正在执行 v1/v2/v3 签名 (apksigner)..."
+echo "==> [tianyan-apk-sign] 正在执行 v1/v2/v3 签名 (apksigner)..."
 apksigner sign --ks "$KS_PATH" --ks-pass pass:android --ks-key-alias androiddebugkey --key-pass pass:android --out "$OUTPUT_APK" "$TMP_ALIGNED"
 rm -f "$TMP_ALIGNED"
-echo "==> [wanxiang-apk-sign] 正在验证签名..."
+echo "==> [tianyan-apk-sign] 正在验证签名..."
 apksigner verify -v "$OUTPUT_APK" | grep -E "Verifies|Signer #" || true
-echo "==> [wanxiang-apk-sign] ✅ 签名回包完成: $OUTPUT_APK"
+echo "==> [tianyan-apk-sign] ✅ 签名回包完成: $OUTPUT_APK"
 EOF
-chmod 755 "$TOOL_DIR/bin/wanxiang-apk-sign"
+chmod 755 "$TOOL_DIR/bin/tianyan-apk-sign"
 
 progress 97 "[COMMAND] 正在创建全局开发、逆向与签名命令链接"
 ln -sfn "$JDK_HOME/bin/java" "$TOOL_DIR/bin/java"
 ln -sfn "$JDK_HOME/bin/javac" "$TOOL_DIR/bin/javac"
 ln -sfn "/opt/gradle-$GRADLE_VERSION/bin/gradle" "$TOOL_DIR/bin/gradle"
-for command in java javac gradle cmake ninja adb flutter dart rustc cargo rustdoc apksigner zipalign jarsigner keytool aapt aapt2 dexdump readelf objdump nm strings cxxfilt uber-apk-signer smali baksmali wanxiang-apk-sign jadx apktool d2j-dex2jar d2j-baksmali d2j-smali rg; do
-    if [ "$command" = "adb" ] && [ -f "/opt/wanxiang/bin/adb" ] && ! [ -L "/opt/wanxiang/bin/adb" ]; then
-        # 保留 /opt/wanxiang/bin/adb 智能连接包装脚本
+for command in java javac gradle cmake ninja adb flutter dart rustc cargo rustdoc apksigner zipalign jarsigner keytool aapt aapt2 dexdump readelf objdump nm strings cxxfilt uber-apk-signer smali baksmali tianyan-apk-sign jadx apktool d2j-dex2jar d2j-baksmali d2j-smali rg; do
+    if [ "$command" = "adb" ] && [ -f "/opt/tianyan/bin/adb" ] && ! [ -L "/opt/tianyan/bin/adb" ]; then
+        # 保留 /opt/tianyan/bin/adb 智能连接包装脚本
         continue
     fi
-    if [ -e "$TOOL_DIR/bin/$command" ]; then ln -sfn "$TOOL_DIR/bin/$command" "/opt/wanxiang/bin/$command"; fi
+    if [ -e "$TOOL_DIR/bin/$command" ]; then ln -sfn "$TOOL_DIR/bin/$command" "/opt/tianyan/bin/$command"; fi
 done
 
 # 兼容旧版探针路径与系统标准 PATH
@@ -521,7 +521,7 @@ if [ -d "$TOOL_DIR/jadx" ]; then
     rm -rf /opt/jadx
     ln -sfn "$TOOL_DIR/jadx" /opt/jadx
 fi
-for common_cmd in jadx apktool rg d2j-dex2jar d2j-baksmali d2j-smali cmake ninja rustc cargo flutter dart aapt aapt2 zipalign apksigner wanxiang-apk-sign; do
+for common_cmd in jadx apktool rg d2j-dex2jar d2j-baksmali d2j-smali cmake ninja rustc cargo flutter dart aapt aapt2 zipalign apksigner tianyan-apk-sign; do
     if [ -e "$TOOL_DIR/bin/$common_cmd" ]; then
         ln -sfn "$TOOL_DIR/bin/$common_cmd" "/usr/local/bin/$common_cmd" 2>/dev/null || true
     fi
@@ -531,7 +531,7 @@ done
 # 启动器。任何中间环节被替换成包装脚本（脚本 exec 软链、软链又指回脚本）
 # 都会形成 PRoot 下的无限 exec 回环，这里在离开安装事务前彻底排除。
 JAVA_CHAIN_TARGETS="$JDK_HOME/bin/java"
-for chain_entry in "$TOOL_DIR/bin/java" "/opt/wanxiang/bin/java"; do
+for chain_entry in "$TOOL_DIR/bin/java" "/opt/tianyan/bin/java"; do
     resolved=$(readlink -f "$chain_entry" 2>/dev/null || echo "$chain_entry")
     case "$resolved" in
         "$JAVA_CHAIN_TARGETS") ;;
@@ -548,52 +548,52 @@ is_aarch64_elf "$JDK_HOME/bin/java" || {
 
 mkdir -p /root/.gradle /root/.gradle/init.d
 if [ -f "$PAYLOAD/config/gradle.properties" ]; then cp "$PAYLOAD/config/gradle.properties" /root/.gradle/gradle.properties; fi
-if [ -f "$PAYLOAD/config/wanxiang-android-ndk.gradle" ]; then cp "$PAYLOAD/config/wanxiang-android-ndk.gradle" /root/.gradle/init.d/wanxiang-android-ndk.gradle; fi
+if [ -f "$PAYLOAD/config/tianyan-android-ndk.gradle" ]; then cp "$PAYLOAD/config/tianyan-android-ndk.gradle" /root/.gradle/init.d/tianyan-android-ndk.gradle; fi
 printf '%s\n' 'android.builder.sdkDownload=false' >> /root/.gradle/gradle.properties
 
 # 持久化环境变量（供终端、PTY与沙箱全生命周期共享）
 mkdir -p /etc/profile.d
-cat << EOF > /etc/profile.d/wanxiang-android.sh
-# WanXiang Android development environment (managed by android-suite-offline plugin)
+cat << EOF > /etc/profile.d/tianyan-android.sh
+# Tianyan Android development environment (managed by android-suite-offline plugin)
 export JAVA_HOME="$JDK_HOME"
 export ANDROID_HOME="$ANDROID_HOME"
 export ANDROID_SDK_ROOT="$ANDROID_HOME"
 export GRADLE_HOME="/opt/gradle-$GRADLE_VERSION"
-export WANXIANG_AAPT2_PATH="$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/aapt2"
-export WANXIANG_NDK_PATH="$NDK_HOME"
-export WANXIANG_NDK_VERSION="r29"
+export TIANYAN_AAPT2_PATH="$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/aapt2"
+export TIANYAN_NDK_PATH="$NDK_HOME"
+export TIANYAN_NDK_VERSION="r29"
 export ANDROID_NDK_HOME="$NDK_HOME"
 export ANDROID_NDK_ROOT="$NDK_HOME"
-export WANXIANG_CMAKE_HOME="$TOOL_DIR/cmake"
-export WANXIANG_NINJA_HOME="$TOOL_DIR/bin"
-export RUSTUP_HOME="/opt/wanxiang/toolchains/rust"
+export TIANYAN_CMAKE_HOME="$TOOL_DIR/cmake"
+export TIANYAN_NINJA_HOME="$TOOL_DIR/bin"
+export RUSTUP_HOME="/opt/tianyan/toolchains/rust"
 export CARGO_HOME="/root/.cargo"
-export PATH="/opt/wanxiang/bin:/opt/wanxiang/toolchains/rust/bin:$TOOL_DIR/bin:$TOOL_DIR/cmake/bin:\$JAVA_HOME/bin:\$GRADLE_HOME/bin:/opt/flutter/bin:\$PATH"
+export PATH="/opt/tianyan/bin:/opt/tianyan/toolchains/rust/bin:$TOOL_DIR/bin:$TOOL_DIR/cmake/bin:\$JAVA_HOME/bin:\$GRADLE_HOME/bin:/opt/flutter/bin:\$PATH"
 export _JAVA_OPTIONS="-Djava.security.egd=file:/dev/urandom"
 EOF
-chmod 644 /etc/profile.d/wanxiang-android.sh 2>/dev/null || true
+chmod 644 /etc/profile.d/tianyan-android.sh 2>/dev/null || true
 
 cat << EOF > /etc/environment
 JAVA_HOME=$JDK_HOME
 ANDROID_HOME=$ANDROID_HOME
 ANDROID_SDK_ROOT=$ANDROID_HOME
 GRADLE_HOME=/opt/gradle-$GRADLE_VERSION
-WANXIANG_AAPT2_PATH=$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/aapt2
-WANXIANG_NDK_PATH=$NDK_HOME
-WANXIANG_NDK_VERSION=r29
+TIANYAN_AAPT2_PATH=$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/aapt2
+TIANYAN_NDK_PATH=$NDK_HOME
+TIANYAN_NDK_VERSION=r29
 ANDROID_NDK_HOME=$NDK_HOME
 ANDROID_NDK_ROOT=$NDK_HOME
-RUSTUP_HOME=/opt/wanxiang/toolchains/rust
+RUSTUP_HOME=/opt/tianyan/toolchains/rust
 CARGO_HOME=/root/.cargo
-PATH=/opt/wanxiang/bin:/opt/wanxiang/toolchains/rust/bin:$TOOL_DIR/bin:$TOOL_DIR/cmake/bin:$JDK_HOME/bin:/opt/gradle-$GRADLE_VERSION/bin:/opt/flutter/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+PATH=/opt/tianyan/bin:/opt/tianyan/toolchains/rust/bin:$TOOL_DIR/bin:$TOOL_DIR/cmake/bin:$JDK_HOME/bin:/opt/gradle-$GRADLE_VERSION/bin:/opt/flutter/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 _JAVA_OPTIONS=-Djava.security.egd=file:/dev/urandom
 EOF
 
-if [ -f /root/.bashrc ] && ! grep -q "wanxiang-android" /root/.bashrc 2>/dev/null; then
-    echo '. /etc/profile.d/wanxiang-android.sh 2>/dev/null || true' >> /root/.bashrc
+if [ -f /root/.bashrc ] && ! grep -q "tianyan-android" /root/.bashrc 2>/dev/null; then
+    echo '. /etc/profile.d/tianyan-android.sh 2>/dev/null || true' >> /root/.bashrc
 fi
-if [ -f /etc/bash.bashrc ] && ! grep -q "wanxiang-android" /etc/bash.bashrc 2>/dev/null; then
-    echo '. /etc/profile.d/wanxiang-android.sh 2>/dev/null || true' >> /etc/bash.bashrc
+if [ -f /etc/bash.bashrc ] && ! grep -q "tianyan-android" /etc/bash.bashrc 2>/dev/null; then
+    echo '. /etc/profile.d/tianyan-android.sh 2>/dev/null || true' >> /etc/bash.bashrc
 fi
 
 progress 98 "[VERIFY] 正在执行 Android 全栈开发套件最终验证"

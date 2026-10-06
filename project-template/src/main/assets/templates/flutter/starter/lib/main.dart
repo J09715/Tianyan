@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-void main() => runApp(const WanXiangApp());
+void main() => runApp(const TianyanApp());
 
-class WanXiangApp extends StatelessWidget {
-  const WanXiangApp({super.key});
+class TianyanApp extends StatelessWidget {
+  const TianyanApp({super.key});
 
   @override
   Widget build(BuildContext context) {

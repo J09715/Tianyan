@@ -1,6 +1,6 @@
 # RTK 终端命令优化器 — 离线插件包
 
-本目录是 `rtk-suite-offline` 插件的源文件布局，用于打包为可直接导入万象的本地 `.txplugin`。
+本目录是 `rtk-suite-offline` 插件的源文件布局，用于打包为可直接导入天衍的本地 `.txplugin`。
 
 ## 用途
 
@@ -39,4 +39,4 @@ payload/
 python tools/package-rtk-plugin.py
 ```
 
-产物将输出至：`dist/plugins/wanxiang-plugin-rtk-v1.0.0-arm64.txplugin`。
+产物将输出至：`dist/plugins/tianyan-plugin-rtk-v1.0.0-arm64.txplugin`。

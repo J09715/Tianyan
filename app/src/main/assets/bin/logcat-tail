@@ -1,5 +1,5 @@
 #!/bin/sh
-# WanXiang Logcat Tail — 实时跟踪目标应用日志
+# Tianyan Logcat Tail — 实时跟踪目标应用日志
 set -eu
 
 show_help() {
@@ -47,6 +47,6 @@ fi
 
 echo "--- 开始实时跟踪 $PACKAGE 日志 (按 Ctrl+C 停止) ---"
 while true; do
-    /opt/wanxiang/bin/logcat-grabber "$PACKAGE" ${TAG:+-t "$TAG"} -p "$PRIORITY" ${KEYWORD:+-k "$KEYWORD"} -n 50
+    /opt/tianyan/bin/logcat-grabber "$PACKAGE" ${TAG:+-t "$TAG"} -p "$PRIORITY" ${KEYWORD:+-k "$KEYWORD"} -n 50
     sleep "$INTERVAL"
 done

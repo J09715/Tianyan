@@ -38,7 +38,7 @@ if (-not (Test-Path -LiteralPath $systemTar)) {
     throw "Windows system tar not found at $systemTar"
 }
 
-$temporaryRoot = Join-Path ([IO.Path]::GetTempPath()) ("wanxiang-proot-" + [guid]::NewGuid())
+$temporaryRoot = Join-Path ([IO.Path]::GetTempPath()) ("tianyan-proot-" + [guid]::NewGuid())
 $debPath = Join-Path $temporaryRoot 'proot.deb'
 $arDirectory = Join-Path $temporaryRoot 'ar'
 $prootExtracted = Join-Path $temporaryRoot 'libproot.so'

@@ -1,6 +1,6 @@
-# 万象可移植项目模板规范（v1）
+# 天衍可移植项目模板规范（v1）
 
-万象模板是一个可导入、导出和分享的 ZIP 包。用户可在“工坊 → 更多 → 模板管理”中导入 ZIP，也可导出任意内置模板作为制作样例。
+天衍模板是一个可导入、导出和分享的 ZIP 包。用户可在“工坊 → 更多 → 模板管理”中导入 ZIP，也可导出任意内置模板作为制作样例。
 
 ## 1. 目录结构
 
@@ -65,7 +65,7 @@ my-template/
 
 文本内容和相对路径都可使用 `{{variableName}}`，例如 `src/{{moduleName}}/config.json.template`。生成时会替换变量并去掉末尾的 `.template`。
 
-任意需要替换的文本文件都建议添加 `.template` 后缀；常见源码和配置扩展名也会自动按文本处理。Android/Kotlin 包目录使用 `WANXIANG_PACKAGE_PATH`，创建时会替换为包名对应的目录层级。不要使用以下划线开头的占位目录，否则可能被 Android AAPT 忽略。
+任意需要替换的文本文件都建议添加 `.template` 后缀；常见源码和配置扩展名也会自动按文本处理。Android/Kotlin 包目录使用 `TIANYAN_PACKAGE_PATH`，创建时会替换为包名对应的目录层级。不要使用以下划线开头的占位目录，否则可能被 Android AAPT 忽略。
 
 生成结束前若仍存在 `{{unknownVariable}}`，创建会失败。所有输出路径都会进行规范化和越界检查。
 
@@ -90,8 +90,8 @@ my-template/
 - 导入、查看和导出模板不会执行脚本；创建工程时必须由用户明确授权。
 - 脚本在 Linux 沙箱的新工程目录中运行，单阶段最长 60 秒。
 - `beforeCreate` 在复制模板文件前执行，`afterCreate` 在物化完成后执行。
-- 工程路径通过 `WANXIANG_PROJECT_DIR` 提供。
-- 变量通过 `WANXIANG_VAR_<大写变量名>` 提供，例如 `packageName` 对应 `WANXIANG_VAR_PACKAGENAME`。
+- 工程路径通过 `TIANYAN_PROJECT_DIR` 提供。
+- 变量通过 `TIANYAN_VAR_<大写变量名>` 提供，例如 `packageName` 对应 `TIANYAN_VAR_PACKAGENAME`。
 - 任一脚本非零退出会终止创建并显示错误输出。
 
 ## 8. 生成结果校验
@@ -101,8 +101,8 @@ my-template/
 ```json
 {
   "validation": {
-    "requiredFiles": ["app/src/main/java/WANXIANG_PACKAGE_PATH/MainHook.kt"],
-    "forbiddenFiles": ["app/src/main/java/WANXIANG_PACKAGE_PATH/LegacyHook.kt"],
+    "requiredFiles": ["app/src/main/java/TIANYAN_PACKAGE_PATH/MainHook.kt"],
+    "forbiddenFiles": ["app/src/main/java/TIANYAN_PACKAGE_PATH/LegacyHook.kt"],
     "contentRules": [
       {
         "path": "app/src/main/assets/xposed_init",
@@ -116,7 +116,7 @@ my-template/
 - `requiredFiles`：必须存在的文件。
 - `forbiddenFiles`：不得生成的文件或目录。
 - `contentRules`：支持 `equals`、`contains`、`excludes` 文本规则。
-- 路径和期望内容都支持模板变量及 `WANXIANG_PACKAGE_PATH`。
+- 路径和期望内容都支持模板变量及 `TIANYAN_PACKAGE_PATH`。
 - 校验在 `afterCreate` 脚本完成后执行，因此脚本可以参与最终工程构造。
 
 ## 9. 导入、导出与分享

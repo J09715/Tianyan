@@ -2,8 +2,8 @@
 .gradle/
 .kotlin/
 **/build/
-!runtime/src/main/java/top/wanxiang/app/runtime/build/
-!runtime/src/main/java/top/wanxiang/app/runtime/build/*.kt
+!runtime/src/main/java/top/tianyan/app/runtime/build/
+!runtime/src/main/java/top/tianyan/app/runtime/build/*.kt
 
 # Android Studio / IntelliJ
 .idea/
@@ -118,3 +118,8 @@ cf*.png
 evidence/
 # taixu 上游对比参考（不入库）
 taixu-src/
+# AndroidX Baseline Profile 生成物（含过期类名引用，不入库）
+app/src/*/generated/baselineProfiles/
+
+# libpty_native.so 由 CI 用 NDK 从 app/src/main/cpp/pty_native.c 重建后产出，不入库
+app/src/main/jniLibs/arm64-v8a/libpty_native.so

@@ -1,0 +1,52 @@
+天衍 Tianyan — 第三方组件与来源声明
+==================================
+
+一、本项目来源
+--------------
+天衍（Tianyan）派生自开源项目「万象 WanXiang」(https://github.com/peakSee/Wanxiang)。
+上游项目未附带任何开源许可证声明。本仓库保留对上游项目的来源致谢，
+并在 README 中明确标注上游关系。所有品牌标识、图标、名称与文档均已由本仓库独立重写。
+
+二、随包分发的第三方组件（其版权声明必须保留）
+----------------------------------------------
+1. Gradle Wrapper
+   文件：gradlew、gradlew.bat
+   版权：Copyright © 2015-2021 the original authors
+   许可证：Apache License 2.0
+
+2. React / React-DOM / Scheduler
+   文件：app/src/main/assets/webchat/assets/index-*.js
+   版权：Copyright (c) Meta Platforms, Inc. and affiliates.
+   许可证：MIT
+   说明：该文件内的 @license 注释块为打包工具自动生成，不可移除。
+
+3. rtk（离线工具套件）
+   文件：assets/plugins/rtk-suite-offline/payload/
+   版权：Copyright 2024 rtk-ai and rtk-ai Labs
+   许可证：见该目录下随附的 LICENSE 文件
+
+4. AgentLand 智能体资产
+   文件：core/database/src/main/assets/agency_agents/
+   版权：Copyright (c) 2025 AgentLand Contributors
+   许可证：见该目录下随附的 LICENSE 文件
+
+5. PRoot 及其加载器
+   文件：app/src/main/jniLibs/arm64-v8a/libproot.so、libproot-loader.so
+   版权：PRoot 项目及其贡献者
+   许可证：GPL-2.0
+
+6. talloc
+   文件：app/src/main/jniLibs/arm64-v8a/libtalloc.so
+   版权：Andrew Tridgell 及 Samba 团队
+   许可证：LGPL-3.0
+
+7. libandroid-shmem.so
+   文件：app/src/main/jniLibs/arm64-v8a/libandroid-shmem.so
+   来源：AOSP / Android Open Source Project
+   许可证：Apache License 2.0
+
+三、本仓库自行构建的原生组件
+----------------------------
+libpty_native.so
+    由 app/src/main/cpp/pty_native.c 经 NDK aarch64-linux-android 工具链编译，
+    随源码一同分发，版权归本项目所有。

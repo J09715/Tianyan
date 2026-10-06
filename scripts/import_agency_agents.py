@@ -21,7 +21,7 @@ from pathlib import Path
 
 REPOSITORY_URL = "https://github.com/msitarzewski/agency-agents"
 
-# WanXiang is a software-building environment, so the bundled roster intentionally
+# Tianyan is a software-building environment, so the bundled roster intentionally
 # excludes sales, finance, healthcare, marketing, and other business functions.
 # None means every upstream agent in that department; a set is an explicit curation.
 CURATED_DEPARTMENTS: dict[str, set[str] | None] = {

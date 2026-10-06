@@ -1,8 +1,8 @@
-# 万象 Git 架构 Spec · 求审文档 v1
+# 天衍 Git 架构 Spec · 求审文档 v1
 
 > **给审阅 AI 的 prompt 建议**（复制到新对话最前）：
 >
-> 你是一位 Android 资深架构师 + Git 内部机制专家。下面这份文档描述了一个叫"万象"的 AI 手机 App（`top.wanxiang.app`，Kotlin/Compose，通过 PRoot 在用户态跑 Ubuntu 沙箱）里 **Git 相关功能的完整架构**。请你**批判性地审阅**：
+> 你是一位 Android 资深架构师 + Git 内部机制专家。下面这份文档描述了一个叫"天衍"的 AI 手机 App（`top.tianyan.app`，Kotlin/Compose，通过 PRoot 在用户态跑 Ubuntu 沙箱）里 **Git 相关功能的完整架构**。请你**批判性地审阅**：
 >
 > 1. **架构合理性**：分层、耦合、状态管理、跨进程通信协议。
 > 2. **正确性风险**：并发、竞态、失败恢复、状态泄漏、边界。
@@ -18,7 +18,7 @@
 
 ## 0. 上下文（背景）
 
-- **产品**：万象 = AI 手机 App，用户是中文开发者，主要在 GitHub/Gitee/GitLab 上私有仓库工作。
+- **产品**：天衍 = AI 手机 App，用户是中文开发者，主要在 GitHub/Gitee/GitLab 上私有仓库工作。
 - **技术栈**：Kotlin / Jetpack Compose / Hilt / Room / DataStore / OkHttp / kotlinx.coroutines。
 - **核心特点**：**不引 JGit/libgit2**，git 命令一律通过 **PRoot 沙箱里的真 git 二进制**执行。凭据 + 代理 + `.gitconfig` 全在沙箱里配置。
 - **网络环境**：手机在中国大陆，GitHub 需代理。App 有 in-app 沙箱代理入口 + 回落 Android 全局 proxy。
@@ -56,13 +56,13 @@ Sandbox (Ubuntu via PRoot)
     .gitconfig 里 credential.helper 两条链
         ↓
 跨进程通信（App ↔ 沙箱）
-    通过 /wanxiang-ipc/ 目录（PRoot -b 绑定，同一 inode）
+    通过 /tianyan-ipc/ 目录（PRoot -b 绑定，同一 inode）
     文件协议：cred-req-<id> / cred-resp-<id>
 
 存储
     GitPreferences (DataStore + AES 加密) — 用户凭据真源
     SettingsDataStore (DataStore 明文) — sandboxHttpProxy / recentCloneUrls / 更新冷却字段
-    /wanxiang-ipc/git-credentials (明文文件) — 供沙箱 store helper 读
+    /tianyan-ipc/git-credentials (明文文件) — 供沙箱 store helper 读
 ```
 
 ## 2. 关键组件职责
@@ -79,8 +79,8 @@ Sandbox (Ubuntu via PRoot)
 - `cleanupStale(dir)` 启动时清所有遗留 req/resp 文件。
 - 内部 `CoroutineScope(SupervisorJob + Dispatchers.IO)`。
 
-### 2.2 `git-credential-wanxiang`（沙箱 shell helper）
-POSIX sh 脚本，作为 `.gitconfig` 里 credential.helper 的第二条（`store --file=/wanxiang-ipc/git-credentials` 之后）。
+### 2.2 `git-credential-tianyan`（沙箱 shell helper）
+POSIX sh 脚本，作为 `.gitconfig` 里 credential.helper 的第二条（`store --file=/tianyan-ipc/git-credentials` 之后）。
 
 关键决策：
 - 因为 git 的多 helper **顺序串行、凭据累加**，本 helper 总会被调；被调 ≠ 未登录。
@@ -90,13 +90,13 @@ POSIX sh 脚本，作为 `.gitconfig` 里 credential.helper 的第二条（`stor
 - RESP 内容格式：`username=...\npassword=...\n` 或 `cancel=1\n`。
 
 ### 2.3 `GitCredentialIpcBootstrap`（装配）
-App 启动 `WanXiangApplication.onCreate` 里 `launch { bootstrap.start() }`。做四件事（全幂等）：
-1. 从 `assets/wanxiang/git-credential-wanxiang` 抽到 `gitIpcDir/` + `chmod +x`。
-2. 用 `linuxRuntime.execute` 跑 `git config --global --unset-all credential.helper; git config --global credential.helper 'store --file=...'; git config --global --add credential.helper '/wanxiang-ipc/git-credential-wanxiang'`（20 次 5s 退避重试直到成功，因为沙箱启动时机不确定）。
+App 启动 `TianyanApplication.onCreate` 里 `launch { bootstrap.start() }`。做四件事（全幂等）：
+1. 从 `assets/tianyan/git-credential-tianyan` 抽到 `gitIpcDir/` + `chmod +x`。
+2. 用 `linuxRuntime.execute` 跑 `git config --global --unset-all credential.helper; git config --global credential.helper 'store --file=...'; git config --global --add credential.helper '/tianyan-ipc/git-credential-tianyan'`（20 次 5s 退避重试直到成功，因为沙箱启动时机不确定）。
 3. `observeAndMirrorCredentials`：订阅 `GitPreferences.credentials` flow，任何变更 `distinctUntilChanged` 后**重写 `git-credentials` 明文文件**（先 `.tmp` 再 renameTo）。
 4. 启动 `GitCredentialIpcBridge.start()`。
 
-**额外**：如果沙箱 `git` 未装（`buildpack-deps:noble-scm` 镜像不带），首次会 `apt-get update && apt-get install -y -qq git`。apt 用国内 TUNA 源（万象 provision 里已配好）。
+**额外**：如果沙箱 `git` 未装（`buildpack-deps:noble-scm` 镜像不带），首次会 `apt-get update && apt-get install -y -qq git`。apt 用国内 TUNA 源（天衍 provision 里已配好）。
 
 ### 2.4 `EnvironmentResolver`（沙箱 env）
 每次 `linuxRuntime.execute` 都通过它构造 env map。代理优先级：
@@ -108,7 +108,7 @@ App 启动 `WanXiangApplication.onCreate` 里 `launch { bootstrap.start() }`。�
 
 ### 2.5 `ProotCommandBuilder`
 每次起 PRoot 时决定 `-b` 挂载。关键：
-- `<files>/linux-runtime/git-ipc` → `/wanxiang-ipc`（**IPC 桥的传输介质**）。
+- `<files>/linux-runtime/git-ipc` → `/tianyan-ipc`（**IPC 桥的传输介质**）。
 - `<files>/linux-runtime/workspace` → `/workspace`（用户项目根）。
 - `<files>/linux-runtime/distros/ubuntu/home` → `/root`（含 `.gitconfig`）。
 - `<files>/linux-runtime/attachments` → `/attachments`。
@@ -157,7 +157,7 @@ App 启动 `WanXiangApplication.onCreate` 里 `launch { bootstrap.start() }`。�
 ⑥ git 需 auth → credential.helper 链：
     store helper 读 git-credentials：有则返回；无则返回空
     → 空时我 shell helper 触发：
-      写 cred-req-<id> 到 /wanxiang-ipc/
+      写 cred-req-<id> 到 /tianyan-ipc/
       轮询 cred-resp-<id>（每 200ms，25 分钟上限）
 ⑦ 同时 App 侧：
     GitCredentialIpcBridge.FileObserver 或 1s 兜底轮询捕获 → 解析 host
@@ -171,7 +171,7 @@ App 启动 `WanXiangApplication.onCreate` 里 `launch { bootstrap.start() }`。�
 ⑧ helper 读到 RESP → cat 给 git → git 用凭据继续 fetch
 ⑨ git 每输出流式回 onOutput → applyGitProgress → 状态推 UI 进度条
 ⑩ exit=0 → _gitProgress=null + _gitOpMessage = Ok + SwitchWorkspaceTo 动作
-⑪ Snackbar 「✓ 已克隆到 Wanxiang/」+ [切过去]
+⑪ Snackbar 「✓ 已克隆到 Tianyan/」+ [切过去]
 ⑫ 用户点切过去 → switchWorkspace(path) → refreshGitStatus
 ```
 
@@ -200,7 +200,7 @@ App 启动 `WanXiangApplication.onCreate` 里 `launch { bootstrap.start() }`。�
 ```
 ① App 冷启 → MainActivity.setContent 里 LaunchedEffect(onboarding.completed)
 ② autoCheckUpdates 开关 → 距上次 <6h 冷却中 return → setLastUpdateCheckTime(now)
-③ checkUpdateMerged → GET /app-api/wanxiang/config/get-all → 拿 wanxiang.latest_version
+③ checkUpdateMerged → GET /app-api/tianyan/config/get-all → 拿 tianyan.latest_version
 ④ versionCode > current 且 != dismissedCode → 延后 3s → updateInfo = info
 ⑤ 弹对话框
 ⑥ 用户点下载 → **重跑一次 checkUpdateMerged 拿最新**（防中间版本 cascade，
@@ -229,7 +229,7 @@ App 启动 `WanXiangApplication.onCreate` 里 `launch { bootstrap.start() }`。�
 
 **同一份凭据在两个地方存**，可能引发一致性问题：
 1. `GitPreferences.credentials: Flow<List<GitCredential>>`（DataStore + AES 加密）。
-2. `/wanxiang-ipc/git-credentials`（明文文件，供沙箱 git 的 store helper 读）。
+2. `/tianyan-ipc/git-credentials`（明文文件，供沙箱 git 的 store helper 读）。
 
 写路径：UI 增删 → `GitPreferences.setCredentials(list)` → DataStore 变 → `observeAndMirrorCredentials` 通过 `distinctUntilChanged` 触发 → 重写文件。
 
@@ -283,7 +283,7 @@ App 启动 `WanXiangApplication.onCreate` 里 `launch { bootstrap.start() }`。�
 ### Android / PRoot
 - **D1** FileObserver 用 `String path` 构造（`@Suppress("DEPRECATION")`）。API 29+ 推荐 File 版；这里用 String 是因为项目 minSdk=26。但 PRoot 的 `-b` 绑定后 inotify 事件跨 mount 边界的行为**没标准保证**。你信 1s 轮询的兜底吗？间隔要不要更短？
 - **D2** 沙箱 `.gitconfig` 通过 `linuxRuntime.execute("git config --global ...")` 写。如果沙箱还没 ready（`LinuxRuntimeImpl` restoreInstalledState 未完成）→ 命令失败 → 靠 20 次重试。**但**在应用被系统 kill 后重启 → 冷启时间可能超过重试窗口 100 秒 → credential.helper 就没注册。用户 clone 直接失败 → 但错误消息可能不指向这个根因。怎么改善？
-- **D3** PRoot 挂载 `<ipcDir>:/wanxiang-ipc` + `<homeDir>:/root`，两者嵌套（后者是前者父路径）。PRoot 的 `-b` 处理这种嵌套冲突吗？会不会有 `/root/.gitconfig` 和 `/wanxiang-ipc/*` 的路径混淆？（现在实测没问题，但依赖未文档化。）
+- **D3** PRoot 挂载 `<ipcDir>:/tianyan-ipc` + `<homeDir>:/root`，两者嵌套（后者是前者父路径）。PRoot 的 `-b` 处理这种嵌套冲突吗？会不会有 `/root/.gitconfig` 和 `/tianyan-ipc/*` 的路径混淆？（现在实测没问题，但依赖未文档化。）
 - **D4** `--change-id=0:0` 让沙箱内是 root。这意味着 apt-get install 无需 sudo。副作用：所有 git 命令都在 root 权限下跑，`.git` 目录文件属 root（宿主机看到的 uid 是 u0_a300，通过 PRoot 映射 OK）。但 `safe.directory = *` 的必要性就来自这里。生产环境上有没有其他隐患？
 - **D5** App 从后台被系统 kill 时，PRoot 子进程会被杀吗？（`--kill-on-exit` 是 PRoot 正常退出时的清理，被 SIGKILL 时未必。）如果 PRoot 泄漏 → 内存/文件描述符积累。有没有 watchdog？
 
@@ -295,9 +295,9 @@ App 启动 `WanXiangApplication.onCreate` 里 `launch { bootstrap.start() }`。�
 - **E5** `gitClone` 目标 `<repoName>` 用 URL 末段去 `.git`。`https://github.com/x/y/` → `y`（OK）。但 `git@github.com:x/y.git`（SSH 形式）→ 我 `substringAfterLast('/')` 拿不到（因为没有 `/`）。当前只支持 HTTPS，OK。但如果用户误粘 SSH URL，会拿整串当 repoName → 名字里带冒号奇怪。**是否该明确拒绝非 HTTPS**？
 
 ### 安全
-- **F1** shell helper 用 `cat "$RESP"` 把凭据**明文**输出到 stdout → git 读。这条 stdout 会进 git 的 stderr 日志吗？（不会，git 内部管道，不落 log。）但 `linuxRuntime.execute` 捕获的 stdout 里**可能包含 git 的 stdout**——如果 git 处理 credential helper 输出时把它打印出来了（比如 verbose 模式），凭据会进 万象 runtime.log（明文）。要不要在 applyGitProgress 前做正则脱敏 `ghp_[A-Za-z0-9]{36}`？
-- **F2** Debug 广播（`top.wanxiang.app.DEBUG_GIT` 等）只在 debug 版 AndroidManifest 注册。**但如果 release 版被误打了 debug AndroidManifest 合并（比如 build.gradle 配置错）** → 广播入口对外开放 → 任何人 adb 或第三方 app `sendBroadcast` 就能触发 gitClone/set_proxy/clear_creds。要不要 receiver 端加签名校验 or `android:permission` 保护？
-- **F3** GitOpAction.CopyError 把整段错误文本塞剪贴板。如果错误里包含 token（比如 `fatal: Authentication failed for 'https://peakSee:ghp_xxx@github.com/...'`）→ token 进剪贴板 → 其他 app 读剪贴板 → 泄露。要不要 CopyError 前正则掩码？
+- **F1** shell helper 用 `cat "$RESP"` 把凭据**明文**输出到 stdout → git 读。这条 stdout 会进 git 的 stderr 日志吗？（不会，git 内部管道，不落 log。）但 `linuxRuntime.execute` 捕获的 stdout 里**可能包含 git 的 stdout**——如果 git 处理 credential helper 输出时把它打印出来了（比如 verbose 模式），凭据会进 天衍 runtime.log（明文）。要不要在 applyGitProgress 前做正则脱敏 `ghp_[A-Za-z0-9]{36}`？
+- **F2** Debug 广播（`top.tianyan.app.DEBUG_GIT` 等）只在 debug 版 AndroidManifest 注册。**但如果 release 版被误打了 debug AndroidManifest 合并（比如 build.gradle 配置错）** → 广播入口对外开放 → 任何人 adb 或第三方 app `sendBroadcast` 就能触发 gitClone/set_proxy/clear_creds。要不要 receiver 端加签名校验 or `android:permission` 保护？
+- **F3** GitOpAction.CopyError 把整段错误文本塞剪贴板。如果错误里包含 token（比如 `fatal: Authentication failed for 'https://J09715:ghp_xxx@github.com/...'`）→ token 进剪贴板 → 其他 app 读剪贴板 → 泄露。要不要 CopyError 前正则掩码？
 - **F4** DataStore 的 `sandboxHttpProxy` 是明文字符串（`http://user:pass@host:port` 可能带凭据）。DataStore 明文文件在 app 私有目录。同上：root + adb 可读。用户如果配了带 auth 的代理 URL → 代理凭据泄露。要不要加密？
 
 ### 性能

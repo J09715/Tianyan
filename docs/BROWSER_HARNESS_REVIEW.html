@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WanXiang 内置浏览器 · Harness 驱动链路代码审查</title>
+<title>Tianyan 内置浏览器 · Harness 驱动链路代码审查</title>
 <style>
   :root{
     --text:#1A1B1C; --secondary:#6B7280; --bg:#F4F3EE; --card:#FFFFFF;
@@ -50,7 +50,7 @@
 <body>
 <div class="wrap">
 
-  <h1>🌐 WanXiang 内置浏览器 · Harness 驱动链路代码审查</h1>
+  <h1>🌐 Tianyan 内置浏览器 · Harness 驱动链路代码审查</h1>
   <div class="sub">范围：feature/browser + runtime/browser + harness 侧 MCP 桥接 · 审查日期：2026-09-02 · 结论：链路可通，但存在 1 处阻断性时序 Bug 与若干安全/多 tab 隐患</div>
   <div class="meta">
     <span class="pill red">🔴 高危 × 4</span>
@@ -61,13 +61,13 @@
 
   <h2>一、结论摘要</h2>
   <div class="card">
-    <p><b>整条链路是通的：</b>模型 tool_call（<code>mcp__wanxiang-browser-bu__browser_*__&lt;hash&gt;</code>）→ <code>ToolExecutor(MCP)</code> → <code>McpManager</code> → <code>McpHttpTransport</code> → 回环 HTTP <code>127.0.0.1:8787/mcp</code> → <code>McpServerRuntime</code> → <code>BrowserMcpTools</code> → <code>AndroidInAppBrowserEngine</code> → WebView。内置 server 配置已写入 <code>BuiltinMcpPresets</code>（id=<code>wanxiang-browser-builtin</code>，默认启用），UI 与 harness 共用同一 <code>BrowserRegistry</code> 实例，设计正确。</p>
+    <p><b>整条链路是通的：</b>模型 tool_call（<code>mcp__tianyan-browser-bu__browser_*__&lt;hash&gt;</code>）→ <code>ToolExecutor(MCP)</code> → <code>McpManager</code> → <code>McpHttpTransport</code> → 回环 HTTP <code>127.0.0.1:8787/mcp</code> → <code>McpServerRuntime</code> → <code>BrowserMcpTools</code> → <code>AndroidInAppBrowserEngine</code> → WebView。内置 server 配置已写入 <code>BuiltinMcpPresets</code>（id=<code>tianyan-browser-builtin</code>，默认启用），UI 与 harness 共用同一 <code>BrowserRegistry</code> 实例，设计正确。</p>
     <p><b>但当前实现有几个会实际咬人的坑：</b>最严重的是 <code>browser.snapshot</code> 的快照异步发布竞态（首次拿空、之后滞后）；其次是审批风险矩阵完全没落地（安全闭环缺失）与脱敏层未接线（敏感数据可能回灌模型）。多 tab 场景下有全局状态串扰；离屏 tab 截图大概率空白。</p>
   </div>
 
   <h2>二、驱动链路总览</h2>
   <div class="chain">
-    <div class="node"><b>① 模型 tool_call</b><span>mcp__wanxiang-browser-bu__browser_click__&lt;hash&gt;（McpToolApiName 编码/匹配正常）</span></div>
+    <div class="node"><b>① 模型 tool_call</b><span>mcp__tianyan-browser-bu__browser_click__&lt;hash&gt;（McpToolApiName 编码/匹配正常）</span></div>
     <div class="arrow">▼</div>
     <div class="node"><b>② ToolExecutor · HarnessTool.MCP</b><span>审批判定入口 → 风险矩阵未按工具粒度落地 <span class="badge high">#2</span></span></div>
     <div class="arrow">▼</div>
@@ -130,7 +130,7 @@
   <div class="issue">
     <h3><span class="tag mid">中危</span>#6 click/type/press 嵌套 runBlocking + 每次全量重扫 DOM</h3>
     <div class="field"><b>位置：</b>BrowserMcpTools.handleWithRef / handleType / handlePress（L106-134）；click 回调（L117-118）</div>
-    <p>在已经 runBlocking 的 CIO handler 里再次 runBlocking 包 suspend 调用（阻塞线程）；且 ref→selector 的回调每次都重新执行 <code>engine.snapshot()</code> 全量注入扫描脚本（又触发 #1 竞态），而不是从 RefResolver 缓存读。selector 依赖 DOM 里残留的 <code>data-wanxiang-ref</code> 属性，SPA 重渲染后失效。</p>
+    <p>在已经 runBlocking 的 CIO handler 里再次 runBlocking 包 suspend 调用（阻塞线程）；且 ref→selector 的回调每次都重新执行 <code>engine.snapshot()</code> 全量注入扫描脚本（又触发 #1 竞态），而不是从 RefResolver 缓存读。selector 依赖 DOM 里残留的 <code>data-tianyan-ref</code> 属性，SPA 重渲染后失效。</p>
     <p><b>建议：</b>invoke 全程纯 suspend（去掉内层 runBlocking）；selector 从 SnapshotBuilder 缓存表读取，不要每次重扫。</p>
   </div>
 
@@ -199,7 +199,7 @@
       <tr><td>#3 脱敏未接线（P0）</td><td style="color:var(--green);">✔ 已修</td><td>McpToolDispatcher.dispatch() 对所有工具输出统一过 SecretRedactingInterceptor.apply()（含 headers 字典重载）</td></tr>
       <tr><td>#2 审批矩阵未落地（P1）</td><td style="color:var(--green);">✔ 已修</td><td>ApprovalPolicyEngine.decide() 新增 rawToolName 参数，按工具名映射 LOW/MEDIUM/HIGH/CRITICAL：LOW 免审、HIGH/CRITICAL 按档提示，ToolExecutor 已传 rawToolName</td></tr>
       <tr><td>#5 多 tab 串扰（P1）</td><td style="color:var(--green);">✔ 已修</td><td>BrowserEventBus 按 tabId 分片（tabUrls/tabTitles/tabSnapshots），全局 StateFlow 只反映活跃 tab；新增 urlOf/titleOf/snapshotOf；storage 工具按 tokenOf 取 tab</td></tr>
-      <tr><td>#6 click/type/press（P1）</td><td style="color:var(--green);">✔ 已修</td><td>去掉嵌套 runBlocking（全 suspend）；ref→selector 直接映射 data-wanxiang-ref，不再每次全量重扫 DOM</td></tr>
+      <tr><td>#6 click/type/press（P1）</td><td style="color:var(--green);">✔ 已修</td><td>去掉嵌套 runBlocking（全 suspend）；ref→selector 直接映射 data-tianyan-ref，不再每次全量重扫 DOM</td></tr>
       <tr><td>#7 refMap 线程安全</td><td style="color:var(--green);">✔ 已修</td><td>ResolverRegistry 改用 ConcurrentHashMap&lt;String, ConcurrentHashMap&gt;</td></tr>
       <tr><td>#8 Unicode 反转义</td><td style="color:var(--green);">✔ 已修</td><td>unwrap() 改用 Json.parseToJsonElement 解码（带旧逻辑 fallback）</td></tr>
       <tr><td>#9 离屏截图空白</td><td style="color:var(--green);">✔ 已修</td><td>ScreenshotRecorder 对未 layout 的 view 先 measure+layout 再 draw</td></tr>
@@ -217,7 +217,7 @@
 
   <div class="foot">
     审查依据：docs/BROWSER_DESIGN.md · runtime/browser · harness/browser + harness/mcp · core/browser · feature/browser（均已在 2026-09-02 的 HEAD 编译通过）。<br>
-    生成时间：2026-09-02 · 万象 LinuxAIRuntime 代码审查产物。
+    生成时间：2026-09-02 · 天衍 LinuxAIRuntime 代码审查产物。
   </div>
 </div>
 </body>

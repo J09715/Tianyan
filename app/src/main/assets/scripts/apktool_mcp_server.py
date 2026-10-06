@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # ==============================================================================
-# WanXiang (LinuxAIRuntime) - 内置 APK 逆向 MCP 服务端 (stdio transport)
+# Tianyan (LinuxAIRuntime) - 内置 APK 逆向 MCP 服务端 (stdio transport)
 # ------------------------------------------------------------------------------
 # 自包含轻量 MCP 服务，包装沙箱内 android-suite 已装配的逆向工具链：
 #   apktool  (解包/回编译)   jadx (dex->java)   aapt (清单解码)
@@ -158,21 +158,21 @@ def tool_sign_apk(args):
     require_tool("apksigner")
     require_tool("keytool")
 
-    keystore = os.path.expanduser("~/.wanxiang-debug.keystore")
+    keystore = os.path.expanduser("~/.tianyan-debug.keystore")
     if not os.path.isfile(keystore):
         ok, out = run([
             "keytool", "-genkeypair", "-v",
             "-keystore", keystore,
-            "-alias", "wanxiang",
+            "-alias", "tianyan",
             "-keyalg", "RSA", "-keysize", "2048",
             "-validity", "10000",
-            "-storepass", "wanxiang123", "-keypass", "wanxiang123",
-            "-dname", "CN=Wanxiang Debug, OU=Wanxiang, O=Wanxiang, C=CN",
+            "-storepass", "tianyan123", "-keypass", "tianyan123",
+            "-dname", "CN=Tianyan Debug, OU=Tianyan, O=Tianyan, C=CN",
         ])
         if not ok:
             return False, "生成调试密钥库失败: {}".format(out)
 
-    tmp_dir = tempfile.mkdtemp(prefix="wanxiang-sign-")
+    tmp_dir = tempfile.mkdtemp(prefix="tianyan-sign-")
     try:
         aligned = os.path.join(tmp_dir, "aligned.apk")
         ok, out = run(["zipalign", "-f", "4", apk_path, aligned])
@@ -181,8 +181,8 @@ def tool_sign_apk(args):
         ok, out = run([
             "apksigner", "sign",
             "--ks", keystore,
-            "--ks-pass", "pass:wanxiang123",
-            "--key-pass", "pass:wanxiang123",
+            "--ks-pass", "pass:tianyan123",
+            "--key-pass", "pass:tianyan123",
             "--out", output_apk,
             aligned,
         ])
@@ -288,7 +288,7 @@ def handle_line(line):
         return rpc_response(req_id, {
             "protocolVersion": "2025-06-18",
             "capabilities": {"tools": {}},
-            "serverInfo": {"name": "wanxiang-apktool-mcp", "version": "1.0.0"},
+            "serverInfo": {"name": "tianyan-apktool-mcp", "version": "1.0.0"},
         })
     if method == "tools/list":
         return rpc_response(req_id, {

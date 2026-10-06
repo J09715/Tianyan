@@ -31,13 +31,13 @@
 最终目录必须是：
 
 ```text
-D:\work\wanxiang\assets\plugins\android-suite-offline\payload\archives\
+D:\work\tianyan\assets\plugins\android-suite-offline\payload\archives\
 ```
 
 PowerShell 示例：
 
 ```powershell
-$archiveDir = 'D:\work\wanxiang\assets\plugins\android-suite-offline\payload\archives'
+$archiveDir = 'D:\work\tianyan\assets\plugins\android-suite-offline\payload\archives'
 New-Item -ItemType Directory -Force $archiveDir | Out-Null
 Move-Item 'D:\Downloads\OpenJDK17U-jdk_aarch64_linux_hotspot_17.0.20.1_1.tar.gz' "$archiveDir\jdk-17-aarch64-linux.tar.gz"
 Move-Item 'D:\Downloads\flutter_v3.47.1_linux_arm64_android_web_sdk.tar.gz' "$archiveDir\flutter-source-arm64.tar.gz"

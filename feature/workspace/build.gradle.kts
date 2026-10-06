@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "top.wanxiang.app.feature.workspace"
+    namespace = "top.tianyan.app.feature.workspace"
     resourcePrefix = "workspace_"
     compileSdk = 37
     defaultConfig { minSdk = 29 }

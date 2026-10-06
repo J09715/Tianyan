@@ -1,5 +1,5 @@
 #!/bin/sh
-# WanXiang Logcat Export — 导出应用日志到文件
+# Tianyan Logcat Export — 导出应用日志到文件
 set -eu
 
 if [ $# -lt 2 ]; then
@@ -12,4 +12,4 @@ PACKAGE="$1"
 OUTPUT_FILE="$2"
 shift 2
 
-/opt/wanxiang/bin/logcat-grabber "$PACKAGE" -o "$OUTPUT_FILE" "$@"
+/opt/tianyan/bin/logcat-grabber "$PACKAGE" -o "$OUTPUT_FILE" "$@"

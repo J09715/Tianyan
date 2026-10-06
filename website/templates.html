@@ -4,23 +4,23 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f7f7f8">
-  <meta name="description" content="万象项目模板制作教程：template.json、动态字段、1:1 模板预览图、随身构造脚本、ZIP 导入与分享规范。">
-  <title>项目模板制作教程 · 万象 WanXiang</title>
-  <link rel="icon" href="assets/wanxiang-logo.png">
+  <meta name="description" content="天衍项目模板制作教程：template.json、动态字段、1:1 模板预览图、随身构造脚本、ZIP 导入与分享规范。">
+  <title>项目模板制作教程 · 天衍 Tianyan</title>
+  <link rel="icon" href="assets/tianyan-logo.png">
   <link rel="stylesheet" href="styles.css">
   <script src="script.js" defer></script>
 </head>
 <body class="docs-page">
   <a class="skip-link" href="#main">跳到主要内容</a>
   <header class="site-header docs-header" data-header>
-    <a class="brand" href="index.html" aria-label="返回万象首页"><span class="brand-mark"><img src="assets/wanxiang-logo.png" alt=""></span><span class="brand-name">万象</span><span class="brand-roman">WANXIANG</span></a>
+    <a class="brand" href="index.html" aria-label="返回天衍首页"><span class="brand-mark"><img src="assets/tianyan-logo.png" alt=""></span><span class="brand-name">天衍</span><span class="brand-roman">TIANYAN</span></a>
     <button class="menu-toggle" type="button" aria-label="打开导航" aria-expanded="false" data-menu-toggle><span></span><span></span></button>
-    <nav class="site-nav" aria-label="主导航" data-nav><a href="index.html#vision">理念</a><a href="index.html#themes">界面</a><a href="plugins.html">插件教程</a><a href="templates.html" aria-current="page">模板教程</a><a class="nav-github" href="https://github.com/peakSee/Wanxiang" target="_blank" rel="noreferrer">GitHub ↗</a></nav>
+    <nav class="site-nav" aria-label="主导航" data-nav><a href="index.html#vision">理念</a><a href="index.html#themes">界面</a><a href="plugins.html">插件教程</a><a href="templates.html" aria-current="page">模板教程</a><a class="nav-github" href="https://github.com/J09715/Tianyan" target="_blank" rel="noreferrer">GitHub ↗</a></nav>
   </header>
 
   <main id="main" class="docs-main">
     <section class="docs-hero reveal">
-      <div class="section-index">WANXIANG PROJECT TEMPLATE GUIDE / SCHEMA 1</div>
+      <div class="section-index">TIANYAN PROJECT TEMPLATE GUIDE / SCHEMA 1</div>
       <h1>把一套工程，<br>变成可分享的起点。</h1>
       <p>一个 ZIP 就能携带工程骨架、动态字段、统一方形预览图，以及需要用户明确授权的构造脚本。这里记录的是当前模板导入器、表单渲染器和物化引擎的真实约束。</p>
     </section>
@@ -45,7 +45,7 @@
 │   └── after-create.sh
 └── app/
     ├── build.gradle.kts
-    └── src/main/java/WANXIANG_PACKAGE_PATH/
+    └── src/main/java/TIANYAN_PACKAGE_PATH/
         └── MainActivity.kt.template</code></pre>
           <ul><li>最多 5000 个 ZIP 条目。</li><li>单文件最大 16 MiB。</li><li>总解压体积最大 128 MiB。</li><li>绝对路径、Windows 盘符和包含 <code>..</code> 的越界路径会被拒绝。</li></ul>
         </section>
@@ -110,7 +110,7 @@
   "mode": "{{buildMode}}"
 }</code></pre>
           <p>生成时会替换变量并移除末尾的 <code>.template</code>。任意需要替换的文本都建议使用该后缀；Java、Kotlin、Dart、JSON、YAML、TOML、Shell、Python、JavaScript、C/C++ 等常见文本格式也会自动识别。</p>
-          <p>包目录使用 <code>WANXIANG_PACKAGE_PATH</code>，创建时会替换为包名对应的目录层级。不要使用以下划线开头的占位目录，否则可能被 Android AAPT 忽略。变量生成的路径会再次规范化，越界路径会被拒绝。若文件中残留未声明的 <code>{{unknownVariable}}</code>，创建会直接失败。</p>
+          <p>包目录使用 <code>TIANYAN_PACKAGE_PATH</code>，创建时会替换为包名对应的目录层级。不要使用以下划线开头的占位目录，否则可能被 Android AAPT 忽略。变量生成的路径会再次规范化，越界路径会被拒绝。若文件中残留未声明的 <code>{{unknownVariable}}</code>，创建会直接失败。</p>
         </section>
 
         <section id="preview" class="reveal">
@@ -125,19 +125,19 @@
   "beforeCreate": "template-hooks/before-create.sh",
   "afterCreate": "template-hooks/after-create.sh"
 }</code></pre>
-          <p>脚本不会在导入、查看或导出时执行。创建工程时，万象会显示脚本内容，只有用户明确勾选授权后才执行。</p>
-          <ul><li>脚本必须位于 <code>template-hooks/</code>，单个最大 1 MiB。</li><li>在 Linux 沙箱的新工程目录中运行，单阶段最长 60 秒。</li><li><code>beforeCreate</code> 在复制模板文件前执行，<code>afterCreate</code> 在物化后执行。</li><li>工程路径为 <code>WANXIANG_PROJECT_DIR</code>。</li><li>变量以 <code>WANXIANG_VAR_&lt;大写变量名&gt;</code> 传入。</li><li>非零退出会终止创建，并把错误输出返回界面。</li></ul>
+          <p>脚本不会在导入、查看或导出时执行。创建工程时，天衍会显示脚本内容，只有用户明确勾选授权后才执行。</p>
+          <ul><li>脚本必须位于 <code>template-hooks/</code>，单个最大 1 MiB。</li><li>在 Linux 沙箱的新工程目录中运行，单阶段最长 60 秒。</li><li><code>beforeCreate</code> 在复制模板文件前执行，<code>afterCreate</code> 在物化后执行。</li><li>工程路径为 <code>TIANYAN_PROJECT_DIR</code>。</li><li>变量以 <code>TIANYAN_VAR_&lt;大写变量名&gt;</code> 传入。</li><li>非零退出会终止创建，并把错误输出返回界面。</li></ul>
           <pre><code>#!/bin/sh
 set -eu
 mkdir -p generated
-printf '%s\n' "$WANXIANG_VAR_PROJECTNAME" &gt; generated/project-name.txt</code></pre>
+printf '%s\n' "$TIANYAN_VAR_PROJECTNAME" &gt; generated/project-name.txt</code></pre>
         </section>
 
         <section id="validation" class="reveal">
           <h2>08 / 模板自带结果校验</h2>
           <pre><code>"validation": {
-  "requiredFiles": ["app/src/main/java/WANXIANG_PACKAGE_PATH/MainHook.kt"],
-  "forbiddenFiles": ["app/src/main/java/WANXIANG_PACKAGE_PATH/LegacyHook.kt"],
+  "requiredFiles": ["app/src/main/java/TIANYAN_PACKAGE_PATH/MainHook.kt"],
+  "forbiddenFiles": ["app/src/main/java/TIANYAN_PACKAGE_PATH/LegacyHook.kt"],
   "contentRules": [
     {
       "path": "app/src/main/assets/xposed_init",
@@ -189,13 +189,13 @@ zip -r ../my-android-template.zip .</code></pre>
           <h2>11 / 发布前检查</h2>
           <ul><li>清单可通过 v1 JSON Schema，且没有未知字段。</li><li>ID 未使用 <code>builtin.</code>，变量名与分类 ID 合法且不重复。</li><li>项目名称和路径没有被声明成动态字段。</li><li>所有文本占位符均已声明，路径变量不会产生越界。</li><li>单张预览图符合 1:1、270×270、格式和体积限制。</li><li>脚本位于指定目录，不包含密钥，并能在 60 秒内结束。</li><li>在全新目录中完成导入、表单填写、创建、导出和重新导入。</li><li>GENERAL 模板已确认不会被错误要求填写 Java 包名。</li></ul>
           <div class="hero-actions">
-            <a class="button button-primary" href="https://github.com/peakSee/Wanxiang/blob/main/docs/PROJECT_TEMPLATE_SPEC.md" target="_blank" rel="noreferrer">阅读完整规范 <span>↗</span></a>
-            <a class="button button-quiet" href="https://github.com/peakSee/Wanxiang/blob/main/docs/project-template.schema.json" target="_blank" rel="noreferrer">查看 JSON Schema <span>↗</span></a>
+            <a class="button button-primary" href="https://github.com/J09715/Tianyan/blob/main/docs/PROJECT_TEMPLATE_SPEC.md" target="_blank" rel="noreferrer">阅读完整规范 <span>↗</span></a>
+            <a class="button button-quiet" href="https://github.com/J09715/Tianyan/blob/main/docs/project-template.schema.json" target="_blank" rel="noreferrer">查看 JSON Schema <span>↗</span></a>
           </div>
         </section>
       </article>
     </div>
   </main>
-  <footer><div class="footer-brand"><strong>万象</strong><span>WANXIANG / LINUX AI RUNTIME</span></div><p>于万象中立极，于方寸间创世。</p><div class="footer-links"><a href="index.html">首页</a><a href="plugins.html">插件教程</a><a href="https://github.com/peakSee/Wanxiang">GitHub</a></div><small>© <span data-year></span> WanXiang Project. Open source on GitHub.</small></footer>
+  <footer><div class="footer-brand"><strong>天衍</strong><span>TIANYAN / LINUX AI RUNTIME</span></div><p>于方寸之间，构建一整个世界。</p><div class="footer-links"><a href="index.html">首页</a><a href="plugins.html">插件教程</a><a href="https://github.com/J09715/Tianyan">GitHub</a></div><small>© <span data-year></span> Tianyan Project. Open source on GitHub.</small></footer>
 </body>
 </html>

@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "top.wanxiang.app.feature.settings"
+    namespace = "top.tianyan.app.feature.settings"
     resourcePrefix = "settings_"
     compileSdk = 37
     defaultConfig { minSdk = 29 }

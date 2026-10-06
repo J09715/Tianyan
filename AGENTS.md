@@ -1,4 +1,4 @@
-# 🧭 万象 (WanXiang / LinuxAIRuntime) — AI 导航入口
+# 🧭 天衍 (Tianyan / LinuxAIRuntime) — AI 导航入口
 
 > 本文件为导航入口，默认载入。全部细节（技术栈 / 模块拓扑 / 调用链路 / 文件索引 / 铁律 / 命令）在 [`docs/AI_NAVIGATION.md`](docs/AI_NAVIGATION.md)，按需读取。
 
@@ -16,8 +16,8 @@ Android 无 Root 下用 PRoot 跑 Linux 多发行版沙箱 + AI Agent Harness + 
 2. **UI 设计系统**（防加乱布局）：容器一律 `RuntimeCard`；按钮/弹窗/开关/进度/顶栏/底栏一律 `Runtime*` 组件（严禁散落原生 Material3 Card/Button/AlertDialog）；含输入框或列表的弹窗 text 区必须 `fillMaxWidth().verticalScroll(rememberScrollState())`（严禁固定高宽/硬编码 offset）；消息气泡 `widthIn(max=560.dp)`；路径/标签等单行文本 `maxLines=1 + TextOverflow.Ellipsis`；触摸目标 ≥48dp；`RuntimeCard` 内嵌内容用 `Surface`（严禁嵌套 Card）。
 3. **命令执行边界**：短任务用 `base`；长任务/常驻必须用 `process(action="start")`（严禁 `nohup`/`setsid`/`&`），process 外部 ID 加 `agent-process:` 命名空间。
 4. **移动端构建**：NDK 只由 init policy 的 `android.ndkPath` 注入，不得在项目里再写 `ndk.dir`/`ndkPath`；沙箱 Gradle 固定 `daemon=false`、`workers.max=2`、`Xmx=1024m`。
-5. **工作区安全**：ZIP 导入必须 `WorkspaceManager.importProjectArchive()`（防 Zip Slip）；导入类型写入 `.wanxiang-project.properties`，不得靠扩展名反猜。
-6. **包名与品牌**：包名 `top.wanxiang.app`（dev 版 `top.wanxiang.app.dev`），应用名「万象 / WanXiang」，日志/目录统一 WanXiang 标识。
+5. **工作区安全**：ZIP 导入必须 `WorkspaceManager.importProjectArchive()`（防 Zip Slip）；导入类型写入 `.tianyan-project.properties`，不得靠扩展名反猜。
+6. **包名与品牌**：包名 `top.tianyan.app`（dev 版 `top.tianyan.app.dev`），应用名「天衍 / Tianyan」，日志/目录统一 Tianyan 标识。
 7. **改动方式**：优先 `edit` 局部精准修改（oldText 精确唯一）；遵循现有命名与分层，不整文件重写、不引入不必要依赖；代码注释写「为什么/意图」。
 
 ## 动手前先读

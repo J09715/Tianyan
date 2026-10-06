@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "top.wanxiang.app.feature.custom_iteration"
+    namespace = "top.tianyan.app.feature.custom_iteration"
     compileSdk = 37
     defaultConfig { minSdk = 29 }
     buildFeatures { compose = true }

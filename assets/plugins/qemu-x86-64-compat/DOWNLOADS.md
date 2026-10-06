@@ -53,5 +53,5 @@ Compress-Archive -Path "manifest.json", "payload" -DestinationPath "$env:USERPRO
 ## 注意事项
 
 - 全部脚本为 POSIX `sh`，安装过程不访问网络，仅解包本地 `archives/` 并做 SHA256 校验。
-- 安装目标固定为 `/opt/wanxiang/compat/x86_64`（宿主 `wanxiangRoot/compat/x86_64`），与 `runtime` 模块 `QemuCompatibilityLayout` 一致。
-- 命令链接只写入 `$WANXIANG_TOOL_DIR/bin` 与 `/opt/wanxiang/bin`：`qemu-x86_64`。
+- 安装目标固定为 `/opt/tianyan/compat/x86_64`（宿主 `tianyanRoot/compat/x86_64`），与 `runtime` 模块 `QemuCompatibilityLayout` 一致。
+- 命令链接只写入 `$TIANYAN_TOOL_DIR/bin` 与 `/opt/tianyan/bin`：`qemu-x86_64`。

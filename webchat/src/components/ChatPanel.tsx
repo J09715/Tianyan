@@ -37,7 +37,7 @@ const GREETING_WORDS = ["聊天", "执行", "构建", "探索", "规划", "总�
 const WORD_ROTATE_INTERVAL = 1800;
 const WORD_SPIN_DURATION = 460;
 
-/** 轮播展示智枢与万象运行时紧密相关的核心能力。 */
+/** 轮播展示智枢与天衍运行时紧密相关的核心能力。 */
 function SlotWordRotator({ words }: { words: string[] }) {
   const [current, setCurrent] = useState(() => Math.floor(Math.random() * words.length));
   const [previous, setPrevious] = useState<number | null>(null);
@@ -79,7 +79,7 @@ function EmptyGreeting() {
   return (
     <div className="empty-state">
       <div className="empty-greeting">
-        <p>你好👋，这里是万象智枢</p>
+        <p>你好👋，这里是天衍智枢</p>
         <p>可以与你一起 <SlotWordRotator words={GREETING_WORDS} /></p>
       </div>
     </div>
@@ -198,7 +198,7 @@ function Message({
   const classes = `message-row ${isUser ? "user" : "assistant"}${message.isError ? " error" : ""}`;
   const isCard = Number(message.type) === 2 || rawCard;
 
-  // 万象 Harness 的工具调用、工具结果与能力事件。
+  // 天衍 Harness 的工具调用、工具结果与能力事件。
   if (isCard) {
     const title = card.toolTitle ?? card.toolName ?? card.displayName ?? card.title ?? card.toolType ?? "工具运行";
     const status = card.status ?? (message.isLoading ? "running" : "completed");

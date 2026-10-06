@@ -149,7 +149,7 @@
     <string name="chat_android_check_prompt">Inspect the current Android project structure, Gradle configuration, manifest, package name, and build environment. Fix issues directly and verify the result.</string>
     <string name="chat_android_build">Build and install on device</string>
     <string name="chat_android_build_description">Build a debug APK, export it, and open the installer</string>
-    <string name="chat_android_build_prompt">Build the current Android project. On success, export the APK to the device and open the installer. Prefer the workspace build scripts and wanxiang-host install-apk.</string>
+    <string name="chat_android_build_prompt">Build the current Android project. On success, export the APK to the device and open the installer. Prefer the workspace build scripts and tianyan-host install-apk.</string>
     <string name="chat_android_debug">Troubleshoot Android build</string>
     <string name="chat_android_debug_description">Find Gradle, Kotlin, AAPT2, or installation issues</string>
     <string name="chat_android_debug_prompt">Read the latest Android build log, identify the actual error, edit the scripts or project directly, and verify again.</string>
@@ -158,7 +158,7 @@
     <string name="chat_flutter_check_prompt">Inspect pubspec.yaml, the Dart entry point, and Android Gradle configuration. Fix any issues directly and verify the result.</string>
     <string name="chat_flutter_build">Build and install Flutter app</string>
     <string name="chat_flutter_build_description">Resolve dependencies, build an APK, and open the installer</string>
-    <string name="chat_flutter_build_prompt">Check Flutter dependencies and build a debug APK. On success, export it to the device and run wanxiang-host install-apk.</string>
+    <string name="chat_flutter_build_prompt">Check Flutter dependencies and build a debug APK. On success, export it to the device and run tianyan-host install-apk.</string>
     <string name="chat_flutter_debug">Troubleshoot Flutter build</string>
     <string name="chat_flutter_debug_description">Find dependency, Gradle, or AAPT2 errors</string>
     <string name="chat_flutter_debug_prompt">Read the latest Flutter build error, identify the dependency, Gradle, or AAPT2 root cause, fix the project directly, and verify again.</string>
