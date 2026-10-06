@@ -324,6 +324,10 @@ class ChatViewModel @Inject constructor(
     private val _gitPanelState = MutableStateFlow(GitPanelState())
     val gitPanelState: StateFlow<GitPanelState> = _gitPanelState.asStateFlow()
 
+    private companion object {
+        const val MAX_VISIBLE_UNTRACKED = 100
+    }
+
     /** 读取当前会话工作区的 Git 状态（分支 + 改动 + 分支列表 + 提交历史）。 */
     fun refreshGitStatus() {
         // 会话未绑定工作区时回退到沙箱内 /workspace 根目录；相对路径补 /workspace 前缀
@@ -331,7 +335,9 @@ class ChatViewModel @Inject constructor(
             .let { if (it.startsWith("/")) it else "/workspace/$it" }
         _gitPanelState.value = GitPanelState(loading = true)
         viewModelScope.launch(Dispatchers.IO) {
-            val statusOut = runGitRead(ws, "git status --porcelain -b -uall")
+            // Git's default untracked mode collapses large directories (e.g. an 800-skill pack)
+            // into one entry. Never materialize thousands of paths into Compose state.
+            val statusOut = runGitRead(ws, "git status --porcelain -b -u")
             if (statusOut == null || statusOut.contains("not a git repository", ignoreCase = true)) {
                 _gitPanelState.value = GitPanelState(loading = false, notARepo = true)
                 return@launch
@@ -353,13 +359,16 @@ class ChatViewModel @Inject constructor(
             val staged = mutableListOf<GitFileChange>()
             val unstaged = mutableListOf<GitFileChange>()
             val untracked = mutableListOf<String>()
+            val untrackedCount = runGitRead(ws, "git ls-files --others --exclude-standard | wc -l")
+                ?.trim()?.toIntOrNull()?.coerceAtLeast(untracked.size) ?: untracked.size
+            var untrackedOverflow = false
             for (line in lines.filterNot { it.startsWith("## ") }) {
                 if (line.length < 4) continue
                 val x = line[0]
                 val y = line[1]
                 val path = line.drop(3)
                 when {
-                    x == '?' && y == '?' -> untracked += path
+                    x == '?' && y == '?' -> if (untracked.size < MAX_VISIBLE_UNTRACKED) untracked += path else untrackedOverflow = true
                     x != ' ' -> staged += GitFileChange(x, path)
                     y != ' ' -> unstaged += GitFileChange(y, path)
                 }
@@ -387,6 +396,8 @@ class ChatViewModel @Inject constructor(
                 staged = staged,
                 unstaged = unstaged,
                 untracked = untracked,
+                untrackedCount = untrackedCount,
+                untrackedOverflow = untrackedCount > untracked.size || untrackedOverflow,
                 localBranches = localBranches,
                 remoteBranches = remoteBranches,
                 tags = tags,
@@ -2471,6 +2482,10 @@ data class GitPanelState(
     val staged: List<GitFileChange> = emptyList(),
     val unstaged: List<GitFileChange> = emptyList(),
     val untracked: List<String> = emptyList(),
+    /** 未跟踪路径总数，仅保存计数，不把大目录展开到 Compose。 */
+    val untrackedCount: Int = 0,
+    /** 超过展示上限的未跟踪路径只保留聚合提示，避免大技能包拖垮 UI。 */
+    val untrackedOverflow: Boolean = false,
     val localBranches: List<String> = emptyList(),
     val remoteBranches: List<String> = emptyList(),
     val tags: List<String> = emptyList(),
