@@ -217,7 +217,7 @@ fun GitPanel(
             statusText = if (showCredentialsPage) null else state.branch?.let { b ->
                 val ab = state.aheadBehind?.let { (a, bh) -> "  ↑$a ↓$bh" } ?: ""
                 val n = state.staged.size + state.unstaged.size + state.untracked.size
-                val badge = if (n > 0) "  ● $n" else ""
+                val badge = if (n > 0 || state.untrackedOverflow) "  ● ${if (state.untrackedOverflow) "99+" else n}" else ""
                 "$b$ab$badge"
             },
             actions = {
@@ -739,7 +739,8 @@ private fun StatusTab(
     val staged = state.staged
     val unstaged = state.unstaged
     val untracked = state.untracked
-    val clean = staged.isEmpty() && unstaged.isEmpty() && untracked.isEmpty()
+    val untrackedCount = state.untrackedCount.coerceAtLeast(untracked.size)
+    val clean = staged.isEmpty() && unstaged.isEmpty() && untrackedCount == 0
 
     var showCommitDialog by rememberSaveable { mutableStateOf(false) }
     var commitMessage by rememberSaveable { mutableStateOf("") }
@@ -758,12 +759,29 @@ private fun StatusTab(
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // 状态统计卡
-        RuntimeCard(contentPadding = PaddingValues(horizontal = 8.dp, vertical = 12.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                StatItem("已暂存", staged.size, Color(0xFF2E7D32))
-                StatItem("已修改", unstaged.size, Color(0xFFB45309))
-                StatItem("未跟踪", untracked.size, Color(0xFF757575))
+        // 工作区摘要：大目录只显示总数，不把所有 skill 路径展开成 UI 节点。
+        RuntimeCard(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 14.dp),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("工作区概览", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        if (clean) "干净" else "有改动",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = if (clean) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary,
+                    )
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                StatItem("已暂存", staged.size.toString(), Color(0xFF2E7D32))
+                StatItem("已修改", unstaged.size.toString(), Color(0xFFB45309))
+                StatItem("未跟踪", if (state.untrackedOverflow) "99+" else untrackedCount.toString(), Color(0xFF757575))
+                }
             }
         }
 
@@ -854,13 +872,21 @@ private fun StatusTab(
                 }
             }
             if (untracked.isNotEmpty()) {
-                SectionHeader("未跟踪 (${untracked.size})")
+                SectionHeader("未跟踪 (${if (state.untrackedOverflow) "99+" else untrackedCount})")
                 RuntimeCard(contentPadding = PaddingValues(0.dp)) {
                     Column {
                         untracked.forEachIndexed { i, path ->
                             if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                             FileRow(GitFileChange('?', path), action = "添加", onAction = { onStage(path) }, onClick = { onFileDiff(path) }, secondaryAction = "删除", onSecondaryAction = { onDeleteUntracked(path) })
                         }
+                    }
+                    if (state.untrackedOverflow) {
+                        Text(
+                            "仅显示 ${untracked.size} 个入口，共 $untrackedCount 项；大目录已聚合，避免打开 Git 时卡顿。",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        )
                     }
                 }
             }
@@ -925,10 +951,10 @@ private fun SectionHeader(title: String, actionLabel: String? = null, onAction: 
 }
 
 @Composable
-private fun StatItem(label: String, count: Int, color: Color) {
+private fun StatItem(label: String, count: String, color: Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
-            count.toString(),
+            count,
             style = MaterialTheme.typography.titleMedium.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold),
             color = color,
         )
