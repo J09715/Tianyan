@@ -4,7 +4,7 @@
 
 <h1 align="center">Tianyan · 天衍</h1>
 
-<p align="center"><strong>Android Linux sandbox & AI Agent harness.</strong></p>
+<p align="center"><strong>Put a full Linux environment and a self-directed agent in a phone that needs no Root.</strong></p>
 
 <p align="center">
   Android No-Root Linux Runtime · Native Agent Harness · PTY Terminal · Mobile Dev Workspace · Wireless ADB Diagnostics

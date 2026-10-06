@@ -4,7 +4,7 @@
 
 <h1 align="center">天衍 · Tianyan</h1>
 
-<p align="center"><strong>掌中沙盒 · 自主 Agent</strong></p>
+<p align="center"><strong>把完整的 Linux 环境和能自主执行任务的智能体装进一部无需 Root 的手机</strong></p>
 
 <p align="center">
   Android 无 Root Linux Runtime · 智能体引擎 (Agent Harness) · 原生 PTY 终端 · 移动开发工作区 · 无线 ADB 诊断
