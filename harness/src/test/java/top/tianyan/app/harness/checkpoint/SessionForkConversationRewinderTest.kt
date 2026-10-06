@@ -41,6 +41,9 @@ class SessionForkConversationRewinderTest {
         }
 
         override suspend fun touch(id: String, updatedAt: Long) = Unit
+        override suspend fun updateWorkspace(id: String, workspace: String) {
+            sessions[id]?.let { sessions[id] = it.copy(workspace = workspace) }
+        }
         override suspend fun rename(id: String, title: String, updatedAt: Long) = Unit
         override suspend fun setApprovalMode(id: String, approvalMode: String, updatedAt: Long) = Unit
         override suspend fun setApprovalModeForAll(approvalMode: String, updatedAt: Long) = Unit

@@ -96,3 +96,34 @@ jobs:
         with:
           files: app/build/outputs/apk/debug/*.apk
           append_body: true
+
+  # 单元测试此前从未在 CI 里跑过——仓库有 800+ 个测试，但没有任何 workflow 执行它们，
+  # 于是 harness 模块的测试代码在接口变更后编译不过很久都没人发现。
+  # 与 apk 任务并行，且不需要 NDK：preBuild 只在真正打包 APK 时才要求 libpty_native.so。
+  test:
+    name: 单元测试
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Run unit tests
+        run: |
+          chmod +x gradlew
+          ./gradlew testDebugUnitTest --console=plain --no-daemon --continue
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports-${{ github.ref_name }}
+          path: "**/build/reports/tests/testDebugUnitTest/**"
+          if-no-files-found: warn
+          retention-days: 14

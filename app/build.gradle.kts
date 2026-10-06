@@ -267,19 +267,31 @@ tasks.configureEach {
             }
             // libpty_native 必须是 NDK/Bionic 构建：若依赖 glibc 的 libc.so.6，设备上
             // dlopen 必失败并静默回退到 script PTY 路径（PTY 回显问题会随之复发）。
-            check(bundledPtyNative.asFile.isFile) {
-                "Missing libpty_native.so. Build it with the NDK clang before assembling " +
-                    "(aarch64-linux-android30-clang -shared -fPIC -O2 -o <out> app/src/main/cpp/pty_native.c). " +
-                    "CI does this automatically."
+            //
+            // 但它是构建产物（.gitignore 不入库，由 NDK 从 app/src/main/cpp/pty_native.c
+            // 重建），所以只在真正产出 APK 的构建里强制要求。挂在 preBuild 上无条件
+            // 检查会让 `./gradlew test` 因为一个与测试无关的原生库缺失而整条失败，
+            // 本地根本跑不了单元测试。
+            val packagingApk = gradle.taskGraph.allTasks.any { task ->
+                val n = task.name
+                n.startsWith("assemble") || n.startsWith("bundle") ||
+                    n.startsWith("package") || n.startsWith("install")
             }
-            val ptyNativeBytes = bundledPtyNative.asFile.readBytes()
-            val glibcMarker = "libc.so.6".toByteArray()
-            check(ptyNativeBytes.size < glibcMarker.size ||
-                (0..ptyNativeBytes.size - glibcMarker.size).none { offset ->
-                    glibcMarker.indices.all { ptyNativeBytes[offset + it] == glibcMarker[it] }
-                }) {
-                "libpty_native.so is linked against glibc (libc.so.6). Rebuild it with the NDK " +
-                    "aarch64-linux-android clang (see app/src/main/cpp/CMakeLists.txt)."
+            if (packagingApk) {
+                check(bundledPtyNative.asFile.isFile) {
+                    "Missing libpty_native.so. Build it with the NDK clang before assembling " +
+                        "(aarch64-linux-android30-clang -shared -fPIC -O2 -o <out> app/src/main/cpp/pty_native.c). " +
+                        "CI does this automatically."
+                }
+                val ptyNativeBytes = bundledPtyNative.asFile.readBytes()
+                val glibcMarker = "libc.so.6".toByteArray()
+                check(ptyNativeBytes.size < glibcMarker.size ||
+                    (0..ptyNativeBytes.size - glibcMarker.size).none { offset ->
+                        glibcMarker.indices.all { ptyNativeBytes[offset + it] == glibcMarker[it] }
+                    }) {
+                    "libpty_native.so is linked against glibc (libc.so.6). Rebuild it with the NDK " +
+                        "aarch64-linux-android clang (see app/src/main/cpp/CMakeLists.txt)."
+                }
             }
         }
     }
