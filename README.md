@@ -48,13 +48,33 @@ Agent 侧通过统一的 `redteam` 工具工作，始终作用于调用它的那
 
 | 能力 | action |
 | :--- | :--- |
-| 会话与预检 | `session_info`、`preflight`、`roles` |
+| 会话与预检 | `session_info`、`session_check`、`sessions`、`preflight`、`roles` |
+| 角色提示词 | `role_prompt`、`role_prompt_reset`（会话级覆盖，未设置时回落内置职责） |
 | 并发闸门 | `agent_slot`（`status`/`acquire`/`release`，上限 3，按会话隔离） |
 | 事实写入 | `asset_add`、`vuln_add`、`credential_add`、`access_add`、`webshell_add`、`tunnel_add`、`chain_add`、`attack_file_add`、`score_hit`、`poc_add`、`http_evidence_add`、`knowledge_add`、`skill_add` |
-| 事实查询 | `fact_query`、`asset_query`、`vuln_query`、`credential_list`、`webshell_list`、`tunnel_list`、`chain`、`attack_file_list`、`score_list`、`poc_list` |
+| 事实更新 | `asset_update`、`vuln_update`、`credential_update`、`access_update`、`webshell_update`、`tunnel_update`、`poc_update`（必须带 `id`） |
+| 资产图谱 | `asset_link`（写关系边）、`asset_graph`（按 C 段取子图，节点上限默认 300 / 硬上限 1000）、`domain_index`、`asset_stats`、`asset_timeline`、`web_list` |
+| 攻击路径 | `attack_path`、`chain`、`attack_chain` |
+| 单条读取 | `asset_get`、`vuln_get`、`poc_get` |
+| PoC 使用 | `poc_use`（使用计数写回记录） |
+| 事实查询 | `fact_query`、`asset_query`、`vuln_query`、`credential_list`、`webshell_list`、`tunnel_list`、`attack_file_list`、`score_list`、`poc_list`、`poc_search` |
 | 报告 | `report`、`score_report`、`report_targets` |
+| 评估登记 | `asset_assess`、`asset_test`（只登记结论，主动探测仍走已审批的 `base`/`process`） |
 
-事实记录保留上游的原始字段（IP、端口、服务、指纹、来源 provenance 等）并以 JSON 存入会话事实库；结构化写入使用稳定 ID，可重复提交覆盖同一条记录。真正的探测与验证动作仍通过天衍既有的 `base`/`process`/`MCP` 执行，并遵循当前会话的审批模式与 scope。
+事实记录保留上游的原始字段（IP、端口、服务、指纹、来源 provenance、关系 src/dst/relation 等）并以 JSON 存入会话事实库；结构化写入使用稳定 ID，可重复提交覆盖同一条记录。工具 action 清单与协调器实现由 `RedTeamToolSchema` 单一来源驱动，并有契约测试断言「宣告的动作必须已实现」，防止再次出现枚举宣告但无分支的情况。真正的探测与验证动作仍通过天衍既有的 `base`/`process`/`MCP` 执行，并遵循当前会话的审批模式与 scope。
+
+## 日志与崩溃排查
+
+开发者控制台提供「运行日志」区块：
+
+| 操作 | 作用 |
+| :--- | :--- |
+| 查看运行日志 | 等宽字体弹窗展示 `runtime.log` 尾部（默认 10 万字符） |
+| 查看崩溃报告 | 展示最近一次未捕获异常，含版本、机型、线程与完整栈 |
+| 复制运行日志 / 复制崩溃报告 | 一键进剪贴板，便于直接反馈 |
+| 清空运行日志 / 清空崩溃报告 | 复现前清零，避免旧记录干扰 |
+
+日志优先写入公共 `Download/Tianyan`，无「所有文件访问」权限时回退应用私有目录，保证不静默丢失；崩溃报告会在下次启动后导出到 `Download/Tianyan/crash-reports`。
 
 ## 获取应用
 
