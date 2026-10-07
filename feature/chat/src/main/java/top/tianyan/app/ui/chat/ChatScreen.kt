@@ -199,6 +199,7 @@ fun ChatScreen(
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     val subagentResult by viewModel.subagentResult.collectAsStateWithLifecycle()
     val gitPanelState by viewModel.gitPanelState.collectAsStateWithLifecycle()
+    val redTeamFacts by viewModel.redTeamFacts.collectAsStateWithLifecycle(initialValue = emptyList())
     val gitCredentials by viewModel.gitCredentials.collectAsStateWithLifecycle()
     val matchedCredId by viewModel.matchedCredentialId.collectAsStateWithLifecycle()
     val gitUncommittedCount = gitPanelState.let { s -> s.staged.size + s.unstaged.size + s.untrackedCount }
@@ -771,6 +772,7 @@ fun ChatScreen(
     if (currentSession?.redTeamMode == top.tianyan.app.core.model.RedTeamMode.RED_TEAM.id && !showGitPanel) {
         RedTeamPanel(
             session = currentSession,
+            facts = redTeamFacts,
             onBindTarget = viewModel::bindRedTeamTarget,
         )
     }
