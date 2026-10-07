@@ -4,6 +4,8 @@ package top.tianyan.app.core.model
 enum class RedTeamFactKind(val id: String) {
     ENGAGEMENT("engagement"),
     ASSET("asset"),
+    /** 资产关系边：src/dst 均为 (kind,id)，用于图谱与横向路径推理。 */
+    EDGE("edge"),
     VULNERABILITY("vulnerability"),
     CREDENTIAL("credential"),
     ACCESS_SESSION("access_session"),
