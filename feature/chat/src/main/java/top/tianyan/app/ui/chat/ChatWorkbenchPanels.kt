@@ -1336,6 +1336,16 @@ private fun eventVisual(event: HarnessEvent): EventVisual = when (event) {
         stringResource(R.string.chat_event_permission_required, event.permission),
         event.reason,
     )
+    is HarnessEvent.RedTeamFactChanged -> EventVisual(
+        RuntimeIconName.Shield, MaterialTheme.colorScheme.error,
+        "红队事实已更新 · ${event.kind}",
+        "${event.status} · ${event.factId}",
+    )
+    is HarnessEvent.RedTeamPhaseChanged -> EventVisual(
+        RuntimeIconName.Play, MaterialTheme.colorScheme.error,
+        "红队阶段 · ${event.phase}",
+        event.detail ?: "阶段状态已更新",
+    )
     is HarnessEvent.PlanStepProgress -> EventVisual(
         when (event.status) {
             "COMPLETED" -> RuntimeIconName.Check
