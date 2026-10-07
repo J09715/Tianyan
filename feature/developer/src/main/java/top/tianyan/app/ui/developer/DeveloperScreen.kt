@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -80,6 +81,9 @@ fun DeveloperScreen(
     val agentLoggingEnabled by viewModel.agentLoggingEnabled.collectAsStateWithLifecycle()
     val agentLogSize by viewModel.agentLogSize.collectAsStateWithLifecycle()
     val agentLogLocation by viewModel.agentLogLocation.collectAsStateWithLifecycle()
+    val runtimeLogSize by viewModel.logSize.collectAsStateWithLifecycle()
+    val runtimeLogLocation by viewModel.logLocation.collectAsStateWithLifecycle()
+    val crashLocation by viewModel.crashLocation.collectAsStateWithLifecycle()
     val adbState by viewModel.adbState.collectAsStateWithLifecycle()
     val adbDiscovery by viewModel.adbDiscovery.collectAsStateWithLifecycle()
     val adbBusy by viewModel.adbBusy.collectAsStateWithLifecycle()
@@ -93,6 +97,10 @@ fun DeveloperScreen(
     var showResetConfirmation by remember { mutableStateOf(false) }
     var showAgentLogDialog by remember { mutableStateOf(false) }
     var agentLogText by remember { mutableStateOf("") }
+    var showRuntimeLogDialog by remember { mutableStateOf(false) }
+    var runtimeLogText by remember { mutableStateOf("") }
+    var showCrashDialog by remember { mutableStateOf(false) }
+    var crashText by remember { mutableStateOf("") }
     var pairingCode by remember { mutableStateOf("") }
     var logcatPackage by remember { mutableStateOf("") }
     var logcatTag by remember { mutableStateOf("") }
@@ -104,6 +112,10 @@ fun DeveloperScreen(
     LaunchedEffect(adbState) {
         if (adbState is EmbeddedAdbManager.ConnectionState.Connected) pairingCode = ""
     }
+
+    // 进入开发者控制台时刷新运行日志尺寸/路径与崩溃报告目录，
+    // 用户刚复现完闪退进来即可看到最新现场。
+    LaunchedEffect(Unit) { viewModel.refreshRuntimeLogInfo() }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -453,6 +465,95 @@ fun DeveloperScreen(
                 }
             }
 
+            SectionHeader("运行日志", "应用级运行日志与崩溃报告，用于定位闪退等现场问题")
+            RuntimeCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.fillMaxWidth()) {
+                    Text(
+                        if (runtimeLogSize > 0L) "已记录（文件大小：${runtimeLogSize.toReadableSize()}）" else "暂无运行日志",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    if (runtimeLogLocation.isNotBlank()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "日志文件：$runtimeLogLocation",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    if (crashLocation.isNotBlank()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "崩溃报告：$crashLocation",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedButton(
+                            onClick = {
+                                runtimeLogText = viewModel.readRuntimeLogs()
+                                showRuntimeLogDialog = true
+                            },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("查看运行日志")
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                crashText = viewModel.readLatestCrashReport()
+                                showCrashDialog = true
+                            },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("查看崩溃报告")
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedButton(
+                            onClick = {
+                                val logs = viewModel.readRuntimeLogs()
+                                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Tianyan Runtime Logs", logs))
+                                android.widget.Toast.makeText(context, "运行日志已复制到剪贴板", android.widget.Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("复制运行日志")
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                val report = viewModel.readLatestCrashReport()
+                                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Tianyan Crash Report", report))
+                                android.widget.Toast.makeText(context, "崩溃报告已复制到剪贴板", android.widget.Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("复制崩溃报告")
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        TextButton(
+                            onClick = viewModel::clearRuntimeLogs,
+                        ) {
+                            Text("清空运行日志", color = MaterialTheme.colorScheme.error)
+                        }
+                        TextButton(
+                            onClick = viewModel::clearCrashReports,
+                        ) {
+                            Text("清空崩溃报告", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                }
+            }
+
             SectionHeader("命令诊断", "在隔离的 Linux 环境中执行一次性 Shell 命令")
             RuntimeCard(Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -564,6 +665,41 @@ fun DeveloperScreen(
                     val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                     clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Tianyan Agent Logs", agentLogText))
                     android.widget.Toast.makeText(context, "日志已复制", android.widget.Toast.LENGTH_SHORT).show()
+                }) { Text("复制") }
+            },
+        )
+    }
+
+    // 运行日志与崩溃报告共用同一套弹窗结构：等宽字体 + 可滚动 + 一键复制，
+    // 现场排查时用户能直接把整段贴给开发者，不必进文件管理器。
+    val logDialogText = when {
+        showRuntimeLogDialog -> runtimeLogText
+        showCrashDialog -> crashText
+        else -> null
+    }
+    val logDialogVisible = showRuntimeLogDialog || showCrashDialog
+    val logDialogTitle = if (showRuntimeLogDialog) "运行日志" else "崩溃报告"
+    if (logDialogVisible && logDialogText != null) {
+        RuntimeAlertDialog(
+            onDismissRequest = { showRuntimeLogDialog = false; showCrashDialog = false },
+            title = { Text(logDialogTitle) },
+            text = {
+                Column(Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState())) {
+                    Text(
+                        logDialogText.ifBlank { "暂无记录" },
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showRuntimeLogDialog = false; showCrashDialog = false }) { Text("关闭") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText(logDialogTitle, logDialogText))
+                    android.widget.Toast.makeText(context, "$logDialogTitle 已复制", android.widget.Toast.LENGTH_SHORT).show()
                 }) { Text("复制") }
             },
         )
