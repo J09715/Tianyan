@@ -16,6 +16,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import top.tianyan.app.core.model.RedTeamFactKind
 import top.tianyan.app.core.model.RedTeamPreflightResult
+import top.tianyan.app.core.model.RedTeamIpUtils
+import top.tianyan.app.core.model.RedTeamReportReplay
 import top.tianyan.app.core.model.RedTeamRole
 import top.tianyan.app.core.model.RedTeamScoreCatalog
 import top.tianyan.app.core.model.RedTeamScoring
@@ -575,6 +577,58 @@ class RedTeamCoordinator @Inject constructor(
     private fun JsonObject.putJson(key: String, value: String): JsonObject =
         JsonObject(this + (key to kotlinx.serialization.json.JsonPrimitive(value)))
 
+    /**
+     * 每条计分的复现入口：报告里不能只有「没有原始请求记录」。
+     *
+     * 数据其实都在事实库里（攻击步骤的 tool、漏洞的目标 URL、HTTP 证据的原始报文），
+     * 这里把它整理成能重放的报文与能直接跑的命令。真实抓到的证据优先原样给出——
+     * 合成的必须标注 `synthesized`，推断与实证在可信度上不是一回事。
+     */
+    private suspend fun replayBrief(sessionId: String): String {
+        val facts = recent(sessionId, MAX_FACTS_SCANNED)
+        val evidence = facts.filter { it.kind == "event" }
+        val steps = facts.filter { it.kind == "attack_step" }
+        val vulns = facts.filter { it.kind == "vulnerability" }
+
+        return buildString {
+            appendLine("## 复现入口")
+            if (evidence.isEmpty() && steps.isEmpty()) {
+                appendLine("暂无复现材料。补录方式：用 http_evidence_add 保存原始请求与响应，")
+                appendLine("或用 chain_add 记录攻击步骤的 tool 与目标 URL。")
+                return@buildString
+            }
+            evidence.forEach { fact ->
+                val payload = payloadOf(fact)
+                val raw = payload["request"]?.jsonPrimitive?.contentOrNull
+                appendLine("- 证据：${fact.title}")
+                if (!raw.isNullOrBlank()) {
+                    // 真实抓包：原样给出，不做任何加工。
+                    appendLine("  原始请求（真实抓包）：")
+                    raw.lines().forEach { appendLine("    $it") }
+                } else {
+                    val url = fact.target ?: payload["url"]?.jsonPrimitive?.contentOrNull
+                    val synthesized = RedTeamReportReplay.buildHttpRequest(
+                        url = url,
+                        method = payload["method"]?.jsonPrimitive?.contentOrNull,
+                        data = payload["body"]?.jsonPrimitive?.contentOrNull,
+                    )
+                    if (synthesized != null) {
+                        appendLine("  合成请求（synthesized=true，非抓包，仅按已记录信息推断）：")
+                        synthesized.text.lines().forEach { appendLine("    $it") }
+                    } else {
+                        appendLine("  缺原始请求与可解析 URL，无法合成；请用 http_evidence_add 补录。")
+                    }
+                }
+            }
+            (steps + vulns).forEach { fact ->
+                val tool = payloadOf(fact)["tool"]?.jsonPrimitive?.contentOrNull
+                val url = fact.target ?: payloadOf(fact)["url"]?.jsonPrimitive?.contentOrNull
+                val cmd = RedTeamReportReplay.buildCurlCommand(tool = tool, url = url)
+                if (cmd != null) appendLine("- 复现命令（${fact.title}）：$cmd")
+            }
+        }
+    }
+
     private suspend fun scoreReport(sessionId: String): String {
         val session = requireBoundRedTeam(sessionId)
         val hits = hitRows(sessionId)
@@ -616,6 +670,8 @@ class RedTeamCoordinator @Inject constructor(
             appendLine()
             appendLine("## 通用规则")
             RedTeamScoreCatalog.GENERAL_RULES.forEach { appendLine("- ${it.code} ${it.name}：${it.detail}") }
+            appendLine()
+            append(replayBrief(sessionId))
         }
     }
 
@@ -747,12 +803,15 @@ class RedTeamCoordinator @Inject constructor(
         return session
     }
 
-    /** /24 归段：上游以 C 段为图谱顶层节点。 */
+    /**
+     * 归段：委托 [RedTeamIpUtils.cidrOf]，IPv4 走 /24、IPv6 走 /64。
+     * 之前这里手写死 `split('.')` 拼 `.0/24`，IPv6 资产会得到 `2001:db8::1.0/24` 这种脏 CIDR，
+     * 面板左侧会多出假网段、资产归属也错。认不出来（非 IP）返回 null，不编造网段。
+     */
     private fun segmentOf(ip: String?): String? {
-        val raw = ip?.trim()?.substringBefore('/') ?: return null
-        val parts = raw.split('.')
-        if (parts.size != 4 || parts.any { it.toIntOrNull() == null }) return null
-        return "${parts[0]}.${parts[1]}.${parts[2]}.0/24"
+        val raw = ip?.trim()?.substringBefore('/')?.takeIf { it.isNotEmpty() } ?: return null
+        val cidr = RedTeamIpUtils.cidrOf(raw)
+        return cidr.takeIf { it != raw }
     }
 
     private fun isWebAsset(fact: RedTeamFactEntity): Boolean {
