@@ -257,7 +257,7 @@ class HarnessLoop @Inject constructor(
             stateMirrors.isWaitingApproval(sessId)
 
     /** 新建会话。workspace 为关联的工作区 Linux 路径（如 /workspace/proj），空串表示不关联。 */
-    suspend fun newSession(title: String, workspace: String = "", projectType: String = ""): String {
+    suspend fun newSession(title: String, workspace: String = "", projectType: String = "", redTeamMode: String = "off"): String {
         val id = UUID.randomUUID().toString()
         val defaultModel = modelRepository.activeModel()
         foregroundLoadGeneration.incrementAndGet()
@@ -276,6 +276,7 @@ class HarnessLoop @Inject constructor(
                 workspace = workspace,
                 projectType = projectType,
                 approvalMode = approvalRepository.currentMode().id,
+                redTeamMode = redTeamMode,
             ),
         )
         messageProjector.seedEmpty(id)
