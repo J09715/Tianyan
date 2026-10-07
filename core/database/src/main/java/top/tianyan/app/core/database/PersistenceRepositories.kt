@@ -475,5 +475,6 @@ abstract class PersistenceRepositoryModule {
     @Binds abstract fun bindAndroidAppRepository(impl: RoomAndroidAppRepository): AndroidAppRepository
     @Binds abstract fun bindQuickPhraseRepository(impl: RoomQuickPhraseRepository): QuickPhraseRepository
     @Binds abstract fun bindHarnessRuntimeRepository(impl: RoomHarnessRuntimeRepository): HarnessRuntimeRepository
+    @Binds abstract fun bindRedTeamFactRepository(impl: RoomRedTeamFactRepository): RedTeamFactRepository
     @Binds abstract fun bindBuildScriptRepository(impl: RoomBuildScriptRepository): BuildScriptRepository
 }
