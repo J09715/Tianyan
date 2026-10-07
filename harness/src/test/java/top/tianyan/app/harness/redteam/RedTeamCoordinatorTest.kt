@@ -160,6 +160,51 @@ class RedTeamCoordinatorTest {
         }
     }
 
+    @Test
+    fun `asset detail fields survive into the stored payload`() = runBlocking {
+        val store = FakeFacts()
+        val coordinator = RedTeamCoordinator(
+            store,
+            FakeSessions(listOf(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))),
+            events,
+        )
+
+        val args = buildJsonObject {
+            put("action", "asset_add")
+            put("id", "10.0.0.5:443")
+            put("title", "web-01")
+            put("ip", "10.0.0.5")
+            put("port", "443")
+            put("service", "https")
+            put("fingerprint", "nginx/1.24")
+            put("provenance", "passive")
+        }
+        val (ok, _) = coordinator.execute(args, "s1")
+        assertTrue(ok)
+
+        val stored = store.recent("s1").single()
+        assertEquals("10.0.0.5", stored.target)
+        assertEquals("10.0.0.5:443", stored.id)
+        listOf("port", "service", "fingerprint", "provenance").forEach { field ->
+            assertTrue("payload lost $field -> ${stored.payload}", stored.payload.contains("\"$field\""))
+        }
+    }
+
+    @Test
+    fun `rewriting the same id replaces the existing fact`() = runBlocking {
+        val store = FakeFacts()
+        val coordinator = RedTeamCoordinator(
+            store,
+            FakeSessions(listOf(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))),
+            events,
+        )
+
+        coordinator.execute(buildJsonObject { put("action", "asset_add"); put("id", "a1"); put("title", "web-01") }, "s1")
+        coordinator.execute(buildJsonObject { put("action", "asset_add"); put("id", "a1"); put("title", "web-02") }, "s1")
+
+        assertEquals(listOf("web-02"), store.recent("s1").map { it.title })
+    }
+
     private fun call(action: String, vararg pairs: Pair<String, String>): JsonObject = buildJsonObject {
         put("action", action)
         pairs.forEach { (key, value) -> put(key, value) }
