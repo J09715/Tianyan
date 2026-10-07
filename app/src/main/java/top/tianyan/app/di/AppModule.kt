@@ -23,6 +23,7 @@ import top.tianyan.app.core.database.MIGRATION_44_45
 import top.tianyan.app.core.database.MIGRATION_45_46
 import top.tianyan.app.core.database.MIGRATION_46_47
 import top.tianyan.app.core.database.MIGRATION_47_48
+import top.tianyan.app.core.database.MIGRATION_48_49
 import top.tianyan.app.core.database.BuildScriptDao
 import top.tianyan.app.core.database.task.AgentTaskDao
 import top.tianyan.app.core.database.ToolDao
@@ -92,7 +93,7 @@ object AppModule {
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
         return Room.databaseBuilder(context, AppDatabase::class.java, "tianyan.db")
             // 完整迁移链 27→47（含此前缺失的 29→30）：升级不再破坏性丢数据。
-            .addMigrations(MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_33_34, MIGRATION_34_35, MIGRATION_35_36, MIGRATION_36_37, MIGRATION_37_38, MIGRATION_38_39, MIGRATION_39_40, MIGRATION_40_41, MIGRATION_41_42, MIGRATION_42_43, MIGRATION_43_44, MIGRATION_44_45, MIGRATION_45_46, MIGRATION_46_47, MIGRATION_47_48)
+            .addMigrations(MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_33_34, MIGRATION_34_35, MIGRATION_35_36, MIGRATION_36_37, MIGRATION_37_38, MIGRATION_38_39, MIGRATION_39_40, MIGRATION_40_41, MIGRATION_41_42, MIGRATION_42_43, MIGRATION_43_44, MIGRATION_44_45, MIGRATION_45_46, MIGRATION_46_47, MIGRATION_47_48, MIGRATION_48_49)
             .build()
     }
 
