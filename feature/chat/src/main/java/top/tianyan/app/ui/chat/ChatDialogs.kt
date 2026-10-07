@@ -836,7 +836,7 @@ internal fun AddModelDialog(
 internal fun NewSessionDialog(
     workspaces: List<WorkspaceProject>,
     onDismiss: () -> Unit,
-    onCreate: (title: String, workspace: String, projectType: ProjectType) -> Unit,
+    onCreate: (title: String, workspace: String, projectType: ProjectType, redTeamMode: String) -> Unit,
 ) {
     val defaultTitle = stringResource(R.string.chat_new_session)
     // 表单状态旋转后保留；枚举以 name 字符串保存
@@ -845,6 +845,7 @@ internal fun NewSessionDialog(
     var selectedTypeName by rememberSaveable { mutableStateOf(ProjectType.GENERAL.name) }
     val selectedType = ProjectType.valueOf(selectedTypeName)
     var typeMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    var redTeamMode by rememberSaveable { mutableStateOf(false) }
     val quickTags = listOf(
         defaultTitle,
         stringResource(R.string.chat_quick_bug),
@@ -974,11 +975,26 @@ internal fun NewSessionDialog(
                         }
                     }
                 }
+
+                Surface(
+                    color = if (redTeamMode) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f) else MaterialTheme.colorScheme.surfaceContainerHigh,
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth().clickable { redTeamMode = !redTeamMode },
+                ) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        RuntimeIcon(RuntimeIconName.Shield, Modifier.size(20.dp), tint = if (redTeamMode) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                        Column(Modifier.weight(1f)) {
+                            Text("红队模式", fontWeight = FontWeight.SemiBold)
+                            Text("在当前会话内绑定目标并同步作战状态", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        androidx.compose.material3.Switch(checked = redTeamMode, onCheckedChange = { redTeamMode = it })
+                    }
+                }
             }
         },
         confirmButton = {
             Button(
-                onClick = { onCreate(title.ifBlank { defaultTitle }, selected, selectedType) },
+                onClick = { onCreate(title.ifBlank { defaultTitle }, selected, selectedType, if (redTeamMode) "red_team" else "off") },
                 shape = RoundedCornerShape(8.dp),
             ) {
                 Text(stringResource(R.string.chat_create_session))
