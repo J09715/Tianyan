@@ -374,6 +374,14 @@ val MIGRATION_45_46 = object : Migration(45, 46) {
 }
 
 
+val MIGRATION_48_49 = object : Migration(48, 49) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS red_team_facts (sessionId TEXT NOT NULL, id TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, target TEXT, severity TEXT, status TEXT NOT NULL, payload TEXT NOT NULL, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL, PRIMARY KEY(sessionId, id))")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_red_team_facts_sessionId_kind ON red_team_facts(sessionId, kind)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_red_team_facts_sessionId_updatedAt ON red_team_facts(sessionId, updatedAt)")
+    }
+}
+
 val MIGRATION_47_48 = object : Migration(47, 48) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE harness_sessions ADD COLUMN redTeamMode TEXT NOT NULL DEFAULT 'off'")
