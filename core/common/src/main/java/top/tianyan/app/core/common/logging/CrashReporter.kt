@@ -35,6 +35,17 @@ class CrashReporter @Inject constructor(
         .takeIf { it.isFile }
         ?.readText()
 
+    /** 崩溃报告的落盘目录，供开发者界面直接展示路径，用户可自行取走文件。 */
+    fun reportLocation(): String = reportDirectory().absolutePath
+
+    /** 清空全部本地崩溃报告（含已导出标记），避免一次性问题长期占位。 */
+    fun clearReports(): Boolean = runCatching {
+        var ok = true
+        reportDirectory().listFiles().orEmpty().forEach { file -> ok = file.delete() && ok }
+        File(context.filesDir, REPORT_PATH).takeIf { it.exists() }?.let { ok = it.delete() && ok }
+        ok
+    }.getOrDefault(false)
+
     /** Copies reports to Download/Tianyan/crash-reports after the next successful launch. */
     fun exportPendingReports(): Int {
         val reportDir = reportDirectory()
