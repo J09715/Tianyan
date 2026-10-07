@@ -50,6 +50,7 @@ Agent 侧通过统一的 `redteam` 工具工作，始终作用于调用它的那
 | :--- | :--- |
 | 会话与预检 | `session_info`、`session_check`、`sessions`、`preflight`、`roles` |
 | 角色提示词 | `role_prompt`、`role_prompt_reset`（会话级覆盖，未设置时回落内置职责） |
+| 角色派发 | `role_dispatch`（合成「角色约束 + 任务 + 授权范围 + 当前态势」的可直接派发描述，并同时占位）、`group_slot`（在跑角色与剩余名额） |
 | 并发闸门 | `agent_slot`（`status`/`acquire`/`release`，上限 3，按会话隔离） |
 | 事实写入 | `asset_add`、`vuln_add`、`credential_add`、`access_add`、`webshell_add`、`tunnel_add`、`chain_add`、`attack_file_add`、`score_hit`、`poc_add`、`http_evidence_add`、`knowledge_add`、`skill_add` |
 | 事实更新 | `asset_update`、`vuln_update`、`credential_update`、`access_update`、`webshell_update`、`tunnel_update`、`poc_update`（必须带 `id`） |
@@ -59,7 +60,7 @@ Agent 侧通过统一的 `redteam` 工具工作，始终作用于调用它的那
 | PoC 使用 | `poc_use`（使用计数写回记录） |
 | 事实查询 | `fact_query`、`asset_query`、`vuln_query`、`credential_list`、`webshell_list`、`tunnel_list`、`attack_file_list`、`score_list`、`poc_list`、`poc_search` |
 | 报告 | `report`、`score_report`、`report_targets` |
-| 评估登记 | `asset_assess`、`asset_test`（只登记结论，主动探测仍走已审批的 `base`/`process`） |
+| 评估登记 | `asset_test`（"未测试/测试中/已测试/被封禁/已放弃/无攻击面"状态机，测试记录追加、剩余攻击面覆盖、被封禁计数）、`asset_assess`（易打性评估：优先级 / 预期成果 / 判断理由） |
 | 评分规则 | `score_points`（25 个得分点 / 8 个类别 / 8 条通用规则 G1–G8） |
 
 ### 评分引擎
@@ -78,6 +79,21 @@ Agent 侧通过统一的 `redteam` 工具工作，始终作用于调用它的那
 判分逻辑的正确性由**对照测试**保证：夹具直接用上游 Node 实现跑出来，Kotlin 移植版必须逐例一致。手写期望值只能证明「我实现了我以为的规则」，跑上游才能证明「我实现的是同一套规则」。
 
 事实记录保留上游的原始字段（IP、端口、服务、指纹、来源 provenance、关系 src/dst/relation 等）并以 JSON 存入会话事实库；结构化写入使用稳定 ID，可重复提交覆盖同一条记录。工具 action 清单与协调器实现由 `RedTeamToolSchema` 单一来源驱动，并有契约测试断言「宣告的动作必须已实现」，防止再次出现枚举宣告但无分支的情况。真正的探测与验证动作仍通过天衍既有的 `base`/`process`/`MCP` 执行，并遵循当前会话的审批模式与 scope。
+
+### 角色
+
+角色 code 与上游 `ROLE_TITLES` 逐条对齐，白名单从枚举派生而非写死：
+
+| code | 角色 | 可派发 |
+| :--- | :--- | :--- |
+| `plan` | 主会话（指挥） | 否，主会话本身 |
+| `recon` | 信息收集 | 是 |
+| `assess` | 资产梳理 | 是 |
+| `vuln-scan` | 漏洞发现 | 是 |
+| `exploit` | 漏洞利用 | 是 |
+| `internal` | 内网渗透 | 是 |
+
+`role_dispatch` 把角色约束、本轮任务、授权目标与 scope、当前资产与评分态势合成一份可直接交给 `invoke_subagent` 的描述，**并在派发时即占用并发名额**——先查名额再派会被别的角色抢走，产生「以为没满却派了第 4 个」的竞态。子代理继续使用天衍原生子代理，不引入第二套编排实现。
 
 ## 日志与崩溃排查
 
