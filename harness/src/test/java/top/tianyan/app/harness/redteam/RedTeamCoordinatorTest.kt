@@ -466,6 +466,62 @@ class RedTeamCoordinatorTest {
         assertFalse("no blockers means no fix list", out.contains("不可用技能与修法"))
     }
 
+    /** 并发上限必须真的可调：写死 3 就等于阉掉了上游最常改的一项设置。 */
+    @Test
+    fun `concurrency ceiling follows the configured limit`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+        fresh.maxAgentsOverride = 2.0
+
+        repeat(2) { index ->
+            val (ok, out) = fresh.execute(call("role_dispatch", "role" to "recon", "task" to "t$index"), "s1")
+            assertTrue(ok)
+            assertFalse("dispatch $index should fit under 2: $out", out.contains("ok=false"))
+        }
+        val (_, refused) = fresh.execute(call("role_dispatch", "role" to "internal", "task" to "t3"), "s1")
+        assertTrue("third dispatch must be refused at limit 2: $refused", refused.contains("ok=false"))
+
+        val (_, slots) = fresh.execute(call("group_slot"), "s1")
+        assertTrue("slot report must show the configured ceiling: $slots", slots.contains("max=2"))
+
+        // 调高后立刻可以再派。
+        fresh.maxAgentsOverride = 5.0
+        val (_, more) = fresh.execute(call("role_dispatch", "role" to "internal", "task" to "t4"), "s1")
+        assertFalse("raising the ceiling must take effect: $more", more.contains("ok=false"))
+    }
+
+    /** 上限收敛到 1..10，越界值不应把闸门撑开。 */
+    @Test
+    fun `max agents override is clamped`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+        assertEquals(10, fresh.saveMaxAgents(99))
+        assertEquals(1, fresh.saveMaxAgents(0))
+        assertEquals(3, fresh.saveMaxAgents("abc"))
+    }
+
+    /** 马类型/状态拼错必须当场报错，而不是静默入库让界面判定失效。 */
+    @Test
+    fun `webshell writes reject invalid type and status`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+
+        val (badTypeOk, badType) = fresh.execute(
+            call("webshell_add", "title" to "shell", "shell_type" to "totally-unknown"), "s1",
+        )
+        assertFalse("unknown shell_type must be refused", badTypeOk)
+        assertTrue("error should explain the accepted values: $badType", badType.contains("custom"))
+
+        val (badStatusOk, badStatus) = fresh.execute(
+            call("webshell_add", "title" to "shell", "status" to "almost-online"), "s1",
+        )
+        assertFalse("unknown shell status must be refused", badStatusOk)
+        assertTrue("error should list valid statuses: $badStatus", badStatus.contains("offline"))
+
+        // 中文别名与合法状态应当放行。
+        val (okAlias, _) = fresh.execute(
+            call("webshell_add", "title" to "shell", "shell_type" to "冰蝎", "status" to "up"), "s1",
+        )
+        assertTrue("chinese alias must be accepted", okAlias)
+    }
+
     private fun call(action: String, vararg pairs: Pair<String, String>): JsonObject = buildJsonObject {
         put("action", action)
         pairs.forEach { (key, value) -> put(key, value) }
