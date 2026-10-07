@@ -52,3 +52,26 @@ data class RedTeamPreflightResult(
 ) {
     val ready: Boolean get() = missing.isEmpty()
 }
+
+/** 单个技能的体检结论，供界面标记「能不能跑」。 */
+data class RedTeamSkillHealth(
+    val name: String,
+    val status: String,
+    val problems: List<String> = emptyList(),
+    val fix: String = "",
+) {
+    val usable: Boolean get() = status == "available"
+}
+
+/** 开工前体检汇总。 */
+data class RedTeamPreflightReport(
+    val ready: Boolean = false,
+    val target: String = "",
+    val scope: String = "",
+    val total: Int = 0,
+    val available: Int = 0,
+    val broken: Int = 0,
+    val unknown: Int = 0,
+    val needsUser: List<String> = emptyList(),
+    val skills: List<RedTeamSkillHealth> = emptyList(),
+)
