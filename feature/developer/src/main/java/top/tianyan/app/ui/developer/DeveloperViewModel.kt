@@ -36,6 +36,7 @@ class DeveloperViewModel @Inject constructor(
     private val toolRegistry: ToolRegistry,
     private val toolManager: ToolManager,
     private val logger: AppLogger,
+    private val crashReporter: top.tianyan.app.core.common.logging.CrashReporter,
     private val embeddedAdbManager: EmbeddedAdbManager,
 ) : ViewModel() {
 
@@ -199,6 +200,35 @@ class DeveloperViewModel @Inject constructor(
         logger.clearAgentLogs()
         refreshAgentLogSize()
         setMessage("智能体日志已清空。")
+    }
+
+    private val _logSize = MutableStateFlow(0L)
+    val logSize: StateFlow<Long> = _logSize.asStateFlow()
+    private val _logLocation = MutableStateFlow("")
+    val logLocation: StateFlow<String> = _logLocation.asStateFlow()
+    private val _crashLocation = MutableStateFlow("")
+    val crashLocation: StateFlow<String> = _crashLocation.asStateFlow()
+
+    /** 运行日志与崩溃报告都落在应用私有目录（必要时镜像到 Download/Tianyan），刷新时一并取路径。 */
+    fun refreshRuntimeLogInfo() {
+        _logSize.value = logger.getLogSizeBytes()
+        _logLocation.value = logger.getLogLocation()
+        _crashLocation.value = crashReporter.reportLocation()
+    }
+
+    fun readRuntimeLogs(): String = logger.readLogs()
+
+    fun clearRuntimeLogs() {
+        logger.clearLogs()
+        refreshRuntimeLogInfo()
+        setMessage("运行日志已清空。")
+    }
+
+    fun readLatestCrashReport(): String = crashReporter.latestReport() ?: "暂无崩溃记录"
+
+    fun clearCrashReports() {
+        crashReporter.clearReports()
+        setMessage("崩溃报告已清空。")
     }
 
     fun saveRegistryConfig(manifestUrl: String, signatureUrl: String, publicKey: String) {
