@@ -20,6 +20,7 @@ import top.tianyan.app.core.database.HarnessSessionRepository
 import top.tianyan.app.core.database.RedTeamFactEntity
 import top.tianyan.app.core.database.RedTeamFactRepository
 import top.tianyan.app.core.model.RedTeamFactKind
+import top.tianyan.app.core.model.RedTeamRole
 import top.tianyan.app.harness.events.HarnessEventBus
 
 class RedTeamCoordinatorTest {
@@ -304,6 +305,93 @@ class RedTeamCoordinatorTest {
             top.tianyan.app.core.model.RedTeamScoring.DEFAULT_POINTS.size,
             top.tianyan.app.core.model.RedTeamScoring.DEFAULT_POINTS.map { it.code }.distinct().size,
         )
+    }
+
+    /** 角色 code 必须与上游 ROLE_TITLES 一致：拼错就等于该角色查不到提示词。 */
+    @Test
+    fun `role registry matches upstream codes`() {
+        assertEquals(
+            listOf("plan", "recon", "assess", "vuln-scan", "exploit", "internal"),
+            RedTeamRole.entries.map { it.id },
+        )
+        assertEquals(
+            listOf("recon", "assess", "vuln-scan", "exploit", "internal"),
+            RedTeamRole.dispatchable.map { it.id },
+        )
+    }
+
+    @Test
+    fun `role dispatch embeds role constraint and scope and reserves a slot`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+
+        val (ok, out) = fresh.execute(
+            call("role_dispatch", "role" to "vuln-scan", "task" to "对 10.0.0.5 做授权验证"),
+            "s1",
+        )
+        assertTrue(ok)
+        assertTrue("dispatch must carry the role duty: $out", out.contains("漏洞发现"))
+        assertTrue("dispatch must carry the task: $out", out.contains("对 10.0.0.5 做授权验证"))
+        assertTrue("dispatch must carry the bound scope: $out", out.contains("10.0.0.0/24"))
+        assertTrue("dispatch must carry the target: $out", out.contains("a.com"))
+        assertTrue("dispatch must tell the caller to invoke_subagent: $out", out.contains("invoke_subagent"))
+
+        // 派发即占位：不等调用方再 acquire，避免「先查名额、再派、中间被抢走」的竞态。
+        val (_, slots) = fresh.execute(call("group_slot"), "s1")
+        assertTrue("slot must be reserved by dispatch: $slots", slots.contains("used=1"))
+    }
+
+    @Test
+    fun `role dispatch refuses the planner and unknown roles`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+
+        val (planOk, planMsg) = fresh.execute(call("role_dispatch", "role" to "plan", "task" to "x"), "s1")
+        assertFalse("plan is the main session and must not be dispatched", planOk)
+        assertTrue("message should list dispatchable roles: $planMsg", planMsg.contains("recon"))
+
+        val (badOk, badMsg) = fresh.execute(call("role_dispatch", "role" to "asset", "task" to "x"), "s1")
+        assertFalse("'asset' is not a valid role code", badOk)
+        assertTrue("message should name the unknown role: $badMsg", badMsg.contains("unknown role"))
+    }
+
+    @Test
+    fun `role dispatch honours the concurrency ceiling`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+        repeat(3) { index ->
+            val (ok, _) = fresh.execute(call("role_dispatch", "role" to "recon", "task" to "t$index"), "s1")
+            assertTrue("dispatch $index should fit", ok)
+        }
+        val (ok, out) = fresh.execute(call("role_dispatch", "role" to "internal", "task" to "t4"), "s1")
+        // 数据层拒绝：工具调用本身成功，但 payload 里 ok=false。
+        assertTrue(ok)
+        assertTrue("fourth dispatch must be refused: $out", out.contains("ok=false"))
+    }
+
+    @Test
+    fun `asset test keeps an append log and a blocked counter`() = runBlocking {
+        val store = FakeFacts()
+        val fresh = RedTeamCoordinator(
+            store,
+            FakeSessions(listOf(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))),
+            events,
+        )
+
+        fresh.execute(call("asset_test", "id" to "10.0.0.5", "status" to "testing", "test" to "nmap 全端口"), "s1")
+        fresh.execute(call("asset_test", "id" to "10.0.0.5", "status" to "blocked", "test" to "nuclei cve", "surface" to "SMB 445 未测", "blocked" to "true"), "s1")
+
+        val stored = store.recent("s1").single().payload
+        // test 是追加式：两次记录都要在，不能互相覆盖。
+        assertTrue("first test entry lost: $stored", stored.contains("nmap 全端口"))
+        assertTrue("second test entry lost: $stored", stored.contains("nuclei cve"))
+        assertTrue("blocked counter missing: $stored", stored.contains("\"blocked_count\":\"1\""))
+        assertTrue("surface missing: $stored", stored.contains("SMB 445 未测"))
+    }
+
+    @Test
+    fun `asset test rejects an unknown status`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+        val (ok, message) = fresh.execute(call("asset_test", "id" to "10.0.0.5", "status" to "almost-done"), "s1")
+        assertFalse(ok)
+        assertTrue("should list valid statuses: $message", message.contains("no_surface"))
     }
 
     private fun call(action: String, vararg pairs: Pair<String, String>): JsonObject = buildJsonObject {
