@@ -52,6 +52,7 @@ internal object HarnessApiMapper {
             lower == "build_script" -> HarnessTool.BUILD_SCRIPT
             lower == "invoke_subagent" || lower == "subagent" || lower == "invoke_dual_agent" -> HarnessTool.SUBAGENT
             lower == "load_rule" -> HarnessTool.LOAD_RULE
+            lower == "redteam" -> HarnessTool.REDTEAM
             trimmed.startsWith("mcp__") -> HarnessTool.MCP
             else -> HarnessTool.BASE
         }
@@ -74,5 +75,6 @@ internal object HarnessApiMapper {
         HarnessTool.SUBAGENT -> "invoke_subagent"
         HarnessTool.MCP -> "mcp"
         HarnessTool.LOAD_RULE -> "load_rule"
+        HarnessTool.REDTEAM -> "redteam"
     }
 }
