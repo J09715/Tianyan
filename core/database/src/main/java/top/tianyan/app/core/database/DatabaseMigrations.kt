@@ -374,6 +374,15 @@ val MIGRATION_45_46 = object : Migration(45, 46) {
 }
 
 
+val MIGRATION_47_48 = object : Migration(47, 48) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE harness_sessions ADD COLUMN redTeamMode TEXT NOT NULL DEFAULT 'off'")
+        db.execSQL("ALTER TABLE harness_sessions ADD COLUMN redTeamTarget TEXT")
+        db.execSQL("ALTER TABLE harness_sessions ADD COLUMN redTeamScope TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE harness_sessions ADD COLUMN redTeamPhase TEXT NOT NULL DEFAULT 'idle'")
+    }
+}
+
 val MIGRATION_46_47 = object : Migration(46, 47) {
     override fun migrate(db: SupportSQLiteDatabase) {
         // 工作流引擎 v0.13 移植：两张新表，DDL 与 Room 由 entity 生成的 schema 逐字对齐
