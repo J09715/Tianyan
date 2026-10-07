@@ -28,7 +28,8 @@ interface HarnessSessionRepository {
     suspend fun upsert(session: HarnessSessionEntity)
     suspend fun touch(id: String, updatedAt: Long)
     suspend fun updateWorkspace(id: String, workspace: String)
-    suspend fun updateRedTeamBinding(id: String, mode: String, target: String?, scope: String, phase: String, updatedAt: Long)
+    /** Optional extension for legacy repository test doubles; Room implementation persists it. */
+    suspend fun updateRedTeamBinding(id: String, mode: String, target: String?, scope: String, phase: String, updatedAt: Long) = Unit
     suspend fun rename(id: String, title: String, updatedAt: Long)
     suspend fun setApprovalMode(id: String, approvalMode: String, updatedAt: Long)
     suspend fun setApprovalModeForAll(approvalMode: String, updatedAt: Long)
