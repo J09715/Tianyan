@@ -768,6 +768,13 @@ fun ChatScreen(
         )
     }
 
+    if (currentSession?.redTeamMode == top.tianyan.app.core.model.RedTeamMode.RED_TEAM.id && !showGitPanel) {
+        RedTeamPanel(
+            session = currentSession,
+            onBindTarget = viewModel::bindRedTeamTarget,
+        )
+    }
+
     if (showGitPanel) {
         GitPanel(
             state = gitPanelState,
@@ -847,9 +854,9 @@ fun ChatScreen(
         NewSessionDialog(
             workspaces = workspaces,
             onDismiss = { showNewSession = false },
-            onCreate = { title, selected, selectedType ->
+            onCreate = { title, selected, selectedType, redTeamMode ->
                 showNewSession = false
-                viewModel.createSession(title = title, workspace = selected, projectType = selectedType.name)
+                viewModel.createSession(title = title, workspace = selected, projectType = selectedType.name, redTeamMode = redTeamMode)
             },
         )
     }
