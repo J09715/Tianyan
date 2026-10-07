@@ -60,6 +60,22 @@ Agent 侧通过统一的 `redteam` 工具工作，始终作用于调用它的那
 | 事实查询 | `fact_query`、`asset_query`、`vuln_query`、`credential_list`、`webshell_list`、`tunnel_list`、`attack_file_list`、`score_list`、`poc_list`、`poc_search` |
 | 报告 | `report`、`score_report`、`report_targets` |
 | 评估登记 | `asset_assess`、`asset_test`（只登记结论，主动探测仍走已审批的 `base`/`process`） |
+| 评分规则 | `score_points`（25 个得分点 / 8 个类别 / 8 条通用规则 G1–G8） |
+
+### 评分引擎
+
+移植自上游 `score-rules.js`，判分口径与上游**逐例一致**（由对照测试保证，见下）：
+
+- **25 个得分点**，对齐《突破入侵类得分规则（合并版）》，按 8 个类别分组：一般系统 / Web 应用 / 集权系统 / 大数据 / 网络基础设施 / 文件存储 / 模型相关 / 突破网络边界
+- **8 条通用规则 G1–G8**：G1 权限取高只计一次、G2 数据成果另行计分、G3 上限针对单个防守单位、G4 设备按台计分、G5 数据规模翻倍、G6 IPv6 ×3（不突破原上限）、G7 证明材料、G8 兜底
+- **去重口径** `service` / `system` / `target` / `none`：同口径只保留分值最高一条，同分取更早记的
+- **规则上限**：同一 `rule` 的计分命中按分值从高到低累计，超出 `cap` 的标为不计分并给出原因
+- **`self_created` 不计分**：自己注册自建的账号不参与竞争也不占位
+- **隧道真实性**：只有通道一端在目标侧（`target-outbound` / `target-http` / `target-agent`）才算跨越靶标边界，自建 VPS 上的代理不算突破
+
+`score_report`、`report` 与攻击链共用同一份实现，三处给出的总分必然一致——上游为此把规则抽成唯一实现，因为三处各写一遍必然漂移成不同口径。得分点定义由上游脚本程序化生成，禁止手改。
+
+判分逻辑的正确性由**对照测试**保证：夹具直接用上游 Node 实现跑出来，Kotlin 移植版必须逐例一致。手写期望值只能证明「我实现了我以为的规则」，跑上游才能证明「我实现的是同一套规则」。
 
 事实记录保留上游的原始字段（IP、端口、服务、指纹、来源 provenance、关系 src/dst/relation 等）并以 JSON 存入会话事实库；结构化写入使用稳定 ID，可重复提交覆盖同一条记录。工具 action 清单与协调器实现由 `RedTeamToolSchema` 单一来源驱动，并有契约测试断言「宣告的动作必须已实现」，防止再次出现枚举宣告但无分支的情况。真正的探测与验证动作仍通过天衍既有的 `base`/`process`/`MCP` 执行，并遵循当前会话的审批模式与 scope。
 
