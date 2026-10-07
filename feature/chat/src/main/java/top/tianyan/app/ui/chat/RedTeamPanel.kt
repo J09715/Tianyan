@@ -152,6 +152,7 @@ internal fun RedTeamPanel(
 /** Panels mirrored from the upstream web console, ordered by engagement flow. */
 private val RedTeamFactKinds = listOf(
     RedTeamFactKind.ASSET,
+    RedTeamFactKind.EDGE,
     RedTeamFactKind.VULNERABILITY,
     RedTeamFactKind.CREDENTIAL,
     RedTeamFactKind.ACCESS_SESSION,
@@ -169,6 +170,7 @@ private val RedTeamFactKind.label: String
     get() = when (this) {
         RedTeamFactKind.ENGAGEMENT -> "靶标"
         RedTeamFactKind.ASSET -> "资产"
+        RedTeamFactKind.EDGE -> "关系"
         RedTeamFactKind.VULNERABILITY -> "漏洞"
         RedTeamFactKind.CREDENTIAL -> "凭据"
         RedTeamFactKind.ACCESS_SESSION -> "访问会话"
