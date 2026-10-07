@@ -28,6 +28,9 @@ import androidx.compose.ui.unit.dp
 import top.tianyan.app.core.database.HarnessSessionEntity
 import top.tianyan.app.core.database.RedTeamFactEntity
 import top.tianyan.app.core.model.RedTeamFactKind
+import top.tianyan.app.core.model.RedTeamGraphModel
+import top.tianyan.app.core.model.RedTeamIpUtils
+import top.tianyan.app.core.model.RedTeamPreflightReport
 import top.tianyan.app.core.model.RedTeamPhase
 import top.tianyan.app.ui.components.RuntimeButton
 import top.tianyan.app.ui.components.RuntimeCard
@@ -40,10 +43,13 @@ internal fun RedTeamPanel(
     session: HarnessSessionEntity,
     facts: List<RedTeamFactEntity>,
     onBindTarget: (String, String) -> Unit,
+    skillHealth: RedTeamPreflightReport? = null,
+    onRefreshSkillHealth: (() -> Unit)? = null,
 ) {
     var target by remember(session.id, session.redTeamTarget) { mutableStateOf(session.redTeamTarget.orEmpty()) }
     var scope by remember(session.id, session.redTeamScope) { mutableStateOf(session.redTeamScope) }
     var expanded by remember(session.id) { mutableStateOf(false) }
+    var showGraph by remember(session.id) { mutableStateOf(true) }
     val phase = RedTeamPhase.fromId(session.redTeamPhase)
     val grouped = remember(facts) { facts.groupBy { it.kind } }
     RuntimeCard(
@@ -102,6 +108,131 @@ internal fun RedTeamPanel(
                         Text("Scope", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                         session.redTeamScope.lineSequence().filter { it.isNotBlank() }.take(8).forEach {
                             Text(it.trim(), style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+            }
+
+            // 资产图谱：C 段 → 资产 → 端口，按内网/外网分组。
+            // 归段走与智能体同一份 RedTeamIpUtils，界面与工具看到的网段必须一致。
+            val graph = remember(facts) {
+                RedTeamGraphModel.build(
+                    assets = facts
+                        .filter { it.kind == RedTeamFactKind.ASSET.id }
+                        .map { RedTeamGraphModel.GraphNode(it.id, it.title, it.target, it.status) },
+                    edgeCount = facts.count { it.kind == RedTeamFactKind.EDGE.id },
+                )
+            }
+            if (graph.segments.isNotEmpty()) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "资产图谱 · ${graph.segments.size} 段 / ${graph.assetCount} 资产",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    RuntimeButton(onClick = { showGraph = !showGraph }, shape = RoundedCornerShape(8.dp)) {
+                        Text(if (showGraph) "收起" else "展开", maxLines = 1)
+                    }
+                }
+                if (showGraph) {
+                    graph.byScope.forEach { (scope, segments) ->
+                        Surface(color = MaterialTheme.colorScheme.surfaceContainerHighest, shape = RoundedCornerShape(8.dp)) {
+                            Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(
+                                    "${when (scope) {
+                                        "internal" -> "内网"
+                                        "external" -> "外网"
+                                        else -> "未分类"
+                                    }} · ${segments.sumOf { it.assets.size }} 资产",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (scope == "internal") Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary,
+                                )
+                                segments.take(if (expanded) 12 else 4).forEach { segment ->
+                                    Text(
+                                        "▸ ${segment.cidr}（${segment.assets.size}）",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Medium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    segment.assets.take(if (expanded) 8 else 2).forEach { asset ->
+                                        Text(
+                                            "   • ${asset.target ?: asset.title}${asset.status.takeIf { it != "observed" }?.let { " [$it]" } ?: ""}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (graph.edgeCount > 0) {
+                        Text(
+                            "关系边 ${graph.edgeCount} 条",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+
+            // 技能体检：能列出来 ≠ 能跑。缺环境变量/工具在这里就要提示，别等进了靶场才发现。
+            skillHealth?.let { health ->
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "技能体检 · ${health.available}/${health.total} 可用",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    onRefreshSkillHealth?.let { refresh ->
+                        RuntimeButton(onClick = refresh, shape = RoundedCornerShape(8.dp)) {
+                            Text("重新体检", maxLines = 1)
+                        }
+                    }
+                }
+                val unusable = health.skills.filterNot { it.usable }
+                Surface(
+                    color = if (health.ready) Color(0xFF2E7D32).copy(alpha = 0.10f) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.30f),
+                    shape = RoundedCornerShape(8.dp),
+                ) {
+                    Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        if (health.total == 0) {
+                            Text("没有可体检的红队技能。", style = MaterialTheme.typography.labelSmall)
+                        } else if (health.ready) {
+                            Text("${health.total} 个技能全部可用。", style = MaterialTheme.typography.labelSmall)
+                        } else {
+                            unusable.take(if (expanded) 10 else 3).forEach { skill ->
+                                Text(
+                                    "• ${skill.name}：${skill.problems.firstOrNull() ?: skill.status}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                skill.fix.takeIf { it.isNotEmpty() }?.let { fix ->
+                                    Text(
+                                        "   修法：$fix",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 3,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                        }
+                        if (health.needsUser.isNotEmpty()) {
+                            Text(
+                                "需要你提供：" + health.needsUser.joinToString("、"),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                         }
                     }
                 }
