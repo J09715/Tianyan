@@ -2074,6 +2074,23 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    private val _redTeamSkillHealth =
+        kotlinx.coroutines.flow.MutableStateFlow<top.tianyan.app.core.model.RedTeamPreflightReport?>(null)
+    val redTeamSkillHealth: kotlinx.coroutines.flow.StateFlow<top.tianyan.app.core.model.RedTeamPreflightReport?> =
+        _redTeamSkillHealth.asStateFlow()
+
+    /**
+     * 体检要读技能库与文件系统，属于 IO 动作，所以只在用户进入红队面板或主动点「重新体检」时跑，
+     * 不挂在每次重组上——否则打开面板就会反复扫盘。
+     */
+    fun refreshRedTeamSkillHealth() {
+        val sessionId = currentSessionId.value.takeIf { it.isNotBlank() } ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { redTeamCoordinator.skillHealth(sessionId) }
+                .onSuccess { _redTeamSkillHealth.value = it }
+        }
+    }
+
     fun deleteSession(id: String) {
         viewModelScope.launch { harnessLoop.deleteSession(id) }
     }
