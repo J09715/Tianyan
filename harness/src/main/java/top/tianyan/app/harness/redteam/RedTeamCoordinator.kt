@@ -17,6 +17,9 @@ import kotlinx.coroutines.sync.withLock
 import top.tianyan.app.core.model.RedTeamFactKind
 import top.tianyan.app.core.model.RedTeamPreflightResult
 import top.tianyan.app.core.model.RedTeamRole
+import top.tianyan.app.core.model.RedTeamScoreCatalog
+import top.tianyan.app.core.model.RedTeamScoring
+import top.tianyan.app.core.model.ScoreHit
 import top.tianyan.app.harness.events.HarnessEvent
 import top.tianyan.app.harness.events.HarnessEventBus
 
@@ -143,7 +146,7 @@ class RedTeamCoordinator @Inject constructor(
                     )
                     "已保存 ${fact.kind} 事实 ${fact.id}"
                 }
-                "fact_query", "asset_query", "vuln_query", "credential_list", "access_list", "webshell_list", "tunnel_list", "chain", "attack_chain", "attack_file_list", "score_list", "score_report", "poc_search", "poc_list", "report_targets", "report" -> {
+                "fact_query", "asset_query", "vuln_query", "credential_list", "access_list", "webshell_list", "tunnel_list", "chain", "attack_chain", "attack_file_list", "score_list", "poc_search", "poc_list", "report_targets", "report" -> {
                     val session = requireNotNull(sessions.findById(sessionId)) { "session not found" }
                     require(session.redTeamMode == "red_team") { "red-team mode is not enabled for this session" }
                     val requestedKind = when (action) {
@@ -162,14 +165,16 @@ class RedTeamCoordinator @Inject constructor(
                     val items = recent(sessionId, 500).filter { fact ->
                         requestedKind.isNullOrBlank() || fact.kind == requestedKind
                     }
-                    if (action in setOf("report", "score_report")) {
-                        buildReport(session.redTeamTarget.orEmpty(), items)
+                    if (action == "report") {
+                        buildReport(sessionId, session.redTeamTarget.orEmpty(), items)
                     } else {
                         items.joinToString("\n") { "${it.kind} | ${it.title} | ${it.severity ?: "-"} | ${it.status} | ${it.target.orEmpty()}" }
                             .ifBlank { "当前会话暂无事实记录" }
                     }
                 }
                 "asset_graph" -> assetGraph(sessionId, args)
+                "score_report" -> scoreReport(sessionId)
+                "score_points" -> scorePointList()
                 "domain_index" -> domainIndex(sessionId)
                 "asset_stats" -> assetStats(sessionId)
                 "asset_timeline" -> assetTimeline(sessionId, args)
@@ -233,7 +238,8 @@ class RedTeamCoordinator @Inject constructor(
         }
     }
 
-    private fun buildReport(target: String, items: List<RedTeamFactEntity>): String = buildString {
+    /** 报告里的评分段直接嵌 scoreReport 的输出，保证与面板口径一致。 */
+    private suspend fun buildReport(sessionId: String, target: String, items: List<RedTeamFactEntity>): String = buildString {
         appendLine("# Red-Team Engagement Report")
         appendLine("Target: $target")
         appendLine("Generated: ${java.time.Instant.now()}")
@@ -242,6 +248,12 @@ class RedTeamCoordinator @Inject constructor(
             appendLine()
             appendLine("## $kind (${facts.size})")
             facts.forEach { appendLine("- [${it.severity ?: it.status}] ${it.title}${it.target?.let { value -> " · $value" } ?: ""}") }
+        }
+        // 评分段直接复用 scoreReport：报告与面板必须给出同一个总分。
+        if (items.any { it.kind == "score_hit" }) {
+            appendLine()
+            appendLine("## 评分")
+            appendLine(scoreReport(sessionId))
         }
     }
 
@@ -363,6 +375,103 @@ class RedTeamCoordinator @Inject constructor(
             if (steps.isEmpty()) append("暂无攻击路径记录")
         }
     }
+
+    /**
+     * 评分报告：把会话内的 score_hit 事实转成命中行，交给评分引擎算封顶与去重。
+     *
+     * 面板、报告、攻击链三处必须共用这一个实现——三处各写一遍必然漂移成不同口径，
+     * 同一份战果会算出三个总分（上游为此专门把规则抽成唯一实现）。
+     */
+    private suspend fun scoreReport(sessionId: String): String {
+        val session = requireBoundRedTeam(sessionId)
+        val hits = hitRows(sessionId)
+        val board = RedTeamScoring.applyScoreCaps(hits)
+        val byCode = board.items.groupBy { it.hit.code }
+
+        return buildString {
+            appendLine("ok=true")
+            appendLine("target=${session.redTeamTarget.orEmpty()}")
+            appendLine("hits=${board.items.size} capped=${board.cappedCount}")
+            appendLine("total=${board.totalPoints}")
+            appendLine()
+            appendLine("## 计分明细")
+            byCode.forEach { (code, items) ->
+                val point = RedTeamScoring.POINTS_BY_CODE[code]
+                val label = point?.name ?: code
+                val scored = items.filterNot { it.capped }
+                appendLine("- $label（$code）计分 ${scored.size}/${items.size} · ${scored.sumOf { it.points }}/${point?.cap ?: 0}")
+                items.forEach { row ->
+                    val service = RedTeamScoring.serviceLabel(row.hit)
+                    if (row.capped) {
+                        val why = when (row.cappedReasonKind) {
+                            "dedup" -> "被同口径更高分命中压住（#${row.cappedById}）"
+                            else -> "超出该项上限"
+                        }
+                        appendLine("  · 不计分 ${row.points}分 · $service · $why")
+                    } else {
+                        appendLine("  · 计分 ${row.points}分 · $service")
+                    }
+                }
+            }
+            if (board.caps.isNotEmpty()) {
+                appendLine()
+                appendLine("## 上限用量")
+                board.caps.forEach { (group, usage) ->
+                    appendLine("- $group：已用 ${usage.used}/${usage.cap}${if (usage.cappedCount > 0) "（封顶 ${usage.cappedCount} 条）" else ""}")
+                }
+            }
+            appendLine()
+            appendLine("## 通用规则")
+            RedTeamScoreCatalog.GENERAL_RULES.forEach { appendLine("- ${it.code} ${it.name}：${it.detail}") }
+        }
+    }
+
+    /** 得分点清单：模型据此判档位，避免自己编分值。 */
+    private fun scorePointList(): String = buildString {
+        RedTeamScoreCatalog.GROUPS.forEach { group ->
+            val points = RedTeamScoring.DEFAULT_POINTS.filter { it.category == group.code }
+            if (points.isEmpty()) return@forEach
+            appendLine("## ${group.name}（${group.code}）")
+            points.forEach { p ->
+                appendLine("- ${p.code}｜${p.name}｜档位 ${p.tier}｜上限 ${if (p.cap > 0) p.cap else "不限"}｜口径 ${p.dedupScope.id}")
+            }
+        }
+    }
+
+    /**
+     * 把 score_hit 事实还原成命中行。事实是幂等覆盖写入的，
+     * 所以同一 id 重复提交只会更新分值，不会重复计分。
+     */
+    private suspend fun hitRows(sessionId: String): List<ScoreHit> =
+        recent(sessionId, MAX_FACTS_SCANNED)
+            .filter { it.kind == "score_hit" }
+            .map { fact ->
+                val payload = runCatching { Json.parseToJsonElement(fact.payload) as? JsonObject }.getOrNull()
+                val code = payload?.get("code")?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: fact.title
+                ScoreHit(
+                    id = stableId(fact.id),
+                    code = code,
+                    points = payload?.get("points")?.jsonPrimitive?.contentOrNull?.toIntOrNull(),
+                    assetId = payload?.get("asset_id")?.jsonPrimitive?.contentOrNull?.toLongOrNull(),
+                    port = payload?.get("port")?.jsonPrimitive?.contentOrNull?.toIntOrNull(),
+                    target = fact.target ?: payload?.get("target")?.jsonPrimitive?.contentOrNull,
+                    recordedAt = fact.createdAt,
+                    selfCreated = payload?.get("self_created")?.jsonPrimitive?.contentOrNull == "1",
+                    systemKey = payload?.get("system_key")?.jsonPrimitive?.contentOrNull,
+                    ipVersion = payload?.get("ip_version")?.jsonPrimitive?.contentOrNull?.toIntOrNull(),
+                    dataScale = payload?.get("data_scale")?.jsonPrimitive?.contentOrNull,
+                    multiplier = RedTeamScoring
+                        .scoreMultiplierOf(
+                            payload?.get("ip_version")?.jsonPrimitive?.contentOrNull?.toIntOrNull(),
+                            payload?.get("data_scale")?.jsonPrimitive?.contentOrNull,
+                            fact.target,
+                        ).multiplier,
+                )
+            }
+
+    /** 事实 id 是字符串；评分引擎按下标比较先后，这里映射成稳定且单调的数值键。 */
+    private fun stableId(id: String): Long =
+        id.toLongOrNull() ?: (id.hashCode().toLong() and 0x7fffffffL)
 
     private suspend fun singleFact(sessionId: String, args: JsonObject): String {
         requireBoundRedTeam(sessionId)
