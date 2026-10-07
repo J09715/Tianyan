@@ -19,6 +19,7 @@ object RedTeamToolSchema {
         "session_info", "preflight", "agent_slot", "roles",
         "fact_add", "role_prompt", "role_prompt_reset",
         "sessions", "session_check", "engagement_open", "session_bind",
+        "score_points",
     )
 
     /** 事实写入类：全部要求 title；更新类额外要求 id。 */
