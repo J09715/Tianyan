@@ -112,14 +112,20 @@ class RedTeamCoordinator @Inject constructor(
                     }
                     val kind = RedTeamFactKind.entries.firstOrNull { it.id == actionKind }
                         ?: error("unsupported fact kind")
+                    // Structured detail fields are stored verbatim so upstream schemas
+                    // (ip/port/service/fingerprint/provenance/names...) survive the port.
                     val fact = record(
                         sessionId = sessionId,
                         kind = kind,
                         title = args["title"]?.jsonPrimitive?.contentOrNull.orEmpty().also { require(it.isNotBlank()) { "title is required" } },
-                        target = args["target"]?.jsonPrimitive?.contentOrNull,
+                        target = args["target"]?.jsonPrimitive?.contentOrNull
+                            ?: args["ip"]?.jsonPrimitive?.contentOrNull
+                            ?: args["host"]?.jsonPrimitive?.contentOrNull
+                            ?: args["domain"]?.jsonPrimitive?.contentOrNull,
                         severity = args["severity"]?.jsonPrimitive?.contentOrNull,
                         status = args["status"]?.jsonPrimitive?.contentOrNull ?: "observed",
-                        payload = args["payload"]?.jsonPrimitive?.contentOrNull ?: "{}",
+                        payload = JsonObject(args.filterKeys { it !in CONTROL_KEYS }).toString(),
+                        id = args["id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString(),
                     )
                     "已保存 ${fact.kind} 事实 ${fact.id}"
                 }
@@ -222,6 +228,9 @@ class RedTeamCoordinator @Inject constructor(
 
     private companion object {
         const val MAX_CONCURRENT_AGENTS = 3
+
+        /** Control-plane keys; everything else is preserved as fact detail. */
+        val CONTROL_KEYS = setOf("action", "sub_action", "title", "target", "severity", "status", "id", "key", "label")
         val ROLE_DUTIES = mapOf(
             RedTeamRole.RECON to "被动测绘优先：域名、证书、备案、公开暴露面，结果写 asset_add 并标注 provenance=passive。",
             RedTeamRole.ASSET to "把资产、端口、服务、指纹、归属关系整理成可复用的资产库，区分 live/dead。",
