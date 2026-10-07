@@ -54,7 +54,7 @@ Agent 侧通过统一的 `redteam` 工具工作，始终作用于调用它的那
 | 会话与预检 | `session_info`、`session_check`、`sessions`、`preflight`、`roles` |
 | 角色提示词 | `role_prompt`、`role_prompt_reset`（会话级覆盖，未设置时回落内置职责） |
 | 角色派发 | `role_dispatch`（合成「角色约束 + 任务 + 授权范围 + 当前态势」的可直接派发描述，并同时占位）、`group_slot`（在跑角色与剩余名额） |
-| 并发闸门 | `agent_slot`（`status`/`acquire`/`release`，上限 3，按会话隔离） |
+| 并发闸门 | `agent_slot`（`status`/`acquire`/`release`，按会话隔离）、`group_slot`（在跑角色与剩余名额） |
 | 事实写入 | `asset_add`、`vuln_add`、`credential_add`、`access_add`、`webshell_add`、`tunnel_add`、`chain_add`、`attack_file_add`、`score_hit`、`poc_add`、`http_evidence_add`、`knowledge_add`、`skill_add` |
 | 事实更新 | `asset_update`、`vuln_update`、`credential_update`、`access_update`、`webshell_update`、`tunnel_update`、`poc_update`（必须带 `id`） |
 | 资产图谱 | `asset_link`（写关系边）、`asset_graph`（按 C 段取子图，节点上限默认 300 / 硬上限 1000）、`domain_index`、`asset_stats`、`asset_timeline`、`web_list` |
@@ -129,6 +129,22 @@ Agent 侧通过统一的 `redteam` 工具工作，始终作用于调用它的那
 | `internal` | 内网渗透 | 是 |
 
 `role_dispatch` 把角色约束、本轮任务、授权目标与 scope、当前资产与评分态势合成一份可直接交给 `invoke_subagent` 的描述，**并在派发时即占用并发名额**——先查名额再派会被别的角色抢走，产生「以为没满却派了第 4 个」的竞态。子代理继续使用天衍原生子代理，不引入第二套编排实现。
+
+### 并发上限
+
+同时派几个执行智能体是使用中最常调的一项，所以做成可配置而不是写死：
+
+- 生效顺序：设置项 → 环境变量 `REDTEAM_MAX_AGENTS` → 默认 3
+- 硬上限 10：再多也不会更快，同一个 API Key 的并发/速率限制会先到，反而扰动测试
+- 越界值收敛到 `1..10`；填 `0` 视为未设置（让位给环境变量），而不是被解释成「只允许 1 个」
+- 设置项落在 `$DSH_HOME/redteam/settings.json`，与事实库同根，随库一起备份迁移
+
+### 写入校验
+
+写库前的校验是**安全边界**，不是格式美化：
+
+- **路径穿越防护**：攻击文件与 PoC 读的是库里存的 path 列，而那个列是智能体自己写进去的——也就是不可信输入。一旦填成 `/etc/passwd` 或 `~/.ssh/id_rsa`，界面上点一下就把文件读出来了。读路径与写路径共用同一处判定，越界按「查不到」处理，**不静默返回内容**
+- **WebShell 类型/状态归一化**：支持大小写与中文别名（冰蝎 / 哥斯拉 / 蚁剑 / 自研），认不出**当场报错而不是静默存原文**——面板的「用户连不上」红标与会话页的连接口令复制都按这个字段判断，存进一个拼错的值不会报错，只会让这两处判定静默失效
 
 ## 日志与崩溃排查
 
