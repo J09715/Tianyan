@@ -417,6 +417,55 @@ class RedTeamCoordinatorTest {
         assertTrue("synthesized must carry the Host header: $out", out.contains("Host: a.com:8080"))
     }
 
+    /**
+     * 体检必须真的判「能不能跑」，不能只报「有哪些技能」——
+     * 缺环境变量/工具要能在这个阶段就找用户要，而不是等进了靶场才发现。
+     */
+    @Test
+    fun `preflight reports unusable skills with fix guidance`() = runBlocking {
+        val source = object : RedTeamSkillSource {
+            override suspend fun redTeamSkills() = listOf(
+                RedTeamSkillSource.SkillSource(
+                    name = "recon-passive",
+                    content = "use process.env.REDTEAM_TEST_MISSING_KEY and run \$DSH_HOME/redteam/toolkit/nonexistent-tool-xyz/bin",
+                ),
+            )
+        }
+        val fresh = RedTeamCoordinator(
+            FakeFacts(),
+            FakeSessions(listOf(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))),
+            events,
+            source,
+        )
+
+        val (ok, out) = fresh.execute(call("preflight"), "s1")
+        assertTrue(ok)
+        assertTrue("preflight must report readiness: $out", out.contains("ready=false"))
+        assertTrue("preflight must count skills: $out", out.contains("skills=1"))
+        assertTrue("preflight must name the missing env var: $out", out.contains("REDTEAM_TEST_MISSING_KEY"))
+        assertTrue("preflight must list what the user must provide: $out", out.contains("需要你提供"))
+        assertTrue("preflight must give a fix, not just a diagnosis: $out", out.contains("修法："))
+    }
+
+    @Test
+    fun `preflight is ready when every skill checks out`() = runBlocking {
+        val source = object : RedTeamSkillSource {
+            override suspend fun redTeamSkills() = listOf(
+                RedTeamSkillSource.SkillSource(name = "plain", content = "no env, no paths, no placeholders"),
+            )
+        }
+        val fresh = RedTeamCoordinator(
+            FakeFacts(),
+            FakeSessions(listOf(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))),
+            events,
+            source,
+        )
+        val (ok, out) = fresh.execute(call("preflight"), "s1")
+        assertTrue(ok)
+        assertTrue("clean skill set should be ready: $out", out.contains("ready=true"))
+        assertFalse("no blockers means no fix list", out.contains("不可用技能与修法"))
+    }
+
     private fun call(action: String, vararg pairs: Pair<String, String>): JsonObject = buildJsonObject {
         put("action", action)
         pairs.forEach { (key, value) -> put(key, value) }
