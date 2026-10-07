@@ -11,6 +11,8 @@ import top.tianyan.app.harness.prompt.DefaultPrivilegeSectionRenderer
 import top.tianyan.app.harness.prompt.PrivilegeSectionRenderer
 import top.tianyan.app.harness.projection.LiveMessagePort
 import top.tianyan.app.harness.projection.SessionMessageProjector
+import top.tianyan.app.harness.redteam.RedTeamSkillSource
+import top.tianyan.app.harness.redteam.RepositoryRedTeamSkillSource
 
 /** Harness 模块内的 Hilt 端点绑定：可测接缝在此收口。 */
 @Module
@@ -36,4 +38,11 @@ abstract class HarnessBindsModule {
     abstract fun bindConversationRewinder(
         impl: SessionForkConversationRewinder,
     ): ConversationRewinder
+
+    /** 红队技能来源 → 技能库实现（开工前体检据此判断「能不能跑」而不只是「列得出来」） */
+    @Binds
+    @Singleton
+    abstract fun bindRedTeamSkillSource(
+        impl: RepositoryRedTeamSkillSource,
+    ): RedTeamSkillSource
 }
