@@ -394,6 +394,29 @@ class RedTeamCoordinatorTest {
         assertTrue("should list valid statuses: $message", message.contains("no_surface"))
     }
 
+    /**
+     * 复现段：真实抓包原样给出，合成必须标注来源——
+     * 推断的请求与实证在可信度上不是一回事，报告里要能一眼分辨。
+     */
+    @Test
+    fun `replay section labels synthesized requests and preserves real ones`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+
+        // 真实抓包：有 request 字段。
+        fresh.execute(call("http_evidence_add", "id" to "e1", "title" to "越权读取用户列表",
+            "request" to "GET /api/users HTTP/1.1\r\nHost: a.com\r\n\r\n"), "s1")
+        // 只有 URL：需要合成。
+        fresh.execute(call("http_evidence_add", "id" to "e2", "title" to "未鉴权接口",
+            "target" to "http://a.com:8080/api/x", "method" to "GET"), "s1")
+
+        val (ok, out) = fresh.execute(call("score_report"), "s1")
+        assertTrue(ok)
+        assertTrue("real capture must be preserved verbatim: $out", out.contains("GET /api/users HTTP/1.1"))
+        assertTrue("real capture must be labelled as such: $out", out.contains("真实抓包"))
+        assertTrue("synthesized must be labelled: $out", out.contains("synthesized=true"))
+        assertTrue("synthesized must carry the Host header: $out", out.contains("Host: a.com:8080"))
+    }
+
     private fun call(action: String, vararg pairs: Pair<String, String>): JsonObject = buildJsonObject {
         put("action", action)
         pairs.forEach { (key, value) -> put(key, value) }
