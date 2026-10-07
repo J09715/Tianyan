@@ -40,8 +40,9 @@ import top.tianyan.app.core.database.task.AgentTaskDao
         AgentTaskEntity::class,
         WorkflowEntity::class,
         WorkflowExecutionLogEntity::class,
+        RedTeamFactEntity::class,
     ],
-    version = 48,
+    version = 49,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -66,5 +67,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun buildScriptDao(): BuildScriptDao
     abstract fun agentTaskDao(): AgentTaskDao
     abstract fun workflowDao(): WorkflowDao
+    abstract fun redTeamFactDao(): RedTeamFactDao
 }
 
