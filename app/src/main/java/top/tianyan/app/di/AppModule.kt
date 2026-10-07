@@ -42,6 +42,7 @@ import top.tianyan.app.core.database.ToolSettingsDao
 import top.tianyan.app.core.database.AgentApprovalDao
 import top.tianyan.app.core.database.QuickPhraseDao
 import top.tianyan.app.core.database.WorkflowDao
+import top.tianyan.app.core.database.RedTeamFactDao
 import top.tianyan.app.core.database.HarnessRuntimeDao
 import top.tianyan.app.core.database.AndroidAppDao
 import top.tianyan.app.harness.WorkspaceFileAccess
@@ -164,6 +165,10 @@ object AppModule {
     @Provides
     @Singleton
     fun provideWorkflowDao(database: AppDatabase): WorkflowDao = database.workflowDao()
+
+    @Provides
+    @Singleton
+    fun provideRedTeamFactDao(database: AppDatabase): RedTeamFactDao = database.redTeamFactDao()
 
     @Provides
     @Singleton
