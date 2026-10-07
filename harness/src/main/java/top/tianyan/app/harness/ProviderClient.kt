@@ -1249,6 +1249,15 @@ class ProviderClient @Inject constructor(
             ),
             ApiToolDefinition(
                 function = ApiFunctionDefinition(
+                    name = "redteam",
+                    description = "会话级红队工作区工具。先调用 preflight 与 session_info；fact_add/fact_query/report 只读写当前已绑定目标的会话事实。复杂执行通过 Tianyan 已审批的 base/process 与 invoke_subagent 工具完成。支持 session_info、preflight、fact_add、fact_query、report。",
+                    parameters = Json.parseToJsonElement(
+                        """{"type":"object","properties":{"action":{"type":"string","enum":["session_info","preflight","agent_slot","roles","fact_add","asset_add","vuln_add","credential_add","access_add","webshell_add","tunnel_add","chain_add","attack_file_add","score_hit","poc_add","http_evidence_add","knowledge_add","skill_add","fact_query","asset_query","vuln_query","credential_list","access_list","webshell_list","tunnel_list","chain","attack_chain","attack_file_list","score_list","score_report","poc_search","poc_list","report_targets","report"]},"kind":{"type":"string","enum":["engagement","asset","vulnerability","credential","access_session","webshell","tunnel","attack_step","attack_file","score_hit","report","knowledge","skill","agent","event"]},"title":{"type":"string"},"target":{"type":"string"},"severity":{"type":"string"},"status":{"type":"string"},"payload":{"type":"string"}},"required":["action"],"allOf":[{"if":{"properties":{"action":{"const":"fact_add"}},"required":["action"]},"then":{"required":["kind","title"]}},{"if":{"properties":{"action":{"enum":["asset_add","vuln_add","credential_add","access_add","webshell_add","tunnel_add","chain_add","attack_file_add","score_hit","poc_add","http_evidence_add","knowledge_add","skill_add"]}},"then":{"required":["title"]}}]}""",
+                    ).jsonObject,
+                ),
+            ),
+            ApiToolDefinition(
+                function = ApiFunctionDefinition(
                     name = "load_rule",
                     description = "按需加载系统提示词的详细规则块（workflow / code-navigation / security / memory / environment-proot / tools）。当当前任务需要某块规则但系统提示词中未注入时调用；只读，无副作用。",
                     parameters = Json.parseToJsonElement(
