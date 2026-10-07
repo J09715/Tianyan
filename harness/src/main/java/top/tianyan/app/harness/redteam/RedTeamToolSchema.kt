@@ -19,7 +19,8 @@ object RedTeamToolSchema {
         "session_info", "preflight", "agent_slot", "roles",
         "fact_add", "role_prompt", "role_prompt_reset",
         "sessions", "session_check", "engagement_open", "session_bind",
-        "score_points",
+        "score_points", "role_dispatch", "group_slot",
+        "asset_assess", "asset_test",
     )
 
     /** 事实写入类：全部要求 title；更新类额外要求 id。 */
@@ -29,7 +30,7 @@ object RedTeamToolSchema {
         "webshell_add", "webshell_update", "tunnel_add", "tunnel_update",
         "chain_add", "attack_file_add", "score_hit", "poc_add", "poc_update",
         "http_evidence_add", "knowledge_add", "skill_add",
-        "asset_link", "asset_assess", "asset_test",
+        "asset_link",
     )
 
     /** 查询/报告类：只读当前会话事实库。 */
@@ -66,7 +67,11 @@ object RedTeamToolSchema {
             append(""""kind":{"type":"string","enum":[""")
             append(factKindIds().joinToString(",") { "\"$it\"" })
             append("""]},""")
-            append(""""role":{"type":"string","enum":["recon","asset","vuln-scan","exploit","internal"]},""")
+            // 角色白名单从枚举派生：上游注释过「写死 4 个值曾漏掉 assess」。
+            append(""""role":{"type":"string","enum":[""")
+            append(top.tianyan.app.core.model.RedTeamRole.entries.joinToString(",") { "\"${it.id}\"" })
+            append("""]},""")
+            append(""""task":{"type":"string","description":"role_dispatch 要该角色这一轮交付什么"},""")
             append(""""cidr":{"type":"string","description":"只取某个 C 段的子图，例如 10.0.0.0/24"},""")
             append(""""maxNodes":{"type":"integer","description":"图谱节点上限，默认 300，硬上限 1000"},""")
             append(""""src_kind":{"type":"string"},"src_id":{"type":"string"},""")
@@ -82,6 +87,7 @@ object RedTeamToolSchema {
                 add("""{"if":{"properties":{"action":{"enum":[""" + FACTS_REQUIRING_TITLE.joinToString(",") { "\"$it\"" } + """]}},"required":["action"]},"then":{"required":["title"]}}""")
                 add("""{"if":{"properties":{"action":{"const":"agent_slot"}},"required":["action"]},"then":{"required":["sub_action"]}}""")
                 add("""{"if":{"properties":{"action":{"const":"role_prompt"}},"required":["action"]},"then":{"required":["role"]}}""")
+                add("""{"if":{"properties":{"action":{"const":"role_dispatch"}},"required":["action"]},"then":{"required":["role","task"]}}""")
                 add("""{"if":{"properties":{"action":{"const":"asset_link"}},"required":["action"]},"then":{"required":["src_id","dst_id","relation"]}}""")
                 add("""{"if":{"properties":{"action":{"enum":[""" + ID_REQUIRED_ACTIONS.joinToString(",") { "\"$it\"" } + """]}},"required":["action"]},"then":{"required":["id"]}}""")
                 add("""{"if":{"properties":{"action":{"enum":[""" + UPDATE_ACTIONS.joinToString(",") { "\"$it\"" } + """]}},"required":["action"]},"then":{"required":["id"]}}""")
