@@ -20,6 +20,8 @@ import top.tianyan.app.core.model.RedTeamIpUtils
 import top.tianyan.app.core.model.RedTeamReportReplay
 import top.tianyan.app.core.model.RedTeamPreflightReport
 import top.tianyan.app.core.model.RedTeamRole
+import top.tianyan.app.core.model.RedTeamSettings
+import top.tianyan.app.core.model.RedTeamValidate
 import top.tianyan.app.core.model.RedTeamSkillHealth
 import top.tianyan.app.core.model.RedTeamSkillAvailability
 import top.tianyan.app.core.model.RedTeamScoreCatalog
@@ -36,6 +38,11 @@ class RedTeamCoordinator @Inject constructor(
     /** 红队技能来源；缺省为空，单测无需构造完整技能库。 */
     private val skills: RedTeamSkillSource = RedTeamSkillSource.Empty,
 ) {
+    /** 设置文件位置；与事实库同根，随库一起备份迁移。 */
+    private val settingsRoot: String =
+        System.getenv("DSH_HOME")?.takeIf { it.isNotBlank() }?.let { "$it/redteam" }
+            ?: "${System.getProperty("user.home").orEmpty()}/.dsh/redteam"
+
     /** Per-session agent slots. The registry lives in memory; the fact store survives restarts. */
     private val slotLock = Mutex()
     private val reservations = java.util.concurrent.ConcurrentHashMap<String, MutableList<SlotReservation>>()
@@ -193,7 +200,17 @@ class RedTeamCoordinator @Inject constructor(
                         "vuln_add", "vuln_update" -> "vulnerability"
                         "credential_add", "credential_update" -> "credential"
                         "access_add", "access_update" -> "access_session"
-                        "webshell_add", "webshell_update" -> "webshell"
+                        "webshell_add", "webshell_update" -> {
+                            // 类型/状态必须归一化：存进拼错的值不报错，只会让面板的
+                            // 「用户连不上」红标与会话页的口令复制两处判定静默失效。
+                            args["shell_type"]?.jsonPrimitive?.contentOrNull?.let {
+                                RedTeamValidate.normalizeShellType(it)
+                            }
+                            args["status"]?.jsonPrimitive?.contentOrNull?.let {
+                                RedTeamValidate.normalizeShellStatus(it)
+                            }
+                            "webshell"
+                        }
                         "tunnel_add", "tunnel_update" -> "tunnel"
                         "chain_add" -> "attack_step"
                         "attack_file_add" -> "attack_file"
@@ -278,7 +295,7 @@ class RedTeamCoordinator @Inject constructor(
     }
 
     private suspend fun agentSlot(sessionId: String, args: JsonObject): String = slotLock.withLock {
-        val max = MAX_CONCURRENT_AGENTS
+        val max = maxConcurrentAgents
         val held = reservations.getOrPut(sessionId) { mutableListOf() }
         val action = args["sub_action"]?.jsonPrimitive?.contentOrNull?.trim()?.lowercase().orEmpty()
         val used = held.size
@@ -320,7 +337,7 @@ class RedTeamCoordinator @Inject constructor(
             RedTeamRole.entries.forEach { role ->
                 appendLine("- ${role.id}｜${role.displayName}：${ROLE_DUTIES.getValue(role)}")
             }
-            append("派活用 invoke_subagent；并发上限 $MAX_CONCURRENT_AGENTS，派前先 agent_slot status。")
+            append("派活用 invoke_subagent；并发上限 $maxConcurrentAgents，派前先 agent_slot status。")
         }
     }
 
@@ -492,13 +509,13 @@ class RedTeamCoordinator @Inject constructor(
         // 派发即占位：避免「先查名额、再派、中间被别人抢走」的竞态。
         val slot = slotLock.withLock {
             val held = reservations.getOrPut(sessionId) { mutableListOf() }
-            if (held.size >= MAX_CONCURRENT_AGENTS) {
+            if (held.size >= maxConcurrentAgents) {
                 return@withLock null
             }
             val reservation = SlotReservation("${role.id}#${System.currentTimeMillis()}", role.id, System.currentTimeMillis())
             held += reservation
             reservation
-        } ?: return "ok=false\nerror=并发已满（最多 $MAX_CONCURRENT_AGENTS 个），先等当前在跑的角色回报或 release 掉已结束的。"
+        } ?: return "ok=false\nerror=并发已满（最多 $maxConcurrentAgents 个），先等当前在跑的角色回报或 release 掉已结束的。"
 
         val context = engagementBrief(sessionId)
         return buildString {
@@ -536,9 +553,9 @@ class RedTeamCoordinator @Inject constructor(
         requireBoundRedTeam(sessionId)
         val held = slotLock.withLock { reservations.getOrPut(sessionId) { mutableListOf() }.toList() }
         return buildString {
-            appendLine("max=$MAX_CONCURRENT_AGENTS")
+            appendLine("max=$maxConcurrentAgents")
             appendLine("used=${held.size}")
-            appendLine("free=${(MAX_CONCURRENT_AGENTS - held.size).coerceAtLeast(0)}")
+            appendLine("free=${(maxConcurrentAgents - held.size).coerceAtLeast(0)}")
             appendLine("## 在跑的角色")
             held.forEach { appendLine("- ${it.label} | ${it.key}") }
             append("可派角色：${RedTeamRole.dispatchable.joinToString("/") { it.id }}")
@@ -920,6 +937,38 @@ class RedTeamCoordinator @Inject constructor(
         val session = requireNotNull(sessions.findById(sessionId)) { "session not found" }
         require(session.redTeamMode == "red_team") { "red-team mode is not enabled for this session" }
         require(!session.redTeamTarget.isNullOrBlank()) { "bind a target and scope before recording facts" }
+    }
+
+    /**
+     * 当前生效的并发上限：设置项 → 环境变量 `REDTEAM_MAX_AGENTS` → 默认 3。
+     * 上游特意把它做成可调（上限 10），因为「同时派几个执行智能体」是使用中最常改的一项。
+     */
+    private val maxConcurrentAgents: Int
+        get() = RedTeamSettings.maxAgentsOf(
+            settingsValue = maxAgentsOverride ?: readSettingsMaxAgents(),
+            envValue = System.getenv(RedTeamSettings.ENV_MAX_AGENTS),
+        ).value
+
+    /** 界面/测试可以就地覆盖，不必落盘。 */
+    @Volatile
+    var maxAgentsOverride: Double? = null
+
+    private fun readSettingsMaxAgents(): Double? =
+        runCatching {
+            val file = java.io.File(settingsRoot, RedTeamSettings.SETTINGS_FILE_NAME)
+            if (!file.isFile) null else RedTeamSettings.maxAgentsFromJson(file.readText())
+        }.getOrNull()
+
+    /** 保存并发上限并返回实际生效值（收敛到 1..10）。 */
+    fun saveMaxAgents(value: Any?): Int {
+        val applied = RedTeamSettings.clampMaxAgents(value)
+        runCatching {
+            val file = java.io.File(settingsRoot, RedTeamSettings.SETTINGS_FILE_NAME)
+            file.parentFile?.mkdirs()
+            file.writeText(RedTeamSettings.withMaxAgents(file.takeIf { it.isFile }?.readText(), applied))
+        }
+        maxAgentsOverride = applied.toDouble()
+        return applied
     }
 
     private companion object {
