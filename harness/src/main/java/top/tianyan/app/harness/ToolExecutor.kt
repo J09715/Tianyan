@@ -67,6 +67,7 @@ class ToolExecutor @Inject constructor(
     private val checkpointStore: top.tianyan.app.harness.checkpoint.CheckpointStore? = null,
     private val dualAgentCoordinator: top.tianyan.app.harness.dual.DualAgentCoordinator? = null,
     private val embeddedAdbManager: EmbeddedAdbManager? = null,
+    private val redTeamCoordinator: top.tianyan.app.harness.redteam.RedTeamCoordinator? = null,
 ) {
     @Inject
     lateinit var settingsDataStore: AgentPreferences
@@ -221,6 +222,8 @@ class ToolExecutor @Inject constructor(
                 subagentOrchestrator?.executeSubagents(args, sessionId) ?: (false to "未初始化子智能体编排器")
             }
             HarnessTool.MCP -> mcpManager?.executeTool(rawToolName ?: "mcp", args, workspace) ?: (false to "未初始化 MCP 管理器")
+            HarnessTool.REDTEAM -> redTeamCoordinator?.execute(args, sessionId)
+                ?: (false to "红队协调器未初始化")
             HarnessTool.LOAD_RULE -> {
                 val rule = requireString(args, "rule")
                 val content = promptRouter?.loadRule(rule)
