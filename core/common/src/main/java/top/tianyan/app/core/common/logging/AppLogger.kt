@@ -120,6 +120,44 @@ class AppLogger @Inject constructor(
         ok
     }.getOrDefault(false)
 
+    /** 通用运行日志（runtime.log）的落盘位置描述，与智能体日志同一套公共/回退目录逻辑。 */
+    fun getLogLocation(): String {
+        val publicFile = publicLogFile(GENERAL_LOG_FILE)
+        return if (publicFile != null && publicFile.exists()) {
+            publicFile.absolutePath
+        } else if (Environment.isExternalStorageManager()) {
+            "${publicFile?.absolutePath}（尚未创建）"
+        } else {
+            fallbackLogFile(GENERAL_LOG_FILE).absolutePath + "（未授予所有文件访问）"
+        }
+    }
+
+    /**
+     * 读取通用运行日志尾部。崩溃现场排查时，CrashReporter 只留下异常栈本身，
+     * 运行日志提供崩溃前一刻的应用级上下文，二者互补。
+     */
+    fun readLogs(maxChars: Int = 100_000): String = runCatching {
+        val file = existingLogFile(GENERAL_LOG_FILE)
+            ?: return@runCatching "暂无运行日志"
+        val text = file.readText(Charsets.UTF_8)
+        when {
+            text.isEmpty() -> "暂无运行日志"
+            text.length > maxChars -> text.takeLast(maxChars)
+            else -> text
+        }
+    }.getOrDefault("读取日志失败")
+
+    fun getLogSizeBytes(): Long = runCatching {
+        existingLogFile(GENERAL_LOG_FILE)?.length() ?: 0L
+    }.getOrDefault(0L)
+
+    fun clearLogs(): Boolean = runCatching {
+        var ok = true
+        publicLogFile(GENERAL_LOG_FILE)?.takeIf { it.exists() }?.let { ok = it.delete() && ok }
+        fallbackLogFile(GENERAL_LOG_FILE).takeIf { it.exists() }?.let { ok = it.delete() && ok }
+        ok
+    }.getOrDefault(false)
+
     /** 追加一行日志：优先公共目录，失败时回退私有目录。 */
     private fun append(fileName: String, content: String, maxBytes: Long, rotateMarker: String) {
         synchronized(writeLock) {
