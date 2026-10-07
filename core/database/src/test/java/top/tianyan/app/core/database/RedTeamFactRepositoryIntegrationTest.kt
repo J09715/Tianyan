@@ -36,7 +36,8 @@ class RedTeamFactRepositoryIntegrationTest {
         repository.upsert(RedTeamFactEntity("session-b", "b1", "asset", "host-b", "10.0.0.2", createdAt = 2L, updatedAt = 2L))
         repository.upsert(RedTeamFactEntity("session-a", "v1", "vulnerability", "finding-a", severity = "high", createdAt = 3L, updatedAt = 3L))
 
-        assertEquals(listOf("a1", "v1"), repository.recent("session-a").map { it.id })
+        // recent() returns most-recently-updated first.
+        assertEquals(listOf("v1", "a1"), repository.recent("session-a").map { it.id })
         assertEquals(listOf("b1"), repository.recent("session-b").map { it.id })
         assertEquals(listOf("a1"), repository.recent("session-a").filter { it.kind == "asset" }.map { it.id })
     }
