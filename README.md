@@ -40,9 +40,21 @@
 
 ## 红队模式
 
-红队模式是天衍会话级 Agent 类型。新建会话时选择红队模式，进入当前对话后绑定目标与允许范围；目标、阶段、资产摘要和后续红队事实只显示在当前会话，不会串到其他会话。子代理继续使用天衍原生子代理注册表与运行状态。
+红队模式是天衍的会话级 Agent 类型。新建会话时选择红队模式，进入当前对话后绑定目标与授权范围；目标、阶段与作战数据只存在于当前会话，切换会话不会看到其他会话的目标或记录。子智能体继续使用天衍原生子代理，不引入第二套编排实现。
 
-移动端工作区采用原生 Compose 布局，将目标确认、阶段状态、资产/漏洞/凭据/WebShell/隧道/攻击链/评分/报告等能力归入当前会话的红队工作区；执行前遵循会话授权、范围和工具审批。红队事实库和编排能力由 runtime/harness 层承载，UI 仅订阅当前会话事件并按需加载详情，避免大规模资产或证据阻塞首屏。
+工作区由原生 Compose 渲染，按上游 Web 控制台的维度分组展示：资产、漏洞、凭据、访问会话、WebShell、隧道、攻击链、评分、攻击文件、知识库与技能。
+
+Agent 侧通过统一的 `redteam` 工具工作，始终作用于调用它的那个会话：
+
+| 能力 | action |
+| :--- | :--- |
+| 会话与预检 | `session_info`、`preflight`、`roles` |
+| 并发闸门 | `agent_slot`（`status`/`acquire`/`release`，上限 3，按会话隔离） |
+| 事实写入 | `asset_add`、`vuln_add`、`credential_add`、`access_add`、`webshell_add`、`tunnel_add`、`chain_add`、`attack_file_add`、`score_hit`、`poc_add`、`http_evidence_add`、`knowledge_add`、`skill_add` |
+| 事实查询 | `fact_query`、`asset_query`、`vuln_query`、`credential_list`、`webshell_list`、`tunnel_list`、`chain`、`attack_file_list`、`score_list`、`poc_list` |
+| 报告 | `report`、`score_report`、`report_targets` |
+
+事实记录保留上游的原始字段（IP、端口、服务、指纹、来源 provenance 等）并以 JSON 存入会话事实库；结构化写入使用稳定 ID，可重复提交覆盖同一条记录。真正的探测与验证动作仍通过天衍既有的 `base`/`process`/`MCP` 执行，并遵循当前会话的审批模式与 scope。
 
 ## 获取应用
 
