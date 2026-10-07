@@ -268,6 +268,44 @@ class RedTeamCoordinatorTest {
         assertTrue("guard string changed: $message", message.contains("unsupported redteam action"))
     }
 
+    /**
+     * 报告与评分报告必须给出同一个总分：上游为此把规则抽成唯一实现，
+     * 三处各写一遍必然漂移成不同口径。
+     */
+    @Test
+    fun `report and score report agree on the total`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+        // 同一主机同端口的两条服务器权限：system 口径下只有高分那条计分。
+        fresh.execute(call("score_hit", "title" to "server-host", "id" to "h1", "points" to "50",
+            "code" to "server-host", "asset_id" to "1", "port" to "22", "target" to "10.0.0.5"), "s1")
+        fresh.execute(call("score_hit", "title" to "server-host", "id" to "h2", "points" to "10",
+            "code" to "server-host", "asset_id" to "1", "port" to "22", "target" to "10.0.0.5"), "s1")
+
+        val (okScore, scoreOut) = fresh.execute(call("score_report"), "s1")
+        assertTrue(okScore)
+
+        val (okReport, reportOut) = fresh.execute(call("report"), "s1")
+        assertTrue(okReport)
+
+        // 只有 50 分那条计分：10 分那条被同口径压住。
+        assertTrue("score report should count only the best hit: $scoreOut", scoreOut.contains("total=50"))
+        assertTrue("report must embed the same total: $reportOut", reportOut.contains("total=50"))
+        assertTrue("capped hit must be explained: $scoreOut", scoreOut.contains("不计分 10分"))
+    }
+
+    @Test
+    fun `score points listing exposes upstream catalog`() = runBlocking {
+        val (ok, out) = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+            .execute(call("score_points"), "s1")
+        assertTrue(ok)
+        assertTrue("missing server-host: $out", out.contains("server-host"))
+        assertTrue("missing boundary-physical: $out", out.contains("boundary-physical"))
+        assertEquals(
+            top.tianyan.app.core.model.RedTeamScoring.DEFAULT_POINTS.size,
+            top.tianyan.app.core.model.RedTeamScoring.DEFAULT_POINTS.map { it.code }.distinct().size,
+        )
+    }
+
     private fun call(action: String, vararg pairs: Pair<String, String>): JsonObject = buildJsonObject {
         put("action", action)
         pairs.forEach { (key, value) -> put(key, value) }
