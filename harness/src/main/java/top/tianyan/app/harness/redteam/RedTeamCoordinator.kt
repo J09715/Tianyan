@@ -18,7 +18,9 @@ import top.tianyan.app.core.model.RedTeamFactKind
 import top.tianyan.app.core.model.RedTeamPreflightResult
 import top.tianyan.app.core.model.RedTeamIpUtils
 import top.tianyan.app.core.model.RedTeamReportReplay
+import top.tianyan.app.core.model.RedTeamPreflightReport
 import top.tianyan.app.core.model.RedTeamRole
+import top.tianyan.app.core.model.RedTeamSkillHealth
 import top.tianyan.app.core.model.RedTeamSkillAvailability
 import top.tianyan.app.core.model.RedTeamScoreCatalog
 import top.tianyan.app.core.model.RedTeamScoring
@@ -92,7 +94,11 @@ class RedTeamCoordinator @Inject constructor(
      * 开工前体检：技能能列出来 ≠ 能跑。缺 `FOFA_KEY`、工具没落到 toolkit、VPS 还是占位符，
      * 都要等真正动手才发现，那时候人已经在靶场里了。所以缺什么在这里直接要，并给出怎么修。
      */
-    private suspend fun preflightReport(sessionId: String): String {
+    /**
+     * 结构化体检结论，供界面标记「能不能跑」。
+     * 与文字版共用同一份判定，避免界面与智能体看到两种结论。
+     */
+    suspend fun skillHealth(sessionId: String): RedTeamPreflightReport {
         val session = requireNotNull(sessions.findById(sessionId)) { "session not found" }
         require(session.redTeamMode == "red_team") { "red-team mode is not enabled for this session" }
 
@@ -115,35 +121,60 @@ class RedTeamCoordinator @Inject constructor(
             )
         }
         val summary = RedTeamSkillAvailability.summarizeSkills(verdicts)
-        val blocked = verdicts.filter { it.status != "available" }
-        val needsUser = blocked.flatMap { it.needsUser }.distinct()
+        return RedTeamPreflightReport(
+            ready = verdicts.all { it.status == "available" },
+            target = session.redTeamTarget.orEmpty(),
+            scope = session.redTeamScope,
+            total = summary["total"] ?: 0,
+            available = summary["available"] ?: 0,
+            broken = summary["broken"] ?: 0,
+            unknown = summary["unknown"] ?: 0,
+            needsUser = verdicts.flatMap { it.needsUser }.distinct(),
+            skills = verdicts.map { verdict ->
+                RedTeamSkillHealth(
+                    name = verdict.name,
+                    status = verdict.status,
+                    problems = verdict.problems,
+                    fix = verdict.issues.firstOrNull { it.fix.isNotEmpty() }?.fix.orEmpty(),
+                )
+            },
+        )
+    }
 
+    /**
+     * 开工前体检：技能能列出来 ≠ 能跑。缺 `FOFA_KEY`、工具没落到 toolkit、VPS 还是占位符，
+     * 都要等真正动手才发现，那时候人已经在靶场里了。所以缺什么在这里直接要，并给出怎么修。
+     */
+    private suspend fun preflightReport(sessionId: String): String {
+        val report = skillHealth(sessionId)
         val toolProbe = preflight(
             requiredEnvironment = emptyMap(),
             availableTools = setOf("base", "process", "invoke_subagent", "mcp"),
         )
+        val blocked = report.skills.filterNot { it.usable }
 
         return buildString {
-            appendLine("ready=${blocked.isEmpty()}")
-            appendLine("target=${session.redTeamTarget.orEmpty()}")
-            appendLine("scope=${session.redTeamScope}")
+            appendLine("ready=${report.ready}")
+            appendLine("target=${report.target}")
+            appendLine("scope=${report.scope}")
             appendLine("tools=${toolProbe.available.joinToString(",")}")
-            appendLine("skills=${summary["total"]} available=${summary["available"]} broken=${summary["broken"] ?: 0} unknown=${summary["unknown"] ?: 0}")
-            if (needsUser.isNotEmpty()) {
+            appendLine("skills=${report.total} available=${report.available} broken=${report.broken} unknown=${report.unknown}")
+            if (report.needsUser.isNotEmpty()) {
                 appendLine()
                 appendLine("## 需要你提供")
-                needsUser.forEach { appendLine("- $it") }
+                report.needsUser.forEach { appendLine("- $it") }
             }
             if (blocked.isNotEmpty()) {
                 appendLine()
                 appendLine("## 不可用技能与修法")
-                blocked.forEach { verdict ->
-                    verdict.issues.forEach { appendLine("- [${verdict.name}] ${it.detail}") }
-                    verdict.issues.firstOrNull { it.fix.isNotEmpty() }?.let { appendLine("  修法：${it.fix}") }
+                blocked.forEach { skill ->
+                    skill.problems.forEach { appendLine("- [${skill.name}] $it") }
+                    if (skill.fix.isNotEmpty()) appendLine("  修法：${skill.fix}")
                 }
             }
         }
     }
+
 
     suspend fun execute(args: JsonObject, sessionId: String): Pair<Boolean, String> {
         return runCatching {
