@@ -102,8 +102,6 @@ class RedTeamCoordinator @Inject constructor(
                 "fact_add", "asset_add", "vuln_add", "credential_add", "access_add", "webshell_add", "tunnel_add", "chain_add", "attack_file_add", "score_hit", "poc_add", "http_evidence_add", "knowledge_add", "skill_add",
                 "vuln_update", "tunnel_update", "webshell_update", "poc_update", "asset_update", "credential_update", "access_update",
                 "asset_link",
-                // 存量评估/并发验证：只登记结论，真正的主动探测仍需走已审批的 base/process。
-                "asset_assess", "asset_test",
                 -> {
                     val actionKind = when (action) {
                         "asset_add", "asset_update" -> "asset"
@@ -120,8 +118,6 @@ class RedTeamCoordinator @Inject constructor(
                         "knowledge_add" -> "knowledge"
                         "skill_add" -> "skill"
                         "asset_link" -> "edge"
-                        "asset_assess" -> "asset"
-                        "asset_test" -> "event"
                         else -> args["kind"]?.jsonPrimitive?.contentOrNull
                     }
                     val kind = RedTeamFactKind.entries.firstOrNull { it.id == actionKind }
@@ -175,6 +171,11 @@ class RedTeamCoordinator @Inject constructor(
                 "asset_graph" -> assetGraph(sessionId, args)
                 "score_report" -> scoreReport(sessionId)
                 "score_points" -> scorePointList()
+                "role_dispatch" -> roleDispatch(sessionId, args)
+                // 存量评估/并发验证：只登记结论，真正的主动探测仍需走已审批的 base/process。
+                "asset_assess" -> assessAsset(sessionId, args)
+                "asset_test" -> testAsset(sessionId, args)
+                "group_slot" -> groupSlot(sessionId)
                 "domain_index" -> domainIndex(sessionId)
                 "asset_stats" -> assetStats(sessionId)
                 "asset_timeline" -> assetTimeline(sessionId, args)
@@ -382,6 +383,198 @@ class RedTeamCoordinator @Inject constructor(
      * 面板、报告、攻击链三处必须共用这一个实现——三处各写一遍必然漂移成不同口径，
      * 同一份战果会算出三个总分（上游为此专门把规则抽成唯一实现）。
      */
+    /**
+     * 角色派发：把「角色提示词 + 已绑定目标与 scope + 当前资产/评分态势 + 并发闸门」
+     * 合成一份可以直接交给 `invoke_subagent` 的任务描述。
+     *
+     * 上游的做法是让调用方自己把 role_prompt 取出来塞进任务描述，漏一步就派了个没有角色约束的
+     * 裸子代理。这里把它收成一个动作：调用方拿到的就是能直接派出去的文本，并同时占好槽位。
+     */
+    private suspend fun roleDispatch(sessionId: String, args: JsonObject): String {
+        val session = requireBoundRedTeam(sessionId)
+        val roleId = args["role"]?.jsonPrimitive?.contentOrNull?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
+            ?: error("role is required")
+        val role = RedTeamRole.fromId(roleId)
+            ?: error("unknown role: $roleId (${RedTeamRole.entries.joinToString("/") { it.id }})")
+        require(role != RedTeamRole.PLANNER) { "plan 是主会话本身，不能派给自己；可派角色：${RedTeamRole.dispatchable.joinToString("/") { it.id }}" }
+
+        val task = args["task"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+        require(task.isNotEmpty()) { "task is required：说清这一轮要这个角色交付什么" }
+
+        val override = rolePrompts[sessionId]?.get(role.id)
+        val duty = override ?: ROLE_DUTIES.getValue(role)
+
+        // 派发即占位：避免「先查名额、再派、中间被别人抢走」的竞态。
+        val slot = slotLock.withLock {
+            val held = reservations.getOrPut(sessionId) { mutableListOf() }
+            if (held.size >= MAX_CONCURRENT_AGENTS) {
+                return@withLock null
+            }
+            val reservation = SlotReservation("${role.id}#${System.currentTimeMillis()}", role.id, System.currentTimeMillis())
+            held += reservation
+            reservation
+        } ?: return "ok=false\nerror=并发已满（最多 $MAX_CONCURRENT_AGENTS 个），先等当前在跑的角色回报或 release 掉已结束的。"
+
+        val context = engagementBrief(sessionId)
+        return buildString {
+            appendLine("ok=true")
+            appendLine("slot=${slot.key}")
+            appendLine("role=${role.id}｜${role.displayName}")
+            appendLine("## 交给 invoke_subagent 的任务描述")
+            appendLine("---")
+            appendLine("你是本次授权红队演练中的「${role.displayName}」角色。")
+            appendLine()
+            appendLine("【角色约束】")
+            appendLine(duty)
+            appendLine()
+            appendLine("【本次任务】")
+            appendLine(task)
+            appendLine()
+            appendLine("【授权范围】")
+            appendLine("目标：${session.redTeamTarget.orEmpty()}")
+            appendLine("范围：${session.redTeamScope}")
+            appendLine("只在上述范围与当前会话审批模式下动作；越界目标一律不碰。")
+            appendLine()
+            appendLine("【当前态势】")
+            appendLine(context)
+            appendLine()
+            appendLine("【交付要求】")
+            appendLine("产出通过 redteam 工具写回当前会话（asset_add/vuln_add/credential_add/…），")
+            appendLine("评分相关命中写 score_hit 并填 code/points/asset_id/port；结束时回一句结论与剩余攻击面。")
+            appendLine("---")
+            appendLine("派完活后：invoke_subagent 返回即视为本轮结束，记得 agent_slot release key=${slot.key}。")
+        }
+    }
+
+    /** 已有多少个角色在跑，以及还能派几个。 */
+    private suspend fun groupSlot(sessionId: String): String {
+        requireBoundRedTeam(sessionId)
+        val held = slotLock.withLock { reservations.getOrPut(sessionId) { mutableListOf() }.toList() }
+        return buildString {
+            appendLine("max=$MAX_CONCURRENT_AGENTS")
+            appendLine("used=${held.size}")
+            appendLine("free=${(MAX_CONCURRENT_AGENTS - held.size).coerceAtLeast(0)}")
+            appendLine("## 在跑的角色")
+            held.forEach { appendLine("- ${it.label} | ${it.key}") }
+            append("可派角色：${RedTeamRole.dispatchable.joinToString("/") { it.id }}")
+        }
+    }
+
+    /** 派活前给子代理看的态势摘要：目标、C 段、资产/漏洞计数、当前得分。 */
+    private suspend fun engagementBrief(sessionId: String): String {
+        val facts = recent(sessionId, MAX_FACTS_SCANNED)
+        val board = RedTeamScoring.applyScoreCaps(hitRows(sessionId))
+        val segments = facts.filter { it.kind == "asset" }
+            .mapNotNull { segmentOf(it.target) }.distinct()
+        return buildString {
+            appendLine("资产 ${facts.count { it.kind == "asset" }} 条，覆盖 C 段 ${segments.size} 个${if (segments.isNotEmpty()) "（${segments.take(5).joinToString(", ")}${if (segments.size > 5) " …" else ""}）" else ""}")
+            appendLine("漏洞 ${facts.count { it.kind == "vulnerability" }} 条，凭据 ${facts.count { it.kind == "credential" }} 条，访问会话 ${facts.count { it.kind == "access_session" }} 个")
+            appendLine("当前评分合计 ${board.totalPoints} 分（命中 ${board.items.size} 条，被封顶 ${board.cappedCount} 条）")
+        }
+    }
+
+    /**
+     * 资产测试登记（上游 asset_test）：维护「未测试 / 测试中 / 已测试 / 被封禁 / 已放弃 / 无攻击面」状态机。
+     *
+     * 两个字段的语义必须分清，否则资产测绘页会显示成错误的进度：
+     *   · `test` 是**追加式**的测试记录（每次调用往后接，保留完整试错过程）；
+     *   · `surface` 是**覆盖式**的剩余攻击面（只关心当前还剩什么）。
+     * `blocked=true` 时封禁计数 +1，用于判断该资产是否已被 WAF 盯上。
+     */
+    private suspend fun testAsset(sessionId: String, args: JsonObject): String {
+        requireBoundRedTeam(sessionId)
+        val assetKey = assetKeyOf(args, "asset_test")
+        val status = args["status"]?.jsonPrimitive?.contentOrNull?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
+        require(status == null || status in ASSET_TEST_STATUSES) {
+            "status 必须是 ${ASSET_TEST_STATUSES.joinToString("/")}"
+        }
+
+        val time = System.currentTimeMillis()
+        val existing = recent(sessionId, MAX_FACTS_SCANNED).firstOrNull { it.id == assetKey }
+        val prior = payloadOf(existing)
+        // `notes` 是上游老提示词里的兼容别名，效果与 `test` 相同。
+        val entry = listOfNotNull(
+            args["test"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() },
+            args["notes"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() },
+        ).joinToString("；")
+
+        val priorLog = prior["test_log"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        val priorBlocked = prior["blocked_count"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 0
+        val surface = args["surface"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
+        val blockedNow = args["blocked"]?.jsonPrimitive?.contentOrNull == "true"
+        val blockedCount = priorBlocked + if (blockedNow) 1 else 0
+
+        val merged = prior
+            .putJson("test_log", if (entry.isEmpty()) priorLog else listOf(priorLog, "[$time] $entry").filter { it.isNotEmpty() }.joinToString("\n"))
+            .putJson("blocked_count", blockedCount.toString())
+            .let { if (surface != null) it.putJson("surface", surface) else it }
+            .let { if (status != null) it.putJson("test_status", status) else it }
+
+        val fact = RedTeamFactEntity(
+            sessionId = sessionId,
+            id = assetKey,
+            kind = "asset",
+            title = existing?.title ?: args["title"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: assetKey,
+            target = existing?.target ?: args["ip"]?.jsonPrimitive?.contentOrNull,
+            severity = existing?.severity,
+            status = status ?: existing?.status ?: "observed",
+            payload = merged.toString(),
+            createdAt = existing?.createdAt ?: time,
+            updatedAt = time,
+        )
+        facts.upsert(fact)
+        events.emit(HarnessEvent.RedTeamFactChanged(sessionId, time, fact.id, fact.kind, fact.status))
+        return "ok=true\nid=${fact.id}\nstatus=${fact.status}\nblocked_count=$blockedCount"
+    }
+
+    /**
+     * 易打性评估（上游 asset_assess）：预期成果、优先级、判断理由。
+     * 信息收集收口时对每个资产调用一次，供指挥者按性价比排序派活。
+     */
+    private suspend fun assessAsset(sessionId: String, args: JsonObject): String {
+        requireBoundRedTeam(sessionId)
+        val assetKey = assetKeyOf(args, "asset_assess")
+        val priority = args["priority"]?.jsonPrimitive?.contentOrNull?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
+        require(priority == null || priority in ASSESS_PRIORITIES) {
+            "priority 必须是 ${ASSESS_PRIORITIES.joinToString("/")}"
+        }
+
+        val time = System.currentTimeMillis()
+        val existing = recent(sessionId, MAX_FACTS_SCANNED).firstOrNull { it.id == assetKey }
+        val merged = payloadOf(existing)
+            .let { obj -> priority?.let { obj.putJson("priority", it) } ?: obj }
+            .let { obj -> args["potential"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }?.let { obj.putJson("potential", it) } ?: obj }
+            .let { obj -> args["reason"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }?.let { obj.putJson("assess_reason", it) } ?: obj }
+
+        val fact = RedTeamFactEntity(
+            sessionId = sessionId,
+            id = assetKey,
+            kind = "asset",
+            title = existing?.title ?: args["title"]?.jsonPrimitive?.contentOrNull ?: assetKey,
+            target = existing?.target ?: args["ip"]?.jsonPrimitive?.contentOrNull,
+            severity = existing?.severity,
+            status = existing?.status ?: "observed",
+            payload = merged.toString(),
+            createdAt = existing?.createdAt ?: time,
+            updatedAt = time,
+        )
+        facts.upsert(fact)
+        events.emit(HarnessEvent.RedTeamFactChanged(sessionId, time, fact.id, fact.kind, fact.status))
+        return "ok=true\nid=${fact.id}\npriority=${priority ?: "-"}"
+    }
+
+    /** 资产类动作可以用 id / asset_id / ip 任一定位；三样都没有就报错，不要静默新建一条无名资产。 */
+    private fun assetKeyOf(args: JsonObject, action: String): String =
+        listOf("id", "asset_id", "ip").firstNotNullOfOrNull { key ->
+            args[key]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
+        } ?: error("$action 需要 id / asset_id / ip 指定资产")
+
+    private fun payloadOf(fact: RedTeamFactEntity?): JsonObject =
+        runCatching { Json.parseToJsonElement(fact?.payload ?: "{}") as? JsonObject }.getOrNull() ?: JsonObject(emptyMap())
+
+    private fun JsonObject.putJson(key: String, value: String): JsonObject =
+        JsonObject(this + (key to kotlinx.serialization.json.JsonPrimitive(value)))
+
     private suspend fun scoreReport(sessionId: String): String {
         val session = requireBoundRedTeam(sessionId)
         val hits = hitRows(sessionId)
@@ -598,11 +791,18 @@ class RedTeamCoordinator @Inject constructor(
         /** Control-plane keys; everything else is preserved as fact detail. */
         val CONTROL_KEYS = setOf("action", "sub_action", "title", "target", "severity", "status", "id", "key", "label")
         val ROLE_DUTIES = mapOf(
+            RedTeamRole.PLANNER to "主会话负责统筹：读资产图谱与评分，按性价比排序后把活派给五个执行角色，自己不做具体探测。",
             RedTeamRole.RECON to "被动测绘优先：域名、证书、备案、公开暴露面，结果写 asset_add 并标注 provenance=passive。",
-            RedTeamRole.ASSET to "把资产、端口、服务、指纹、归属关系整理成可复用的资产库，区分 live/dead。",
+            RedTeamRole.ASSESS to "把资产、端口、服务、指纹、归属关系整理成可复用的资产库，区分 live/dead，并给出易打性评估 priority/potential/reason。",
             RedTeamRole.VULN_SCAN to "对已知资产做授权范围内的主动验证，产出漏洞记录与 HTTP 证据。",
             RedTeamRole.EXPLOIT to "在确认的漏洞上验证影响，记录凭据、访问会话、WebShell 等利用结果。",
             RedTeamRole.INTERNAL to "从已获得的立足点向内网延伸，维护内网资产与攻击链。",
         )
+
+        /** 资产测试状态，与上游 asset_test 的 status 枚举一致。 */
+        val ASSET_TEST_STATUSES = listOf("untested", "testing", "tested", "blocked", "abandoned", "no_surface")
+
+        /** 易打性优先级。 */
+        val ASSESS_PRIORITIES = listOf("high", "medium", "low")
     }
 }
