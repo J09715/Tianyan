@@ -19,6 +19,7 @@ import top.tianyan.app.core.model.RedTeamPreflightResult
 import top.tianyan.app.core.model.RedTeamIpUtils
 import top.tianyan.app.core.model.RedTeamReportReplay
 import top.tianyan.app.core.model.RedTeamRole
+import top.tianyan.app.core.model.RedTeamSkillAvailability
 import top.tianyan.app.core.model.RedTeamScoreCatalog
 import top.tianyan.app.core.model.RedTeamScoring
 import top.tianyan.app.core.model.ScoreHit
@@ -30,6 +31,8 @@ class RedTeamCoordinator @Inject constructor(
     private val facts: RedTeamFactRepository,
     private val sessions: HarnessSessionRepository,
     private val events: HarnessEventBus,
+    /** 红队技能来源；缺省为空，单测无需构造完整技能库。 */
+    private val skills: RedTeamSkillSource = RedTeamSkillSource.Empty,
 ) {
     /** Per-session agent slots. The registry lives in memory; the fact store survives restarts. */
     private val slotLock = Mutex()
@@ -85,6 +88,63 @@ class RedTeamCoordinator @Inject constructor(
         return RedTeamPreflightResult(availableTools.sorted(), missing, warnings)
     }
 
+    /**
+     * 开工前体检：技能能列出来 ≠ 能跑。缺 `FOFA_KEY`、工具没落到 toolkit、VPS 还是占位符，
+     * 都要等真正动手才发现，那时候人已经在靶场里了。所以缺什么在这里直接要，并给出怎么修。
+     */
+    private suspend fun preflightReport(sessionId: String): String {
+        val session = requireNotNull(sessions.findById(sessionId)) { "session not found" }
+        require(session.redTeamMode == "red_team") { "red-team mode is not enabled for this session" }
+
+        val fs = RedTeamSkillAvailability.fileSystemFs()
+        val home = System.getProperty("user.home").orEmpty()
+        val dshHome = System.getenv("DSH_HOME")?.takeIf { it.isNotBlank() } ?: "$home/.dsh"
+        val env = System.getenv()
+
+        val verdicts = skills.redTeamSkills().map { source ->
+            RedTeamSkillAvailability.checkSkill(
+                skill = RedTeamSkillAvailability.Skill(
+                    name = source.name,
+                    content = source.content,
+                    path = source.path,
+                ),
+                env = env,
+                fs = fs,
+                dshHome = dshHome,
+                homeDir = home,
+            )
+        }
+        val summary = RedTeamSkillAvailability.summarizeSkills(verdicts)
+        val blocked = verdicts.filter { it.status != "available" }
+        val needsUser = blocked.flatMap { it.needsUser }.distinct()
+
+        val toolProbe = preflight(
+            requiredEnvironment = emptyMap(),
+            availableTools = setOf("base", "process", "invoke_subagent", "mcp"),
+        )
+
+        return buildString {
+            appendLine("ready=${blocked.isEmpty()}")
+            appendLine("target=${session.redTeamTarget.orEmpty()}")
+            appendLine("scope=${session.redTeamScope}")
+            appendLine("tools=${toolProbe.available.joinToString(",")}")
+            appendLine("skills=${summary["total"]} available=${summary["available"]} broken=${summary["broken"] ?: 0} unknown=${summary["unknown"] ?: 0}")
+            if (needsUser.isNotEmpty()) {
+                appendLine()
+                appendLine("## 需要你提供")
+                needsUser.forEach { appendLine("- $it") }
+            }
+            if (blocked.isNotEmpty()) {
+                appendLine()
+                appendLine("## 不可用技能与修法")
+                blocked.forEach { verdict ->
+                    verdict.issues.forEach { appendLine("- [${verdict.name}] ${it.detail}") }
+                    verdict.issues.firstOrNull { it.fix.isNotEmpty() }?.let { appendLine("  修法：${it.fix}") }
+                }
+            }
+        }
+    }
+
     suspend fun execute(args: JsonObject, sessionId: String): Pair<Boolean, String> {
         return runCatching {
             val action = args["action"]?.jsonPrimitive?.contentOrNull?.trim()?.lowercase().orEmpty()
@@ -92,15 +152,7 @@ class RedTeamCoordinator @Inject constructor(
                 "session_info" -> sessionInfo(sessionId)
                 "agent_slot" -> agentSlot(sessionId, args)
                 "roles" -> roleBrief(sessionId)
-                "preflight" -> {
-                    val session = requireNotNull(sessions.findById(sessionId)) { "session not found" }
-                    require(session.redTeamMode == "red_team") { "red-team mode is not enabled for this session" }
-                    val result = preflight(
-                        requiredEnvironment = emptyMap(),
-                        availableTools = setOf("base", "process", "invoke_subagent", "mcp"),
-                    )
-                    "ready=${result.ready}\navailable=${result.available.joinToString(",")}\nmissing=${result.missing.joinToString(",")}\nwarnings=${result.warnings.joinToString(",")}"
-                }
+                "preflight" -> preflightReport(sessionId)
                 "fact_add", "asset_add", "vuln_add", "credential_add", "access_add", "webshell_add", "tunnel_add", "chain_add", "attack_file_add", "score_hit", "poc_add", "http_evidence_add", "knowledge_add", "skill_add",
                 "vuln_update", "tunnel_update", "webshell_update", "poc_update", "asset_update", "credential_update", "access_update",
                 "asset_link",
