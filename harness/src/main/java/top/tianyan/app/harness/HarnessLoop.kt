@@ -2006,6 +2006,7 @@ class HarnessLoop @Inject constructor(
             HarnessTool.MEMORY,
             HarnessTool.PLAN,
             HarnessTool.SCRATCHPAD,
+            HarnessTool.REDTEAM,
         )
 
     }
