@@ -200,6 +200,7 @@ fun ChatScreen(
     val subagentResult by viewModel.subagentResult.collectAsStateWithLifecycle()
     val gitPanelState by viewModel.gitPanelState.collectAsStateWithLifecycle()
     val redTeamFacts by viewModel.redTeamFacts.collectAsStateWithLifecycle(initialValue = emptyList())
+    val redTeamSkillHealth by viewModel.redTeamSkillHealth.collectAsStateWithLifecycle()
     val gitCredentials by viewModel.gitCredentials.collectAsStateWithLifecycle()
     val matchedCredId by viewModel.matchedCredentialId.collectAsStateWithLifecycle()
     val gitUncommittedCount = gitPanelState.let { s -> s.staged.size + s.unstaged.size + s.untrackedCount }
@@ -770,10 +771,16 @@ fun ChatScreen(
     }
 
     if (currentSession?.redTeamMode == top.tianyan.app.core.model.RedTeamMode.RED_TEAM.id && !showGitPanel) {
+        // 进面板即体检一次：技能能列出来 ≠ 能跑，缺环境变量与工具要在开工前就提示。
+        androidx.compose.runtime.LaunchedEffect(currentSession?.id) {
+            if (currentSession?.id != null) viewModel.refreshRedTeamSkillHealth()
+        }
         RedTeamPanel(
             session = currentSession,
             facts = redTeamFacts,
             onBindTarget = viewModel::bindRedTeamTarget,
+            skillHealth = redTeamSkillHealth,
+            onRefreshSkillHealth = viewModel::refreshRedTeamSkillHealth,
         )
     }
 
