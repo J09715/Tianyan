@@ -9,6 +9,8 @@ import androidx.room.Index
 import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 import top.tianyan.app.core.model.ApprovalMode
+import top.tianyan.app.core.model.RedTeamMode
+import top.tianyan.app.core.model.RedTeamPhase
 
 /** Harness 会话：一条会话聚合一批消息，并记录使用的模型。 */
 @Entity(tableName = "harness_sessions", indices = [Index(value = ["updatedAt"])])
@@ -26,6 +28,13 @@ data class HarnessSessionEntity(
     val projectType: String = "",
     /** Tool approval authority for this session; new sessions inherit the global default. */
     val approvalMode: String = ApprovalMode.ASSISTED.id,
+    /** Red-team capability is opt-in and isolated to this session. */
+    val redTeamMode: String = RedTeamMode.OFF.id,
+    /** User-confirmed target unit, host, URL, or CIDR for this session only. */
+    val redTeamTarget: String? = null,
+    /** Newline-separated allowed scope entries; empty means confirmation is still required. */
+    val redTeamScope: String = "",
+    val redTeamPhase: String = RedTeamPhase.IDLE.id,
 )
 
 @Dao
@@ -45,6 +54,9 @@ interface HarnessSessionDao {
     /** 会话工作区随切换持久化（重启后 loadSession 恢复到上次绑定的目录，不再回默认）。 */
     @Query("UPDATE harness_sessions SET workspace = :workspace WHERE id = :id")
     suspend fun updateWorkspace(id: String, workspace: String)
+
+    @Query("UPDATE harness_sessions SET redTeamMode = :mode, redTeamTarget = :target, redTeamScope = :scope, redTeamPhase = :phase, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun updateRedTeamBinding(id: String, mode: String, target: String?, scope: String, phase: String, updatedAt: Long)
 
     @Query("UPDATE harness_sessions SET title = :title, updatedAt = :updatedAt WHERE id = :id")
     suspend fun rename(id: String, title: String, updatedAt: Long)
