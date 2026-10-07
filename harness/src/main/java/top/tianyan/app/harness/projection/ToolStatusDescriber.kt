@@ -45,5 +45,6 @@ object ToolStatusDescriber {
         HarnessTool.SUBAGENT -> "正在派发并执行子智能体协同任务…"
         HarnessTool.MCP -> "正在调用 MCP 插件工具：${rawToolName ?: "mcp"}…"
         HarnessTool.LOAD_RULE -> "正在加载规则块：${arg(args, "rule") ?: "load_rule"}…"
+        HarnessTool.REDTEAM -> "正在更新当前会话红队工作区…"
     }
 }
