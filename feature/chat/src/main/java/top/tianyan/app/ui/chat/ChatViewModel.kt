@@ -94,6 +94,8 @@ class ChatViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
     private val harnessLoop: HarnessLoop,
     private val sessionDao: HarnessSessionRepository,
+    private val redTeamFactRepository: top.tianyan.app.core.database.RedTeamFactRepository,
+    private val redTeamCoordinator: top.tianyan.app.harness.redteam.RedTeamCoordinator,
     private val aiModelDao: AiModelRepository,
     private val workspaceManager: WorkspaceManager,
     private val proactiveWorkflowAdvisor: top.tianyan.app.harness.workflow.ProactiveWorkflowAdvisor,
@@ -2060,10 +2062,15 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch { harnessLoop.loadSession(id) }
     }
 
+    val redTeamFacts: kotlinx.coroutines.flow.Flow<List<top.tianyan.app.core.database.RedTeamFactEntity>>
+        get() = currentSessionId.flatMapLatest { id ->
+            if (id.isBlank()) kotlinx.coroutines.flow.flowOf(emptyList()) else redTeamFactRepository.observeForSession(id)
+        }
+
     fun bindRedTeamTarget(target: String, scope: String) {
         val sessionId = currentSessionId.value.takeIf { it.isNotBlank() } ?: return
         viewModelScope.launch(Dispatchers.IO) {
-            sessionDao.updateRedTeamBinding(sessionId, RedTeamMode.RED_TEAM.id, target, scope, RedTeamPhase.RECON.id, System.currentTimeMillis())
+            redTeamCoordinator.bind(sessionId, target, scope)
         }
     }
 
