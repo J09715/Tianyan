@@ -5,6 +5,11 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject as JsonObj
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -203,6 +208,64 @@ class RedTeamCoordinatorTest {
         coordinator.execute(buildJsonObject { put("action", "asset_add"); put("id", "a1"); put("title", "web-02") }, "s1")
 
         assertEquals(listOf("web-02"), store.recent("s1").map { it.title })
+    }
+
+    /** schema 自身必须能干净解析，且 action 清单无重复（重复会让 provider 端校验行为不确定）。 */
+    @Test
+    fun `tool schema is valid and action names are unique`() {
+        val names = top.tianyan.app.harness.redteam.RedTeamToolSchema.actionNames()
+        assertEquals("action names must be unique", names.size, names.distinct().size)
+        assertTrue(names.containsAll(listOf("asset_graph", "attack_path", "role_prompt", "poc_use", "domain_index")))
+
+        val params = top.tianyan.app.harness.redteam.RedTeamToolSchema.parameters()
+        val actionEnum = params["properties"]!!.jsonObject["action"]!!.jsonObject["enum"]!!.let { it as JsonArray }
+            .map { it.jsonPrimitive.content }
+        assertEquals(names.size, actionEnum.size)
+    }
+
+    /**
+     * 契约测试：schema 对外宣告的每个 action 都必须被协调器真实处理。
+     * 之前 asset_assess / asset_test 进了枚举却没有分支，模型一调就是 unsupported，
+     * 这条断言把「宣告与实现漂移」钉死在测试里。
+     */
+    @Test
+    fun `every advertised action is handled or explicitly rejected as invalid input`() = runBlocking {
+        val advertised = RedTeamToolSchema.actionNames()
+        assertTrue("schema advertised no actions", advertised.isNotEmpty())
+        assertTrue("advertised surface shrank unexpectedly: ${advertised.size}", advertised.size >= 55)
+
+        for (action in advertised) {
+            val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+            val args = buildJsonObject {
+                put("action", action)
+                // 给所有条件必填字段喂最小合法值，确保走到真正的实现分支而不是前置校验。
+                put("title", "probe")
+                put("kind", "asset")
+                put("id", "probe-id")
+                put("sub_action", "status")
+                put("role", "recon")
+                put("src_id", "a")
+                put("dst_id", "b")
+                put("relation", "resolves")
+            }
+            val (_, message) = fresh.execute(args, "s1")
+            assertFalse(
+                "action '$action' is advertised but not implemented: $message",
+                message.contains("unsupported redteam action"),
+            )
+        }
+    }
+
+    /**
+     * 反向对照：证明上面那条契约断言的字符串判据真的会命中。
+     * 没有这条，契约测试可能因为判据写错而永远为真。
+     */
+    @Test
+    fun `unknown action is reported as unsupported`() = runBlocking {
+        val (ok, message) = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+            .execute(call("definitely_not_a_real_action"), "s1")
+        assertFalse(ok)
+        assertTrue("guard string changed: $message", message.contains("unsupported redteam action"))
     }
 
     private fun call(action: String, vararg pairs: Pair<String, String>): JsonObject = buildJsonObject {
