@@ -6,6 +6,8 @@ import top.tianyan.app.core.tools.AiProfileWriter
 import top.tianyan.app.core.model.ExecutionMode
 import top.tianyan.app.core.model.McpConnectionState
 import top.tianyan.app.core.model.ApprovalMode
+import top.tianyan.app.core.model.RedTeamMode
+import top.tianyan.app.core.model.RedTeamPhase
 import top.tianyan.app.core.database.AiModelRepository
 import top.tianyan.app.core.database.AiModelEntity
 import top.tianyan.app.core.database.HarnessSessionRepository
@@ -2048,14 +2050,21 @@ class ChatViewModel @Inject constructor(
     fun clearError() = harnessLoop.clearError()
 
     /** 新建会话（支持自定义标题并关联工作区）。 */
-    fun createSession(title: String = "", workspace: String = "", projectType: String = "") {
+    fun createSession(title: String = "", workspace: String = "", projectType: String = "", redTeamMode: String = "off") {
         viewModelScope.launch {
-            harnessLoop.newSession(title.trim().ifBlank { context.getString(R.string.chat_new_session) }, workspace, projectType)
+            harnessLoop.newSession(title.trim().ifBlank { context.getString(R.string.chat_new_session) }, workspace, projectType, redTeamMode)
         }
     }
 
     fun switchSession(id: String) {
         viewModelScope.launch { harnessLoop.loadSession(id) }
+    }
+
+    fun bindRedTeamTarget(target: String, scope: String) {
+        val sessionId = currentSessionId.value.takeIf { it.isNotBlank() } ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            sessionDao.updateRedTeamBinding(sessionId, RedTeamMode.RED_TEAM.id, target, scope, RedTeamPhase.RECON.id, System.currentTimeMillis())
+        }
     }
 
     fun deleteSession(id: String) {
