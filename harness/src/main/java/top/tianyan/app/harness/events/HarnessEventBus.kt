@@ -112,6 +112,21 @@ sealed interface HarnessEvent {
         val dependencies: List<String> = emptyList(),
         val resultSummary: String? = null,
     ) : HarnessEvent
+
+    data class RedTeamFactChanged(
+        override val sessionId: String,
+        override val timestamp: Long,
+        val factId: String,
+        val kind: String,
+        val status: String,
+    ) : HarnessEvent
+
+    data class RedTeamPhaseChanged(
+        override val sessionId: String,
+        override val timestamp: Long,
+        val phase: String,
+        val detail: String? = null,
+    ) : HarnessEvent
 }
 
 /**
