@@ -76,7 +76,7 @@ fun ToolDiffView(
             HarnessTool.BASE -> BaseToolDiff(call, result)
             HarnessTool.PROCESS, HarnessTool.HOST, HarnessTool.DOWNLOAD, HarnessTool.MEMORY, HarnessTool.PLAN, HarnessTool.SCRATCHPAD,
             HarnessTool.HISTORY_SEARCH, HarnessTool.HISTORY_READ, HarnessTool.BUILD_SCRIPT, HarnessTool.SUBAGENT, HarnessTool.MCP,
-            HarnessTool.LOAD_RULE -> BaseToolDiff(call, result)
+            HarnessTool.LOAD_RULE, HarnessTool.REDTEAM -> BaseToolDiff(call, result)
         }
     }
 }
