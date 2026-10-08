@@ -11,6 +11,7 @@ interface RedTeamFactRepository {
     suspend fun upsert(fact: RedTeamFactEntity)
     suspend fun upsertAll(facts: List<RedTeamFactEntity>)
     suspend fun deleteForSession(sessionId: String)
+    suspend fun deleteById(sessionId: String, id: String)
 }
 
 @Singleton
@@ -23,4 +24,5 @@ class RoomRedTeamFactRepository @Inject constructor(
     override suspend fun upsert(fact: RedTeamFactEntity) = dao.upsert(fact)
     override suspend fun upsertAll(facts: List<RedTeamFactEntity>) = dao.upsertAll(facts.take(500))
     override suspend fun deleteForSession(sessionId: String) = dao.deleteForSession(sessionId)
+    override suspend fun deleteById(sessionId: String, id: String) = dao.deleteById(sessionId, id)
 }
