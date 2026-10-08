@@ -110,9 +110,14 @@ internal fun RedTeamConsole(
         // 内容区必须可滚动，并给底部中枢导航留出空间。
         // 这里原来是个不滚动的 Column：超出一屏的资产/技能列表被直接裁掉，
         // 用户既看不到也划不到；而底部导航是浮层，会盖在最后几行上。
+        //
+        // 用 weight(1f) 而不是 fillMaxSize()：外层 Column 里已经有顶栏与页签条，
+        // fillMaxSize 会让滚动区按「整屏高度」测量，内容被推到屏幕外；
+        // weight 取的是剩余空间，滚动视口高度才正确。
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .weight(1f)
+                .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
                 .padding(bottom = 96.dp),
         ) {

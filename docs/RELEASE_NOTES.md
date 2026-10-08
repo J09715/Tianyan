@@ -1,8 +1,32 @@
-# 天衍 · Tianyan v0.17.8 发布记录
+# 天衍 · Tianyan v0.17.9 发布记录
 
 > **发布时间**：2026-10-08
-> **版本号**：v0.17.8（`appVersionName = 0.17.8`，`appVersionCode = 66`）
+> **版本号**：v0.17.9（`appVersionName = 0.17.9`，`appVersionCode = 67`）
 > **支持范围**：Android 10+ · arm64-v8a（无 Root / PRoot 沙箱）
+
+---
+
+## 🆕 v0.17.9 补充（崩溃修复）
+
+### 修复红队控制台崩溃
+
+v0.17.8 给控制台内容区补 `verticalScroll` 时，与「概览」页签内 `RedTeamPanel` 自带的滚动层形成了**两层无界纵向滚动嵌套**。内层因此拿到无限的 `maxHeight` 约束，Compose 直接抛：
+
+```
+IllegalStateException: Vertically scrollable component was measured with an
+infinity maximum height constraints, which is disallowed.
+```
+
+进红队控制台即崩溃。
+
+修法：滚动容器归页面所有。移除 `RedTeamPanel` 自带的滚动层，内容组件不再重复声明；同时把内容区的 `fillMaxSize()` 改为 `weight(1f)`——外层 Column 里已有顶栏与页签条，`fillMaxSize` 会让滚动区按整屏高度测量、内容被推出屏幕外。
+
+### 新增崩溃回归守卫（+2 项）
+
+- `redTeamUiHasAtMostOneUnboundedVerticalScroll`：整个红队界面最多一处无界纵向滚动（页面级），嵌套的滚动区必须 `heightIn` 限高；
+- `overviewPanelDoesNotBringItsOwnScroller`：概览内容组件不得自带滚动容器。
+
+两条守卫都做过反向验证——把嵌套滚动加回去会立刻变红，确认不是永远为真的空断言。
 
 ---
 

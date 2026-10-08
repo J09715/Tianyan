@@ -7,9 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -60,8 +58,13 @@ internal fun RedTeamPanel(
         containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.28f),
         contentPadding = PaddingValues(14.dp),
     ) {
+        // 这里刻意不自己滚动：本面板是控制台「概览」页签的内容，
+        // 而控制台的内容区已经有一层 verticalScroll。
+        // 两层无界纵向滚动嵌套时，内层会拿到无限的 maxHeight 约束，
+        // Compose 直接抛 IllegalStateException 崩溃（0.17.8 线上崩溃的成因）。
+        // 滚动容器归页面所有，内容组件不重复声明。
         Column(
-            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+            modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

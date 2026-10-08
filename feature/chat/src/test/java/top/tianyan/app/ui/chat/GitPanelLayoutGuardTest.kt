@@ -134,6 +134,55 @@ class GitPanelLayoutGuardTest {
         )
     }
 
+    /**
+     * 红队界面里只能有一处「无界」纵向滚动。
+     *
+     * 0.17.8 线上崩溃的成因：控制台内容区加了一层 verticalScroll 之后，
+     * 「概览」页签里的 RedTeamPanel 自己也有一层，两层无界纵向滚动嵌套时，
+     * 内层拿到无限的 maxHeight 约束，Compose 直接抛
+     * IllegalStateException: Vertically scrollable component was measured with
+     * an infinity maximum height constraints。
+     *
+     * 规则：页面级滚动只允许一处（控制台内容区）；嵌套在里面的滚动区必须用
+     * heightIn(max = ...) 限高，否则就是崩溃隐患。
+     */
+    @Test
+    fun redTeamUiHasAtMostOneUnboundedVerticalScroll() {
+        val files = listOf("RedTeamConsole.kt", "RedTeamAssetsTab.kt", "RedTeamConsoleTabs.kt", "RedTeamPanel.kt")
+            .map { File("src/main/java/top/tianyan/app/ui/chat/$it") }
+
+        val unbounded = mutableListOf<String>()
+        files.forEach { file ->
+            val lines = file.readLines()
+            lines.forEachIndexed { index, line ->
+                if (!line.contains("verticalScroll(") || line.trimStart().startsWith("import")) return@forEachIndexed
+                // 往上看 4 行，看这个滚动区是否被 heightIn 限了高
+                val context = lines.subList(maxOf(0, index - 4), index + 1).joinToString(" ")
+                if (!context.contains("heightIn")) {
+                    unbounded += "${file.name}:${index + 1}"
+                }
+            }
+        }
+        assertTrue(
+            "出现了 ${unbounded.size} 处无界纵向滚动（$unbounded）：嵌套的无界纵向滚动会让内层拿到无限 maxHeight，直接崩溃。",
+            unbounded.size <= 1,
+        )
+        assertTrue(
+            "唯一允许的无界滚动应是控制台内容区（页面级），实际是 $unbounded",
+            unbounded.singleOrNull()?.startsWith("RedTeamConsole.kt") == true,
+        )
+    }
+
+    /** 概览页签的内容组件不得自带滚动容器：滚动归页面所有。 */
+    @Test
+    fun overviewPanelDoesNotBringItsOwnScroller() {
+        val source = File("src/main/java/top/tianyan/app/ui/chat/RedTeamPanel.kt").readText()
+        assertTrue(
+            "RedTeamPanel 又加回了 verticalScroll：它与控制台内容区的滚动嵌套会崩溃",
+            !source.contains("verticalScroll("),
+        )
+    }
+
     /** 群号占位符不得再出现：它曾被兜底复制给用户，搜不到任何群还提示「已复制」。 */
     @Test
     fun noPlaceholderGroupNumberAnywhere() {
