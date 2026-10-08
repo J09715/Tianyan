@@ -25,11 +25,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import top.tianyan.app.core.database.HarnessSessionEntity
 import top.tianyan.app.core.database.RedTeamFactEntity
 import top.tianyan.app.core.model.RedTeamFactKind
 import top.tianyan.app.core.model.RedTeamGraphModel
 import top.tianyan.app.core.model.RedTeamIpUtils
+import top.tianyan.app.core.model.RedTeamStage
 import top.tianyan.app.core.model.RedTeamPreflightReport
 import top.tianyan.app.core.model.RedTeamPhase
 import top.tianyan.app.ui.components.RuntimeButton
@@ -180,6 +183,37 @@ internal fun RedTeamPanel(
                 }
             }
 
+            // 阶段进度：演练方按这条推进线读战果，所以面板与报告必须同一口径。
+            val scored = remember(facts) { facts.filter { it.kind == "score_hit" } }
+            if (scored.isNotEmpty()) {
+                val buckets = remember(facts) { stageBuckets(facts) }
+                Text("阶段进度", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                Surface(color = MaterialTheme.colorScheme.surfaceContainerHighest, shape = RoundedCornerShape(8.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        RedTeamStage.DEFAULT_STAGES.forEach { stage ->
+                            val rows = buckets[stage.code].orEmpty()
+                            val points = rows.mapNotNull { it.first }.sum()
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    stage.name,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    if (stage.scored == 0) "${rows.size} 条 · 前置不计分" else "${rows.size} 条 · $points 分",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (rows.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             // 技能体检：能列出来 ≠ 能跑。缺环境变量/工具在这里就要提示，别等进了靶场才发现。
             skillHealth?.let { health ->
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -316,3 +350,40 @@ private val RedTeamFactKind.label: String
         RedTeamFactKind.AGENT -> "智能体"
         RedTeamFactKind.EVENT -> "事件"
     }
+
+/**
+ * 把得分事实按作战阶段分桶，口径与报告侧完全一致（显式 > 类型特判 > 资产内外网 > target 地址）。
+ *
+ * 资产归属要回查资产事实——用得分事实自己的 id 建表会永远查不到，
+ * 于是所有得分都退化成「按 target 地址推断」，内网得分会被算到互联网侧。
+ */
+private fun stageBuckets(facts: List<RedTeamFactEntity>): Map<String, List<Pair<Int?, String>>> {
+    val assetTargets = facts
+        .filter { it.kind == RedTeamFactKind.ASSET.id }
+        .associate { it.id to (it.target ?: it.title) }
+
+    fun payloadOf(fact: RedTeamFactEntity) = runCatching {
+        kotlinx.serialization.json.Json.parseToJsonElement(fact.payload) as? kotlinx.serialization.json.JsonObject
+    }.getOrNull()
+
+    return facts
+        .filter { it.kind == "score_hit" }
+        .groupBy { fact ->
+            val payload = payloadOf(fact)
+            val assetScope = payload?.get("asset_id")?.jsonPrimitive?.contentOrNull
+                ?.let { assetTargets[it] }
+                ?.let { RedTeamIpUtils.scopeOfIp(it.substringBefore('/')) }
+                ?.takeIf { it == "internal" || it == "external" }
+            RedTeamStage.scoreStageOf(
+                stageCode = payload?.get("stage_code")?.jsonPrimitive?.contentOrNull,
+                hitCode = payload?.get("code")?.jsonPrimitive?.contentOrNull ?: fact.title,
+                assetScope = assetScope,
+                target = fact.target,
+            )
+        }
+        .mapValues { (_, rows) ->
+            rows.map { fact ->
+                payloadOf(fact)?.get("points")?.jsonPrimitive?.contentOrNull?.toIntOrNull() to fact.title
+            }
+        }
+}
