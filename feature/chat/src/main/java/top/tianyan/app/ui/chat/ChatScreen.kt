@@ -125,6 +125,8 @@ private fun chatBottomInsets(bottomBarHeight: Dp): WindowInsets {
 fun ChatScreen(
     onNavigate: (MainDestination) -> Unit,
     onOpenFile: ((projectName: String, relativePath: String) -> Unit)? = null,
+    /** 运行日志入口；由导航层接到开发者页，聊天页不直接依赖它。 */
+    onOpenLogs: (() -> Unit)? = null,
     terminalPane: (@Composable (project: String) -> Unit)? = null,
     browserPane: (@Composable (onExit: (() -> Unit)?) -> Unit)? = null,
     browserActivityTick: Long = 0L,
@@ -465,6 +467,7 @@ fun ChatScreen(
                     browserHighlight = browserHighlight,
                     onOpenGit = { viewModel.refreshGitStatus(); showGitPanel = true },
                     gitUncommittedCount = gitUncommittedCount,
+                    onOpenLogs = onOpenLogs,
                 )
                 // Git 流式进度横幅（clone/pull/push 时可见）
                 gitProgress?.let { p ->
