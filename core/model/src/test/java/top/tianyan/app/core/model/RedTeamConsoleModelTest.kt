@@ -3,6 +3,7 @@ package top.tianyan.app.core.model
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -167,6 +168,65 @@ class RedTeamConsoleModelTest {
         assertEquals(1, stats.fingerprints)
         assertEquals(1, stats.passiveSignals)
         assertEquals(1, stats.activeSignals)
+    }
+
+    /**
+     * 分区归属。
+     *
+     * 这九个分类是上游 `consoleDigest` 就有的（会话/漏洞/攻击链/得分/目标/报告/知识…），
+     * 之前本移植只在概览里混着显示，用户找不到入口会以为「没有这些数据」。
+     * 这里钉住「一类事实只归到该归的分区」，避免面板与摘要两处口径漂移。
+     */
+    @Test
+    fun `sections route each fact kind to its own category`() {
+        fun fact(id: String, kind: String) = RedTeamConsoleModel.Fact(
+            id = id, kind = kind, title = id, target = null, status = "observed",
+            payload = "{}", createdAt = 1L, updatedAt = 1L,
+        )
+        val facts = listOf(
+            fact("w1", "webshell"),
+            fact("t1", "tunnel"),
+            fact("v1", "vulnerability"),
+            fact("s1", "attack_step"),
+            fact("h1", "score_hit"),
+            fact("r1", "report"),
+            fact("k1", "knowledge"),
+            fact("e1", "engagement"),
+            fact("g1", "segment"),
+            fact("a1", "asset"),
+        )
+
+        fun ids(section: RedTeamConsoleModel.Section) =
+            RedTeamConsoleModel.section(facts, section).map { it.id }.toSet()
+
+        // 会话隧道：WebShell 与隧道都要在这里，它们是「拿到了什么」的核心凭据。
+        assertEquals(setOf("w1", "t1"), ids(RedTeamConsoleModel.Section.SESSIONS))
+        assertEquals(setOf("v1"), ids(RedTeamConsoleModel.Section.VULNS))
+        assertEquals(setOf("s1"), ids(RedTeamConsoleModel.Section.CHAIN))
+        assertEquals(setOf("h1"), ids(RedTeamConsoleModel.Section.SCORES))
+        assertEquals(setOf("r1"), ids(RedTeamConsoleModel.Section.REPORT))
+        assertEquals(setOf("k1"), ids(RedTeamConsoleModel.Section.KNOWLEDGE))
+        assertEquals(setOf("e1", "g1"), ids(RedTeamConsoleModel.Section.TARGETS))
+        // 资产不进任何分区页签：它有自己的「资产测绘」整页，重复入口会让两处数量对不上。
+        RedTeamConsoleModel.Section.entries.forEach { section ->
+            assertFalse("a1" in ids(section), "asset must not leak into ${section.id}")
+        }
+    }
+
+    @Test
+    fun `digest reports counts and latest time per section`() {
+        val facts = listOf(
+            RedTeamConsoleModel.Fact("w1", "webshell", "shell", null, "observed", "{}", 10L, 100L),
+            RedTeamConsoleModel.Fact("t1", "tunnel", "tun", null, "observed", "{}", 10L, 300L),
+            RedTeamConsoleModel.Fact("k1", "knowledge", "kb", null, "observed", "{}", 10L, 50L),
+        )
+        val digest = RedTeamConsoleModel.digest(facts).associateBy { it.id }
+        assertEquals(2, digest.getValue("sessions").count)
+        // 取最近一条的时间：页签红点靠它判断「有没有新东西」。
+        assertEquals(300L, digest.getValue("sessions").latestAt)
+        assertEquals(1, digest.getValue("knowledge").count)
+        assertEquals(0, digest.getValue("report").count)
+        assertNull(digest.getValue("report").latestAt)
     }
 
     /** 段归属来自 segment 事实（上游独立 segment 表），不是从资产 payload 反推。 */

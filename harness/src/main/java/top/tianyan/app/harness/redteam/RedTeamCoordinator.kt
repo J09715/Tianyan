@@ -448,12 +448,9 @@ class RedTeamCoordinator @Inject constructor(
      * 端口/指纹/域名不是独立事实，它们挂在资产 payload 的数组里，所以只取三类；
      * 多取类型只会让面板在无关行上白跑投影。
      */
-    private val consoleKinds = listOf(
-        RedTeamFactKind.ASSET.id,
-        RedTeamFactKind.EDGE.id,
-        RedTeamFactKind.EVENT.id,
-        RedTeamFactKind.SEGMENT.id,
-    )
+    private val consoleKinds = RedTeamConsoleModel.Section.entries
+        .flatMap { it.kinds }
+        .distinct() + listOf(RedTeamFactKind.ASSET.id, RedTeamFactKind.EVENT.id)
 
     /** 面板单次读事实的上限：上游 `listAssets` 硬上限 2000，这里留出端口/漏洞的余量。 */
     private val consoleFactLimit = 8000
@@ -467,6 +464,7 @@ class RedTeamCoordinator @Inject constructor(
         payload = payload,
         createdAt = createdAt,
         updatedAt = updatedAt,
+        severity = severity,
     )
 
     suspend fun consoleFacts(sessionId: String): List<RedTeamConsoleModel.Fact> = withContext(Dispatchers.IO) {
@@ -500,6 +498,22 @@ class RedTeamCoordinator @Inject constructor(
             segments = RedTeamConsoleModel.segments(rows, assets),
             stats = RedTeamConsoleModel.stats(rows, assets),
         )
+    }
+
+    /**
+     * 控制台分区数据 + 摘要。
+     *
+     * 面板不再各自 `filter { kind == ... }`：分区的归属只在 [RedTeamConsoleModel.Section] 里定义一次，
+     * 否则同一类数据在两个页面里数量对不上时无从判断谁对。
+     */
+    suspend fun consoleSections(sessionId: String): List<RedTeamConsoleModel.SectionDigest> =
+        withContext(Dispatchers.IO) { RedTeamConsoleModel.digest(consoleFacts(sessionId)) }
+
+    suspend fun consoleSectionRows(
+        sessionId: String,
+        section: RedTeamConsoleModel.Section,
+    ): List<RedTeamConsoleModel.Fact> = withContext(Dispatchers.IO) {
+        RedTeamConsoleModel.section(consoleFacts(sessionId), section)
     }
 
     /** 资产列表：返回（过滤后总数，当前页）。 */

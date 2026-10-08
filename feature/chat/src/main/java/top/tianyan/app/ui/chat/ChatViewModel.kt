@@ -2161,7 +2161,39 @@ class ChatViewModel @Inject constructor(
             RedTeamConsoleTab.PROMPTS -> if (_redTeamConsole.value.roles.isEmpty()) loadConsoleRoles()
             RedTeamConsoleTab.SKILLS -> if (_redTeamConsole.value.skills.isEmpty()) loadConsoleSkills()
             RedTeamConsoleTab.OVERVIEW -> if (_redTeamConsole.value.agents == null) loadConsoleAgents()
-            else -> Unit
+            RedTeamConsoleTab.ASSETS -> Unit
+            // 分区页签按需读：一次读全部事实在小库上无所谓，大库上会明显拖慢开面板。
+            else -> loadConsoleSection(tab.section)
+        }
+    }
+
+    /** 页签到分区的映射；只有这里一处，避免两边各写一套对应关系。 */
+    private val RedTeamConsoleTab.section: top.tianyan.app.core.model.RedTeamConsoleModel.Section?
+        get() = when (this) {
+            RedTeamConsoleTab.SESSIONS -> top.tianyan.app.core.model.RedTeamConsoleModel.Section.SESSIONS
+            RedTeamConsoleTab.VULNS -> top.tianyan.app.core.model.RedTeamConsoleModel.Section.VULNS
+            RedTeamConsoleTab.CHAIN -> top.tianyan.app.core.model.RedTeamConsoleModel.Section.CHAIN
+            RedTeamConsoleTab.SCORES -> top.tianyan.app.core.model.RedTeamConsoleModel.Section.SCORES
+            RedTeamConsoleTab.TARGETS -> top.tianyan.app.core.model.RedTeamConsoleModel.Section.TARGETS
+            RedTeamConsoleTab.REPORT -> top.tianyan.app.core.model.RedTeamConsoleModel.Section.REPORT
+            RedTeamConsoleTab.KNOWLEDGE -> top.tianyan.app.core.model.RedTeamConsoleModel.Section.KNOWLEDGE
+            else -> null
+        }
+
+    private fun loadConsoleSection(section: top.tianyan.app.core.model.RedTeamConsoleModel.Section?) {
+        if (section == null) return
+        val sessionId = currentSessionId.value.takeIf { it.isNotBlank() } ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                redTeamCoordinator.consoleSectionRows(sessionId, section) to
+                    redTeamCoordinator.consoleSections(sessionId)
+            }.onSuccess { (rows, digests) ->
+                updateConsole {
+                    it.copy(sections = digests, sectionRows = it.sectionRows + (section.id to rows), error = null)
+                }
+            }.onFailure { error ->
+                updateConsole { it.copy(error = error.message ?: "读取分区失败") }
+            }
         }
     }
 
@@ -2174,8 +2206,10 @@ class ChatViewModel @Inject constructor(
                 val state = _redTeamConsole.value
                 val filter = state.filter.copy(cidr = state.selectedSegment)
                 val (total, rows) = redTeamCoordinator.consoleAssets(sessionId, filter)
-                Triple(snapshot, total, rows)
-            }.onSuccess { (snapshot, total, rows) ->
+                val digests = redTeamCoordinator.consoleSections(sessionId)
+                Triple(snapshot, total, rows) to digests
+            }.onSuccess { (triple, digests) ->
+                val (snapshot, total, rows) = triple
                 updateConsole {
                     it.copy(
                         loading = false,
@@ -2185,6 +2219,7 @@ class ChatViewModel @Inject constructor(
                         segments = snapshot.segments,
                         assets = rows,
                         total = total,
+                        sections = digests,
                         error = null,
                     )
                 }

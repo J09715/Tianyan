@@ -12,6 +12,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -137,6 +142,20 @@ internal fun RedTeamConsole(
                 onToggleAsset = onToggleAsset,
             )
 
+            RedTeamConsoleTab.SESSIONS,
+            RedTeamConsoleTab.VULNS,
+            RedTeamConsoleTab.CHAIN,
+            RedTeamConsoleTab.SCORES,
+            RedTeamConsoleTab.TARGETS,
+            RedTeamConsoleTab.REPORT,
+            RedTeamConsoleTab.KNOWLEDGE,
+            -> RedTeamSectionTab(
+                tab = state.tab,
+                rows = state.sectionRows[state.tab.sectionId].orEmpty(),
+                digest = state.sections.firstOrNull { it.id == state.tab.sectionId },
+                loading = state.loading,
+            )
+
             RedTeamConsoleTab.PROMPTS -> RedTeamPromptsTab(
                 state = state,
                 onSelectRole = onSelectRole,
@@ -153,6 +172,108 @@ internal fun RedTeamConsole(
                 onSave = onSaveSkill,
                 onDelete = onDeleteSkill,
             )
+        }
+    }
+}
+
+/**
+ * 页签 → 分区 id。
+ *
+ * 面板只需要 id 去查已加载的行；`Section` 枚举本体在 core/model，
+ * 这里不复制一份 kinds 归属，避免两处定义漂移。
+ */
+internal val RedTeamConsoleTab.sectionId: String
+    get() = when (this) {
+        RedTeamConsoleTab.SESSIONS -> "sessions"
+        RedTeamConsoleTab.VULNS -> "vulns"
+        RedTeamConsoleTab.CHAIN -> "chain"
+        RedTeamConsoleTab.SCORES -> "scores"
+        RedTeamConsoleTab.TARGETS -> "targets"
+        RedTeamConsoleTab.REPORT -> "report"
+        RedTeamConsoleTab.KNOWLEDGE -> "knowledge"
+        else -> ""
+    }
+
+/**
+ * 通用分区页：把一类事实按「标题 · 目标 · 状态」列出来。
+ *
+ * 这九个分区（会话隧道 / 漏洞战果 / 攻击链 / 得分 / 目标 / 报告 / 知识 …）
+ * 是上游 `consoleDigest` 里就有的分类，之前本移植只在概览页签里混着显示，
+ * 用户找不到对应入口，会以为「没有这些数据」。
+ */
+@Composable
+private fun RedTeamSectionTab(
+    tab: RedTeamConsoleTab,
+    rows: List<RedTeamConsoleModel.Fact>,
+    digest: RedTeamConsoleModel.SectionDigest?,
+    loading: Boolean,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(10.dp)) {
+            Text(
+                buildString {
+                    append(tab.label)
+                    append(" · ${rows.size} 条")
+                    digest?.latestAt?.let { append(" · 最近 ${formatEpochTime(it)}") }
+                },
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            if (rows.isEmpty()) {
+                Text(
+                    if (loading) "加载中…" else "这一类还没有记录。派发角色后由工具写回，或在上方对话里让智能体补录。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+                return@RuntimeCard
+            }
+            Column(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                rows.forEach { fact ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                    ) {
+                        Text(
+                            fact.title.ifBlank { fact.id },
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        fact.subtitle.takeIf { it.isNotBlank() }?.let { sub ->
+                            Text(
+                                sub,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        fact.severity?.takeIf { it.isNotBlank() }?.let { severity ->
+                            Text(
+                                severity,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = when (severity.lowercase()) {
+                                    "critical", "high" -> MaterialTheme.colorScheme.error
+                                    "medium" -> Color(0xFFF59E0B)
+                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -300,8 +421,11 @@ private fun ConsoleChrome(
                         },
                     ),
                 ) {
+                    // 条数直接标在页签上：否则用户要点进每个页签才知道有没有数据，
+                    // 空页签和「没实现的页签」看起来一模一样。
+                    val count = state.sections.firstOrNull { it.id == tab.sectionId }?.count
                     Text(
-                        tab.label,
+                        if (count != null && count > 0) "${tab.label} $count" else tab.label,
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                         maxLines = 1,

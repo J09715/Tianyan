@@ -7,6 +7,13 @@ import top.tianyan.app.harness.redteam.RedTeamSkillStore
 enum class RedTeamConsoleTab(val label: String) {
     OVERVIEW("概览"),
     ASSETS("资产测绘"),
+    SESSIONS("会话隧道"),
+    VULNS("漏洞战果"),
+    CHAIN("攻击链"),
+    SCORES("得分"),
+    TARGETS("目标"),
+    REPORT("报告"),
+    KNOWLEDGE("知识"),
     PROMPTS("智能体提示词"),
     SKILLS("技能库"),
 }
@@ -52,6 +59,9 @@ data class RedTeamConsoleState(
     val roleDraft: String = "",
     val roleSaving: Boolean = false,
     val roleMessage: String? = null,
+    // 分区（会话隧道 / 漏洞战果 / 攻击链 / 得分 / 目标 / 报告 / 知识）
+    val sections: List<RedTeamConsoleModel.SectionDigest> = emptyList(),
+    val sectionRows: Map<String, List<RedTeamConsoleModel.Fact>> = emptyMap(),
     // 智能体并发
     val agents: top.tianyan.app.harness.redteam.RedTeamCoordinator.AgentsStatus? = null,
     val agentsMessage: String? = null,

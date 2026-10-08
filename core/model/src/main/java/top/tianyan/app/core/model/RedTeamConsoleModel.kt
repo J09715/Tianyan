@@ -35,7 +35,52 @@ object RedTeamConsoleModel {
         val payload: String,
         val createdAt: Long,
         val updatedAt: Long,
-    )
+        /** 严重级；漏洞/战果列表要按它着色与排序，投影里缺了就只能回查实体。 */
+        val severity: String? = null,
+    ) {
+        /** 列表副标题：目标与状态，两样都没有就留空，不显示分隔符。 */
+        val subtitle: String
+            get() = listOfNotNull(target?.takeIf { it.isNotBlank() }, status.takeIf { it != "observed" })
+                .joinToString(" · ")
+    }
+
+    /**
+     * 控制台的分区（对齐上游 `consoleDigest` 的 sections）。
+     *
+     * 上游是 12 个页签各自一类数据；本移植把这套分类固化成一个枚举，
+     * 让「哪一类事实归哪个页面」只有一处定义——面板、摘要、测试都读它。
+     * 各自散写 `filter { it.kind == ... }` 迟早出现同一类数据在两个页面里数量对不上。
+     */
+    enum class Section(val id: String, val label: String, val kinds: List<String>) {
+        TARGETS("targets", "目标", listOf("engagement", "segment")),
+        SESSIONS("sessions", "会话", listOf("webshell", "tunnel", "access_session", "credential")),
+        VULNS("vulns", "漏洞", listOf("vulnerability")),
+        CHAIN("chain", "攻击链", listOf("attack_step", "edge")),
+        SCORES("scores", "得分", listOf("score_hit", "score_point")),
+        RESULTS("results", "战果", listOf("score_hit", "vulnerability", "webshell", "tunnel", "access_session", "credential")),
+        REPORT("report", "报告", listOf("report")),
+        KNOWLEDGE("knowledge", "知识", listOf("knowledge")),
+        ATTACK_FILES("attackfiles", "攻击文件", listOf("attack_file")),
+    }
+
+    /** 按分区取事实；顺序沿用事实库给出的时间倒序，不在 UI 里再排一次。 */
+    fun section(facts: List<Fact>, section: Section): List<Fact> =
+        facts.filter { it.kind in section.kinds }
+
+    /**
+     * 分区摘要：条数 + 最近一条时间。上游 `consoleDigest` 就是给面板点红点用的。
+     */
+    data class SectionDigest(val id: String, val label: String, val count: Int, val latestAt: Long?)
+
+    fun digest(facts: List<Fact>): List<SectionDigest> = Section.entries.map { section ->
+        val rows = section(facts, section)
+        SectionDigest(
+            id = section.id,
+            label = section.label,
+            count = rows.size,
+            latestAt = rows.maxOfOrNull { it.updatedAt },
+        )
+    }
 
     data class Name(val name: String, val source: String?)
 
