@@ -26,6 +26,9 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Surface
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -53,6 +56,8 @@ import top.tianyan.app.ui.components.RuntimeCard
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeLinearProgressIndicator
+import top.tianyan.app.ui.components.RuntimeOutlinedButton
+import androidx.compose.ui.text.style.TextAlign
 import top.tianyan.app.ui.components.RuntimeTextButton
 
 /** 图谱配色，逐项对齐上游 canvas：段 / 存活资产 / 离线资产 / 端口 / 域名。 */
@@ -128,9 +133,15 @@ internal fun RedTeamAssetsTab(
 private fun SegmentRail(state: RedTeamConsoleState, onSelectSegment: (String?) -> Unit) {
     RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(10.dp)) {
         Text(
-            "全部 C 段 · ${state.segments.size} 个网段",
+            if (state.segments.isEmpty()) {
+                "网段 · 当前资产都不是 IP，无法归段"
+            } else {
+                "全部 C 段 · ${state.segments.size} 个网段"
+            },
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -199,96 +210,125 @@ private fun AssetToolbar(
     onSortChange: (RedTeamConsoleModel.Sort) -> Unit,
     onViewChange: (RedTeamConsoleView) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        // 搜索：输入框 + 图标按钮。图标按钮改成有边框的小方按钮，
+        // 原来它悬在输入框右侧、和输入框不等高，看着像没对齐。
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             OutlinedTextField(
                 value = state.queryDraft,
                 onValueChange = onQueryChange,
                 modifier = Modifier.weight(1f),
-                placeholder = { Text("搜索 IP / 域名 / 指纹（回车）", fontSize = 12.sp) },
+                placeholder = { Text("搜索 IP / 域名 / 指纹", fontSize = 13.sp) },
+                leadingIcon = {
+                    RuntimeIcon(RuntimeIconName.Search, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                },
                 singleLine = true,
-                textStyle = MaterialTheme.typography.bodySmall,
+                textStyle = MaterialTheme.typography.bodyMedium,
+                shape = RoundedCornerShape(12.dp),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { onSubmitQuery() }),
             )
-            RuntimeTextButton(onClick = onSubmitQuery) {
-                RuntimeIcon(RuntimeIconName.Search, Modifier.size(18.dp))
+            RuntimeOutlinedButton(
+                onClick = onSubmitQuery,
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 14.dp),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Text("搜索", style = MaterialTheme.typography.labelMedium, maxLines = 1)
             }
         }
 
+        // 筛选条件排成一行可横向滚动：手机宽度放不下「服务 + 端口 + 来源 + 排序」四个控件，
+        // 挤成两行会让下拉框窄到看不清当前选中项（截图里两个下拉只剩一个箭头）。
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             OutlinedTextField(
                 value = state.serviceDraft,
                 onValueChange = onServiceChange,
-                modifier = Modifier.width(96.dp),
-                placeholder = { Text("服务", fontSize = 11.sp) },
+                modifier = Modifier.width(110.dp),
+                placeholder = { Text("服务", fontSize = 12.sp) },
                 singleLine = true,
                 textStyle = MaterialTheme.typography.bodySmall,
+                shape = RoundedCornerShape(12.dp),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { onSubmitQuery() }),
             )
             OutlinedTextField(
                 value = state.portDraft,
                 onValueChange = onPortChange,
-                modifier = Modifier.width(76.dp),
-                placeholder = { Text("端口", fontSize = 11.sp) },
+                modifier = Modifier.width(92.dp),
+                placeholder = { Text("端口", fontSize = 12.sp) },
                 singleLine = true,
                 textStyle = MaterialTheme.typography.bodySmall,
+                shape = RoundedCornerShape(12.dp),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { onSubmitQuery() }),
             )
-            ConsoleSelect(
-                label = when (state.filter.provenance) {
-                    "passive" -> "仅被动"
-                    "active" -> "仅主动"
-                    else -> "来源不限"
+            // 两个下拉用 FilterChip 呈现当前值：胶囊本身就说明「这是个可切换的筛选」，
+            // 而且宽度自适应、不会像下拉框那样窄到只剩箭头。
+            FilterChip(
+                selected = state.filter.provenance != null,
+                onClick = { onProvenanceChange(nextProvenance(state.filter.provenance)) },
+                label = {
+                    Text(
+                        when (state.filter.provenance) {
+                            "passive" -> "仅被动"
+                            "active" -> "仅主动"
+                            else -> "来源不限"
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1,
+                    )
                 },
-                options = listOf(null to "来源不限", "passive" to "仅被动", "active" to "仅主动"),
-                onSelect = onProvenanceChange,
-                modifier = Modifier.weight(1f),
+                leadingIcon = {
+                    RuntimeIcon(RuntimeIconName.ChevronDown, Modifier.size(14.dp))
+                },
             )
             ConsoleSelect(
                 label = state.filter.sort.label,
                 options = RedTeamConsoleModel.Sort.entries.map { it to it.label },
                 onSelect = onSortChange,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.width(148.dp),
             )
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+        // 视图切换 + 结果计数。
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             RedTeamConsoleView.entries.forEach { view ->
-                val selected = state.view == view
-                RuntimeTextButton(
+                FilterChip(
+                    selected = state.view == view,
                     onClick = { onViewChange(view) },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = if (selected) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                    ),
-                ) {
-                    Text(
-                        view.label,
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                    )
-                }
+                    label = { Text(view.label, style = MaterialTheme.typography.labelMedium, maxLines = 1) },
+                )
             }
             Text(
-                "共 ${state.total} 条，显示 ${state.assets.size} 条",
+                "共 ${state.total} 条 · 显示 ${state.assets.size} 条",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
+                textAlign = TextAlign.End,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
     }
+}
+
+/** 来源筛选是三态循环：不限 → 仅被动 → 仅主动 → 不限。 */
+private fun nextProvenance(current: String?): String? = when (current) {
+    null -> "passive"
+    "passive" -> "active"
+    else -> null
 }
 
 /** 通用下拉：`label` 是当前值，`options` 是 (值, 显示名) 列表。 */
@@ -335,17 +375,25 @@ private fun <T> ConsoleSelect(
 @Composable
 private fun AssetListCard(state: RedTeamConsoleState, onToggleAsset: (String) -> Unit) {
     RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(10.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf("IP" to 1f, "状态" to 0.7f, "端口 / 服务" to 1.4f, "首见" to 0.8f).forEach { (title, weight) ->
-                Text(
-                    title,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(weight),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+        // 行改成了两行式卡片，不再有列对齐，所以这里不放假表头——
+        // 列名对不齐比没有列名更容易误读。改为计数 + 排序说明。
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "${state.assets.size} 台资产",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                "按${state.filter.sort.label}排序 · 点条目展开详情",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
         if (state.assets.isEmpty()) {
             Text(
@@ -375,81 +423,99 @@ private fun AssetRow(
     detail: RedTeamConsoleModel.Detail?,
     onToggle: () -> Unit,
 ) {
+    // 两行式条目：第一行是「主机 + 状态」，第二行是「端口/服务 + 指纹」，
+    // 右侧一个展开箭头。原来四列都用 weight 平分宽度，IP 被压得和日期一样窄，
+    // 而「未分类」在每行都重复一遍，占掉了最该给端口和指纹的位置。
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().clickable { onToggle() },
         color = if (expanded) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent,
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(10.dp),
     ) {
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // 状态点：比「存活/离线」两个字更省位置，颜色本身就是信息。
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(
+                            when (asset.state) {
+                                RedTeamConsoleModel.State.LIVE -> LiveAssetColor
+                                RedTeamConsoleModel.State.DEAD -> DeadAssetColor
+                                RedTeamConsoleModel.State.UNKNOWN -> MaterialTheme.colorScheme.outline
+                            },
+                        ),
+                )
+                Text(
+                    asset.ip,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    formatEpochDay(asset.firstSeen),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+                RuntimeIcon(
+                    if (expanded) RuntimeIconName.ChevronUp else RuntimeIconName.ChevronDown,
+                    Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
             Text(
-                asset.ip,
-                style = MaterialTheme.typography.labelMedium,
-                fontFamily = FontFamily.Monospace,
-                modifier = Modifier.weight(1f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                when (asset.state) {
-                    RedTeamConsoleModel.State.LIVE -> "存活"
-                    RedTeamConsoleModel.State.DEAD -> "离线"
-                    RedTeamConsoleModel.State.UNKNOWN -> "未知"
+                buildString {
+                    val ports = asset.openPorts.joinToString("、") { it.port.toString() }
+                    append(if (ports.isBlank()) "无开放端口" else "端口 $ports")
+                    asset.openPorts.mapNotNull { it.service }.distinct().take(3)
+                        .takeIf { it.isNotEmpty() }?.let { append(" · " + it.joinToString("/")) }
                 },
-                style = MaterialTheme.typography.labelSmall,
-                color = when (asset.state) {
-                    RedTeamConsoleModel.State.LIVE -> LiveAssetColor
-                    RedTeamConsoleModel.State.DEAD -> DeadAssetColor
-                    RedTeamConsoleModel.State.UNKNOWN -> MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                modifier = Modifier.weight(0.7f),
-                maxLines = 1,
-            )
-            Text(
-                asset.openPorts.joinToString(",") { it.port.toString() }.ifBlank { "—" } +
-                    asset.openPorts.mapNotNull { it.service }.distinct().take(2)
-                        .joinToString("", prefix = " ") { it },
-                style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.weight(1.4f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                formatEpochDay(asset.firstSeen),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(0.8f),
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
-        }
-        Text(
-            buildString {
-                if (asset.primaryName != null) append("${asset.primaryName} · ")
-                append(asset.segmentCidr ?: "未分类")
-                if (asset.passivePorts > 0) append(" · 被动 ${asset.passivePorts}")
-                if (asset.activePorts > 0) append(" · 主动 ${asset.activePorts}")
-                asset.fingerprints.take(2).mapNotNull { it.product ?: it.vendor }.takeIf { it.isNotEmpty() }
-                    ?.let { append(" · " + it.joinToString("/")) }
-            },
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        RuntimeTextButton(onClick = onToggle, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)) {
-            Text(if (expanded) "收起详情" else "展开详情", style = MaterialTheme.typography.labelSmall)
-        }
 
-        if (expanded) {
-            AssetDetail(detail = detail)
+            // 第三行只在真有信息时出现：域名 / 指纹 / 来源标记。
+            // 「未分类」不再逐行显示——它由左侧段侧栏统一表达，逐行重复只是噪声。
+            val extra = buildString {
+                asset.primaryName?.let { append(it) }
+                asset.fingerprints.take(2).mapNotNull { it.product ?: it.vendor }
+                    .takeIf { it.isNotEmpty() }?.let {
+                        if (isNotEmpty()) append(" · ")
+                        append(it.joinToString("/"))
+                    }
+                if (asset.passivePorts > 0 || asset.activePorts > 0) {
+                    if (isNotEmpty()) append(" · ")
+                    append("被动 ${asset.passivePorts} 主动 ${asset.activePorts}")
+                }
+            }
+            if (extra.isNotBlank()) {
+                Text(
+                    extra,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            if (expanded) {
+                AssetDetail(detail = detail)
+            }
         }
-    }
     }
 }
 

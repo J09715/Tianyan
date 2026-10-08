@@ -107,6 +107,15 @@ internal fun RedTeamConsole(
             onSelectTab = onSelectTab,
         )
 
+        // 内容区必须可滚动，并给底部中枢导航留出空间。
+        // 这里原来是个不滚动的 Column：超出一屏的资产/技能列表被直接裁掉，
+        // 用户既看不到也划不到；而底部导航是浮层，会盖在最后几行上。
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 96.dp),
+        ) {
         when (state.tab) {
             RedTeamConsoleTab.OVERVIEW -> {
                 // 自动绑定提示：用户根本没进面板就绑上了目标，不提示一下会以为是系统乱改。
@@ -173,6 +182,7 @@ internal fun RedTeamConsole(
                 onSave = onSaveSkill,
                 onDelete = onDeleteSkill,
             )
+        }
         }
     }
 }

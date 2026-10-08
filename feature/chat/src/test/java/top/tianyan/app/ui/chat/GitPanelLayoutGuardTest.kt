@@ -97,6 +97,43 @@ class GitPanelLayoutGuardTest {
         )
     }
 
+    /**
+     * 红队控制台的内容区必须可滚动，并为底部导航留出空间。
+     *
+     * 这里出过两个只有真机才看得见的问题：
+     *   · 根 Column 没有滚动修饰符，超出一屏的资产/技能列表被直接裁掉，
+     *     用户既看不到也划不到；
+     *   · 控制台在 Scaffold 之外渲染，拿不到 chatBottomInsets，
+     *     底部中枢导航作为浮层盖在最后几行上。
+     */
+    @Test
+    fun redTeamConsoleContentIsScrollableAndClearsBottomNav() {
+        val source = File("src/main/java/top/tianyan/app/ui/chat/RedTeamConsole.kt").readText()
+        assertTrue(
+            "RedTeamConsole 的内容区缺少 verticalScroll：超出一屏的内容会被裁掉",
+            source.contains("verticalScroll(rememberScrollState())"),
+        )
+        assertTrue(
+            "RedTeamConsole 内容区缺少底部留白：底部导航会盖住最后几行",
+            source.contains("padding(bottom = 96.dp)"),
+        )
+    }
+
+    /** 资产列表条目要能整行点击展开，而不是只靠一个小按钮。 */
+    @Test
+    fun assetRowsAreTappableAndNotColumnAligned() {
+        val source = File("src/main/java/top/tianyan/app/ui/chat/RedTeamAssetsTab.kt").readText()
+        assertTrue(
+            "资产条目应支持整行点击展开",
+            source.contains("Modifier.fillMaxWidth().clickable { onToggle() }"),
+        )
+        // 行改成两行式后不该再有假列头（列名对不齐比没有列名更容易误读）
+        assertTrue(
+            "资产列表不该再保留对不齐的假列头（IP/状态/端口/首见）",
+            !source.contains("listOf(\"IP\" to 1f"),
+        )
+    }
+
     /** 群号占位符不得再出现：它曾被兜底复制给用户，搜不到任何群还提示「已复制」。 */
     @Test
     fun noPlaceholderGroupNumberAnywhere() {
