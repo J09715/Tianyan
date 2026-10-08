@@ -23,6 +23,12 @@ object RedTeamToolSchema {
         "asset_assess", "asset_test",
     )
 
+    /**
+     * 删除类：与写入分开列，避免与 UPDATE_ACTIONS 的「必须带 id」规则混淆——
+     * 删除按 id 或 code 定位，缺一不可，但不需要 title。
+     */
+    val DELETE_ACTIONS = listOf("poc_delete")
+
     /** 事实写入类：全部要求 title；更新类额外要求 id。 */
     val WRITE_ACTIONS = listOf(
         "asset_add", "asset_update", "vuln_add", "vuln_update",
@@ -40,6 +46,8 @@ object RedTeamToolSchema {
         "tunnel_list", "chain", "attack_chain", "attack_file_list",
         "score_list", "score_report", "poc_search", "poc_list", "poc_get", "poc_use",
         "report_targets", "report", "domain_index", "web_list", "attack_path", "fact_query",
+        // 攻击文件读回：路径来自库里被智能体写过的 path 列，读取必须过靶标根目录校验。
+        "read_attack_file",
     )
 
     /** 更新类动作必须携带 id，否则会退化成「再插一条」并污染图谱。 */
@@ -50,7 +58,7 @@ object RedTeamToolSchema {
 
     val FACTS_REQUIRING_TITLE = WRITE_ACTIONS
 
-    fun actionNames(): List<String> = CONTROL_ACTIONS + WRITE_ACTIONS + READ_ACTIONS
+    fun actionNames(): List<String> = CONTROL_ACTIONS + WRITE_ACTIONS + READ_ACTIONS + DELETE_ACTIONS
 
     fun factKindIds(): List<String> = top.tianyan.app.core.model.RedTeamFactKind.entries.map { it.id }
 
