@@ -805,6 +805,7 @@ fun ChatScreen(
             onSkillDraftChange = viewModel::updateConsoleSkillDraft,
             onSaveSkill = viewModel::saveConsoleSkill,
             onDeleteSkill = viewModel::deleteConsoleSkill,
+            onSetAgentsMax = viewModel::setConsoleAgentsMax,
             skillHealth = redTeamSkillHealth,
             onRefreshSkillHealth = viewModel::refreshRedTeamSkillHealth,
         )

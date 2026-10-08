@@ -110,11 +110,21 @@ object RedTeamConsoleModel {
     data class Segment(
         val cidr: String,
         val org: String?,
-        val assets: Int,
-        val openPorts: Int,
-        val passivePorts: Int,
-        val activePorts: Int,
-    )
+        val asn: String? = null,
+        val country: String? = null,
+        val city: String? = null,
+        val assets: Int = 0,
+        val openPorts: Int = 0,
+        val passivePorts: Int = 0,
+        val activePorts: Int = 0,
+    ) {
+        /** 侧栏副标题：归属信息有就显示，没有就退回纯计数，不编造。 */
+        val subtitle: String
+            get() = buildString {
+                org?.let { append("$it · ") }
+                append("$assets 资产 · $openPorts 端口")
+            }
+    }
 
     data class Stats(
         val segments: Int = 0,
@@ -384,23 +394,26 @@ object RedTeamConsoleModel {
      * 上游有独立的 segment 表，本移植没有，只能从资产反推；取不到就留空，不编造。
      */
     fun segments(facts: List<Fact>, assets: List<Asset> = assets(facts)): List<Segment> {
-        val orgByCidr = facts.filter { it.kind == "asset" }
-            .mapNotNull { fact ->
-                val payload = payloadOf(fact)
-                val cidr = payload.str("segment_cidr")
-                    ?: RedTeamGraphModel.segmentOf(fact.target).takeIf { it != RedTeamGraphModel.UNCLASSIFIED }
-                val org = payload.str("org") ?: payload.str("owner")
-                if (cidr != null && org != null) cidr to org else null
-            }
-            .toMap()
+        // 归属信息来自 segment 事实（上游是独立的 segment 表，由 import_bundle 写入）。
+        // 不从资产 payload 反推：上游的 org 本来就不挂在资产上，反推出来的值十有八九是空的，
+        // 而面板上「有组织名」和「查不到组织名」是两回事，混在一起会让人以为数据丢了。
+        val metaByCidr = facts.filter { it.kind == "segment" }.associate { fact ->
+            val payload = payloadOf(fact)
+            val cidr = payload.str("cidr") ?: fact.target ?: fact.title
+            cidr to payload
+        }
         return assets.mapNotNull { it.segmentCidr }
             .distinct()
             .sortedWith(compareBy({ RedTeamIpUtils.ipToInt(it.substringBefore('/')) ?: Long.MAX_VALUE }, { it }))
             .map { cidr ->
                 val rows = assets.filter { it.segmentCidr == cidr }
+                val meta = metaByCidr[cidr]
                 Segment(
                     cidr = cidr,
-                    org = orgByCidr[cidr],
+                    org = meta?.str("org"),
+                    asn = meta?.str("asn"),
+                    country = meta?.str("country"),
+                    city = meta?.str("city"),
                     assets = rows.size,
                     openPorts = rows.sumOf { it.openPorts.size },
                     passivePorts = rows.sumOf { it.passivePorts },

@@ -21,6 +21,7 @@ import top.tianyan.app.core.database.RedTeamFactEntity
 import top.tianyan.app.core.database.RedTeamFactRepository
 import top.tianyan.app.core.model.RedTeamFactKind
 import top.tianyan.app.core.model.RedTeamRole
+import top.tianyan.app.core.model.RedTeamSettings
 import top.tianyan.app.harness.events.HarnessEventBus
 
 /** 模板库文件系统接缝的短别名：用例里要反复构造匿名实现。 */
@@ -1286,6 +1287,99 @@ class RedTeamCoordinatorTest {
         fun seed(skill: RedTeamSkillStore.Skill) {
             rows[skill.id] = skill
         }
+    }
+
+    /**
+     * import_bundle 的 segments 必须落库。
+     *
+     * 原来这里只 `segments++` 计数，行被直接丢掉——上游 #upsertSegment 是写进 segment 表的，
+     * 面板左侧栏的「归属组织」就从那里读。丢行不影响计数，所以看不出异常，
+     * 只是导入的网段归属信息全部静默消失。
+     */
+    @Test
+    fun `import bundle persists segment metadata`() = runBlocking {
+        val store = FakeFacts()
+        val session = session("s1", redTeam = true, target = "10.0.0.0/24", scope = "10.0.0.0/24")
+        val bundle = """
+            {"segments":[{"cidr":"10.0.0.0/24","org":"示例科技有限公司","asn":"AS64500","country":"CN"},
+                         {"cidr":"10.0.1.0/24"}],
+             "assets":[{"id":"10.0.0.5","ip":"10.0.0.5","ports":[{"port":443,"state":"open"}]}]}
+        """.trimIndent()
+        val (ok, out) = coordinatorOn(store, session).execute(
+            call("import_bundle", "bundle" to bundle),
+            "s1",
+        )
+        assertTrue(out, ok)
+        assertTrue("segments must be counted: $out", out.contains("segments=2"))
+
+        val segments = store.recent("s1").filter { it.kind == "segment" }
+        assertEquals("每个网段都要落一条事实", 2, segments.size)
+        val first = segments.first { it.id == "segment:10.0.0.0/24" }
+        assertTrue("org must be persisted: ${first.payload}", first.payload.contains("示例科技有限公司"))
+        assertTrue("asn must be persisted: ${first.payload}", first.payload.contains("AS64500"))
+    }
+
+    /** 后一次导入没带 org 时不能把先前的抹掉（上游 COALESCE(excluded.org, segment.org)）。 */
+    @Test
+    fun `import bundle keeps prior segment metadata when the new row omits it`() = runBlocking {
+        val store = FakeFacts()
+        val session = session("s1", redTeam = true, target = "10.0.0.0/24", scope = "10.0.0.0/24")
+        val fresh = coordinatorOn(store, session)
+        fresh.execute(
+            call("import_bundle", "bundle" to """{"segments":[{"cidr":"10.0.0.0/24","org":"示例科技有限公司"}]}"""),
+            "s1",
+        )
+        fresh.execute(
+            call("import_bundle", "bundle" to """{"segments":[{"cidr":"10.0.0.0/24","asn":"AS64500"}]}"""),
+            "s1",
+        )
+        val segment = store.recent("s1").first { it.id == "segment:10.0.0.0/24" }
+        assertTrue("org must survive a later import without it: ${segment.payload}", segment.payload.contains("示例科技有限公司"))
+        assertTrue("asn must be merged in: ${segment.payload}", segment.payload.contains("AS64500"))
+    }
+
+    /**
+     * 并发上限可改、改完立即生效、来源如实上报。
+     *
+     * 这条控件的价值全在「立即生效」上：派活时每次现读上限，所以不需要重启。
+     * 如果哪天有人把上限缓存进字段，这里会红。
+     */
+    @Test
+    fun `agents max is adjustable and takes effect immediately`() = runBlocking {
+        val store = FakeFacts()
+        val session = session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24")
+        val fresh = coordinatorOn(store, session)
+        // 必须指向临时目录：默认设置根是真实的 ~/.dsh/redteam，
+        // 那里可能已经有一份 settings.json，读出来会让「默认值」断言变成在测开发机。
+        fresh.filesRootOverride = java.nio.file.Files.createTempDirectory("redteam-agents").toString()
+
+        fresh.maxAgentsOverride = null
+        val before = fresh.consoleAgentsStatus("s1")
+        assertEquals(RedTeamSettings.DEFAULT_MAX_AGENTS, before.max)
+        assertEquals("default", before.source)
+
+        // 覆盖层当设置项用：不落盘也能验「改完立即生效」。
+        fresh.maxAgentsOverride = 7.0
+        val after = fresh.consoleAgentsStatus("s1")
+        assertEquals(7, after.max)
+        assertEquals(RedTeamSettings.MAX_AGENTS_LIMIT, after.limit)
+        assertEquals(7, after.free)
+
+        // 闸门必须跟着走，否则「立即生效」只是一句面板文案。
+        val (_, full) = fresh.execute(call("agent_slot", "sub_action" to "status"), "s1")
+        assertTrue("slot gate must read the new max: $full", full.contains("max=7"))
+    }
+
+    /** 越界输入收敛到 1..10，不报错也不静默忽略。 */
+    @Test
+    fun `agents max clamps out of range values`() = runBlocking {
+        val fresh = coordinatorOn(FakeFacts(), session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+        // consoleSetAgentsMax 会落盘，必须改到临时目录——否则这条测试会写真实的
+        // ~/.dsh/redteam/settings.json，把开发机上的并发上限改掉。
+        fresh.filesRootOverride = java.nio.file.Files.createTempDirectory("redteam-agents-clamp").toString()
+        assertEquals(RedTeamSettings.MAX_AGENTS_LIMIT, fresh.consoleSetAgentsMax(99))
+        assertEquals(1, fresh.consoleSetAgentsMax(0))
+        assertEquals(RedTeamSettings.DEFAULT_MAX_AGENTS, fresh.consoleSetAgentsMax("abc"))
     }
 
     /** 角色提示词覆盖必须落库：只放内存的话重启后用户改过的提示词会静默变回内置文案。 */

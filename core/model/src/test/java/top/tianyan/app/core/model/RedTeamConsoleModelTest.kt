@@ -3,6 +3,7 @@ package top.tianyan.app.core.model
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -166,6 +167,39 @@ class RedTeamConsoleModelTest {
         assertEquals(1, stats.fingerprints)
         assertEquals(1, stats.passiveSignals)
         assertEquals(1, stats.activeSignals)
+    }
+
+    /** 段归属来自 segment 事实（上游独立 segment 表），不是从资产 payload 反推。 */
+    @Test
+    fun `segment metadata comes from segment facts`() {
+        val facts = listOf(
+            assetFact("asset:10.0.0.5", "10.0.0.5"),
+            RedTeamConsoleModel.Fact(
+                id = "segment:10.0.0.0/24",
+                kind = "segment",
+                title = "10.0.0.0/24",
+                target = "10.0.0.0/24",
+                status = "observed",
+                payload = """{"org":"示例科技有限公司","asn":"AS64500","country":"CN","city":"杭州"}""",
+                createdAt = 1L,
+                updatedAt = 1L,
+            ),
+        )
+        val segment = RedTeamConsoleModel.segments(facts).single()
+        assertEquals("示例科技有限公司", segment.org)
+        assertEquals("AS64500", segment.asn)
+        assertEquals("杭州", segment.city)
+        assertEquals("示例科技有限公司 · 1 资产 · 0 端口", segment.subtitle)
+    }
+
+    /** 没有 segment 事实时归属留空——「查不到组织名」和「有组织名」是两回事，不能编。 */
+    @Test
+    fun `segment without metadata leaves org empty`() {
+        val facts = listOf(assetFact("asset:10.0.0.5", "10.0.0.5"))
+        val segment = RedTeamConsoleModel.segments(facts).single()
+        assertNull(segment.org)
+        assertNull(segment.asn)
+        assertEquals("1 资产 · 0 端口", segment.subtitle)
     }
 
     @Test

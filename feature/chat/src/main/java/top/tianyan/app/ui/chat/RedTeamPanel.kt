@@ -348,6 +348,7 @@ private val RedTeamFactKind.label: String
         RedTeamFactKind.SCORE_POINT -> "得分点设置"
         RedTeamFactKind.STAGE -> "阶段设置"
         RedTeamFactKind.PROMPT -> "提示词设置"
+        RedTeamFactKind.SEGMENT -> "网段"
         RedTeamFactKind.REPORT -> "报告"
         RedTeamFactKind.KNOWLEDGE -> "知识库"
         RedTeamFactKind.SKILL -> "技能"

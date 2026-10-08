@@ -25,6 +25,15 @@ enum class RedTeamFactKind(val id: String) {
      * 只放进程内存的话重启就没了，用户改过的提示词会静默回退成内置文案。
      */
     PROMPT("prompt"),
+    /**
+     * 网段元数据（归属组织 / ASN / 国家城市）。
+     *
+     * 上游单独一张 `segment` 表，由 `import_bundle` 的 `segments` 数组写入。
+     * 这里没有这张表，就落成事实：`id = segment:<cidr>`。
+     * 面板左侧栏的「归属组织」正是从这里读——不从资产 payload 里反推，
+     * 因为上游的 org 本来就不在资产上，反推出来的值十有八九是空的。
+     */
+    SEGMENT("segment"),
     REPORT("report"),
     KNOWLEDGE("knowledge"),
     SKILL("skill"),

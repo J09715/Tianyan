@@ -452,6 +452,7 @@ class RedTeamCoordinator @Inject constructor(
         RedTeamFactKind.ASSET.id,
         RedTeamFactKind.EDGE.id,
         RedTeamFactKind.EVENT.id,
+        RedTeamFactKind.SEGMENT.id,
     )
 
     /** 面板单次读事实的上限：上游 `listAssets` 硬上限 2000，这里留出端口/漏洞的余量。 */
@@ -557,6 +558,47 @@ class RedTeamCoordinator @Inject constructor(
         }
         return saveRolePrompt(sessionId, args).contains("source=session-override")
     }
+
+    /**
+     * 智能体并发上限的当前值与来源（上游 `agentsStatus` 的 max/source/limit 部分）。
+     *
+     * 面板要如实说明「这个数是哪来的」：设置项 / 环境变量 / 默认值。
+     * 不标来源的话，用户改了设置却没生效（被环境变量压住）时会以为界面坏了。
+     */
+    data class AgentsStatus(
+        val max: Int,
+        val source: String,
+        val limit: Int,
+        val defaultMax: Int,
+        val used: Int,
+        val free: Int,
+        val running: List<String>,
+    )
+
+    suspend fun consoleAgentsStatus(sessionId: String): AgentsStatus {
+        val effective = RedTeamSettings.maxAgentsOf(
+            settingsValue = maxAgentsOverride ?: readSettingsMaxAgents(),
+            envValue = System.getenv(RedTeamSettings.ENV_MAX_AGENTS),
+        )
+        val held = slotLock.withLock { reservations[sessionId]?.toList().orEmpty() }
+        return AgentsStatus(
+            max = effective.value,
+            source = effective.source.id,
+            limit = RedTeamSettings.MAX_AGENTS_LIMIT,
+            defaultMax = RedTeamSettings.DEFAULT_MAX_AGENTS,
+            used = held.size,
+            free = (effective.value - held.size).coerceAtLeast(0),
+            running = held.map { it.label },
+        )
+    }
+
+    /**
+     * 改并发上限（上游 `setAgentsMax`）：落盘 settings.json，立即生效。
+     *
+     * 「立即生效」是真的：派活时每次现读 [maxConcurrentAgents]，不需要重启。
+     * 这一点要写进面板提示——用户最怕的就是「改完要重启才生效」。
+     */
+    suspend fun consoleSetAgentsMax(value: Any?): Int = withContext(Dispatchers.IO) { saveMaxAgents(value) }
 
     /** 面板技能库读写：直接转发到技能库接缝，未装配时由接缝给出明确错误。 */
     suspend fun consoleSkills(): List<RedTeamSkillStore.Skill> = withContext(Dispatchers.IO) { skillStore.list() }
@@ -876,7 +918,37 @@ class RedTeamCoordinator @Inject constructor(
         var names = 0
         var edges = 0
 
-        bundle["segments"]?.let { runCatching { it.jsonArray }.getOrNull() }?.forEach { segments++ }
+        // 段元数据必须落库，不能只计数。
+        //
+        // 上游 `#upsertSegment` 把 org/asn/country/city 写进独立的 segment 表，面板左侧栏的
+        // 「归属组织」就是从这里读的。原来这里只 `segments++`，行被直接丢掉——
+        // 导入的网段归属信息全部静默消失，而且因为计数是对的，看不出任何异常。
+        bundle["segments"]?.let { runCatching { it.jsonArray }.getOrNull() }?.forEach { element ->
+            val row = runCatching { element.jsonObject }.getOrNull() ?: return@forEach
+            val cidr = row["cidr"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
+                ?: return@forEach
+            segments++
+            val priorSegment = existing["segment:$cidr"]
+            val priorSegmentPayload = priorSegment?.let { payloadOf(it) } ?: JsonObject(emptyMap())
+            // 合并而不是覆盖：上游是 COALESCE(excluded.org, segment.org)，
+            // 后一次导入没带 org 时不能把先前的抹掉。
+            fun keep(field: String) = row[field]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
+                ?: priorSegmentPayload[field]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+            record(
+                sessionId = sessionId,
+                kind = RedTeamFactKind.SEGMENT,
+                title = cidr,
+                target = cidr,
+                payload = JsonObject(
+                    buildMap {
+                        listOf("org", "asn", "country", "city", "ip_start", "ip_end", "source").forEach { field ->
+                            keep(field)?.let { put(field, JsonPrimitive(it)) }
+                        }
+                    },
+                ).toString(),
+                id = "segment:$cidr",
+            )
+        }
 
         val edgeRows = mutableListOf<RedTeamFactEntity>()
 

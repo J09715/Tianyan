@@ -54,6 +54,9 @@ data class RedTeamConsoleState(
     val roleDraft: String = "",
     val roleSaving: Boolean = false,
     val roleMessage: String? = null,
+    // 智能体并发
+    val agents: top.tianyan.app.harness.redteam.RedTeamCoordinator.AgentsStatus? = null,
+    val agentsMessage: String? = null,
     // 技能库
     val skills: List<RedTeamSkillStore.Skill> = emptyList(),
     val skillDraft: RedTeamSkillStore.Skill? = null,

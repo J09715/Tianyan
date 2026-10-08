@@ -2117,6 +2117,7 @@ class ChatViewModel @Inject constructor(
         when (tab) {
             RedTeamConsoleTab.PROMPTS -> if (_redTeamConsole.value.roles.isEmpty()) loadConsoleRoles()
             RedTeamConsoleTab.SKILLS -> if (_redTeamConsole.value.skills.isEmpty()) loadConsoleSkills()
+            RedTeamConsoleTab.OVERVIEW -> if (_redTeamConsole.value.agents == null) loadConsoleAgents()
             else -> Unit
         }
     }
@@ -2281,6 +2282,29 @@ class ChatViewModel @Inject constructor(
     fun resetConsoleRole() {
         updateConsole { it.copy(roleDraft = "") }
         saveConsoleRole()
+    }
+
+    fun loadConsoleAgents() {
+        val sessionId = currentSessionId.value.takeIf { it.isNotBlank() } ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { redTeamCoordinator.consoleAgentsStatus(sessionId) }
+                .onSuccess { status -> updateConsole { it.copy(agents = status) } }
+                .onFailure { error -> updateConsole { it.copy(agentsMessage = error.message ?: "读取并发上限失败") } }
+        }
+    }
+
+    /** 改并发上限：立即生效，不用重启——这一点由协调器保证（派活时现读）。 */
+    fun setConsoleAgentsMax(value: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { redTeamCoordinator.consoleSetAgentsMax(value) }
+                .onSuccess { applied ->
+                    updateConsole { it.copy(agentsMessage = "已保存为 $applied 个并发执行智能体，立即生效") }
+                    loadConsoleAgents()
+                }
+                .onFailure { error ->
+                    updateConsole { it.copy(agentsMessage = error.message ?: "保存失败") }
+                }
+        }
     }
 
     fun loadConsoleSkills() {

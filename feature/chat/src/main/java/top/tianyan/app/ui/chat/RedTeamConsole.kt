@@ -65,6 +65,7 @@ internal fun RedTeamConsole(
     onSkillDraftChange: ((RedTeamSkillStore.Skill) -> RedTeamSkillStore.Skill) -> Unit,
     onSaveSkill: () -> Unit,
     onDeleteSkill: () -> Unit,
+    onSetAgentsMax: (Int) -> Unit,
     skillHealth: RedTeamPreflightReport? = null,
     onRefreshSkillHealth: (() -> Unit)? = null,
 ) {
@@ -81,13 +82,16 @@ internal fun RedTeamConsole(
         // 资产/技能列表——而靶标绑定表单藏在这里面，用户以为没有靶标入口。
         if (state.open) {
         when (state.tab) {
-                RedTeamConsoleTab.OVERVIEW -> RedTeamPanel(
-                    session = session,
-                    facts = facts,
-                    onBindTarget = onBindTarget,
-                    skillHealth = skillHealth,
-                    onRefreshSkillHealth = onRefreshSkillHealth,
-                )
+                RedTeamConsoleTab.OVERVIEW -> {
+                    RedTeamAgentsCard(state = state, onSetMax = onSetAgentsMax)
+                    RedTeamPanel(
+                        session = session,
+                        facts = facts,
+                        onBindTarget = onBindTarget,
+                        skillHealth = skillHealth,
+                        onRefreshSkillHealth = onRefreshSkillHealth,
+                    )
+                }
 
                 RedTeamConsoleTab.ASSETS -> RedTeamAssetsTab(
                     state = state,
@@ -119,6 +123,91 @@ internal fun RedTeamConsole(
                     onDelete = onDeleteSkill,
                 )
         }
+        }
+    }
+}
+
+/**
+ * 智能体并发上限（上游「智能体」页签的核心控件）。
+ *
+ * 上限来源要如实标出来：设置项 / 环境变量 / 默认值。用户改了设置却没生效时
+ * （被 `REDTEAM_MAX_AGENTS` 压住），没有这行提示就会以为界面坏了。
+ */
+@Composable
+private fun RedTeamAgentsCard(
+    state: RedTeamConsoleState,
+    onSetMax: (Int) -> Unit,
+) {
+    val agents = state.agents ?: return
+    RuntimeCard(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            RuntimeIcon(RuntimeIconName.Bot, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "并发执行智能体 ${agents.max} 个 · 已用 ${agents.used} / 空闲 ${agents.free}",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    buildString {
+                        append(
+                            when (agents.source) {
+                                "settings" -> "来源：设置项"
+                                "env" -> "来源：环境变量（会压住设置项）"
+                                else -> "来源：默认值"
+                            },
+                        )
+                        append(" · 上限 ${agents.limit}")
+                        if (agents.running.isNotEmpty()) append(" · 在跑 ${agents.running.joinToString("、")}")
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            (1..agents.limit).forEach { value ->
+                val selected = value == agents.max
+                RuntimeTextButton(
+                    onClick = { onSetMax(value) },
+                    colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                        contentColor = if (selected) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
+                ) {
+                    Text(
+                        value.toString(),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                    )
+                }
+            }
+            Text(
+                "改完立即生效，不用重启",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 6.dp),
+                maxLines = 1,
+            )
+        }
+
+        state.agentsMessage?.let { message ->
+            Text(message, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
         }
     }
 }

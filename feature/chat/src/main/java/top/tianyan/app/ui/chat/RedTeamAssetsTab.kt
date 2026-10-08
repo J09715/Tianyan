@@ -144,8 +144,11 @@ private fun SegmentRail(state: RedTeamConsoleState, onSelectSegment: (String?) -
                     selected = state.selectedSegment == segment.cidr,
                     title = segment.cidr,
                     subtitle = buildString {
-                        segment.org?.let { append("$it · ") }
-                        append("${segment.assets} 资产 · ${segment.openPorts} 端口")
+                        append(segment.subtitle)
+                        // ASN / 国家城市有就带上：上游 segment 表存了这几列，
+                        // 面板不显示等于导入时白存。
+                        listOfNotNull(segment.asn, segment.country, segment.city).takeIf { it.isNotEmpty() }
+                            ?.let { append(" · " + it.joinToString(" ")) }
                         if (segment.passivePorts > 0 || segment.activePorts > 0) {
                             append(" · 被动 ${segment.passivePorts} 主动 ${segment.activePorts}")
                         }
