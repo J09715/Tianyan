@@ -307,6 +307,7 @@
     <string name="chat_menu_capabilities_subtitle">%1$d activated</string>
     <string name="chat_menu_approval_mode">Approval mode</string>
     <string name="chat_open_session_list">Session list</string>
+    <string name="chat_open_logs">Logs</string>
     <string name="chat_new_session_button">New session</string>
     <string name="chat_add_attachment">Add attachment</string>
     <string name="chat_mount_capabilities">Mount capabilities</string>
