@@ -41,10 +41,17 @@ class RedTeamCoordinator @Inject constructor(
     /** 红队技能来源；缺省为空，单测无需构造完整技能库。 */
     private val skills: RedTeamSkillSource = RedTeamSkillSource.Empty,
 ) {
+    /** 落盘根目录的就地覆盖（测试用，避免写到真实 home）。 */
+    @Volatile
+    var filesRootOverride: String? = null
+
     /** 设置文件位置；与事实库同根，随库一起备份迁移。 */
-    private val settingsRoot: String =
+    private val settingsRoot: String
+        get() = filesRootOverride ?: defaultSettingsRoot
+
+    private val defaultSettingsRoot: String =
         System.getenv("DSH_HOME")?.takeIf { it.isNotBlank() }?.let { "$it/redteam" }
-            ?: "${System.getProperty("user.home").orEmpty()}/.dsh/redteam"
+            ?: System.getProperty("user.home").orEmpty() + "/.dsh/redteam"
 
     /** Per-session agent slots. The registry lives in memory; the fact store survives restarts. */
     private val slotLock = Mutex()
@@ -233,6 +240,13 @@ class RedTeamCoordinator @Inject constructor(
                     var normalizedStageCode: String? = null
                     require(!isUpdate || explicitId != null) { "$action requires id" }
                     // 结构化字段原样落库，保留上游 schema（ip/port/service/fingerprint/provenance/relation…）。
+                    // 攻击文件要真落盘：只记元数据事实的话，交付时手上没有文件，
+                    // 读回也无从读起（路径防护也就没有守卫对象）。
+                    val attackFilePath = if (kind == RedTeamFactKind.ATTACK_FILE) {
+                        writeAttackFile(sessionId, args).first
+                    } else {
+                        null
+                    }
                     // 攻击链步骤的阶段：非法 code 退回老 stage 兜底并告警，而不是静默丢桶。
                     val stageWarning = if (kind == RedTeamFactKind.ATTACK_STEP) {
                         val resolved = RedTeamStage.resolveChainStage(
@@ -258,6 +272,8 @@ class RedTeamCoordinator @Inject constructor(
                         payload = JsonObject(
                             args.filterKeys { it !in CONTROL_KEYS }.toMutableMap().apply {
                                 if (normalizedStageCode != null) put("stage_code", JsonPrimitive(normalizedStageCode))
+                                // 落盘路径以服务端结果为准，不采信调用方自报的 path。
+                                if (attackFilePath != null) put("path", JsonPrimitive(attackFilePath))
                             },
                         ).toString(),
                         id = explicitId ?: UUID.randomUUID().toString(),
@@ -266,8 +282,21 @@ class RedTeamCoordinator @Inject constructor(
                         append("已保存 ${fact.kind} 事实 ${fact.id}")
                         normalizedStageCode?.takeIf { kind == RedTeamFactKind.ATTACK_STEP }
                             ?.let { append(" · 阶段 $it") }
+                        attackFilePath?.let { append(" · 已落盘 $it") }
                         stageWarning?.let { appendLine().append("warning=").append(it) }
                     }
+                }
+                "read_attack_file" -> readAttackFile(sessionId, args)
+                "poc_delete" -> {
+                    val session = requireBoundRedTeam(sessionId)
+                    val key = args["id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+                        ?: args["code"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+                        ?: error("poc_delete 需要 id 或 code")
+                    val target = recent(sessionId, MAX_FACTS_SCANNED).firstOrNull { fact ->
+                        fact.kind == "knowledge" && (fact.id == key || payloadOf(fact)["code"]?.jsonPrimitive?.contentOrNull == key)
+                    } ?: error("未找到 PoC：$key")
+                    facts.deleteById(sessionId, target.id)
+                    "ok=true\ndeleted=${target.id}"
                 }
                 "fact_query", "asset_query", "vuln_query", "credential_list", "access_list", "webshell_list", "tunnel_list", "chain", "attack_chain", "attack_file_list", "score_list", "poc_search", "poc_list", "report_targets", "report" -> {
                     val session = requireNotNull(sessions.findById(sessionId)) { "session not found" }
@@ -696,6 +725,56 @@ class RedTeamCoordinator @Inject constructor(
             args[key]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
         } ?: error("$action 需要 id / asset_id / ip 指定资产")
 
+    /**
+     * 靶标目录：与上游 `<root>/engagements/<id>` 同构，随事实库一起备份迁移。
+     * 攻击文件必须真写在磁盘上——上游这一块的意义就是「供复用与交付」，
+     * 只记一条元数据事实等于交付时手上什么都没有。
+     */
+    private fun engagementRoot(sessionId: String): java.io.File =
+        java.io.File(settingsRoot, "engagements/" + sessionId.replace(Regex("[^\\w.-]"), "_"))
+
+    /** 攻击文件根目录：`<靶标>/attack-files/<目标>/<文件名>`。 */
+    private fun attackFilesDir(sessionId: String): java.io.File =
+        java.io.File(engagementRoot(sessionId), "attack-files")
+
+    /**
+     * 写入一个攻击文件，返回落盘路径。
+     *
+     * 写路径也过一遍根目录校验：`target` 为 `..`/`.` 时 `slugTarget` 会原样返回，
+     * join 之后就跑出 `attack-files/` 了。
+     */
+    private fun writeAttackFile(sessionId: String, args: JsonObject): Pair<String, String> {
+        val target = args["target"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+        require(target.isNotEmpty()) { "attack file target required（IP / URL / C 段）" }
+        // 文件名里的路径分隔符要抹掉：上游同样把 `/\` 换成 `-`，避免写到目标目录之外。
+        val name = args["name"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+            .replace('/', '-').replace('\\', '-')
+        require(name.isNotEmpty()) { "attack file name required" }
+        val evidence = args["evidence"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+        require(evidence.isNotEmpty()) {
+            "attack file evidence required：只收录实际生效的脚本/POC/EXP，请写明验证效果"
+        }
+
+        val root = attackFilesDir(sessionId)
+        val dir = java.io.File(root, RedTeamIpUtils.slugTarget(target))
+        dir.mkdirs()
+        val path = RedTeamValidate.assertPathWithin(java.io.File(dir, name).path, listOf(root.path))
+
+        val content = args["content"]?.jsonPrimitive?.contentOrNull
+        val sourcePath = args["path"]?.jsonPrimitive?.contentOrNull
+        when {
+            !content.isNullOrEmpty() -> java.io.File(path).writeText(content)
+            !sourcePath.isNullOrEmpty() -> {
+                val source = java.io.File(sourcePath).takeIf { it.isAbsolute }
+                    ?: java.io.File(engagementRoot(sessionId), sourcePath)
+                require(source.isFile) { "source path not found: $sourcePath" }
+                source.copyTo(java.io.File(path), overwrite = true)
+            }
+            else -> error("attack file content or path required")
+        }
+        return path to target
+    }
+
     private fun payloadOf(fact: RedTeamFactEntity?): JsonObject =
         runCatching { Json.parseToJsonElement(fact?.payload ?: "{}") as? JsonObject }.getOrNull() ?: JsonObject(emptyMap())
 
@@ -855,6 +934,37 @@ class RedTeamCoordinator @Inject constructor(
                 )
             }
 
+
+    /**
+     * 读回攻击文件内容。
+     *
+     * 路径来自**库里的 path 列**，而那一列是智能体写过的——不可信输入。
+     * 一旦填成 `/etc/passwd` 或 `~/.ssh/id_rsa`，界面上点一下就把文件读出来了，
+     * 所以这里必须过根目录校验，越界按「拒绝」回话而**不是静默返回内容**。
+     */
+    private suspend fun readAttackFile(sessionId: String, args: JsonObject): String {
+        requireBoundRedTeam(sessionId)
+        val key = args["id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: error("read_attack_file 需要 id")
+        val fact = recent(sessionId, MAX_FACTS_SCANNED).firstOrNull { it.kind == "attack_file" && it.id == key }
+            ?: return "ok=false\nerror=未找到攻击文件：$key"
+        val stored = payloadOf(fact)["path"]?.jsonPrimitive?.contentOrNull
+            ?: return "ok=false\nerror=这条记录没有落盘路径"
+
+        val root = attackFilesDir(sessionId)
+        val safe = RedTeamValidate.pathWithinOrNull(stored, listOf(root.path))
+            ?: return "ok=false\nerror=（拒绝读取：路径不在本靶标目录内）$stored"
+
+        val file = java.io.File(safe)
+        if (!file.isFile) return "ok=false\nerror=（读取失败：文件不存在）$safe"
+        val content = runCatching { file.readText() }.getOrElse { return "ok=false\nerror=（读取失败）${it.message}" }
+        return buildString {
+            appendLine("ok=true")
+            appendLine("name=${payloadOf(fact)["name"]?.jsonPrimitive?.contentOrNull.orEmpty()}")
+            appendLine("path=$safe")
+            appendLine("---")
+            append(content)
+        }
+    }
 
     /**
      * 把命中按作战阶段分桶。阶段的资产归属需要回查资产事实，所以这一步要读库。
