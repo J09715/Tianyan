@@ -27,6 +27,11 @@ data class ScorePoint(
     val cap: Int,
     val dedupScope: ScoreDedupScope,
     val description: String = "",
+    /**
+     * 是否参与计分。内置目录恒为 true；用户「停用」某个内置点或自建点时由覆盖层置 false。
+     * 停用必须在计分时生效，而不是只在界面上灰掉——否则用户以为关掉了，分数照算。
+     */
+    val enabled: Boolean = true,
 )
 
 /** 命中行。`points` 必须是**本条命中的实际分值**（合并版同一条含多档，传默认值会把哪条计分判反）。 */
@@ -242,8 +247,12 @@ object RedTeamScoring {
     }
 
     /** 本条命中的实际分值 = 档位分值 × 倍率。 */
-    fun hitPointsOf(hit: ScoreHit): Int {
-        val base = hit.points ?: POINTS_BY_CODE[hit.code]?.points ?: 0
+    /**
+     * `metaByCode` 必须可注入：命中缺省分值时要走**调用方那份**得分点表，
+     * 写死静态目录会让自建得分点的分值永远不生效（界面能新增、算分时当不存在）。
+     */
+    fun hitPointsOf(hit: ScoreHit, metaByCode: Map<String, ScorePoint> = POINTS_BY_CODE): Int {
+        val base = hit.points ?: metaByCode[hit.code]?.points ?: 0
         val mult = hit.multiplier?.takeIf { it > 0 && it.isFinite() } ?: 1.0
         return (base * mult).roundToInt()
     }
@@ -304,7 +313,9 @@ object RedTeamScoring {
             val legacy = legacyCapGroup(hit.code)
             ScoredHit(
                 hit = hit,
-                points = hitPointsOf(hit),
+                // 被停用的得分点计 0 分，且由 points=0 自然退出竞争与上限占用。
+                // 只在界面上灰掉而计分照旧，会让用户以为关掉了 —— 那是最难查的一类偏差。
+                points = if (meta?.enabled == false) 0 else hitPointsOf(hit, pointsByCode),
                 rule = meta?.rule,
                 ruleCap = meta?.cap?.takeIf { it > 0 } ?: 0,
                 dedupScope = meta?.dedupScope ?: legacy ?: ScoreDedupScope.NONE,
