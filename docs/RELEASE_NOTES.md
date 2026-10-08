@@ -1,8 +1,15 @@
-# 天衍 · Tianyan v0.17.3 发布记录
+# 天衍 · Tianyan v0.17.4 发布记录
 
 > **发布时间**：2026-10-08
-> **版本号**：v0.17.3（`appVersionName = 0.17.3`，`appVersionCode = 61`）
+> **版本号**：v0.17.4（`appVersionName = 0.17.4`，`appVersionCode = 62`）
 > **支持范围**：Android 10+ · arm64-v8a（无 Root / PRoot 沙箱）
+
+---
+
+## 🆕 v0.17.4 补充
+
+- **红队 UI 用回项目现有控件**：上一轮手搓的页签条 / 筛选胶囊 / 下拉 / 列表行，全部换成 `SecondaryScrollableTabRow` + `Tab`、`FilterChip`、`ExposedDropdownMenuBox`、`Surface`，与设置页同一套语义；
+- **git 缺失不再伪装成「网络问题」**：rootfs 里不一定带 git，而读操作拼了 `|| true` 把「git: not found」变成空输出、写操作直接报原文、凭证探测因缺 curl 被判成「网络不通」。现在所有 git 操作先过 `ensureGit()`（探测 → 按 apt/apk/dnf 安装 → 装不上给可执行指引），凭证探测缺 curl 时明确说明不是网络问题。
 
 ---
 
