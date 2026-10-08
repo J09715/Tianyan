@@ -14,6 +14,10 @@ enum class RedTeamFactKind(val id: String) {
     ATTACK_STEP("attack_step"),
     ATTACK_FILE("attack_file"),
     SCORE_HIT("score_hit"),
+    /** 得分点覆盖层：内置点的启停、自建点本身（随会话走，与靶标绑定）。 */
+    SCORE_POINT("score_point"),
+    /** 阶段覆盖层：用户对阶段名称/目标/手段分组/工具的编辑。 */
+    STAGE("stage"),
     REPORT("report"),
     KNOWLEDGE("knowledge"),
     SKILL("skill"),
