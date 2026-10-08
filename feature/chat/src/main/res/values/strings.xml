@@ -350,6 +350,7 @@
     <string name="chat_menu_approval_mode">审批权限模式</string>
     <string name="chat_open_session_list">会话列表</string>
     <string name="chat_open_git">Git</string>
+    <string name="chat_open_logs">运行日志</string>
     <string name="chat_git_panel_title">Git · 当前会话</string>
     <string name="chat_git_loading">正在读取 Git 状态…</string>
     <string name="chat_git_no_repo">当前会话未绑定 Git 仓库</string>
