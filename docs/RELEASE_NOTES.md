@@ -1,8 +1,24 @@
-# 天衍 · Tianyan v0.17.4 发布记录
+# 天衍 · Tianyan v0.17.5 发布记录
 
 > **发布时间**：2026-10-08
-> **版本号**：v0.17.4（`appVersionName = 0.17.4`，`appVersionCode = 62`）
+> **版本号**：v0.17.5（`appVersionName = 0.17.5`，`appVersionCode = 63`）
 > **支持范围**：Android 10+ · arm64-v8a（无 Root / PRoot 沙箱）
+
+---
+
+## 🆕 v0.17.5 补充
+
+### 插件包与安装教程修复
+
+- **删掉一个装不上的重复插件包**：`assets/plugins/` 下同时存在 `qemu-x86_64-compat` 与 `qemu-x86-64-compat`，两者 `id` 相同但前者没有 payload、没有安装步骤——插件中心按 id 索引，这个包永远装不上；
+- **修正下载教程里会让安装失败的文件名**：`android-suite-offline/DOWNLOADS.md` 的 PowerShell 示例把 Flutter 包重命名成 `flutter-source-arm64.tar.gz`，而安装脚本与 `SHA256SUMS` 要的是 `flutter-linux-arm64-android-only-slim.tar.gz`。照教程做完仍会报「缺文件」；顺带把最大的那个归档（约 848 MB）补进校验清单；
+- **安装引导说清真实包格式**：插件中心首次引导原写「选择 zip 文件」，而离线包是 `.txplugin`，拿到正确文件的用户会以为自己下错了；
+- **hermes-agent 的注册表步骤改为显式说明**：该工具由专用安装器（下载官方 `install.sh`）安装，注册表里原有的 stub 步骤永远不会被执行，留着会让维护者以为改注册表就能改安装行为。
+
+### 新增回归测试
+
+- `PluginPackageIntegrityTest`（7 项）：插件 id 唯一、`LOCAL_PACKAGE` 必须带 payload 与可运行步骤、`SHA256SUMS` 指向真实文件、安装脚本引用的归档名与下载文档一致、脚本为 POSIX 且无 CRLF、无上游品牌残留；
+- `ToolRegistryIntegrityTest`（8 项）：注册表 id 唯一、下载必须带 `--fail`（否则 404 也会当成功）、校验路径必须是真的下载目标、调用的运行时必须声明依赖或自行安装、`commandLinks` 覆盖 `launchCommand`。
 
 ---
 
