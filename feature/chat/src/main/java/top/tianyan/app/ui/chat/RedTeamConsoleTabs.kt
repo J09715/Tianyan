@@ -1,6 +1,4 @@
 package top.tianyan.app.ui.chat
-
-import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -16,12 +14,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -209,15 +207,17 @@ internal fun RedTeamSkillsTab(
                 }
                 state.skills.forEach { skill ->
                     val selected = skill.id == state.skillDraft?.id && skill.id.isNotBlank()
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = if (selected) {
+                            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerHigh
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                    ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(
-                                if (selected) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
-                                else MaterialTheme.colorScheme.surfaceContainerHigh,
-                            )
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
@@ -246,6 +246,7 @@ internal fun RedTeamSkillsTab(
                         RuntimeTextButton(onClick = { onSelectSkill(skill.id) }) {
                             Text("编辑", style = MaterialTheme.typography.labelSmall)
                         }
+                    }
                     }
                 }
             }

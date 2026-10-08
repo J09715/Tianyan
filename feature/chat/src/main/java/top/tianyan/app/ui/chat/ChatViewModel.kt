@@ -504,7 +504,91 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /**
+     * git 是否可用；null 表示还没探过。
+     *
+     * 之前所有 git 操作都假设沙箱里有 git，而 rootfs 是运行时下载的，
+     * 里面不一定带 git。缺了之后的症状极具误导性：
+     *   · `runGitRead` 拼了 `|| true`，失败被吃掉 → `git init` 显示成功但什么都没发生；
+     *   · 用户去加 token，健康检查用 curl 探测，curl 也没有 → 报「网络不通」。
+     * 两个症状一个根因，用户会一路往网络和凭证上查。
+     */
+    @Volatile private var gitAvailable: Boolean? = null
+
+    /** 探测结果所属的发行版；换发行版/重建沙箱后 git 可能又没了，必须重探。 */
+    @Volatile private var gitProbedDistro: String? = null
+
+    /**
+     * 确保沙箱里有 git，没有就装。
+     *
+     * 返回 true 表示可用。装不上时返回 false 并给出原因，让调用方明确失败——
+     * 绝不能让「工具不存在」伪装成操作成功。
+     */
+    private suspend fun ensureGit(): Boolean {
+        // 缓存按发行版失效：换发行版后旧结果不再成立，
+        // 沿用会让所有 git 操作静默走「以为有 git」的路径。
+        val distro = linuxRuntime.activeDistroId.value
+        if (gitProbedDistro != distro) {
+            gitAvailable = null
+            gitProbedDistro = distro
+        }
+        if (gitAvailable == true) return true
+        val probe = runCatching {
+            linuxRuntime.execute(
+                top.tianyan.app.runtime.shell.ShellCommand(
+                    commandLine = "command -v git >/dev/null 2>&1 && git --version 2>&1",
+                    workingDirectory = "/root",
+                    timeoutMs = 20_000L,
+                ),
+            )
+        }.getOrNull()
+        if (probe != null && probe.isSuccess && probe.stdout.contains("git version")) {
+            gitAvailable = true
+            return true
+        }
+        // 缺则尝试安装：apt（Debian/Ubuntu）与 apk（Alpine）都试，
+        // 因为用户装的发行版不固定，写死一个包管理器必然有一半人装不上。
+        _gitOpMessage.value = GitOpMessage.Ok("沙箱里没有 git，正在安装…")
+        val install = runCatching {
+            linuxRuntime.execute(
+                top.tianyan.app.runtime.shell.ShellCommand(
+                    commandLine = buildString {
+                        append("if command -v apt-get >/dev/null 2>&1; then ")
+                        append("DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1; ")
+                        append("DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git >/dev/null 2>&1; ")
+                        append("elif command -v apk >/dev/null 2>&1; then ")
+                        append("apk add --no-cache git >/dev/null 2>&1; ")
+                        append("elif command -v dnf >/dev/null 2>&1; then ")
+                        append("dnf install -y -q git >/dev/null 2>&1; ")
+                        append("fi; ")
+                        append("command -v git >/dev/null 2>&1 && git --version 2>&1 || echo __TIANYAN_NO_GIT__")
+                    },
+                    workingDirectory = "/root",
+                    timeoutMs = 600_000L,
+                ),
+            )
+        }.getOrNull()
+        val out = ((install?.stdout ?: "") + "\n" + (install?.stderr ?: "")).trim()
+        if (install != null && install.isSuccess && out.contains("git version")) {
+            gitAvailable = true
+            _gitOpMessage.value = GitOpMessage.Ok("已安装 git，可以继续操作")
+            return true
+        }
+        gitAvailable = false
+        _gitOpMessage.value = GitOpMessage.Error(
+            "沙箱里没有 git，且自动安装失败。\n" +
+                "可以在终端里手动执行：apt-get update && apt-get install -y git\n" +
+                "（Alpine 用 apk add git）\n\n" + out.take(300),
+            action = GitOpAction.CopyError,
+        )
+        return false
+    }
+
     private suspend fun runGitRead(ws: String, cmd: String): String? {
+        // 先确保 git 存在：缺了的话下面拼的 `|| true` 会把
+        // 「/bin/sh: git: not found」变成空输出，读操作静默返回 null，
+        // 界面显示成「没有改动/没有分支」，比报错更难查。
+        if (!ensureGit()) return null
         val result = linuxRuntime.execute(
             top.tianyan.app.runtime.shell.ShellCommand(
                 commandLine = "$cmd 2>&1 || true",
@@ -661,6 +745,9 @@ class ChatViewModel @Inject constructor(
                 )
                 return@launch
             }
+            // 克隆前先确保 git 存在：缺了的话三次重试全都报
+            // 「git: not found」，白等退避时间，还把它当成网络问题重试。
+            if (!ensureGit()) return@launch
             // 网络类自动重试：2 次退避（1s → 3s）
             var attempt = 0
             var lastError = ""
@@ -765,6 +852,11 @@ class ChatViewModel @Inject constructor(
     private fun translateGitError(out: String, repoName: String = ""): String {
         val l = out.lowercase()
         val core = when {
+            // 兜底：ensureGit() 之后仍出现「找不到 git」，说明安装没生效。
+            // 必须给出可执行指引——原文「/bin/sh: 1: git: not found」看不出下一步做什么。
+            "git: not found" in l || "git: command not found" in l ->
+                "沙箱里没有 git。到终端执行：apt-get update && apt-get install -y git" +
+                    "（Alpine 用 apk add git），然后重试。"
             "already exists and is not an empty directory" in l ->
                 "`$repoName` 目录已存在且非空。可清空再试或改目录名。"
             "authentication failed" in l || "invalid credentials" in l || "password authentication" in l ->
@@ -863,6 +955,9 @@ class ChatViewModel @Inject constructor(
     ) {
         val ws = currentGitWs()
         viewModelScope.launch(Dispatchers.IO) {
+            // 网络型操作同样要先有 git：否则 clone/pull/push 全部报
+            // 「git: not found」，而用户会以为是网络或凭证的问题。
+            if (!ensureGit()) return@launch
             cancelRequested.set(false)
             val host = if (resolveHostFromOrigin) {
                 GitAuth.hostOf(runGitRead(ws, "git remote get-url origin").orEmpty().trim())
@@ -1223,10 +1318,23 @@ class ChatViewModel @Inject constructor(
                 "PRIVATE-TOKEN" -> "curl -s -o /dev/null -w '%{http_code}' --max-time 12 -H 'PRIVATE-TOKEN: $quoted' '$url'"
                 else -> "curl -s -o /dev/null -w '%{http_code}' --max-time 12 -H 'Authorization: Bearer $quoted' -H 'User-Agent: tianyan-app' '$url'"
             }
+            // 先确认 curl 存在：缺了的话命令直接失败，stdout 为空 →
+            // 下面的判据会把它当成「网络不通」，用户于是去查代理和网络，
+            // 而真正的问题是沙箱里没有 curl。这类误报比不报更难查。
+            val curlCmdFinal = "command -v curl >/dev/null 2>&1 || { " +
+                "(command -v apt-get >/dev/null 2>&1 && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl >/dev/null 2>&1) || " +
+                "(command -v apk >/dev/null 2>&1 && apk add --no-cache curl >/dev/null 2>&1); }; " +
+                "command -v curl >/dev/null 2>&1 || { echo __TIANYAN_NO_CURL__; exit 0; }; " +
+                curlCmd
             val result = runCatching {
-                linuxRuntime.execute(ShellCommand(commandLine = curlCmd, workingDirectory = "/root", timeoutMs = 18_000L))
+                linuxRuntime.execute(ShellCommand(commandLine = curlCmdFinal, workingDirectory = "/root", timeoutMs = 180_000L))
             }
-            val code = result.getOrNull()?.stdout?.trim()?.takeLast(3).orEmpty()
+            val raw = result.getOrNull()?.stdout?.trim().orEmpty()
+            if ("__TIANYAN_NO_CURL__" in raw) {
+                _credHealth.value = _credHealth.value + (id to GitCredHealth.Unknown("沙箱里没有 curl，装不上：无法探测凭证（不是网络问题）"))
+                return@launch
+            }
+            val code = raw.takeLast(3)
             val h = when {
                 code == "200" -> GitCredHealth.Ok()
                 code == "401" || code == "403" -> GitCredHealth.Invalid(code)
@@ -1322,6 +1430,10 @@ class ChatViewModel @Inject constructor(
         successAction: GitOpAction?,
     ) {
         viewModelScope.launch(Dispatchers.IO) {
+            // 写操作（init/add/commit/…）必须先确保 git：原来直接跑，
+            // `/bin/sh: 1: git: not found` 被当作普通失败输出，用户看到的是
+            // 「init 失败：git: not found」而不知道下一步该做什么。
+            if (!ensureGit()) return@launch
             val result = runCatching {
                 linuxRuntime.execute(
                     top.tianyan.app.runtime.shell.ShellCommand(

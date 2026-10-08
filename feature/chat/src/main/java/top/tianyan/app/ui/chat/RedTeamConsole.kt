@@ -1,5 +1,4 @@
 package top.tianyan.app.ui.chat
-
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -15,9 +14,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.SecondaryScrollableTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -236,12 +237,13 @@ private fun RedTeamSectionTab(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 rows.forEach { fact ->
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        shape = RoundedCornerShape(8.dp),
+                    ) {
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
                     ) {
                         Text(
                             fact.title.ifBlank { fact.id },
@@ -271,6 +273,7 @@ private fun RedTeamSectionTab(
                                 maxLines = 1,
                             )
                         }
+                    }
                     }
                 }
             }
@@ -404,34 +407,30 @@ private fun ConsoleChrome(
             }
         }
 
-    Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            RedTeamConsoleTab.entries.forEach { tab ->
-                val selected = tab == state.tab
-                RuntimeTextButton(
-                    onClick = { onSelectTab(tab) },
-                    colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
-                        contentColor = if (selected) {
-                            MaterialTheme.colorScheme.error
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    ),
-                ) {
-                    // 条数直接标在页签上：否则用户要点进每个页签才知道有没有数据，
-                    // 空页签和「没实现的页签」看起来一模一样。
-                    val count = state.sections.firstOrNull { it.id == tab.sectionId }?.count
+    // 11 个页签用 ScrollableTabRow：与设置页同一套页签语义，
+    // 横向滚动由控件自己处理，不用手写 Row + horizontalScroll。
+    SecondaryScrollableTabRow(
+        selectedTabIndex = RedTeamConsoleTab.entries.indexOf(state.tab),
+        containerColor = Color.Transparent,
+        edgePadding = 12.dp,
+        divider = {},
+    ) {
+        RedTeamConsoleTab.entries.forEach { tab ->
+            // 条数直接标在页签上：否则用户要点进每个页签才知道有没有数据，
+            // 空页签和「没实现的页签」看起来一模一样。
+            val count = state.sections.firstOrNull { it.id == tab.sectionId }?.count
+            Tab(
+                selected = tab == state.tab,
+                onClick = { onSelectTab(tab) },
+                text = {
                     Text(
                         if (count != null && count > 0) "${tab.label} $count" else tab.label,
                         style = MaterialTheme.typography.labelLarge,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
-                }
-            }
-        }
+                },
+            )
         }
     }
+}}

@@ -1,7 +1,5 @@
 package top.tianyan.app.ui.chat
-
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,6 +20,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Surface
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -32,7 +36,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
@@ -162,35 +165,27 @@ private fun SegmentRail(state: RedTeamConsoleState, onSelectSegment: (String?) -
 
 @Composable
 private fun SegmentChip(selected: Boolean, title: String, subtitle: String, onClick: () -> Unit) {
-    RuntimeTextButton(
+    FilterChip(
+        selected = selected,
         onClick = onClick,
-        modifier = Modifier.width(172.dp),
-        colors = ButtonDefaults.textButtonColors(
-            containerColor = if (selected) {
-                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f)
-            } else {
-                MaterialTheme.colorScheme.surfaceContainerHigh
-            },
-        ),
-        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
-    ) {
-        Column {
-            Text(
-                title,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
+        label = {
+            Column {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.labelLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        },
+    )
 }
 
 @Composable
@@ -297,6 +292,8 @@ private fun AssetToolbar(
 }
 
 /** 通用下拉：`label` 是当前值，`options` 是 (值, 显示名) 列表。 */
+/** 下拉筛选：与设置页同一套 ExposedDropdownMenuBox，不手搓菜单。 */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun <T> ConsoleSelect(
     label: String,
@@ -305,12 +302,23 @@ private fun <T> ConsoleSelect(
     modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    Box(modifier) {
-        RuntimeTextButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-            Text(label, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            RuntimeIcon(RuntimeIconName.ChevronDown, Modifier.size(14.dp))
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded },
+        modifier = modifier,
+    ) {
+        OutlinedTextField(
+            value = label,
+            onValueChange = {},
+            readOnly = true,
+            singleLine = true,
+            textStyle = MaterialTheme.typography.labelMedium,
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+            modifier = Modifier
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                .fillMaxWidth(),
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             options.forEach { (value, text) ->
                 DropdownMenuItem(
                     text = { Text(text, fontSize = 13.sp) },
@@ -367,14 +375,13 @@ private fun AssetRow(
     detail: RedTeamConsoleModel.Detail?,
     onToggle: () -> Unit,
 ) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = if (expanded) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent,
+        shape = RoundedCornerShape(8.dp),
+    ) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(
-                if (expanded) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent,
-            )
-            .padding(vertical = 6.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -442,6 +449,7 @@ private fun AssetRow(
         if (expanded) {
             AssetDetail(detail = detail)
         }
+    }
     }
 }
 
