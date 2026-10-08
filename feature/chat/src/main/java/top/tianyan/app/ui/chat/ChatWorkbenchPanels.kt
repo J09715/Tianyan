@@ -96,6 +96,11 @@ internal fun CollapsibleChatWorkbenchStrip(
     modifier: Modifier = Modifier,
     onOpenBrowser: (() -> Unit)? = null,
     browserHighlight: Boolean = false,
+    /** 仓库入口；与浏览器同一条工具条，方便在对话里直接切过去看改动。 */
+    onOpenGit: (() -> Unit)? = null,
+    gitUncommittedCount: Int = 0,
+    /** 运行日志入口；沿用开发者页那套读取/清空/导出，不在这里重做一份。 */
+    onOpenLogs: (() -> Unit)? = null,
 ) {
     val roundCount = runtimeEvents.count { it is HarnessEvent.ProviderRoundStarted }
     val activeModelName = activeModel?.let { entity ->
@@ -174,6 +179,30 @@ internal fun CollapsibleChatWorkbenchStrip(
                     tint = if (browserHighlight) Color(0xFF3F8FFF) else MaterialTheme.colorScheme.onSurfaceVariant,
                     highlight = browserHighlight,
                     onClick = onOpenBrowser,
+                )
+            }
+
+            // 6. 仓库入口：未提交改动数直接标在标签上，省掉「点进去才知道有没有改动」。
+            if (onOpenGit != null) {
+                StatusDivider()
+                val dirty = gitUncommittedCount > 0
+                WorkbenchStatusItem(
+                    icon = RuntimeIconName.GitBranch,
+                    label = if (dirty) "仓库 $gitUncommittedCount" else "仓库",
+                    tint = if (dirty) Color(0xFFF59E0B) else MaterialTheme.colorScheme.onSurfaceVariant,
+                    highlight = dirty,
+                    onClick = onOpenGit,
+                )
+            }
+
+            // 7. 运行日志入口
+            if (onOpenLogs != null) {
+                StatusDivider()
+                WorkbenchStatusItem(
+                    icon = RuntimeIconName.Document,
+                    label = stringResource(R.string.chat_open_logs),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    onClick = onOpenLogs,
                 )
             }
         }
