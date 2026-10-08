@@ -27,7 +27,9 @@ import top.tianyan.app.core.model.RedTeamValidate
 import top.tianyan.app.core.model.RedTeamSkillHealth
 import top.tianyan.app.core.model.RedTeamSkillAvailability
 import top.tianyan.app.core.model.RedTeamScoreCatalog
+import top.tianyan.app.core.model.RedTeamScorePointEdit
 import top.tianyan.app.core.model.RedTeamScoring
+import top.tianyan.app.core.model.ScorePoint
 import top.tianyan.app.core.model.ScoredHit
 import top.tianyan.app.core.model.ScoreHit
 import top.tianyan.app.harness.events.HarnessEvent
@@ -326,7 +328,11 @@ class RedTeamCoordinator @Inject constructor(
                 }
                 "asset_graph" -> assetGraph(sessionId, args)
                 "score_report" -> scoreReport(sessionId)
-                "score_points" -> scorePointList()
+                "score_points" -> scorePointList(sessionId)
+                "score_point_save" -> saveScorePoint(sessionId, args)
+                "stages" -> stageList(sessionId)
+                "save_stage" -> saveStage(sessionId, args)
+                "delete_score_point" -> deleteScorePoint(sessionId, args)
                 "role_dispatch" -> roleDispatch(sessionId, args)
                 // 存量评估/并发验证：只登记结论，真正的主动探测仍需走已审批的 base/process。
                 "asset_assess" -> assessAsset(sessionId, args)
@@ -619,7 +625,7 @@ class RedTeamCoordinator @Inject constructor(
     /** 派活前给子代理看的态势摘要：目标、C 段、资产/漏洞计数、当前得分。 */
     private suspend fun engagementBrief(sessionId: String): String {
         val facts = recent(sessionId, MAX_FACTS_SCANNED)
-        val board = RedTeamScoring.applyScoreCaps(hitRows(sessionId))
+        val board = RedTeamScoring.applyScoreCaps(hitRows(sessionId), pointsByCode = scoringPoints(sessionId))
         val segments = facts.filter { it.kind == "asset" }
             .mapNotNull { segmentOf(it.target) }.distinct()
         return buildString {
@@ -836,7 +842,7 @@ class RedTeamCoordinator @Inject constructor(
     private suspend fun scoreReport(sessionId: String): String {
         val session = requireBoundRedTeam(sessionId)
         val hits = hitRows(sessionId)
-        val board = RedTeamScoring.applyScoreCaps(hits)
+        val board = RedTeamScoring.applyScoreCaps(hits, pointsByCode = scoringPoints(sessionId))
         val byCode = board.items.groupBy { it.hit.code }
 
         // 演练方按这条推进线读报告，所以分桶必须在这里算，不能让每个消费方各推一次。
@@ -891,15 +897,246 @@ class RedTeamCoordinator @Inject constructor(
     }
 
     /** 得分点清单：模型据此判档位，避免自己编分值。 */
-    private fun scorePointList(): String = buildString {
-        RedTeamScoreCatalog.GROUPS.forEach { group ->
-            val points = RedTeamScoring.DEFAULT_POINTS.filter { it.category == group.code }
-            if (points.isEmpty()) return@forEach
-            appendLine("## ${group.name}（${group.code}）")
-            points.forEach { p ->
-                appendLine("- ${p.code}｜${p.name}｜档位 ${p.tier}｜上限 ${if (p.cap > 0) p.cap else "不限"}｜口径 ${p.dedupScope.id}")
+    private suspend fun scorePointList(sessionId: String): String {
+        val overrides = scoreOverrides(sessionId)
+        val merged = RedTeamScorePointEdit.mergeInto(overrides = overrides)
+        return buildString {
+            RedTeamScoreCatalog.GROUPS.forEach { group ->
+                val points = merged.values.filter { it.category == group.code }.sortedBy { it.src }
+                if (points.isEmpty()) return@forEach
+                appendLine("## ${group.name}（${group.code}）")
+                points.forEach { p ->
+                    val off = if (!p.enabled) "｜**已停用**" else ""
+                    appendLine("- ${p.code}｜${p.name}｜档位 ${p.tier}｜上限 ${if (p.cap > 0) p.cap else "不限"}｜口径 ${p.dedupScope.id}$off")
+                }
+            }
+            val custom = merged.values.filter { it.src == 0 }
+            if (custom.isNotEmpty()) {
+                appendLine("## 自建得分点")
+                custom.forEach { p ->
+                    val off = if (!p.enabled) "｜**已停用**" else ""
+                    appendLine("- ${p.code}｜${p.name}｜${p.points} 分｜${p.category.orEmpty()}$off")
+                }
+            }
+            val disabled = overrides.builtinEnabled.filterValues { !it }.keys
+            if (disabled.isNotEmpty()) {
+                appendLine()
+                appendLine("已停用：${disabled.joinToString("、")}")
             }
         }
+    }
+
+    /**
+     * 当前生效的得分点表 = 内置目录 + 用户覆盖。
+     *
+     * 三处计分（态势摘要、评分报告、总报告）必须共用这一份：
+     * 只要有一处直接用静态目录，自建点与停用就只在部分视图生效，同一份战果会算出不同总分。
+     */
+    private suspend fun scoringPoints(sessionId: String): Map<String, ScorePoint> =
+        RedTeamScorePointEdit.mergeInto(overrides = scoreOverrides(sessionId))
+
+    /** 从事实库读出阶段覆盖层。 */
+    private suspend fun stageOverrides(sessionId: String): Pair<Map<String, RedTeamStage.Stage>, Map<String, Int>> {
+        val overrides = mutableMapOf<String, RedTeamStage.Stage>()
+        val order = mutableMapOf<String, Int>()
+        recent(sessionId, MAX_FACTS_SCANNED).filter { it.kind == "stage" }.forEach { fact ->
+            val payload = payloadOf(fact)
+            val code = payload["code"]?.jsonPrimitive?.contentOrNull ?: fact.id
+            val sections = runCatching {
+                Json.decodeFromString<List<Map<String, String>>>(payload["sections"]?.jsonPrimitive?.contentOrNull ?: "[]")
+            }.getOrNull().orEmpty().mapNotNull { row ->
+                val label = row["label"] ?: return@mapNotNull null
+                RedTeamStage.Section(label, row["items"]?.split("\u0001")?.filter { it.isNotBlank() }.orEmpty())
+            }
+            val patch = RedTeamStage.StagePatch(
+                code = code,
+                name = payload["name"]?.jsonPrimitive?.contentOrNull,
+                subtitle = payload["subtitle"]?.jsonPrimitive?.contentOrNull,
+                color = payload["color"]?.jsonPrimitive?.contentOrNull,
+                goal = payload["goal"]?.jsonPrimitive?.contentOrNull,
+                sections = sections.takeIf { it.isNotEmpty() },
+                tools = payload["tools"]?.jsonPrimitive?.contentOrNull,
+                transition = payload["transition"]?.jsonPrimitive?.contentOrNull,
+            )
+            overrides[code] = RedTeamStage.applyPatch(overrides[code], patch)
+            payload["sort_order"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()?.let { order[code] = it }
+        }
+        return overrides to order
+    }
+
+    private suspend fun stageList(sessionId: String): String {
+        requireBoundRedTeam(sessionId)
+        val (overrides, order) = stageOverrides(sessionId)
+        val stages = RedTeamStage.resolveStages(overrides, order)
+        return buildString {
+            appendLine("ok=true")
+            appendLine("count=${stages.size}")
+            stages.forEachIndexed { index, stage ->
+                val edited = if (overrides.containsKey(stage.code)) " ·已编辑" else ""
+                appendLine()
+                appendLine("## ${index + 1}. ${stage.name}（${stage.code}）$edited")
+                appendLine("subtitle=${stage.subtitle}")
+                appendLine("color=${stage.color}")
+                appendLine("goal=${stage.goal}")
+                stage.sections.forEach { section ->
+                    appendLine("- ${section.label}：${section.items.joinToString("；")}")
+                }
+                appendLine("tools=${stage.tools}")
+                if (stage.transition.isNotEmpty()) appendLine("transition=${stage.transition}")
+            }
+        }
+    }
+
+    /**
+     * 编辑阶段。**部分补丁**语义：没传的字段沿用当前值，再回落到默认——
+     * 否则界面上只改一句「目标」就会把名称、手段分组、工具全清空。
+     */
+    private suspend fun saveStage(sessionId: String, args: JsonObject): String {
+        requireBoundRedTeam(sessionId)
+        val code = args["code"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
+            ?: error("stage.code required")
+        val (existing, order) = stageOverrides(sessionId)
+        val incoming = args["sections"]?.jsonPrimitive?.contentOrNull?.let { raw ->
+            runCatching { Json.decodeFromString<List<Map<String, String>>>(raw) }.getOrNull()
+        }
+        val patch = RedTeamStage.StagePatch(
+            code = code,
+            name = args["name"]?.jsonPrimitive?.contentOrNull,
+            subtitle = args["subtitle"]?.jsonPrimitive?.contentOrNull,
+            color = args["color"]?.jsonPrimitive?.contentOrNull,
+            goal = args["goal"]?.jsonPrimitive?.contentOrNull,
+            sections = incoming?.mapNotNull { row ->
+                val label = row["label"] ?: return@mapNotNull null
+                RedTeamStage.Section(label, row["items"]?.split("|")?.filter { it.isNotBlank() }.orEmpty())
+            },
+            tools = args["tools"]?.jsonPrimitive?.contentOrNull,
+            transition = args["transition"]?.jsonPrimitive?.contentOrNull,
+            sortOrder = args["sort_order"]?.jsonPrimitive?.contentOrNull?.toIntOrNull(),
+        )
+        val next = RedTeamStage.applyPatch(existing[code], patch)
+        record(
+            sessionId = sessionId,
+            kind = RedTeamFactKind.STAGE,
+            title = next.name,
+            payload = JsonObject(
+                buildMap {
+                    put("code", JsonPrimitive(code))
+                    put("name", JsonPrimitive(next.name))
+                    put("subtitle", JsonPrimitive(next.subtitle))
+                    put("color", JsonPrimitive(next.color))
+                    put("goal", JsonPrimitive(next.goal))
+                    put("tools", JsonPrimitive(next.tools))
+                    put("transition", JsonPrimitive(next.transition))
+                    // 条目用 \u0001 连接，避免与正文里的分号/竖线冲突。
+                    put(
+                        "sections",
+                        JsonPrimitive(
+                            Json.encodeToString(
+                                next.sections.map { mapOf("label" to it.label, "items" to it.items.joinToString("\u0001")) },
+                            ),
+                        ),
+                    )
+                    (patch.sortOrder ?: order[code])?.let { put("sort_order", JsonPrimitive(it.toString())) }
+                },
+            ).toString(),
+            id = "stage:$code",
+        )
+        return "ok=true\ncode=$code\nname=${next.name}\nsections=${next.sections.size}"
+    }
+
+    /** 从事实库读出得分点覆盖层：内置启停 + 自建点 + 被停用的自建点。 */
+    private suspend fun scoreOverrides(sessionId: String): RedTeamScorePointEdit.Overrides {
+        val rows = recent(sessionId, MAX_FACTS_SCANNED).filter { it.kind == "score_point" }
+        val builtinEnabled = mutableMapOf<String, Boolean>()
+        val custom = mutableListOf<RedTeamScorePointEdit.CustomPoint>()
+        val disabledCustom = mutableSetOf<String>()
+        rows.forEach { fact ->
+            val payload = payloadOf(fact)
+            val code = payload["code"]?.jsonPrimitive?.contentOrNull ?: fact.id
+            val enabled = payload["enabled"]?.jsonPrimitive?.contentOrNull != "false"
+            val builtin = RedTeamScoring.POINTS_BY_CODE.containsKey(code)
+            if (builtin) {
+                builtinEnabled[code] = enabled
+            } else {
+                custom += RedTeamScorePointEdit.CustomPoint(
+                    code = code,
+                    name = payload["name"]?.jsonPrimitive?.contentOrNull ?: fact.title,
+                    category = payload["category"]?.jsonPrimitive?.contentOrNull,
+                    points = payload["points"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 0,
+                    description = payload["description"]?.jsonPrimitive?.contentOrNull,
+                    enabled = enabled,
+                )
+                if (!enabled) disabledCustom += code
+            }
+        }
+        return RedTeamScorePointEdit.Overrides(builtinEnabled, custom, disabledCustom)
+    }
+
+    /**
+     * 保存得分点。
+     *
+     * 内置点只落「启用/停用」——分值由规则锁定（同一条规则的上限按组内累计，
+     * 单独改分值会让一条命中吃掉整组上限）。要自定义分值请新增一个点。
+     */
+    private suspend fun saveScorePoint(sessionId: String, args: JsonObject): String {
+        requireBoundRedTeam(sessionId)
+        val existing = scoreOverrides(sessionId)
+        val takenCodes = RedTeamScoring.POINTS_BY_CODE.keys + existing.custom.mapNotNull { it.code }
+        val requestedCode = args["code"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+        val (result, apply) = RedTeamScorePointEdit.save(
+            existingCode = requestedCode,
+            name = args["name"]?.jsonPrimitive?.contentOrNull,
+            enabled = args["enabled"]?.jsonPrimitive?.contentOrNull?.toBooleanStrictOrNull(),
+            category = args["category"]?.jsonPrimitive?.contentOrNull,
+            points = args["points"]?.jsonPrimitive?.contentOrNull?.toIntOrNull(),
+            description = args["description"]?.jsonPrimitive?.contentOrNull,
+            takenCodes = takenCodes,
+        )
+        val next = existing.apply()
+        val entry = next.custom.firstOrNull { it.code == result.code }
+        val enabled = next.builtinEnabled[result.code]
+            ?: entry?.enabled
+            ?: true
+        record(
+            sessionId = sessionId,
+            kind = RedTeamFactKind.SCORE_POINT,
+            title = entry?.name ?: (RedTeamScoring.POINTS_BY_CODE[result.code]?.name ?: result.code),
+            payload = JsonObject(
+                buildMap {
+                    put("code", JsonPrimitive(result.code))
+                    put("enabled", JsonPrimitive(enabled.toString()))
+                    entry?.let {
+                        put("name", JsonPrimitive(it.name))
+                        put("points", JsonPrimitive(it.points.toString()))
+                        it.category?.let { c -> put("category", JsonPrimitive(c)) }
+                        it.description?.let { d -> put("description", JsonPrimitive(d)) }
+                    }
+                },
+            ).toString(),
+            id = "score_point:${result.code}",
+        )
+        return buildString {
+            appendLine("ok=true")
+            appendLine("code=${result.code}")
+            appendLine("builtin=${result.builtin}")
+            appendLine("updated=${result.updated}")
+            appendLine("enabled=$enabled")
+            if (result.lockedFields.isNotEmpty()) appendLine("locked_fields=${result.lockedFields.joinToString(",")}")
+            appendLine("note=${result.note}")
+        }
+    }
+
+    /** 删除自建得分点。内置点不允许删除：删掉会让规则表缺一条、报告少一类成果。 */
+    private suspend fun deleteScorePoint(sessionId: String, args: JsonObject): String {
+        requireBoundRedTeam(sessionId)
+        val code = args["code"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: args["id"]?.jsonPrimitive?.contentOrNull
+        ?: error("delete_score_point 需要 code")
+        RedTeamScorePointEdit.assertDeletable(code)
+        val factId = "score_point:$code"
+        val existed = recent(sessionId, MAX_FACTS_SCANNED).any { it.kind == "score_point" && it.id == factId }
+        require(existed) { "score point not found: $code" }
+        facts.deleteById(sessionId, factId)
+        return "ok=true\ndeleted=$code"
     }
 
     /**
