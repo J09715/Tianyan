@@ -6,6 +6,7 @@ import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -21,11 +22,13 @@ import top.tianyan.app.core.model.RedTeamReportReplay
 import top.tianyan.app.core.model.RedTeamPreflightReport
 import top.tianyan.app.core.model.RedTeamRole
 import top.tianyan.app.core.model.RedTeamSettings
+import top.tianyan.app.core.model.RedTeamStage
 import top.tianyan.app.core.model.RedTeamValidate
 import top.tianyan.app.core.model.RedTeamSkillHealth
 import top.tianyan.app.core.model.RedTeamSkillAvailability
 import top.tianyan.app.core.model.RedTeamScoreCatalog
 import top.tianyan.app.core.model.RedTeamScoring
+import top.tianyan.app.core.model.ScoredHit
 import top.tianyan.app.core.model.ScoreHit
 import top.tianyan.app.harness.events.HarnessEvent
 import top.tianyan.app.harness.events.HarnessEventBus
@@ -227,8 +230,20 @@ class RedTeamCoordinator @Inject constructor(
                     // 更新类动作强制要求 id：没有 id 就成了「再插一条」，会污染图谱与去重。
                     val isUpdate = action.endsWith("_update")
                     val explicitId = args["id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+                    var normalizedStageCode: String? = null
                     require(!isUpdate || explicitId != null) { "$action requires id" }
                     // 结构化字段原样落库，保留上游 schema（ip/port/service/fingerprint/provenance/relation…）。
+                    // 攻击链步骤的阶段：非法 code 退回老 stage 兜底并告警，而不是静默丢桶。
+                    val stageWarning = if (kind == RedTeamFactKind.ATTACK_STEP) {
+                        val resolved = RedTeamStage.resolveChainStage(
+                            stageCode = args["stage_code"]?.jsonPrimitive?.contentOrNull,
+                            legacyStage = args["stage"]?.jsonPrimitive?.contentOrNull,
+                        )
+                        normalizedStageCode = resolved.code
+                        resolved.warning
+                    } else {
+                        null
+                    }
                     val fact = record(
                         sessionId = sessionId,
                         kind = kind,
@@ -239,10 +254,20 @@ class RedTeamCoordinator @Inject constructor(
                             ?: args["domain"]?.jsonPrimitive?.contentOrNull,
                         severity = args["severity"]?.jsonPrimitive?.contentOrNull,
                         status = args["status"]?.jsonPrimitive?.contentOrNull ?: "observed",
-                        payload = JsonObject(args.filterKeys { it !in CONTROL_KEYS }).toString(),
+                        // 归一后的阶段码要落库：报告侧按它分桶，塞原始非法值会让这一步落在任何阶段之外。
+                        payload = JsonObject(
+                            args.filterKeys { it !in CONTROL_KEYS }.toMutableMap().apply {
+                                if (normalizedStageCode != null) put("stage_code", JsonPrimitive(normalizedStageCode))
+                            },
+                        ).toString(),
                         id = explicitId ?: UUID.randomUUID().toString(),
                     )
-                    "已保存 ${fact.kind} 事实 ${fact.id}"
+                    buildString {
+                        append("已保存 ${fact.kind} 事实 ${fact.id}")
+                        normalizedStageCode?.takeIf { kind == RedTeamFactKind.ATTACK_STEP }
+                            ?.let { append(" · 阶段 $it") }
+                        stageWarning?.let { appendLine().append("warning=").append(it) }
+                    }
                 }
                 "fact_query", "asset_query", "vuln_query", "credential_list", "access_list", "webshell_list", "tunnel_list", "chain", "attack_chain", "attack_file_list", "score_list", "poc_search", "poc_list", "report_targets", "report" -> {
                     val session = requireNotNull(sessions.findById(sessionId)) { "session not found" }
@@ -735,11 +760,22 @@ class RedTeamCoordinator @Inject constructor(
         val board = RedTeamScoring.applyScoreCaps(hits)
         val byCode = board.items.groupBy { it.hit.code }
 
+        // 演练方按这条推进线读报告，所以分桶必须在这里算，不能让每个消费方各推一次。
+        val stages = stageBuckets(sessionId, board.items)
         return buildString {
             appendLine("ok=true")
             appendLine("target=${session.redTeamTarget.orEmpty()}")
             appendLine("hits=${board.items.size} capped=${board.cappedCount}")
             appendLine("total=${board.totalPoints}")
+            appendLine()
+            appendLine("## 阶段进度")
+            RedTeamStage.DEFAULT_STAGES.forEach { stage ->
+                val bucket = stages[stage.code]
+                val points = bucket?.sumOf { it.points } ?: 0
+                val count = bucket?.size ?: 0
+                val unscoredNote = if (stage.scored == 0) " · 前置阶段不计分" else ""
+                appendLine("- ${stage.name}（${stage.code}）$count 条 · $points 分$unscoredNote")
+            }
             appendLine()
             appendLine("## 计分明细")
             byCode.forEach { (code, items) ->
@@ -809,6 +845,7 @@ class RedTeamCoordinator @Inject constructor(
                     systemKey = payload?.get("system_key")?.jsonPrimitive?.contentOrNull,
                     ipVersion = payload?.get("ip_version")?.jsonPrimitive?.contentOrNull?.toIntOrNull(),
                     dataScale = payload?.get("data_scale")?.jsonPrimitive?.contentOrNull,
+                    stageCode = payload?.get("stage_code")?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
                     multiplier = RedTeamScoring
                         .scoreMultiplierOf(
                             payload?.get("ip_version")?.jsonPrimitive?.contentOrNull?.toIntOrNull(),
@@ -817,6 +854,31 @@ class RedTeamCoordinator @Inject constructor(
                         ).multiplier,
                 )
             }
+
+
+    /**
+     * 把命中按作战阶段分桶。阶段的资产归属需要回查资产事实，所以这一步要读库。
+     *
+     * 归属口径与 [RedTeamStage.scoreStageOf] 完全一致：显式 stage_code > 类型特判 >
+     * 资产内外网 > target 地址。资产事实不存在时退到 target 推断，而不是直接算成互联网侧。
+     */
+    private suspend fun stageBuckets(sessionId: String, items: List<ScoredHit>): Map<String, List<ScoredHit>> {
+        val assetTargets = recent(sessionId, MAX_FACTS_SCANNED)
+            .filter { it.kind == "asset" }
+            .associate { fact -> fact.id to (fact.target ?: fact.title) }
+        return items.groupBy { scored ->
+            val scope = scored.hit.assetId
+                ?.let { assetTargets[it.toString()] }
+                ?.let { RedTeamIpUtils.scopeOfIp(it.substringBefore('/')) }
+                ?.takeIf { it == "internal" || it == "external" }
+            RedTeamStage.scoreStageOf(
+                stageCode = scored.hit.stageCode,
+                hitCode = scored.hit.code,
+                assetScope = scope,
+                target = scored.hit.target,
+            )
+        }
+    }
 
     /** 事实 id 是字符串；评分引擎按下标比较先后，这里映射成稳定且单调的数值键。 */
     private fun stableId(id: String): Long =
