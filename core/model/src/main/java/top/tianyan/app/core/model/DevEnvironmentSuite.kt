@@ -193,28 +193,47 @@ object BuiltinPluginBundles {
         val allComponents = bundles.flatMap { it.components }.filter { it.id in selectedComponentIds }
         val allAptPackages = (baseRequiredPackages + allComponents.flatMap { it.aptPackages }).distinct()
 
+        // Runtime configures domestic mirrors (aliyun default). Keep apt
+        // retries bounded so a slow mirror does not stall the whole suite.
+        // ForceIPv4：手机 IPv6 半残时 apt 静默干等的头号元凶；Languages=en 跳过翻译文件。
+        // 提到最前面：依赖自愈步与批量安装步共用同一份选项，避免两处漂移。
+        val aptOpts = "-o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::ForceIPv4=true -o Acquire::Languages=en"
+
         val steps = mutableListOf<String>()
         // 1. dpkg 锁与环境自愈
         steps.add("mkdir -p /etc/dpkg/dpkg.cfg.d /usr/bin /usr/sbin /usr/lib 2>/dev/null || true")
         steps.add("printf 'force-unsafe-io\\nforce-overwrite\\n' > /etc/dpkg/dpkg.cfg.d/tianyan-proot 2>/dev/null || true")
         steps.add("rm -rf /var/lib/dpkg/updates/* /var/lib/dpkg/lock* /var/lib/apt/lists/lock /var/cache/apt/archives/lock /usr/bin/*.dpkg-new /usr/sbin/*.dpkg-new /usr/lib/*.dpkg-new 2>/dev/null || true")
-        // A previously interrupted unzip/java-wrappers transaction can never
-        // complete in PRoot because dpkg cannot chown zipinfo.dpkg-new. These
-        // optional helpers are not needed: the APK supplies its own JAR-backed
-        // unzip command and setup_android_core.sh links it into PATH.
-        steps.add("DEBIAN_FRONTEND=noninteractive dpkg --remove --force-remove-reinstreq --force-depends unzip java-wrappers 2>/dev/null || true")
+        // 清理被中断的 unzip 事务：PRoot 下 dpkg 无法 chown zipinfo.dpkg-new，
+        // 这个半装状态会让后续 apt 事务永远无法完成。unzip 本身不需要——
+        // APK 自带 JAR 实现的 unzip，setup_android_core.sh 会把它链进 PATH。
+        //
+        // 但 java-wrappers 不能一起删：安装列表里的 apktool 依赖 default-jre，
+        // 后者经 java-common 拉入 java-wrappers。用 --force-depends 强删它，
+        // dpkg 会留下「apktool 已装、但它依赖的 java-wrappers 没了」这种状态，
+        // 紧接着的 apt-get install 要么被迫重装 java-wrappers（等于白删），
+        // 要么直接以 Unmet dependencies 失败——这正是「开发套件装不上」的典型表现。
+        // 半装的 java-wrappers 由下面的 --configure -a 修复，而不是删掉。
+        steps.add("DEBIAN_FRONTEND=noninteractive dpkg --remove --force-remove-reinstreq --force-depends unzip 2>/dev/null || true")
         steps.add("DEBIAN_FRONTEND=noninteractive dpkg --configure -a 2>/dev/null || true")
+        // 修复残留的不满足依赖：上一步的 --configure 可能只修好一部分，
+        // 这里显式收敛一次，避免后面的 install 直接撞上 Unmet dependencies。
+        steps.add("DEBIAN_FRONTEND=noninteractive apt-get $aptOpts -f install -y --no-install-recommends 2>/dev/null || true")
 
         // 2. 批量聚合 APT 安装（仅执行 1 次 update 和 1 次 install；
         //    整批失败时降级为 --ignore-missing，避免个别发行版缺包导致全部装不上）
         if (allAptPackages.isNotEmpty()) {
             val packageArg = allAptPackages.joinToString(" ")
-            // Runtime configures domestic mirrors (aliyun default). Keep apt
-            // retries bounded so a slow mirror does not stall the whole suite.
-            // ForceIPv4：手机 IPv6 半残时 apt 静默干等的头号元凶；Languages=en 跳过翻译文件。
-            val aptOpts = "-o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::ForceIPv4=true -o Acquire::Languages=en"
             steps.add("DEBIAN_FRONTEND=noninteractive apt-get $aptOpts update -y || true")
-            steps.add("DEBIAN_FRONTEND=noninteractive apt-get $aptOpts install -y --no-install-recommends $packageArg || DEBIAN_FRONTEND=noninteractive apt-get $aptOpts -f install -y --no-install-recommends && DEBIAN_FRONTEND=noninteractive apt-get $aptOpts install -y --no-install-recommends $packageArg")
+            // 回落链必须显式分组：`A || B && C` 在 sh 里解析成 `A || (B && C)`，
+            // B（-f install 修依赖）一失败 C（重试主安装）就永远不会执行 ——
+            // 也就是说「修完依赖再重试」这条恢复路径，恰好在该用的时候是死的。
+            // 改成 `A || { B && C; }`：修依赖成功才重试，且整组退出码正确冒泡。
+            steps.add(
+                "DEBIAN_FRONTEND=noninteractive apt-get $aptOpts install -y --no-install-recommends $packageArg || " +
+                    "{ DEBIAN_FRONTEND=noninteractive apt-get $aptOpts -f install -y --no-install-recommends && " +
+                    "DEBIAN_FRONTEND=noninteractive apt-get $aptOpts install -y --no-install-recommends $packageArg; }",
+            )
         }
 
         // 3. Debian/Ubuntu 将 fd、bat 分别命名为 fdfind、batcat；统一暴露常用命令名。
