@@ -7,7 +7,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import top.tianyan.app.core.database.HarnessSessionRepository
@@ -32,6 +35,7 @@ import top.tianyan.app.core.model.RedTeamScoring
 import top.tianyan.app.core.model.ScorePoint
 import top.tianyan.app.core.model.ScoredHit
 import top.tianyan.app.core.model.ScoreHit
+import top.tianyan.app.core.model.RedTeamNucleiIndex
 import top.tianyan.app.harness.events.HarnessEvent
 import top.tianyan.app.harness.events.HarnessEventBus
 
@@ -46,6 +50,18 @@ class RedTeamCoordinator @Inject constructor(
     /** 落盘根目录的就地覆盖（测试用，避免写到真实 home）。 */
     @Volatile
     var filesRootOverride: String? = null
+
+    /** 模板库读盘接缝（测试用）；为空时走真实文件系统。 */
+    @Volatile
+    var templateFsOverride: RedTeamNucleiIndex.TemplateFs? = null
+
+    /** 连通性实测接缝（测试用）；为空时真发网络请求。 */
+    @Volatile
+    var sessionProbeOverride: RedTeamSessionProbe? = null
+
+    /** 模板索引缓存：目录 + 构建时间 / 索引本体。13k 个 yaml 不能每次调用重建。 */
+    private val templateCache = java.util.concurrent.atomic.AtomicReference<Pair<String, Long>?>(null)
+    private val templateIndexCache = java.util.concurrent.atomic.AtomicReference<RedTeamNucleiIndex.Index?>(null)
 
     /** 设置文件位置；与事实库同根，随库一起备份迁移。 */
     private val settingsRoot: String
@@ -322,8 +338,12 @@ class RedTeamCoordinator @Inject constructor(
                     if (action == "report") {
                         buildReport(sessionId, session.redTeamTarget.orEmpty(), items)
                     } else {
-                        items.joinToString("\n") { "${it.kind} | ${it.title} | ${it.severity ?: "-"} | ${it.status} | ${it.target.orEmpty()}" }
-                            .ifBlank { "当前会话暂无事实记录" }
+                        val listed = items.joinToString("\n") {
+                            "${it.kind} | ${it.title} | ${it.severity ?: "-"} | ${it.status} | ${it.target.orEmpty()}"
+                        }.ifBlank { "当前会话暂无事实记录" }
+                        // 上游 pocSearch 一次把「本机沉淀的 POC」与「本机 nuclei 模板」都返回，省一轮往返。
+                        // 只列 POC 会让人以为本机没有现成模板，白白多跑一次互联网检索。
+                        if (action == "poc_search") "$listed\n${templateHits(args)}" else listed
                     }
                 }
                 "asset_graph" -> assetGraph(sessionId, args)
@@ -337,6 +357,15 @@ class RedTeamCoordinator @Inject constructor(
                 // 存量评估/并发验证：只登记结论，真正的主动探测仍需走已审批的 base/process。
                 "asset_assess" -> assessAsset(sessionId, args)
                 "asset_test" -> testAsset(sessionId, args)
+                "active_tests" -> activeTests(sessionId, args)
+                "test_stats" -> testStats(sessionId)
+                "console_digest" -> consoleDigest(sessionId)
+                "import_bundle" -> importBundle(sessionId, args)
+                "template_search" -> templateSearch(sessionId, args)
+                "template_stats" -> templateStats(sessionId)
+                "probe_sessions" -> probeSessions(sessionId, args)
+                "snapshot" -> snapshot(sessionId)
+                "bootstrap" -> bootstrap(sessionId)
                 "group_slot" -> groupSlot(sessionId)
                 "domain_index" -> domainIndex(sessionId)
                 "asset_stats" -> assetStats(sessionId)
@@ -345,6 +374,10 @@ class RedTeamCoordinator @Inject constructor(
                 "attack_path" -> attackPath(sessionId, args)
                 "asset_get", "poc_get", "vuln_get" -> singleFact(sessionId, args)
                 "poc_use" -> usePoc(sessionId, args)
+                "vuln_stats" -> vulnStats(sessionId)
+                "http_evidence_list" -> httpEvidenceList(sessionId, args)
+                "score_chain" -> scoreChain(sessionId, args)
+                "poc_stats" -> pocStats(sessionId)
                 "role_prompt" -> rolePrompt(sessionId, args)
                 "role_prompt_reset" -> rolePromptReset(sessionId, args)
                 "sessions" -> "当前会话 ${sessionId}（红队模式的目标与事实均为会话级，不跨会话共享）"
@@ -643,6 +676,707 @@ class RedTeamCoordinator @Inject constructor(
      *   · `surface` 是**覆盖式**的剩余攻击面（只关心当前还剩什么）。
      * `blocked=true` 时封禁计数 +1，用于判断该资产是否已被 WAF 盯上。
      */
+    /** 资产测试状态的合法取值；未记录时按 `untested` 计。 */
+    private val assetTestStatuses = listOf("untested", "testing", "tested", "blocked", "abandoned", "no_surface")
+
+    /** 一台资产的测试状态：没记过就是 `untested`（与上游 `COALESCE(test_status,'untested')` 一致）。 */
+    private fun testStatusOf(fact: RedTeamFactEntity): String =
+        payloadOf(fact)["test_status"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: "untested"
+
+    /**
+     * 待测队列的排序：先按易打性分档，再按开放端口数从多到少，最后按 IP 升序。
+     *
+     * 分档用的是 `asset_assess` 写下的 `priority`；没评估过的排最后，
+     * 否则队列会把「还没看过的机器」顶到前面，与「先打容易打的」这个意图相反。
+     */
+    private fun queueRank(fact: RedTeamFactEntity): Triple<Int, Int, Long> {
+        val payload = payloadOf(fact)
+        val tier = when (payload["priority"]?.jsonPrimitive?.contentOrNull?.lowercase()) {
+            "high" -> 0
+            "medium" -> 1
+            "low" -> 2
+            else -> 3
+        }
+        val ports = payload["open_ports"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 0
+        return Triple(tier, -ports, RedTeamIpUtils.ipToInt(fact.target ?: "") ?: Long.MAX_VALUE)
+    }
+
+    /**
+     * 批量导入一次扫描的成果：分段、资产（含域名/端口/服务/指纹）、关系边。
+     *
+     * 身份键取 `id`/`asset_id`/`ip` 并落成 `asset:<键>`：上游按 (ip,…) 幂等 upsert，
+     * 同一份扫描导两次不该变成两份资产。重复导入保留原 `createdAt`（等价于上游的 first_seen）。
+     *
+     * 上游还有 scan_run 表记录扫描批次；本移植没有这张表，改为把 `tool` 落到资产上，
+     * 批次元信息（argv 等）不落库——这一条是明确的分歧，不是遗漏。
+     *
+     * 批量写入只发一条汇总事件：逐行 emit 会把事件总线冲爆，而面板只需要知道「有变化」。
+     */
+    private suspend fun importBundle(sessionId: String, args: JsonObject): String {
+        requireBoundRedTeam(sessionId)
+        val raw = args["bundle"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+            ?: JsonObject(args.filterKeys { it !in CONTROL_KEYS }).toString()
+        val bundle = runCatching { Json.parseToJsonElement(raw).jsonObject }
+            .getOrElse { error("import_bundle 的 bundle 必须是 JSON 对象：${it.message}") }
+
+        val existing = recent(sessionId, MAX_FACTS_SCANNED).associateBy { it.id }
+        val now = System.currentTimeMillis()
+        val scanTool = bundle["scan"]?.let { runCatching { it.jsonObject["tool"]?.jsonPrimitive?.contentOrNull }.getOrNull() }
+
+        var segments = 0
+        var assets = 0
+        var ports = 0
+        var services = 0
+        var fingerprints = 0
+        var names = 0
+        var edges = 0
+
+        bundle["segments"]?.let { runCatching { it.jsonArray }.getOrNull() }?.forEach { segments++ }
+
+        val edgeRows = mutableListOf<RedTeamFactEntity>()
+
+        for (element in bundle["assets"]?.let { runCatching { it.jsonArray }.getOrNull() }.orEmpty()) {
+            val a = runCatching { element.jsonObject }.getOrNull() ?: continue
+            val key = listOf("id", "asset_id", "ip").firstNotNullOfOrNull { k ->
+                a[k]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
+            } ?: error("import_bundle: 资产缺少 id/asset_id/ip")
+            val factId = "asset:$key"
+            val prior = existing[factId]
+            val priorPayload = prior?.let { payloadOf(it) } ?: JsonObject(emptyMap())
+
+            fun arr(name: String) = a[name]?.let { runCatching { it.jsonArray }.getOrNull() }.orEmpty()
+            val nameRows = arr("names")
+            val portRows = arr("ports")
+            val serviceRows = arr("services")
+            val fingerprintRows = arr("fingerprints")
+            names += nameRows.size
+            ports += portRows.size
+            services += serviceRows.size
+            fingerprints += fingerprintRows.size
+
+            val merged = JsonObject(
+                priorPayload.toMutableMap().apply {
+                    put(
+                        "provenance",
+                        JsonPrimitive(
+                            a["provenance"]?.jsonPrimitive?.contentOrNull
+                                ?: priorPayload["provenance"]?.jsonPrimitive?.contentOrNull
+                                ?: "active",
+                        ),
+                    )
+                    (a["tool"]?.jsonPrimitive?.contentOrNull ?: scanTool)?.let { put("tool", JsonPrimitive(it)) }
+                    a["primary_name"]?.let { put("primary_name", it) }
+                    if (nameRows.isNotEmpty()) put("names", JsonArray(nameRows))
+                    if (portRows.isNotEmpty()) put("ports", JsonArray(portRows))
+                    if (serviceRows.isNotEmpty()) put("services", JsonArray(serviceRows))
+                    if (fingerprintRows.isNotEmpty()) put("fingerprints", JsonArray(fingerprintRows))
+                    // 待测队列按开放端口数排序，所以要把这个数固化下来，而不是每次遍历 payload。
+                    if (portRows.isNotEmpty()) {
+                        val open = portRows.count { row ->
+                            val state = runCatching { row.jsonObject["state"]?.jsonPrimitive?.contentOrNull }.getOrNull()
+                            state == null || state == "open"
+                        }
+                        put("open_ports", JsonPrimitive(open.toString()))
+                    }
+                },
+            )
+
+            facts.upsert(
+                RedTeamFactEntity(
+                    sessionId = sessionId,
+                    id = factId,
+                    kind = "asset",
+                    title = a["title"]?.jsonPrimitive?.contentOrNull ?: prior?.title ?: key,
+                    target = a["ip"]?.jsonPrimitive?.contentOrNull ?: prior?.target,
+                    severity = prior?.severity,
+                    status = prior?.status ?: "observed",
+                    payload = merged.toString(),
+                    createdAt = prior?.createdAt ?: now,
+                    updatedAt = now,
+                ),
+            )
+            assets++
+
+            // 域名 → 资产 的 resolves 边：上游对每个 name 都补这条，
+            // 少了它 domain_index 与攻击路径就看不到「哪个域名指向哪台机器」。
+            nameRows.forEach { row ->
+                val name = runCatching { row.jsonObject["name"]?.jsonPrimitive?.contentOrNull }.getOrNull()
+                    ?.takeIf { it.isNotBlank() } ?: return@forEach
+                edgeRows += edgeFact(sessionId, name, factId, "resolves", now)
+            }
+        }
+
+        for (element in bundle["edges"]?.let { runCatching { it.jsonArray }.getOrNull() }.orEmpty()) {
+            val e = runCatching { element.jsonObject }.getOrNull() ?: continue
+            val src = e["src_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+                ?: e["src"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+                ?: continue
+            val dst = e["dst_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+                ?: e["dst"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+                ?: continue
+            edgeRows += edgeFact(sessionId, src, dst, e["relation"]?.jsonPrimitive?.contentOrNull ?: "related", now)
+        }
+
+        edgeRows.distinctBy { it.id }.forEach {
+            facts.upsert(it)
+            edges++
+        }
+
+        // 汇总一条事件即可：面板只需要知道「这个靶标有变化」，逐行 emit 会冲爆总线。
+        events.emit(HarnessEvent.RedTeamFactChanged(sessionId, now, "import_bundle", "import", "ok"))
+        return buildString {
+            appendLine("ok=true")
+            appendLine("segments=$segments")
+            appendLine("assets=$assets")
+            appendLine("ports=$ports")
+            appendLine("services=$services")
+            appendLine("fingerprints=$fingerprints")
+            appendLine("names=$names")
+            appendLine("edges=$edges")
+        }
+    }
+
+    /**
+     * 本机 nuclei 模板检索：知识库里没有、但本机其实已有现成 POC 时先查它，能省掉一轮互联网检索。
+     *
+     * 索引只抽 path/name/severity/tags 四个检索字段，并按「目录一致 + 7 天内」缓存：
+     * 13k 个 yaml 全量重建每次要读几千次盘，直接卡死工具调用。
+     * 目录按上游顺序找（靶标 toolkit → 用户目录 → 系统目录），一个都没有就明确说没装，不报错。
+     */
+    private fun nucleiIndex(fs: RedTeamNucleiIndex.TemplateFs): RedTeamNucleiIndex.Index {
+        val home = System.getProperty("user.home").orEmpty()
+        val dir = RedTeamNucleiIndex.pickDir(settingsRoot, home, fs)
+            ?: return RedTeamNucleiIndex.Index(null, emptyList())
+        val now = System.currentTimeMillis()
+        val stamp = templateCache.get()
+        val cached = templateIndexCache.get()
+        if (cached != null && stamp != null && cached.dir == dir &&
+            RedTeamNucleiIndex.cacheFresh(stamp.first, stamp.second, dir, now)
+        ) {
+            return cached
+        }
+        val built = RedTeamNucleiIndex.Index(dir, RedTeamNucleiIndex.buildIndex(dir, fs))
+        templateIndexCache.set(built)
+        templateCache.set(dir to now)
+        return built
+    }
+
+    private suspend fun templateSearch(sessionId: String, args: JsonObject): String {
+        requireRedTeamMode(sessionId)
+        val index = nucleiIndex(templateFsOverride ?: RedTeamNucleiIndex.fileSystemFs())
+        val limit = args["limit"]?.jsonPrimitive?.contentOrNull?.toIntOrNull()
+            ?: RedTeamNucleiIndex.DEFAULT_LIMIT
+        val result = RedTeamNucleiIndex.search(index, args["query"]?.jsonPrimitive?.contentOrNull, limit)
+        return buildString {
+            appendLine("ok=true")
+            appendLine("dir=${result.dir ?: "-"}")
+            appendLine("total=${result.total}")
+            appendLine("returned=${result.items.size}")
+            if (result.dir == null) {
+                append("未找到本机 nuclei 模板库；把模板放到 <redteam>/toolkit/nuclei-templates 或 ~/nuclei-templates 后重试。")
+            } else if (result.items.isEmpty()) {
+                append("没有匹配的模板；换个 CVE 编号、组件名或标签再试。")
+            } else {
+                result.items.forEach {
+                    appendLine("- ${it.path} | ${it.name.ifBlank { "-" }} | ${it.severity.ifBlank { "-" }} | ${it.tags.ifBlank { "-" }}")
+                }
+            }
+        }
+    }
+
+    private suspend fun templateStats(sessionId: String): String {
+        requireRedTeamMode(sessionId)
+        val index = nucleiIndex(templateFsOverride ?: RedTeamNucleiIndex.fileSystemFs())
+        val stats = RedTeamNucleiIndex.stats(index)
+        return buildString {
+            appendLine("ok=true")
+            appendLine("dir=${stats.dir ?: "-"}")
+            appendLine("total=${stats.total}")
+            appendLine("cve=${stats.cve}")
+            append(if (stats.dir == null) "本机未安装 nuclei 模板库，检索不可用。" else "索引已就绪。")
+        }
+    }
+
+    /**
+     * 会话连通性实测（上游 `probeSessions`）：对已登记的 WebShell 发 HTTP、对隧道做 TCP 连接，
+     * 把结果写回同一条事实的 `status` / `last_check` / `latency_ms` / `check_note`。
+     *
+     * 为什么值得真连：面板上「用户连不上」和智能体「以为还有通道」是同一份数据的两面，
+     * 不实测就只能靠猜。上游在 host 侧做，本移植同理。
+     *
+     * 时间戳用 epoch 毫秒（上游是 ISO 字符串）：本移植的事实表就是毫秒，
+     * 与 `console_digest` 的处理保持一致——两边都是「越大越新」，比较语义不变。
+     */
+    private suspend fun probeSessions(sessionId: String, args: JsonObject): String = withContext(Dispatchers.IO) {
+        requireBoundRedTeam(sessionId)
+        // 超时收敛到 1..20 秒：低于 1 秒在移动网络下几乎必然假离线，高于 20 秒会把工具调用拖死。
+        val timeout = (args["timeout_ms"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: DEFAULT_PROBE_TIMEOUT_MS)
+            .coerceIn(MIN_PROBE_TIMEOUT_MS, MAX_PROBE_TIMEOUT_MS)
+        val limit = (args["limit"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: MAX_PROBE_ROWS)
+            .coerceIn(1, MAX_PROBE_ROWS)
+        val probe = sessionProbeOverride ?: RedTeamSessionProbe.Network
+        val rows = recent(sessionId, MAX_FACTS_SCANNED)
+
+        val shells = mutableListOf<Triple<RedTeamFactEntity, String, Int>>()
+        rows.filter { it.kind == "webshell" }.take(limit).forEach { fact ->
+            val payload = payloadOf(fact)
+            val url = payload["url"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+                ?: fact.target?.takeIf { it.isNotBlank() }
+            if (url == null) {
+                shells += Triple(fact, "offline", 0)
+                applyProbeResult(sessionId, fact, "offline", "未登记 url，无法探测", 0)
+                return@forEach
+            }
+            val started = System.currentTimeMillis()
+            val (status, note) = probe.http(url, timeout)
+            val latency = (System.currentTimeMillis() - started).toInt()
+            applyProbeResult(sessionId, fact, status, note, latency)
+            shells += Triple(fact, status, latency)
+        }
+
+        val tunnels = mutableListOf<Triple<RedTeamFactEntity, String, Int>>()
+        rows.filter { it.kind == "tunnel" }.take(limit).forEach { fact ->
+            val listen = payloadOf(fact)["listen"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                .removePrefix("socks5://").removePrefix("https://").removePrefix("http://")
+                .trim()
+            val started = System.currentTimeMillis()
+            val parsed = parseListen(listen)
+            val (status, note) = when {
+                listen.isEmpty() -> "down" to "缺少 listen 地址，无法探测"
+                parsed == null -> "down" to "无法解析端口：$listen"
+                else -> probe.tcp(parsed.first, parsed.second, timeout)
+            }
+            val latency = (System.currentTimeMillis() - started).toInt()
+            applyProbeResult(sessionId, fact, status, note, latency)
+            tunnels += Triple(fact, status, latency)
+        }
+
+        buildString {
+            appendLine("ok=true")
+            appendLine("checked_at=${System.currentTimeMillis()}")
+            appendLine("timeout_ms=$timeout")
+            appendLine("webshells=${shells.size} online=${shells.count { it.second == "online" }}")
+            shells.forEach { (fact, status, latency) ->
+                appendLine("- ${fact.id} | ${fact.title} | $status | ${latency}ms")
+            }
+            appendLine("tunnels=${tunnels.size} active=${tunnels.count { it.second == "active" }}")
+            tunnels.forEach { (fact, status, latency) ->
+                appendLine("- ${fact.id} | ${fact.title} | $status | ${latency}ms")
+            }
+            if (shells.isEmpty() && tunnels.isEmpty()) {
+                append("没有已登记的 WebShell 或隧道；先用 webshell_add / tunnel_add 登记再实测。")
+            }
+        }
+    }
+
+    /**
+     * `listen` 解析：`host:port`；没有 host 时按上游回落到 127.0.0.1（本地转发最常见），
+     * 只有裸端口也认。端口非法返回 null，由调用方给出明确原因而不是硬编一个默认端口。
+     */
+    private fun parseListen(listen: String): Pair<String, Int>? {
+        val idx = listen.lastIndexOf(':')
+        val host = if (idx > 0) listen.substring(0, idx).trim().trim('[', ']') else "127.0.0.1"
+        val rawPort = if (idx > 0) listen.substring(idx + 1) else listen
+        val port = rawPort.trim().toIntOrNull() ?: return null
+        if (port <= 0 || port > 65535 || host.isEmpty()) return null
+        return host to port
+    }
+
+    /** 把一次探测结果并回事实的 payload；状态机与备注要一起写，否则界面只看到一半。 */
+    private suspend fun applyProbeResult(
+        sessionId: String,
+        fact: RedTeamFactEntity,
+        status: String,
+        note: String,
+        latencyMs: Int,
+    ) {
+        val now = System.currentTimeMillis()
+        val merged = payloadOf(fact) +
+            mapOf(
+                "status" to JsonPrimitive(status),
+                "last_check" to JsonPrimitive(now.toString()),
+                "latency_ms" to JsonPrimitive(latencyMs.toString()),
+                "check_note" to JsonPrimitive(note),
+            )
+        facts.upsert(fact.copy(payload = JsonObject(merged).toString(), updatedAt = now))
+        events.emit(HarnessEvent.RedTeamFactChanged(sessionId, now, fact.id, fact.kind, status))
+    }
+
+    /**
+     * 上游 `pocSearch` 会把本机 nuclei 模板一并返回。
+     * 查询词按 `q`/`query`/`cve`/`component` 顺序取第一个非空值——
+     * 模型经常把 CVE 编号填在 `cve` 字段而不是 `q`，只认 `q` 会漏掉最常见的那种调用。
+     */
+    private suspend fun templateHits(args: JsonObject): String {
+        val query = listOf("q", "query", "cve", "component").firstNotNullOfOrNull { key ->
+            args[key]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
+        }
+        val index = nucleiIndex(templateFsOverride ?: RedTeamNucleiIndex.fileSystemFs())
+        val result = RedTeamNucleiIndex.search(index, query, POC_TEMPLATE_HITS)
+        return buildString {
+            appendLine("## 本机 nuclei 模板（dir=${result.dir ?: "-"} total=${result.total} 命中=${result.items.size}）")
+            when {
+                result.dir == null -> append("本机未安装 nuclei 模板库。")
+                query == null -> append("未给查询词；用 template_search 指定 CVE/组件/标签再查。")
+                result.items.isEmpty() -> append("没有匹配的模板。")
+                else -> result.items.forEach {
+                    appendLine("- ${it.path} | ${it.name.ifBlank { "-" }} | ${it.severity.ifBlank { "-" }}")
+                }
+            }
+        }
+    }
+
+    /**
+     * 漏洞统计（上游 `vulnStats`）：按严重级/状态分桶，外加两个「结论行」用的计数。
+     *
+     * `targetGroups` 是上游漏洞页的默认分组数（按站点/服务归并）。
+     * 不报它的话，界面上的分组数与工具返回的 total 对不上，看起来像丢了记录。
+     */
+    private suspend fun vulnStats(sessionId: String): String {
+        requireBoundRedTeam(sessionId)
+        val all = recent(sessionId, MAX_FACTS_SCANNED)
+        val vulns = all.filter { it.kind == "vulnerability" }
+        val evidenceVulnIds = all.filter { it.kind == "event" }
+            .mapNotNull { payloadOf(it)["vuln_id"]?.jsonPrimitive?.contentOrNull?.takeIf { id -> id.isNotBlank() } }
+            .toSet()
+        val bySeverity = vulns.groupingBy { it.severity ?: "unknown" }.eachCount().toSortedMap()
+        val byStatus = vulns.groupingBy { it.status }.eachCount().toSortedMap()
+        val withGained = vulns.count { payloadOf(it)["gained"]?.jsonPrimitive?.contentOrNull?.isNotBlank() == true }
+        val withEvidence = vulns.count { fact ->
+            payloadOf(fact)["evidence"]?.jsonPrimitive?.contentOrNull?.isNotBlank() == true || fact.id in evidenceVulnIds
+        }
+        val targetGroups = vulns.map { RedTeamStage.targetKey(it.target, null) }.distinct().size
+        return buildString {
+            appendLine("ok=true")
+            appendLine("total=${vulns.size}")
+            appendLine("## 按严重级")
+            bySeverity.forEach { (key, n) -> appendLine("$key=$n") }
+            appendLine("## 按状态")
+            byStatus.forEach { (key, n) -> appendLine("$key=$n") }
+            appendLine("withGained=$withGained")
+            appendLine("withEvidence=$withEvidence")
+            appendLine("targetGroups=$targetGroups")
+        }
+    }
+
+    /**
+     * HTTP 证据清单（上游 `listHttpEvidence`）：可按 `vuln_id` / `asset_id` 过滤。
+     *
+     * 默认只给摘要行（请求首行 + 响应状态），`full=true` 才附完整原始报文——
+     * 原始报文动辄几十行，默认全给会把工具输出撑爆，而大多数时候只是想确认「有没有证据」。
+     */
+    private suspend fun httpEvidenceList(sessionId: String, args: JsonObject): String {
+        requireBoundRedTeam(sessionId)
+        val vulnId = args["vuln_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+        val assetId = args["asset_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+        val limit = (args["limit"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: DEFAULT_EVIDENCE_LIMIT)
+            .coerceIn(1, HARD_MAX_EVIDENCE_LIMIT)
+        val full = args["full"]?.jsonPrimitive?.contentOrNull == "true"
+
+        val rows = recent(sessionId, MAX_FACTS_SCANNED)
+            .filter { it.kind == "event" }
+            .filter { fact ->
+                val payload = payloadOf(fact)
+                (vulnId == null || payload["vuln_id"]?.jsonPrimitive?.contentOrNull == vulnId) &&
+                    (assetId == null || payload["asset_id"]?.jsonPrimitive?.contentOrNull == assetId)
+            }
+            .sortedByDescending { it.createdAt }
+            .take(limit)
+
+        return buildString {
+            appendLine("ok=true")
+            appendLine("count=${rows.size}")
+            rows.forEach { fact ->
+                val payload = payloadOf(fact)
+                val request = payload["request"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                val status = payload["status"]?.jsonPrimitive?.contentOrNull
+                    ?: fact.status.takeIf { it != "observed" }
+                appendLine("- ${fact.id} | ${fact.title} | ${status ?: "-"} | ${fact.target ?: "-"}")
+                if (request.isNotBlank()) {
+                    if (full) {
+                        appendLine("  原始请求：")
+                        request.lines().forEach { appendLine("    $it") }
+                    } else {
+                        appendLine("  ${request.lineSequence().firstOrNull().orEmpty()}")
+                    }
+                }
+            }
+            if (rows.isEmpty()) append("没有匹配的 HTTP 证据；用 http_evidence_add 保存原始请求与响应。")
+        }
+    }
+
+    /**
+     * 计分链（上游 `scoreChain`）：每条得分点记录「靠什么动作拿到的」。
+     *
+     * 归因分三级，越靠前越可信：
+     *   ① 显式 `step_id`；② 同一得分点 + 同一资产的步骤；③ 同一资产上时间不晚于它的最近一步（标注 inferred）。
+     * 把推断与实证标开，是因为报告里「怎么拿到的」这句话要经得起复盘。
+     */
+    private suspend fun scoreChain(sessionId: String, args: JsonObject): String {
+        requireBoundRedTeam(sessionId)
+        val limit = (args["limit"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: DEFAULT_CHAIN_LIMIT)
+            .coerceIn(1, HARD_MAX_CHAIN_LIMIT)
+        val all = recent(sessionId, MAX_FACTS_SCANNED)
+        val hits = all.filter { it.kind == "score_hit" }.sortedBy { it.createdAt }.take(limit)
+        val steps = all.filter { it.kind == "attack_step" }.sortedBy { it.createdAt }
+        val assets = all.filter { it.kind == "asset" }.associateBy { it.id }
+        val vulns = all.filter { it.kind == "vulnerability" }.associateBy { it.id }
+
+        return buildString {
+            appendLine("ok=true")
+            appendLine("count=${hits.size}")
+            hits.forEach { hit ->
+                val payload = payloadOf(hit)
+                val pointId = payload["point_id"]?.jsonPrimitive?.contentOrNull
+                // 资产键：优先显式 asset_id，缺失时用记录里的目标。
+                // 本移植里资产事实常以 IP 为 id、得分点也常只写 target，
+                // 只认 asset_id 会让绝大多数记录掉进「未关联步骤」。
+                val assetKey = payload["asset_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+                    ?: hit.target
+                val explicit = payload["step_id"]?.jsonPrimitive?.contentOrNull
+                var inferred = false
+                var step = explicit?.let { id -> steps.firstOrNull { it.id == id } }
+                if (step == null && pointId != null) {
+                    step = steps.firstOrNull {
+                        payloadOf(it)["point_id"]?.jsonPrimitive?.contentOrNull == pointId && it.target == assetKey
+                    }
+                }
+                if (step == null && assetKey != null) {
+                    step = steps.lastOrNull { it.target == assetKey && it.createdAt <= hit.createdAt }
+                    inferred = step != null
+                }
+                val assetIp = assetKey?.let { key ->
+                    (assets[key] ?: assets.values.firstOrNull { it.target == key })?.target
+                }
+                val vulnTitle = payload["vuln_id"]?.jsonPrimitive?.contentOrNull?.let { vulns[it]?.title }
+                val code = payload["code"]?.jsonPrimitive?.contentOrNull ?: hit.title
+                append("- $code | ${hit.target ?: assetIp ?: "-"} | points=${payload["points"]?.jsonPrimitive?.contentOrNull ?: "-"}")
+                if (vulnTitle != null) append(" | 漏洞=$vulnTitle")
+                when {
+                    step == null -> append(" | 归因=未关联步骤")
+                    inferred -> append(" | 归因=推断（同资产最近一步：${step.title}）")
+                    else -> append(" | 归因=${step.title}")
+                }
+                appendLine()
+            }
+            if (hits.isEmpty()) append("还没有计分记录；用 score_hit 记分后这里会显示归因。")
+        }
+    }
+
+    /**
+     * 知识库统计（上游 `pocStats`）：总量、已验证数，以及按类型/来源/组件/归类/来源靶标/发现资产的分布。
+     *
+     * 面板按 `byCategory` 分组，所以这里按**数量降序**输出归类，让「哪类武器攒得最多」一眼可见。
+     */
+    private suspend fun pocStats(sessionId: String): String {
+        requireBoundRedTeam(sessionId)
+        val rows = recent(sessionId, MAX_FACTS_SCANNED).filter { it.kind == "knowledge" }
+        fun field(fact: RedTeamFactEntity, key: String): String? =
+            payloadOf(fact)[key]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+
+        val verified = rows.count { field(it, "verified") in setOf("1", "true") }
+        fun tally(key: String, fallback: String): Map<String, Int> =
+            rows.groupingBy { field(it, key) ?: fallback }.eachCount()
+                .entries.sortedByDescending { it.value }.associate { it.key to it.value }
+
+        return buildString {
+            appendLine("ok=true")
+            appendLine("total=${rows.size}")
+            appendLine("verified=$verified")
+            appendLine("## 按类型")
+            tally("kind", "poc").forEach { (key, n) -> appendLine("$key=$n") }
+            appendLine("## 按来源")
+            tally("source", "self").forEach { (key, n) -> appendLine("$key=$n") }
+            appendLine("## 按归类")
+            tally("category", "other").forEach { (key, n) -> appendLine("$key=$n") }
+            appendLine("## Top 组件")
+            tally("component", "(未标注)").entries.take(12).forEach { (key, n) -> appendLine("$key=$n") }
+            appendLine("## 来源靶标")
+            tally("engagement_name", "(未标注来源靶标)").entries.take(30).forEach { (key, n) -> appendLine("$key=$n") }
+            appendLine("## 发现资产")
+            tally("asset_target", "(未标注)").entries.take(15).forEach { (key, n) -> appendLine("$key=$n") }
+        }
+    }
+
+    /**
+     * 靶标总览（上游 `snapshot`）：元信息 + 事实统计 + 测试态 + 网段分布，一次给齐。
+     *
+     * 为什么合成一条：面板首屏与报告开头都要这几块，分三次调用会让「打开靶标」慢半拍。
+     */
+    private suspend fun snapshot(sessionId: String): String {
+        val session = requireBoundRedTeam(sessionId)
+        val all = recent(sessionId, MAX_FACTS_SCANNED)
+        val assets = all.filter { it.kind == "asset" }
+        val segments = assets.mapNotNull { segmentOf(it.target) }.groupingBy { it }.eachCount().toSortedMap()
+        return buildString {
+            appendLine("ok=true")
+            appendLine("id=$sessionId")
+            appendLine("target=${session.redTeamTarget.orEmpty()}")
+            appendLine("scope=${session.redTeamScope}")
+            appendLine("phase=${session.redTeamPhase}")
+            appendLine("facts=${all.size}")
+            appendLine("assets=${assets.size}")
+            appendLine("## 测试态")
+            assetTestStatuses.forEach { status -> appendLine("$status=${assets.count { testStatusOf(it) == status }}") }
+            appendLine("## 网段（${segments.size}）")
+            segments.forEach { (cidr, count) -> appendLine("- $cidr assets=$count") }
+        }
+    }
+
+    /**
+     * 面板首屏（上游 `bootstrap`）：数据根目录 + 当前靶标 + 可选靶标清单。
+     *
+     * 本移植的「靶标」就是红队会话，所以 `current` 取当前会话；
+     * 上游那是一个可切换的指针文件，本移植用会话选择代替——这一条是明确的分歧，不是遗漏。
+     */
+    private suspend fun bootstrap(sessionId: String): String {
+        val session = requireNotNull(sessions.findById(sessionId)) { "session not found" }
+        require(session.redTeamMode == "red_team") { "red-team mode is not enabled for this session" }
+        val all = sessions.listAll().filter { it.redTeamMode == "red_team" }
+        return buildString {
+            appendLine("ok=true")
+            appendLine("root=$settingsRoot")
+            appendLine("current=$sessionId")
+            appendLine("engagements=${all.size}")
+            all.forEach { appendLine("- ${it.id} | ${it.redTeamTarget ?: "-"} | ${it.redTeamPhase}") }
+        }
+    }
+
+    /** 关系边事实：id 由两端与关系确定，重复导入不会堆出重复边。 */
+    private fun edgeFact(sessionId: String, src: String, dst: String, relation: String, now: Long): RedTeamFactEntity =
+        RedTeamFactEntity(
+            sessionId = sessionId,
+            id = "edge:$src->$dst:$relation",
+            kind = "edge",
+            // domain_index 用 title 里是否含 "resolves" 来筛解析关系，所以关系要写进标题。
+            title = "$src $relation $dst",
+            target = dst,
+            severity = null,
+            status = "observed",
+            payload = JsonObject(
+                mapOf(
+                    "src_id" to JsonPrimitive(src),
+                    "dst_id" to JsonPrimitive(dst),
+                    "relation" to JsonPrimitive(relation),
+                ),
+            ).toString(),
+            createdAt = now,
+            updatedAt = now,
+        )
+
+    /**
+     * 控制台「未读」摘要：每个页签给一个「条数 + 最近一条时间」的轻量指针。
+     *
+     * 面板拿它跟本地记住的上次查看状态比：有新条数、或最新时间晚于上次查看，就在页签上点一个红点；
+     * 用户点开该页签后把当前值记为已读，红点消失。**只读、只数数**，不做任何重活。
+     *
+     * 时间戳用 epoch 毫秒（本移植的事实表就是毫秒），上游是 ISO 字符串——
+     * 两边都是「越大越新」，比较语义一致，故不再做字符串转换。
+     */
+    private suspend fun consoleDigest(sessionId: String): String {
+        requireBoundRedTeam(sessionId)
+        val all = recent(sessionId, MAX_FACTS_SCANNED)
+        val of = { kind: String -> all.filter { it.kind == kind } }
+        val latest = { rows: List<RedTeamFactEntity> -> rows.maxOfOrNull { it.updatedAt } }
+
+        data class Pointer(val count: Int, val at: Long?)
+        val assets = of("asset")
+        val steps = of("attack_step")
+        val hits = of("score_hit")
+        val sessions = of("webshell") + of("tunnel")
+        val pointers = linkedMapOf(
+            "assets" to Pointer(assets.size, latest(assets)),
+            "testing" to Pointer(
+                assets.count { testStatusOf(it) != "untested" },
+                latest(assets.filter { testStatusOf(it) != "untested" }),
+            ),
+            // 「智能体」页签看的是"谁在执行"：用攻击步骤的最新动作当指针
+            "agents" to Pointer(steps.size, latest(steps)),
+            "sessions" to Pointer(sessions.size, latest(sessions)),
+            "findings" to Pointer(of("vulnerability").size, latest(of("vulnerability"))),
+            "chain" to Pointer(steps.size, latest(steps)),
+            "scores" to Pointer(hits.size, latest(hits)),
+            "report" to Pointer(hits.size, latest(hits)),
+            "attackfiles" to Pointer(of("attack_file").size, latest(of("attack_file"))),
+            // 知识库上游是跨靶标共享的另一个库；本移植的 POC 随会话走，故按本会话计。
+            "knowledge" to Pointer(of("poc").size, latest(of("poc"))),
+            // 提示词与技能库是随包分发的静态内容：没有"新条目"一说，永不点红点。
+            "prompts" to Pointer(0, null),
+            "skills" to Pointer(0, null),
+        )
+        return buildString {
+            appendLine("ok=true")
+            appendLine("session=$sessionId")
+            pointers.forEach { (name, p) ->
+                appendLine("$name count=${p.count} at=${p.at ?: "-"}")
+            }
+        }
+    }
+
+    /** 测试态总览：按状态给资产计数。界面上的进度条与「还有几台没测」都读它。 */
+    private suspend fun testStats(sessionId: String): String {
+        requireBoundRedTeam(sessionId)
+        val assets = recent(sessionId, MAX_FACTS_SCANNED).filter { it.kind == "asset" }
+        val counts = assetTestStatuses.associateWith { status -> assets.count { testStatusOf(it) == status } }
+        return buildString {
+            appendLine("ok=true")
+            appendLine("total=${assets.size}")
+            counts.forEach { (status, n) -> appendLine("$status=$n") }
+        }
+    }
+
+    /**
+     * 三块测试视图：正在测的、最近动过的、待测队列。
+     *
+     * 「最近动过」排除正在测的，否则同一台机器会在两个区块各出现一次。
+     * 本移植没有独立的端口表，队列里的端口数取 `asset_assess` 记下的 `open_ports`，
+     * 没记过按 0 计——这会让它排在已探测的机器之后，方向是对的。
+     */
+    private suspend fun activeTests(sessionId: String, args: JsonObject): String {
+        requireBoundRedTeam(sessionId)
+        val limit = (args["limit"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: DEFAULT_ACTIVE_TESTS)
+            .coerceIn(1, HARD_MAX_ACTIVE_TESTS)
+        val assets = recent(sessionId, MAX_FACTS_SCANNED).filter { it.kind == "asset" }
+
+        val testing = assets.filter { testStatusOf(it) == "testing" }
+            .sortedWith(compareByDescending<RedTeamFactEntity> { it.updatedAt }.thenByDescending { it.id })
+            .take(limit)
+        val recentTested = assets.filter { testStatusOf(it) != "untested" && testStatusOf(it) != "testing" }
+            .sortedByDescending { it.updatedAt }
+            .take(limit)
+        val queue = assets.filter { testStatusOf(it) == "untested" }
+            .sortedWith(compareBy({ queueRank(it).first }, { queueRank(it).second }, { queueRank(it).third }))
+            .take(limit)
+        val untested = assets.count { testStatusOf(it) == "untested" }
+
+        fun line(fact: RedTeamFactEntity): String {
+            val payload = payloadOf(fact)
+            val parts = mutableListOf(
+                "id=${fact.id}",
+                "ip=${fact.target ?: "-"}",
+                "状态=${testStatusOf(fact)}",
+            )
+            payload["priority"]?.jsonPrimitive?.contentOrNull?.let { parts += "易打性=$it" }
+            payload["surface"]?.jsonPrimitive?.contentOrNull?.let { parts += "面=$it" }
+            payload["open_ports"]?.jsonPrimitive?.contentOrNull?.let { parts += "开放端口=$it" }
+            payload["blocked_count"]?.jsonPrimitive?.contentOrNull?.takeIf { it != "0" }?.let { parts += "受阻=$it" }
+            val notes = payload["test_log"]?.jsonPrimitive?.contentOrNull?.lines()?.lastOrNull { it.isNotBlank() }
+            notes?.let { parts += "最近=$it" }
+            return "- " + parts.joinToString("｜")
+        }
+
+        return buildString {
+            appendLine("ok=true")
+            appendLine("untested=$untested")
+            appendLine("## 正在测试（${testing.size}）")
+            testing.forEach { appendLine(line(it)) }
+            appendLine("## 最近测过（${recentTested.size}）")
+            recentTested.forEach { appendLine(line(it)) }
+            appendLine("## 待测队列（按易打性/端口数排序，取前 ${queue.size}）")
+            queue.forEach { appendLine(line(it)) }
+        }
+    }
+
     private suspend fun testAsset(sessionId: String, args: JsonObject): String {
         requireBoundRedTeam(sessionId)
         val assetKey = assetKeyOf(args, "asset_test")
@@ -1341,6 +2075,16 @@ class RedTeamCoordinator @Inject constructor(
         return merged.toString()
     }
 
+    /**
+     * 只要求红队模式，不要求已绑靶标：本机模板库检索与靶标无关，
+     * 逼着先 bind 才能查模板只会让「还没定目标先摸家底」这一步做不了。
+     */
+    private suspend fun requireRedTeamMode(sessionId: String) {
+        require(sessionId.isNotBlank()) { "sessionId is required" }
+        val session = requireNotNull(sessions.findById(sessionId)) { "session not found" }
+        require(session.redTeamMode == "red_team") { "red-team mode is not enabled for this session" }
+    }
+
     private suspend fun requireBoundSession(sessionId: String) {
         require(sessionId.isNotBlank()) { "sessionId is required" }
         val session = requireNotNull(sessions.findById(sessionId)) { "session not found" }
@@ -1401,6 +2145,25 @@ class RedTeamCoordinator @Inject constructor(
 
         /** 资产测试状态，与上游 asset_test 的 status 枚举一致。 */
         val ASSET_TEST_STATUSES = listOf("untested", "testing", "tested", "blocked", "abandoned", "no_surface")
+        val DEFAULT_ACTIVE_TESTS = 8
+        val HARD_MAX_ACTIVE_TESTS = 50
+
+        /** 连通性实测：上游默认 6 秒、收敛到 1..20 秒；单次最多探 500 条。 */
+        const val DEFAULT_PROBE_TIMEOUT_MS = 6000
+        const val MIN_PROBE_TIMEOUT_MS = 1000
+        const val MAX_PROBE_TIMEOUT_MS = 20000
+        const val MAX_PROBE_ROWS = 500
+
+        /** poc_search 附带返回的模板条数：上游 `Math.min(req.templateLimit || 20, 100)`。 */
+        const val POC_TEMPLATE_HITS = 20
+
+        /** HTTP 证据清单：上游默认 100、硬上限 500。 */
+        const val DEFAULT_EVIDENCE_LIMIT = 100
+        const val HARD_MAX_EVIDENCE_LIMIT = 500
+
+        /** 计分链：上游默认 500、硬上限 2000。 */
+        const val DEFAULT_CHAIN_LIMIT = 500
+        const val HARD_MAX_CHAIN_LIMIT = 2000
 
         /** 易打性优先级。 */
         val ASSESS_PRIORITIES = listOf("high", "medium", "low")

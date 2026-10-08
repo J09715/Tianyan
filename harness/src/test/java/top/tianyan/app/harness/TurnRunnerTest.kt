@@ -81,6 +81,40 @@ class TurnRunnerTest {
     }
 
     @Test
+    fun `empty provider response fails instead of marking the task complete`() = runBlocking {
+        val events = mutableListOf<String>()
+        val outcome = runner.run(
+            toolsEnabled = true,
+            callProvider = {
+                TurnProviderOutcome.Success(ChatResult(content = null, toolCalls = emptyList()), "")
+            },
+            persistAssistant = { events += "persisted" },
+            consumeFollowUps = { events += "follow-ups"; 0 },
+            enforceToolLimit = { calls, _ -> calls },
+            executeTools = { _, _ -> error("must not execute") },
+        )
+
+        assertEquals(TurnOutcome.Failed("模型返回了空响应；本轮未收到可展示的答复或工具调用"), outcome)
+        assertEquals(listOf("persisted"), events)
+    }
+
+    @Test
+    fun `reasoning without answer text does not complete the task`() = runBlocking {
+        val outcome = runner.run(
+            toolsEnabled = true,
+            callProvider = {
+                TurnProviderOutcome.Success(ChatResult(content = null, toolCalls = emptyList(), reasoningContent = "thinking"), "")
+            },
+            persistAssistant = {},
+            consumeFollowUps = { 0 },
+            enforceToolLimit = { calls, _ -> calls },
+            executeTools = { _, _ -> error("must not execute") },
+        )
+
+        assertEquals(TurnOutcome.Failed("模型返回了空响应；本轮未收到可展示的答复或工具调用"), outcome)
+    }
+
+    @Test
     fun `plain answer completes only after durable publication`() = runBlocking {
         val events = mutableListOf<String>()
         val outcome = runner.run(

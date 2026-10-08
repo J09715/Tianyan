@@ -135,16 +135,17 @@ class ToolExecutor @Inject constructor(
             rawOutput
         }
         linuxEnvironmentManager?.refreshIfNeeded()
+        val redactedOutput = secretRedactor.redact(
+            value = truncateOutput(finalOutput),
+            secretValues = linuxEnvironmentManager?.values?.value?.values.orEmpty(),
+            privacyMode = if (::settingsDataStore.isInitialized) runCatching { settingsDataStore.environmentPrivacyMode.first() }.getOrDefault(true) else true,
+        )
         return ToolResult(
             id = UUID.randomUUID().toString(),
             createdAt = now,
             toolCallId = toolCall.id,
             success = success,
-            output = secretRedactor.redact(
-                value = truncateOutput(finalOutput),
-                secretValues = linuxEnvironmentManager?.values?.value?.values.orEmpty(),
-                privacyMode = if (::settingsDataStore.isInitialized) runCatching { settingsDataStore.environmentPrivacyMode.first() }.getOrDefault(true) else true,
-            ),
+            output = redactedOutput.ifBlank { "工具已执行，但未返回文本输出。" },
         )
     }
 

@@ -49,6 +49,9 @@ class TurnRunner @Inject constructor(
                 "模型返回了无法解析的文本工具调用；已停止，避免把未执行的工具请求误判为完成",
             )
         }
+        if (normalized.toolCalls.isEmpty() && normalized.displayText.isBlank()) {
+            return TurnOutcome.Failed("模型返回了空响应；本轮未收到可展示的答复或工具调用")
+        }
         if (normalized.toolCalls.isEmpty()) {
             val followUpCount = consumeFollowUps()
             return if (followUpCount == 0) {

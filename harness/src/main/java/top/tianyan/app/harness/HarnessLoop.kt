@@ -1200,16 +1200,7 @@ class HarnessLoop @Inject constructor(
             }
             round++
         }
-        messageProjector.append(
-            sessId,
-            AssistantText(
-                id = newId(),
-                createdAt = now(),
-                text = "已达到最大工具轮数（$maxRounds），请简化任务或分步进行。",
-                totalMs = now() - startedAt,
-            ),
-        )
-        return RunResult.Completed
+        return RunResult.Failed("已达到最大工具轮数（$maxRounds），任务尚未确认完成；请简化任务或分步进行")
     }
 
     /** 按最新用户消息中的 @提及 过滤动态 MCP 工具，并写入能力挂载记录 */

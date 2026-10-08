@@ -20,7 +20,8 @@ object RedTeamToolSchema {
         "fact_add", "role_prompt", "role_prompt_reset",
         "sessions", "session_check", "engagement_open", "session_bind",
         "score_points", "score_point_save", "stages", "save_stage", "role_dispatch", "group_slot",
-        "asset_assess", "asset_test",
+        "asset_assess", "asset_test", "active_tests", "test_stats", "console_digest", "import_bundle",
+        "template_search", "template_stats", "probe_sessions", "snapshot", "bootstrap",
     )
 
     /**
@@ -46,6 +47,7 @@ object RedTeamToolSchema {
         "tunnel_list", "chain", "attack_chain", "attack_file_list",
         "score_list", "score_report", "poc_search", "poc_list", "poc_get", "poc_use",
         "report_targets", "report", "domain_index", "web_list", "attack_path", "fact_query",
+        "vuln_stats", "http_evidence_list", "score_chain", "poc_stats",
         // 攻击文件读回：路径来自库里被智能体写过的 path 列，读取必须过靶标根目录校验。
         "read_attack_file",
     )
@@ -88,6 +90,9 @@ object RedTeamToolSchema {
             append(""""confidence":{"type":"number"},""")
             append(""""title":{"type":"string"},"target":{"type":"string"},""")
             append(""""severity":{"type":"string"},"status":{"type":"string"},""")
+            append(""""query":{"type":"string","description":"template_search 的模板名/标签/CVE 关键字"},""")
+            append(""""limit":{"type":"integer","description":"结果上限：模板检索默认 40、硬上限 200；active_tests 默认 8、硬上限 50"},""")
+            append(""""timeout_ms":{"type":"integer","description":"probe_sessions 的连接超时，收敛到 1000..20000 毫秒，默认 6000"},""")
             append(""""id":{"type":"string","description":"可选稳定 ID，重复写入同一实体时覆盖"}},""")
             append(""""required":["action"],"additionalProperties":true,"allOf":[""")
             val clauses = buildList {

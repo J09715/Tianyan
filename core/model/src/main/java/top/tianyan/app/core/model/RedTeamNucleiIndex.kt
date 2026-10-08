@@ -112,4 +112,24 @@ object RedTeamNucleiIndex {
     /** 缓存是否还能用：目录一致且在有效期内。 */
     fun cacheFresh(cachedDir: String?, cachedBuiltAt: Long, currentDir: String, now: Long): Boolean =
         cachedDir == currentDir && currentDir.isNotEmpty() && (now - cachedBuiltAt) < CACHE_TTL_MILLIS
+
+    /** 用真实文件系统构造探针；只读文件头，13k 模板全读会拖死工具调用。 */
+    fun fileSystemFs(): TemplateFs = object : TemplateFs {
+        override fun isDirectory(path: String): Boolean = java.io.File(path).isDirectory
+
+        override fun list(path: String): List<Entry> =
+            java.io.File(path).listFiles().orEmpty().map { Entry(it.name, it.isDirectory) }
+
+        override fun readHead(path: String, maxChars: Int): String? {
+            val file = java.io.File(path)
+            if (!file.isFile) return null
+            return runCatching {
+                file.bufferedReader().use { reader ->
+                    val buffer = CharArray(maxChars)
+                    val read = reader.read(buffer)
+                    if (read <= 0) "" else String(buffer, 0, read)
+                }
+            }.getOrNull()
+        }
+    }
 }

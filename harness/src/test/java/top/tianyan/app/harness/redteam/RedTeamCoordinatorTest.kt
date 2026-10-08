@@ -23,6 +23,10 @@ import top.tianyan.app.core.model.RedTeamFactKind
 import top.tianyan.app.core.model.RedTeamRole
 import top.tianyan.app.harness.events.HarnessEventBus
 
+/** 模板库文件系统接缝的短别名：用例里要反复构造匿名实现。 */
+private typealias TplFs = top.tianyan.app.core.model.RedTeamNucleiIndex.TemplateFs
+private typealias TplEntry = top.tianyan.app.core.model.RedTeamNucleiIndex.Entry
+
 class RedTeamCoordinatorTest {
     private val events = HarnessEventBus()
 
@@ -817,6 +821,406 @@ class RedTeamCoordinatorTest {
         assertTrue("custom stage adds to the count: $list", list.contains("count=6"))
     }
 
+    /**
+     * 本机模板库检索：只抽 path/name/severity/tags 四个字段，命中即返回。
+     * 用注入的假文件系统固定内容——真实机器上装没装 nuclei 模板不该决定单测成败。
+     */
+    @Test
+    fun `template search matches name tags and cve from the local index`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+        fresh.filesRootOverride = "/rt"
+        fresh.templateFsOverride = fakeTemplateFs(
+            mapOf(
+                "http/cves/2021/CVE-2021-44228.yaml" to """
+                    id: CVE-2021-44228
+                    info:
+                      name: Log4Shell
+                      severity: critical
+                      tags: cve,rce,log4j
+                """.trimIndent(),
+                "http/misconfiguration/nginx-status.yaml" to """
+                    info:
+                      name: Nginx Status
+                      severity: low
+                      tags: nginx,exposure
+                """.trimIndent(),
+            ),
+        )
+
+        val (ok, out) = fresh.execute(call("template_search", "query" to "log4j"), "s1")
+        assertTrue(out, ok)
+        assertTrue("hit must be returned: $out", out.contains("CVE-2021-44228.yaml"))
+        assertTrue("severity must be surfaced: $out", out.contains("critical"))
+        assertFalse("non-matching template must be filtered out: $out", out.contains("nginx-status.yaml"))
+
+        // 空查询只报总数不列条目（上游语义）：界面据此显示「库里有 N 个模板」。
+        val (_, empty) = fresh.execute(call("template_search", "query" to ""), "s1")
+        assertTrue("empty query must report total: $empty", empty.contains("total=2"))
+        assertTrue("empty query must not list entries: $empty", empty.contains("returned=0"))
+    }
+
+    /** CVE 计数走文件名：上游 templateStats 的 cve 字段就是按路径里的 CVE 编号数的。 */
+    @Test
+    fun `template stats counts templates and cve entries`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+        fresh.filesRootOverride = "/rt"
+        fresh.templateFsOverride = fakeTemplateFs(
+            mapOf(
+                "http/cves/2021/CVE-2021-44228.yaml" to "info:\n  name: Log4Shell\n",
+                "http/cves/2022/CVE-2022-1388.yaml" to "info:\n  name: F5 iControl\n",
+                "http/exposures/git-config.yaml" to "info:\n  name: Git Config\n",
+            ),
+        )
+
+        val (ok, out) = fresh.execute(call("template_stats"), "s1")
+        assertTrue(out, ok)
+        assertTrue("total must count every yaml: $out", out.contains("total=3"))
+        assertTrue("cve must count only CVE-named paths: $out", out.contains("cve=2"))
+    }
+
+    /** 没装模板库不是错误：检索不可用要说清楚，而不是抛异常让整轮工具调用失败。 */
+    @Test
+    fun `template search reports a missing index instead of failing`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+        fresh.filesRootOverride = "/rt"
+        fresh.templateFsOverride = fakeTemplateFs(emptyMap(), dirs = emptySet())
+
+        val (ok, out) = fresh.execute(call("template_search", "query" to "log4j"), "s1")
+        assertTrue("missing template dir is data, not a failure: $out", ok)
+        assertTrue("dir must be reported as absent: $out", out.contains("dir=-"))
+        assertTrue("the message must say how to fix it: $out", out.contains("nuclei-templates"))
+    }
+
+    /**
+     * 索引缓存：第二次调用不得重建（否则 13k 个 yaml 每次工具调用都重读一遍盘）。
+     * 断言的是读盘次数，不是耗时——耗时在 CI 上不稳定。
+     */
+    @Test
+    fun `template index is cached across calls`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+        fresh.filesRootOverride = "/rt"
+        val fs = countingTemplateFs(
+            mapOf("http/cves/2021/CVE-2021-44228.yaml" to "info:\n  name: Log4Shell\n"),
+        )
+        fresh.templateFsOverride = fs
+
+        fresh.execute(call("template_search", "query" to "log4shell"), "s1")
+        val afterFirst = fs.listCalls
+        fresh.execute(call("template_search", "query" to "log4shell"), "s1")
+
+        assertEquals("the second call must reuse the cached index", afterFirst, fs.listCalls)
+        assertTrue("the first call must actually walk the tree: $afterFirst", afterFirst > 0)
+    }
+
+    /** 模板库是靶标无关的本机资源，但红队工具不该在非红队会话里应答。 */
+    @Test
+    fun `template search requires red-team mode`() = runBlocking {
+        val fresh = coordinator(session("plain", redTeam = false))
+        fresh.templateFsOverride = fakeTemplateFs(mapOf("a.yaml" to "info:\n  name: A\n"))
+
+        val (ok, out) = fresh.execute(call("template_search", "query" to "a"), "plain")
+        assertFalse("non-red-team session must be refused: $out", ok)
+        assertTrue("refusal must name the mode gate: $out", out.contains("red-team mode"))
+    }
+
+    /**
+     * 连通性实测：WebShell 走 HTTP、隧道走 TCP，结果必须写回**同一条**事实
+     * （面板与智能体读的是同一份数据，另开一条记录会让两边各看各的）。
+     */
+    @Test
+    fun `probe sessions records status latency and note on the same fact`() = runBlocking {
+        val facts = FakeFacts()
+        val fresh = RedTeamCoordinator(
+            facts,
+            FakeSessions(listOf(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))),
+            events,
+        )
+        fresh.execute(
+            call("webshell_add", "title" to "shell-1", "target" to "http://10.0.0.5/x.jsp", "id" to "ws1"),
+            "s1",
+        )
+        fresh.execute(
+            call("tunnel_add", "title" to "tun-1", "listen" to "socks5://127.0.0.1:1080", "id" to "tn1"),
+            "s1",
+        )
+        fresh.sessionProbeOverride = object : RedTeamSessionProbe {
+            override fun http(url: String, timeoutMs: Int) = "online" to "HTTP 200"
+            override fun tcp(host: String, port: Int, timeoutMs: Int) = "active" to ""
+        }
+
+        val (ok, out) = fresh.execute(call("probe_sessions"), "s1")
+        assertTrue(out, ok)
+        assertTrue("webshell must be counted online: $out", out.contains("webshells=1 online=1"))
+        assertTrue("tunnel must be counted active: $out", out.contains("tunnels=1 active=1"))
+
+        // 关键：写回原事实而不是新增记录——id 必须还是 ws1/tn1，条数不变。
+        val rows = facts.recent("s1", 100)
+        assertEquals("probe must not add new facts", 2, rows.size)
+        val shell = rows.first { it.id == "ws1" }
+        assertTrue("status must be persisted: ${shell.payload}", shell.payload.contains("\"status\":\"online\""))
+        assertTrue("note must be persisted: ${shell.payload}", shell.payload.contains("HTTP 200"))
+        assertTrue("latency must be persisted: ${shell.payload}", shell.payload.contains("latency_ms"))
+        assertTrue("last_check must be persisted: ${shell.payload}", shell.payload.contains("last_check"))
+    }
+
+    /**
+     * 探不通也必须落库：上游把失败原因写进 check_note，
+     * 否则面板只会显示「上次探测过」而看不出是超时还是拒绝。
+     */
+    @Test
+    fun `probe sessions persists failure reasons`() = runBlocking {
+        val facts = FakeFacts()
+        val fresh = RedTeamCoordinator(
+            facts,
+            FakeSessions(listOf(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))),
+            events,
+        )
+        fresh.execute(call("webshell_add", "title" to "shell-1", "target" to "http://10.0.0.5/x.jsp", "id" to "ws1"), "s1")
+        // 隧道只给裸端口：host 回落 127.0.0.1，端口仍要能解析出来。
+        fresh.execute(call("tunnel_add", "title" to "tun-1", "listen" to "1080", "id" to "tn1"), "s1")
+        fresh.sessionProbeOverride = object : RedTeamSessionProbe {
+            override fun http(url: String, timeoutMs: Int) = "offline" to "超时 >${timeoutMs}ms"
+            override fun tcp(host: String, port: Int, timeoutMs: Int) =
+                if (host == "127.0.0.1" && port == 1080) "down" to "连接被拒绝" else "down" to "解析错了"
+        }
+
+        val (ok, out) = fresh.execute(call("probe_sessions", "timeout_ms" to "500"), "s1")
+        assertTrue(out, ok)
+        assertTrue("timeout must be clamped to the 1s floor: $out", out.contains("timeout_ms=1000"))
+        assertTrue("refusal reason must be reported: $out", out.contains("tunnels=1 active=0"))
+        val shell = facts.recent("s1", 100).first { it.id == "ws1" }
+        assertTrue("timeout note must be persisted: ${shell.payload}", shell.payload.contains("超时 >1000ms"))
+    }
+
+    /** 没登记任何会话时给出补录指引，而不是一条空结果。 */
+    @Test
+    fun `probe sessions explains how to register sessions when there are none`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+        fresh.sessionProbeOverride = object : RedTeamSessionProbe {
+            override fun http(url: String, timeoutMs: Int) = "online" to ""
+            override fun tcp(host: String, port: Int, timeoutMs: Int) = "active" to ""
+        }
+        val (ok, out) = fresh.execute(call("probe_sessions"), "s1")
+        assertTrue(out, ok)
+        assertTrue("must point at the registration tools: $out", out.contains("webshell_add"))
+    }
+
+    /**
+     * 靶标总览（上游 snapshot）：元信息、事实计数、测试态、网段一次给齐。
+     * 缺任一块，面板首屏或报告开头就要再跑一次工具调用。
+     */
+    @Test
+    fun `snapshot bundles engagement stats tests and segments`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+        fresh.execute(call("asset_add", "title" to "web-01", "target" to "10.0.0.5", "id" to "a1"), "s1")
+        fresh.execute(call("asset_add", "title" to "web-02", "target" to "10.0.0.6", "id" to "a2"), "s1")
+        fresh.execute(call("asset_test", "id" to "a1", "status" to "tested", "test" to "已验证"), "s1")
+
+        val (ok, out) = fresh.execute(call("snapshot"), "s1")
+        assertTrue(out, ok)
+        assertTrue("target must be present: $out", out.contains("target=a.com"))
+        assertTrue("scope must be present: $out", out.contains("scope=10.0.0.0/24"))
+        // 资产测试是就地更新同一条资产事实，不该多出一条。
+        assertTrue("facts must be counted without duplicates: $out", out.contains("facts=2"))
+        assertTrue("assets must be counted: $out", out.contains("assets=2"))
+        assertTrue("test status must be broken out: $out", out.contains("tested=1"))
+        assertTrue("untested must be broken out: $out", out.contains("untested=1"))
+        // 两台机器同属 10.0.0.0/24，网段必须收敛成一条而不是两条。
+        assertTrue("segments must be aggregated: $out", out.contains("## 网段（1）"))
+        assertTrue("segment cidr must be listed: $out", out.contains("10.0.0.0/24 assets=2"))
+    }
+
+    /** 面板首屏（上游 bootstrap）：数据根 + 当前靶标 + 靶标清单。 */
+    @Test
+    fun `bootstrap lists red team engagements and the current one`() = runBlocking {
+        val fresh = coordinator(
+            session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"),
+            session("s2", redTeam = true, target = "b.com", scope = "10.1.0.0/24"),
+            session("plain", redTeam = false),
+        )
+        val (ok, out) = fresh.execute(call("bootstrap"), "s1")
+        assertTrue(out, ok)
+        assertTrue("current must be the calling session: $out", out.contains("current=s1"))
+        // 非红队会话不该出现在靶标清单里。
+        assertTrue("red-team engagements must be listed: $out", out.contains("engagements=2"))
+        assertTrue("s1 must be listed: $out", out.contains("s1 | a.com"))
+        assertTrue("s2 must be listed: $out", out.contains("s2 | b.com"))
+        assertFalse("non-red-team sessions must be excluded: $out", out.contains("plain |"))
+    }
+
+    /**
+     * 上游 pocSearch 一次返回「本机 POC + 本机 nuclei 模板」。
+     * 少了模板那一段，模型会以为本机没有现成 POC 而白跑一次互联网检索。
+     */
+    @Test
+    fun `poc search also returns local nuclei templates`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+        fresh.filesRootOverride = "/rt"
+        fresh.templateFsOverride = fakeTemplateFs(
+            mapOf("http/cves/2021/CVE-2021-44228.yaml" to "info:\n  name: Log4Shell\n  severity: critical\n"),
+        )
+        fresh.execute(call("poc_add", "title" to "自研 EXP", "code" to "EXP-1", "content" to "payload"), "s1")
+
+        // 查询词走 cve 字段（模型最常见的填法），不是 q。
+        val (ok, out) = fresh.execute(call("poc_search", "cve" to "2021-44228"), "s1")
+        assertTrue(out, ok)
+        assertTrue("saved poc must still be listed: $out", out.contains("自研 EXP"))
+        assertTrue("template section must be appended: $out", out.contains("本机 nuclei 模板"))
+        assertTrue("matching template must be returned: $out", out.contains("CVE-2021-44228.yaml"))
+    }
+
+    /** 漏洞统计：分桶之外，「有证据」要认证据表里的 vuln_id，而不只是漏洞自己的 evidence 字段。 */
+    @Test
+    fun `vuln stats counts evidence from the evidence table`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+        fresh.execute(
+            call("vuln_add", "title" to "log4shell", "id" to "v1", "target" to "http://a.com/x", "severity" to "critical", "gained" to "shell"),
+            "s1",
+        )
+        fresh.execute(
+            call("vuln_add", "title" to "info leak", "id" to "v2", "target" to "http://a.com/y", "severity" to "low"),
+            "s1",
+        )
+        // 证据只挂在 v1 上：v2 不该被算成「有证据」。
+        fresh.execute(
+            call("http_evidence_add", "title" to "200 OK", "id" to "e1", "vuln_id" to "v1", "request" to "GET /x HTTP/1.1"),
+            "s1",
+        )
+
+        // 再补一条不同主机的漏洞：targetGroups 是「按站点归并」的组数，
+        // 同一站点的不同路径必须收敛成一组（上游 targetKey 会剥掉 path）。
+        fresh.execute(
+            call("vuln_add", "title" to "other host", "id" to "v3", "target" to "http://b.com/z", "severity" to "medium"),
+            "s1",
+        )
+
+        val (ok, out) = fresh.execute(call("vuln_stats"), "s1")
+        assertTrue(out, ok)
+        assertTrue("total must count all three: $out", out.contains("total=3"))
+        assertTrue("severity buckets must be present: $out", out.contains("critical=1") && out.contains("low=1"))
+        assertTrue("medium must be bucketed too: $out", out.contains("medium=1"))
+        assertTrue("gained must be counted: $out", out.contains("withGained=1"))
+        assertTrue("evidence must be counted via the evidence table: $out", out.contains("withEvidence=1"))
+        // a.com 的两条路径归成一组，b.com 另算一组。
+        assertTrue("target groups must collapse by site: $out", out.contains("targetGroups=2"))
+    }
+
+    /** HTTP 证据清单：按 vuln_id 过滤，默认只给摘要行。 */
+    @Test
+    fun `http evidence list filters by vuln and defaults to a summary`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+        fresh.execute(
+            call("http_evidence_add", "title" to "ev-1", "id" to "e1", "vuln_id" to "v1", "request" to "GET /x HTTP/1.1\nHost: a.com\n\nBODY-SECRET"),
+            "s1",
+        )
+        fresh.execute(
+            call("http_evidence_add", "title" to "ev-2", "id" to "e2", "vuln_id" to "v2", "request" to "GET /y HTTP/1.1"),
+            "s1",
+        )
+
+        val (ok, out) = fresh.execute(call("http_evidence_list", "vuln_id" to "v1"), "s1")
+        assertTrue(out, ok)
+        assertTrue("only the matching evidence must be listed: $out", out.contains("count=1"))
+        assertTrue("the summary line must be shown: $out", out.contains("GET /x HTTP/1.1"))
+        assertFalse("full body must not be dumped by default: $out", out.contains("BODY-SECRET"))
+        assertFalse("other vuln evidence must be filtered out: $out", out.contains("ev-2"))
+
+        // full=true 才给完整报文。
+        val (_, full) = fresh.execute(call("http_evidence_list", "vuln_id" to "v1", "full" to "true"), "s1")
+        assertTrue("full request must be included on demand: $full", full.contains("BODY-SECRET"))
+    }
+
+    /**
+     * 计分链归因：显式 step_id 最可信，其次同资产同得分点，最后才是「同资产最近一步」的推断——
+     * 推断必须标出来，否则报告里「怎么拿到的」经不起复盘。
+     */
+    @Test
+    fun `score chain attributes hits to steps and marks inference`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+        fresh.execute(call("asset_add", "title" to "web-01", "target" to "10.0.0.5", "id" to "10.0.0.5"), "s1")
+        fresh.execute(call("chain_add", "title" to "显式步骤", "id" to "st1", "target" to "10.0.0.5"), "s1")
+        fresh.execute(call("chain_add", "title" to "被推断的步骤", "id" to "st2", "target" to "10.0.0.5"), "s1")
+        fresh.execute(call("score_hit", "title" to "POINT-A", "id" to "h1", "target" to "10.0.0.5", "step_id" to "st1"), "s1")
+        fresh.execute(call("score_hit", "title" to "POINT-B", "id" to "h2", "target" to "10.0.0.5"), "s1")
+
+        val (ok, out) = fresh.execute(call("score_chain"), "s1")
+        assertTrue(out, ok)
+        assertTrue("both hits must be listed: $out", out.contains("count=2"))
+        assertTrue("explicit step must be attributed: $out", out.contains("归因=显式步骤"))
+        assertTrue("fallback attribution must be marked as inferred: $out", out.contains("归因=推断"))
+    }
+
+    /** 知识库统计：按归类/来源/组件分桶，面板据此分组。 */
+    @Test
+    fun `poc stats buckets knowledge by category and source`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+        fresh.execute(
+            call("poc_add", "title" to "exp-1", "id" to "p1", "code" to "EXP-1", "category" to "rce", "source" to "self", "component" to "log4j", "verified" to "1"),
+            "s1",
+        )
+        fresh.execute(
+            call("poc_add", "title" to "exp-2", "id" to "p2", "code" to "EXP-2", "category" to "rce", "source" to "web", "component" to "log4j"),
+            "s1",
+        )
+        fresh.execute(call("poc_add", "title" to "exp-3", "id" to "p3", "code" to "EXP-3", "category" to "lfi"), "s1")
+
+        val (ok, out) = fresh.execute(call("poc_stats"), "s1")
+        assertTrue(out, ok)
+        assertTrue("total must count all pocs: $out", out.contains("total=3"))
+        assertTrue("verified must be counted: $out", out.contains("verified=1"))
+        assertTrue("categories must be bucketed: $out", out.contains("rce=2") && out.contains("lfi=1"))
+        // 未写 source 的那条按上游默认归到 self。
+        assertTrue("sources must be bucketed with a default: $out", out.contains("self=2") && out.contains("web=1"))
+        assertTrue("components must be tallied: $out", out.contains("log4j=2"))
+    }
+
+    /**
+     * 假模板库：相对路径 → 文件头内容；只有 `dirs` 里的目录才被认作模板库根。
+     * 键写成相对路径（`http/cves/x.yaml`）是为了让用例读起来像模板库的目录结构，
+     * 内部统一补成绝对路径——真实 `TemplateFs` 收的就是绝对路径。
+     */
+    private fun fakeTemplateFs(files: Map<String, String>, dirs: Set<String> = setOf(TPL_ROOT)): TplFs =
+        object : TplFs {
+            private val abs = files.entries.associate { (k, v) -> absolute(k) to v }
+
+            override fun isDirectory(path: String): Boolean = path in dirs
+
+            override fun list(path: String): List<TplEntry> = children(abs.keys, path)
+
+            override fun readHead(path: String, maxChars: Int): String? = abs[path]?.take(maxChars)
+        }
+
+    /** 与上面同构，但统计读盘次数，用来钉住缓存行为。 */
+    private fun countingTemplateFs(files: Map<String, String>) =
+        object : TplFs {
+            private val abs = files.entries.associate { (k, v) -> absolute(k) to v }
+            var listCalls = 0
+
+            override fun isDirectory(path: String): Boolean = path == TPL_ROOT
+
+            override fun list(path: String): List<TplEntry> {
+                listCalls++
+                return children(abs.keys, path)
+            }
+
+            override fun readHead(path: String, maxChars: Int): String? = abs[path]?.take(maxChars)
+        }
+
+    private fun absolute(path: String): String = if (path.startsWith("/")) path else "$TPL_ROOT/$path"
+
+    /** 目录列举：把绝对路径集合投影成「当前层有哪些子项、哪个是目录」。 */
+    private fun children(paths: Set<String>, path: String): List<TplEntry> {
+        val prefix = path.trimEnd('/') + "/"
+        val seen = linkedMapOf<String, Boolean>()
+        paths.forEach { file ->
+            if (!file.startsWith(prefix)) return@forEach
+            val rest = file.removePrefix(prefix)
+            val head = rest.substringBefore('/')
+            seen[head] = seen[head] == true || rest.contains('/')
+        }
+        return seen.map { (name, isDir) -> TplEntry(name, isDir) }
+    }
+
     private fun call(action: String, vararg pairs: Pair<String, String>): JsonObject = buildJsonObject {
         put("action", action)
         pairs.forEach { (key, value) -> put(key, value) }
@@ -886,5 +1290,8 @@ class RedTeamCoordinatorTest {
 
     private companion object {
         const val MAX_SLOTS = 3
+
+        /** 假模板库根：与 `filesRootOverride = "/rt"` 下的首选候选目录一致。 */
+        const val TPL_ROOT = "/rt/toolkit/nuclei-templates"
     }
 }
