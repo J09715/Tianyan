@@ -1016,8 +1016,10 @@ fun ToolCenterScreen(
         SpotlightGuideOverlay(
             anchor = importAnchor,
             title = "导入离线插件包",
-            message = "已从 QQ 群下载好全量离线插件包？点击右上角的文件夹图标，选择 zip 文件即可导入，" +
-                "一次装齐 Android、Flutter、反编译环境，全程无需联网。",
+            // 说清真实格式：包是 .txplugin（本质是 zip），选 zip 或 txplugin 都能进；
+            // 只写「zip 文件」会让拿到 .txplugin 的用户以为自己下错了文件。
+            message = "已从 QQ 群下载好全量离线插件包？点击右上角的文件夹图标，选择 .txplugin 包" +
+                "（或同名 zip）即可导入，一次装齐 Android、Flutter、反编译环境，全程无需联网。",
             icon = RuntimeIconName.FolderOpen,
             onDismiss = viewModel::markImportGuideShown,
         )

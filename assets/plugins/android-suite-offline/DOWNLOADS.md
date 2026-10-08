@@ -40,7 +40,7 @@ PowerShell 示例：
 $archiveDir = 'D:\work\tianyan\assets\plugins\android-suite-offline\payload\archives'
 New-Item -ItemType Directory -Force $archiveDir | Out-Null
 Move-Item 'D:\Downloads\OpenJDK17U-jdk_aarch64_linux_hotspot_17.0.20.1_1.tar.gz' "$archiveDir\jdk-17-aarch64-linux.tar.gz"
-Move-Item 'D:\Downloads\flutter_v3.47.1_linux_arm64_android_web_sdk.tar.gz' "$archiveDir\flutter-source-arm64.tar.gz"
+Move-Item 'D:\Downloads\flutter_v3.47.1_linux_arm64_android_web_sdk.tar.gz' "$archiveDir\flutter-linux-arm64-android-only-slim.tar.gz"
 ```
 
 下载完成后不要解压，直接把原始归档放入 `payload/archives/`。`install-android-suite.sh` 会在 PRoot 内解压到 `/opt`。
@@ -52,6 +52,8 @@ Get-FileHash "$archiveDir\jdk-17-aarch64-linux.tar.gz" -Algorithm SHA256
 Get-FileHash "$archiveDir\android-ndk-r29-aarch64.tar.gz" -Algorithm SHA256
 Get-FileHash "$archiveDir\android-sdk-tools-static-aarch64.zip" -Algorithm SHA256
 Get-FileHash "$archiveDir\android-tools_aarch64.deb" -Algorithm SHA256
+# 最大的那个归档（Flutter slim，约 848 MB）最容易下错或下到 x86 变体，必须一并校验。
+Get-FileHash "$archiveDir\flutter-linux-arm64-android-only-slim.tar.gz" -Algorithm SHA256
 ```
 
 如果 GitHub 直连失败，可以只替换为 `ghfast.top` 代理，但文件名和 SHA-256 必须保持一致。不要用同名的 `x86_64`、`amd64` 或 `linux-x64` 资源替换。

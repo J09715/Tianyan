@@ -4,13 +4,20 @@
     "id": "claude-code",
     "name": "Claude Code",
     "description": "Anthropic 官方 Agent 编程助手 CLI，支持沙箱内代码全自动探索与工程演进。",
-    "dependencies": ["node>=20.0.0", "curl", "ca-certificates", "git"],
+    "dependencies": [
+      "node>=20.0.0",
+      "curl",
+      "ca-certificates",
+      "git"
+    ],
     "launchType": "pty",
     "version": "1.0.0",
     "latestVersion": "1.0.0",
     "publisher": "Anthropic",
     "category": "CODING_AGENT",
-    "architectures": ["ARM64"],
+    "architectures": [
+      "ARM64"
+    ],
     "installMethod": "SCRIPT",
     "installSteps": [
       "if ! command -v npm >/dev/null 2>&1; then DEBIAN_FRONTEND=noninteractive apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs npm || true; fi",
@@ -21,7 +28,9 @@
     ],
     "launchCommand": "claude",
     "verifyCommand": "claude --version",
-    "commandLinks": ["claude"],
+    "commandLinks": [
+      "claude"
+    ],
     "environment": {
       "CLAUDE_CONFIG_DIR": "/opt/tianyan/data/claude-code"
     }
@@ -31,7 +40,12 @@
     "id": "openclaw",
     "name": "OpenClaw",
     "description": "面向自动化工作流与本地 Agent 驱动的天衍中枢工具。",
-    "dependencies": ["node>=22.22.3", "curl", "ca-certificates", "git"],
+    "dependencies": [
+      "node>=22.22.3",
+      "curl",
+      "ca-certificates",
+      "git"
+    ],
     "launchType": "web",
     "servicePort": 18789,
     "servicePath": "/",
@@ -39,8 +53,15 @@
     "latestVersion": "0.1.0",
     "publisher": "OpenClaw",
     "category": "AI_AGENT",
-    "architectures": ["ARM64"],
-    "permissions": ["NETWORK", "WORKSPACE_READ", "WORKSPACE_WRITE", "LOCAL_WEB"],
+    "architectures": [
+      "ARM64"
+    ],
+    "permissions": [
+      "NETWORK",
+      "WORKSPACE_READ",
+      "WORKSPACE_WRITE",
+      "LOCAL_WEB"
+    ],
     "installMethod": "SCRIPT",
     "installSteps": [
       "if ! command -v npm >/dev/null 2>&1; then DEBIAN_FRONTEND=noninteractive apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs npm || true; fi",
@@ -50,7 +71,9 @@
     ],
     "launchCommand": "openclaw gateway --allow-unconfigured --bind lan --port 18789",
     "verifyCommand": "openclaw --version 2>&1 || test -f $TIANYAN_TOOL_DIR/bin/openclaw",
-    "commandLinks": ["openclaw"],
+    "commandLinks": [
+      "openclaw"
+    ],
     "environment": {
       "OPENCLAW_HOME": "/opt/tianyan/data/openclaw",
       "OPENCLAW_STATE_DIR": "/opt/tianyan/data/openclaw",
@@ -69,7 +92,12 @@
     "id": "hermes-agent",
     "name": "Hermes Agent",
     "description": "可扩展的本地 Agent 工具与服务中枢。",
-    "dependencies": ["python>=3.11", "curl", "ca-certificates", "git"],
+    "dependencies": [
+      "python>=3.11",
+      "curl",
+      "ca-certificates",
+      "git"
+    ],
     "launchType": "web",
     "servicePort": 9119,
     "servicePath": "/",
@@ -77,35 +105,57 @@
     "latestVersion": "0.1.0",
     "publisher": "Nous Research",
     "category": "AI_AGENT",
-    "architectures": ["ARM64"],
-    "permissions": ["NETWORK", "WORKSPACE_READ", "WORKSPACE_WRITE", "LOCAL_WEB"],
+    "architectures": [
+      "ARM64"
+    ],
+    "permissions": [
+      "NETWORK",
+      "WORKSPACE_READ",
+      "WORKSPACE_WRITE",
+      "LOCAL_WEB"
+    ],
     "installMethod": "SCRIPT",
     "installSteps": [
-      "mkdir -p $TIANYAN_TOOL_DIR/bin",
-      "printf '#!/bin/sh\\necho \"Hermes Agent v0.1.0 running on port 9119\"\\n' > $TIANYAN_TOOL_DIR/bin/hermes",
-      "chmod +x $TIANYAN_TOOL_DIR/bin/hermes"
+      "# hermes-agent 由 HermesToolInstaller 安装（下载官方 install.sh 并执行）。",
+      "# 这里刻意不再放步骤：staticInstallerById 优先级高于 registry 配方，",
+      "# 在此写命令不会生效，只会让维护者误以为改这里就能改安装行为。",
+      "exit 0"
     ],
     "launchCommand": "hermes dashboard --no-open --host 0.0.0.0 --port 9119",
     "verifyCommand": "hermes --version 2>&1 || test -f $TIANYAN_TOOL_DIR/bin/hermes",
-    "commandLinks": ["hermes"],
+    "commandLinks": [
+      "hermes"
+    ],
     "environment": {
       "HOST": "0.0.0.0"
-    }
+    },
+    "uninstallSteps": [
+      "exit 0"
+    ]
   },
   {
     "schemaVersion": 1,
     "id": "llama-cpp",
     "name": "llama.cpp 本地推理引擎",
     "description": "在 ARM64 Linux 沙箱内运行 GGUF 模型，并提供 OpenAI 兼容的本地推理接口。",
-    "dependencies": ["python>=3.11", "curl", "ca-certificates"],
+    "dependencies": [
+      "python>=3.11",
+      "curl",
+      "ca-certificates"
+    ],
     "launchType": "one_shot",
     "version": "1.0.0",
     "latestVersion": "1.0.0",
     "publisher": "ggml-org / Tianyan",
     "homepage": "https://github.com/ggml-org/llama.cpp",
     "category": "AI_AGENT",
-    "architectures": ["ARM64"],
-    "permissions": ["NETWORK", "LOCAL_WEB"],
+    "architectures": [
+      "ARM64"
+    ],
+    "permissions": [
+      "NETWORK",
+      "LOCAL_WEB"
+    ],
     "installMethod": "SCRIPT",
     "installSteps": [
       "case \"$(uname -m)\" in aarch64|arm64) ;; *) echo 'llama.cpp 本地推理仅支持 ARM64/aarch64' >&2; exit 64;; esac",
@@ -118,7 +168,9 @@
     ],
     "launchCommand": "llama-server --version",
     "verifyCommand": "case \"$(uname -m)\" in aarch64|arm64) llama-server --version;; *) exit 1;; esac",
-    "commandLinks": ["llama-server"],
+    "commandLinks": [
+      "llama-server"
+    ],
     "environment": {
       "LD_LIBRARY_PATH": "/opt/tianyan/tools/llama-cpp/lib/release"
     }
@@ -134,8 +186,13 @@
     "latestVersion": "1.0.0",
     "publisher": "Tianyan",
     "category": "DEVELOPER_TOOL",
-    "architectures": ["ARM64"],
-    "permissions": ["WORKSPACE_READ", "WORKSPACE_WRITE"],
+    "architectures": [
+      "ARM64"
+    ],
+    "permissions": [
+      "WORKSPACE_READ",
+      "WORKSPACE_WRITE"
+    ],
     "installMethod": "SCRIPT",
     "installSteps": [
       "mkdir -p $TIANYAN_TOOL_DIR/bin",
@@ -144,22 +201,33 @@
     ],
     "launchCommand": "hello-tool",
     "verifyCommand": "hello-tool",
-    "commandLinks": ["hello-tool"]
+    "commandLinks": [
+      "hello-tool"
+    ]
   },
   {
     "schemaVersion": 1,
     "id": "qemu-x86-64-compat",
     "name": "QEMU x86_64 兼容构建环境",
     "description": "可选的 ARM64 QEMU 用户态模拟器与隔离 x86_64 Ubuntu Base RootFS，仅用于第三方项目的兼容构建。",
-    "dependencies": ["curl", "ca-certificates"],
+    "dependencies": [
+      "curl",
+      "ca-certificates"
+    ],
     "launchType": "command",
     "version": "1.0.0",
     "latestVersion": "1.0.0",
     "publisher": "Tianyan",
     "homepage": "https://github.com/termux/proot-distro",
     "category": "DEVELOPER_TOOL",
-    "architectures": ["ARM64"],
-    "permissions": ["NETWORK", "WORKSPACE_READ", "WORKSPACE_WRITE"],
+    "architectures": [
+      "ARM64"
+    ],
+    "permissions": [
+      "NETWORK",
+      "WORKSPACE_READ",
+      "WORKSPACE_WRITE"
+    ],
     "installMethod": "SCRIPT",
     "installSteps": [
       "case \"$(uname -m)\" in aarch64|arm64) ;; *) echo 'QEMU 兼容插件宿主仅支持 ARM64' >&2; exit 64;; esac",
@@ -188,7 +256,9 @@
     ],
     "launchCommand": "qemu-x86_64 --version",
     "verifyCommand": "test -x /opt/tianyan/compat/x86_64/qemu-x86_64 && test -x /opt/tianyan/compat/x86_64/rootfs/bin/sh && test -x /opt/tianyan/compat/x86_64/jdk-17/bin/java && test -x /opt/tianyan/compat/x86_64/android-sdk/build-tools/35.0.0/aapt2 && test -x /opt/tianyan/compat/x86_64/flutter/bin/cache/dart-sdk/bin/dart && qemu-x86_64 --version",
-    "commandLinks": ["qemu-x86_64"],
+    "commandLinks": [
+      "qemu-x86_64"
+    ],
     "environment": {
       "TIANYAN_QEMU_COMPAT_ROOT": "/opt/tianyan/compat/x86_64",
       "TIANYAN_QEMU_COMPAT_QEMU": "/opt/tianyan/compat/x86_64/qemu-x86_64",

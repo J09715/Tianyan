@@ -855,7 +855,14 @@ private fun AndroidEnvAcquisitionCard(
     }
 }
 
-private const val TIANYAN_QQ_GROUP_ID = "000000000"
+/**
+ * 天衍官方交流群号。
+ *
+ * 与 `legacy_strings.xml` 的 settings_text_0064 / 0272 保持同一个值：
+ * 这里原来是 `000000000` 占位符，未装 QQ 时兜底复制给用户的是一个假群号，
+ * 搜不到任何群，而且提示还说「已复制群号」——比不提示更误导。
+ */
+private const val TIANYAN_QQ_GROUP_ID = "905971993"
 
 /** 跳转 QQ 加群；未安装 QQ 时兜底复制群号并提示。 */
 private fun joinQqGroup(context: Context) {
