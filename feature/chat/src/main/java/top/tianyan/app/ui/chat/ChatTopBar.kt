@@ -55,6 +55,8 @@ internal fun ChatTopBar(
     browserHighlight: Boolean = false,
     onOpenGit: () -> Unit = {},
     gitUncommittedCount: Int = 0,
+    /** 运行日志入口（与浏览器同一条工具条）；为空时不显示该项。 */
+    onOpenLogs: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     Column(
@@ -175,6 +177,9 @@ internal fun ChatTopBar(
             onOpenRuntime = onOpenRuntime,
             onOpenBrowser = onOpenBrowser,
             browserHighlight = browserHighlight,
+            onOpenGit = onOpenGit,
+            gitUncommittedCount = gitUncommittedCount,
+            onOpenLogs = onOpenLogs,
         )
     }
 }
