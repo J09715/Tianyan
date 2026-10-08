@@ -47,6 +47,11 @@ data class ScoreHit(
     val ipVersion: Int? = null,
     /** `large`（超 1 亿条/10TB）或 `knowledge-base` 触发 G5 ×2。 */
     val dataScale: String? = null,
+    /**
+     * 显式指定的作战阶段 code。留空则由 [RedTeamStage.scoreStageOf] 自动推导——
+     * 报告按这五个阶段分桶，一条靶标得分落错桶会让整份报告的推进叙事废掉。
+     */
+    val stageCode: String? = null,
 )
 
 /** 打过分值上限/去重标记后的命中行。 */
