@@ -1683,7 +1683,15 @@ class HarnessLoop @Inject constructor(
                     approvalPauseRequested.set(true)
                 }
                 val settledOutcome = outcome.copy(durationMs = duration)
-                operationCoordinator.toolSettled(operationId, settledOutcome, round, toolName = toolCall.rawToolName ?: item.tool.name)
+                settleToolResult(
+                    operationId = operationId,
+                    round = round,
+                    toolName = toolCall.rawToolName ?: item.tool.name,
+                    outcome = settledOutcome,
+                    settle = { id, r, name, result -> operationCoordinator.toolSettled(id, result, r, toolName = name) },
+                    appendToTree = { result -> messageStore.append(sessId, result) },
+                    log = { event, detail -> agentEventLogger.log(sessId, event, detail) },
+                )
                 messageProjector.publishPersisted(sessId, settledOutcome)
                 if (outcome.success) roundHadSuccess.set(true)
                 metrics.toolCallRecorded(failed = !outcome.success)
@@ -2000,6 +2008,43 @@ class HarnessLoop @Inject constructor(
             HarnessTool.REDTEAM,
         )
 
+    }
+}
+
+/**
+ * 工具结果落库：优先走 operation 结算，结算失败则退回直接追加消息。
+ *
+ * 为什么要有这条回落：settle() 第一步是 requireOperation()，operation 行一旦没了
+ * （暂停后另起 run 换了 operation、并发完成提前收尾、恢复路径只拿到 task 没有 operation），
+ * 它会直接抛。原来 toolIntent 在 try 里，operation 丢了会降级成「工具执行异常」，
+ * 用户至少看得到一句话；但 toolSettled 原本裸奔，异常一路抛出本回合——
+ * ToolResult 没写进 messageStore，随后的 publishPersisted 也走不到。
+ * 结果就是工具气泡在、结果气泡不在，一条 stdout/exit code/stderr 全丢，
+ * 同回合后面的工具跟着一起陪葬。
+ *
+ * 落库保证可以退，输出不能退：这里与 publishAssistantText 在 operationId == null
+ * 时的处理保持一致，都是退回 messageStore.append。
+ */
+internal suspend fun settleToolResult(
+    operationId: String?,
+    round: Int,
+    toolName: String?,
+    outcome: ToolResult,
+    settle: suspend (operationId: String, round: Int, toolName: String?, outcome: ToolResult) -> Unit,
+    appendToTree: suspend (outcome: ToolResult) -> Unit,
+    log: suspend (event: String, detail: String) -> Unit,
+) {
+    if (operationId == null) {
+        appendToTree(outcome)
+        return
+    }
+    try {
+        settle(operationId, round, toolName, outcome)
+    } catch (cancellation: CancellationException) {
+        throw cancellation
+    } catch (throwable: Throwable) {
+        log("ToolResultPersistFailed", "Tool=$toolName, Error=$throwable")
+        appendToTree(outcome)
     }
 }
 
