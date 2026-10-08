@@ -522,6 +522,69 @@ class RedTeamCoordinatorTest {
         assertTrue("chinese alias must be accepted", okAlias)
     }
 
+    /**
+     * 报告必须按五个作战阶段分桶：演练方就是按这条推进线读的。
+     * 一条靶标得分落进互联网侧桶，整份报告的叙事就废了——而且不会报错。
+     */
+    @Test
+    fun `score report buckets hits by engagement stage`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+
+        // 显式阶段、类型特判（靶标系统）、内网地址兜底各来一条。
+        fresh.execute(call("score_hit", "title" to "h1", "code" to "weak-password", "points" to "100", "stage_code" to "boundary"), "s1")
+        fresh.execute(call("score_hit", "title" to "h2", "code" to "mail-admin", "points" to "200", "target" to "203.0.113.5"), "s1")
+        fresh.execute(call("score_hit", "title" to "h3", "code" to "weak-password", "points" to "50", "target" to "10.1.2.3"), "s1")
+
+        val (ok, out) = fresh.execute(call("score_report"), "s1")
+        assertTrue(ok)
+        assertTrue("report must show stage progress: $out", out.contains("## 阶段进度"))
+        // 靶标系统必须落在靶标桶，而不是它地址所在的互联网侧。
+        assertTrue("mail system must land in target stage: $out", out.contains("靶标权限（target）1 条"))
+        assertTrue("explicit boundary stage must be honored: $out", out.contains("边界突破（boundary）1 条"))
+        assertTrue("private ip must land in internal stage: $out", out.contains("内网资产权限（internal）1 条"))
+        // 前置阶段如实标出不计分。
+        assertTrue("recon must be flagged as unscored: $out", out.contains("前置阶段不计分"))
+    }
+
+    /** 资产登记为外网、但得分点是演练靶标系统时，仍须落在靶标桶。 */
+    @Test
+    fun `engagement target scores stay in target stage despite external asset`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "0.0.0.0/0"))
+        val (assetOk, assetOut) = fresh.execute(
+            call("asset_add", "title" to "mail", "target" to "203.0.113.5", "id" to "77"), "s1",
+        )
+        assertTrue(assetOut, assetOk)
+        fresh.execute(
+            call("score_hit", "title" to "mail admin", "code" to "mail-admin", "points" to "300", "asset_id" to "77", "target" to "203.0.113.5"),
+            "s1",
+        )
+        val (_, out) = fresh.execute(call("score_report"), "s1")
+        assertTrue("target system score must not fall into the internet bucket: $out", out.contains("靶标权限（target）1 条"))
+    }
+
+    /** 非法阶段码不能静默丢桶：退回老 stage 并明确告警。 */
+    @Test
+    fun `invalid chain stage falls back with a warning in the write path`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+        val (ok, out) = fresh.execute(
+            call("chain_add", "title" to "step", "stage_code" to "external", "stage" to "access"), "s1",
+        )
+        assertTrue(ok)
+        assertTrue("must warn about the bad stage code: $out", out.contains("warning="))
+        assertTrue("warning must quote the rejected value: $out", out.contains("external"))
+        // 归一后的码要落库，供报告分桶。
+        assertTrue("normalized stage must be reported: $out", out.contains("阶段 internal"))
+    }
+
+    @Test
+    fun `valid chain stage passes without warning`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+        val (ok, out) = fresh.execute(call("chain_add", "title" to "step", "stage_code" to "boundary"), "s1")
+        assertTrue(ok)
+        assertFalse("valid stage code needs no warning: $out", out.contains("warning="))
+        assertTrue(out, out.contains("阶段 boundary"))
+    }
+
     private fun call(action: String, vararg pairs: Pair<String, String>): JsonObject = buildJsonObject {
         put("action", action)
         pairs.forEach { (key, value) -> put(key, value) }
