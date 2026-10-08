@@ -244,6 +244,9 @@ fun TianyanNavHost(
                         onOpenFile = { projectName, relativePath ->
                             agentStack.push(AgentDestination, CodeEditorDestination(projectName, relativePath))
                         },
+                        // 运行日志复用开发者页那一套（读取/清空/导出/崩溃报告），
+                        // 聊天页只暴露入口，不重复实现日志界面。
+                        onOpenLogs = { agentStack.push(AgentDestination, DeveloperDestination) },
                     )
                 }
             }
