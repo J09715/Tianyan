@@ -148,6 +148,58 @@ object RedTeamStage {
     }
 
     /**
+     * 阶段编辑补丁，移植自上游 `saveStage`。
+     *
+     * 语义是**部分补丁**：未提供的字段沿用当前值，再回落到默认值。
+     * 少了这层回落，界面上只改一句「目标」就会把这一阶段的名称、手段分组、工具全清空。
+     */
+    data class StagePatch(
+        val code: String,
+        val name: String? = null,
+        val subtitle: String? = null,
+        val color: String? = null,
+        val goal: String? = null,
+        val sections: List<Section>? = null,
+        val tools: String? = null,
+        val transition: String? = null,
+        val sortOrder: Int? = null,
+    )
+
+    /** 按补丁算出新的阶段定义：补丁值 → 当前值 → 默认值。 */
+    fun applyPatch(current: Stage?, patch: StagePatch): Stage {
+        require(patch.code.isNotBlank()) { "stage.code required" }
+        val base = current ?: DEFAULT_STAGES.firstOrNull { it.code == patch.code }
+        return Stage(
+            code = patch.code,
+            name = patch.name ?: base?.name ?: patch.code,
+            subtitle = patch.subtitle ?: base?.subtitle ?: "",
+            color = patch.color ?: base?.color ?: "#64748b",
+            goal = patch.goal ?: base?.goal ?: "",
+            sections = patch.sections ?: base?.sections ?: emptyList(),
+            tools = patch.tools ?: base?.tools ?: "",
+            transition = patch.transition ?: base?.transition ?: "",
+            // `scored` 不在可编辑字段里：它由规则侧定义，自建阶段默认为计分阶段。
+            scored = base?.scored ?: 1,
+        )
+    }
+
+    /**
+     * 把覆盖层合并进默认阶段，得到当前生效的阶段链（含界面用的序号）。
+     *
+     * 顺序很关键：`sort_order` 优先，同一顺序按 code 排——
+     * 否则每次读库的顺序都可能不同，界面上的 ①②③ 会跳来跳去。
+     */
+    fun resolveStages(overrides: Map<String, Stage>, order: Map<String, Int> = emptyMap()): List<Stage> {
+        val merged = LinkedHashMap<String, Stage>()
+        DEFAULT_STAGES.forEach { merged[it.code] = it }
+        overrides.forEach { (code, stage) -> merged[code] = stage }
+        return merged.values.sortedWith(
+            compareBy<Stage> { order[it.code] ?: DEFAULT_STAGES.indexOfFirst { d -> d.code == it.code }.takeIf { i -> i >= 0 } ?: Int.MAX_VALUE }
+                .thenBy { it.code },
+        )
+    }
+
+    /**
      * 目标键归一化，移植自上游 `targetKey`：URL 取 scheme 前缀，否则取首个词元。
      * 复现与证据按它归组——同一个目标的写法不同（带路径 / 不带）必须落到同一个键上。
      */
