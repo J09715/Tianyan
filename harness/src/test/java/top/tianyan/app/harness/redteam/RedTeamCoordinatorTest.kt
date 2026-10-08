@@ -585,6 +585,125 @@ class RedTeamCoordinatorTest {
         assertTrue(out, out.contains("阶段 boundary"))
     }
 
+    /**
+     * 攻击文件必须真落盘：上游这一块的意义是「供复用与交付」，
+     * 只记一条元数据事实的话，交付时手上什么都没有。
+     */
+    @Test
+    fun `attack files are written to disk and can be read back`() = runBlocking {
+        val root = java.nio.file.Files.createTempDirectory("rt-attack").toFile()
+        try {
+            val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+            fresh.filesRootOverride = root.path
+
+            val (ok, out) = fresh.execute(
+                call(
+                    "attack_file_add", "title" to "cve-2021-22893.sh", "target" to "10.0.0.5",
+                    "name" to "cve-2021-22893.sh", "evidence" to "回显 uid=0",
+                    "content" to "#!/bin/sh\nid\n",
+                ),
+                "s1",
+            )
+            assertTrue(out, ok)
+            assertTrue("must report the on-disk path: $out", out.contains("已落盘"))
+
+            val written = java.io.File(root, "engagements/s1/attack-files/10.0.0.5/cve-2021-22893.sh")
+            assertTrue("file must exist at the guarded path: ${written.path}", written.isFile)
+            assertEquals("#!/bin/sh\nid\n", written.readText())
+
+            val id = out.substringAfter("事实 ").substringBefore(" ·").trim()
+            val (readOk, readOut) = fresh.execute(call("read_attack_file", "id" to id), "s1")
+            assertTrue(readOut, readOk)
+            assertTrue("content must round trip: $readOut", readOut.contains("uid=0") || readOut.contains("id"))
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    /** 证据必填：没打通的脚本不该进交付目录。 */
+    @Test
+    fun `attack file without evidence is refused`() = runBlocking {
+        val root = java.nio.file.Files.createTempDirectory("rt-attack2").toFile()
+        try {
+            val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+            fresh.filesRootOverride = root.path
+            val (ok, out) = fresh.execute(
+                call("attack_file_add", "title" to "x.sh", "target" to "10.0.0.5", "name" to "x.sh", "content" to "echo hi"),
+                "s1",
+            )
+            assertFalse("missing evidence must be refused", ok)
+            assertTrue("error should explain why: $out", out.contains("evidence"))
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    /**
+     * 这条是安全断言：库里存的 path 是智能体写过的，不可信。
+     * 越界必须拒绝，**不能静默把文件内容读出来**。
+     */
+    @Test
+    fun `reading an attack file outside the engagement root is refused`() = runBlocking {
+        val root = java.nio.file.Files.createTempDirectory("rt-attack3").toFile()
+        try {
+            val fakeFacts = FakeFacts()
+            val fresh = RedTeamCoordinator(
+                fakeFacts,
+                FakeSessions(listOf(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))),
+                events,
+            )
+            fresh.filesRootOverride = root.path
+            val secret = java.io.File(root, "outside-secret.txt")
+            secret.writeText("TOP-SECRET")
+
+            // 直接往库里种一条 path 指向靶标目录之外的事实，模拟被污染的库。
+            // 不能走 attack_file_add：写入侧会把 path 重写成服务端算出的合法路径，
+            // 那样读到的就是合法文件，这条断言会「因为没读到机密」而假通过。
+            val poisoned = RedTeamFactEntity(
+                sessionId = "s1",
+                id = "poisoned-1",
+                kind = "attack_file",
+                title = "leak.sh",
+                target = "10.0.0.5",
+                payload = """{"name":"leak.sh","path":"${secret.path}"}""",
+                createdAt = 1L,
+                updatedAt = 1L,
+            )
+            fakeFacts.upsert(poisoned)
+
+            val (_, readOut) = fresh.execute(call("read_attack_file", "id" to "poisoned-1"), "s1")
+            // 必须明确拒绝，并且**不能**把内容带出来。
+            assertFalse("outside path must not be read: $readOut", readOut.contains("TOP-SECRET"))
+            assertTrue("refusal must be explicit rather than a silent empty result: $readOut", readOut.contains("拒绝读取"))
+
+            // 反向对照：把同一条事实的 path 改到靶标目录内，读取必须成功。
+            // 没有这一步，上面那条断言在「防护根本没跑」时也会通过。
+            val inside = java.io.File(root, "engagements/s1/attack-files/10.0.0.5/leak.sh")
+            inside.parentFile.mkdirs()
+            inside.writeText("INSIDE-CONTENT")
+            fakeFacts.upsert(poisoned.copy(payload = """{"name":"leak.sh","path":"${inside.path}"}"""))
+            val (insideOk, insideOut) = fresh.execute(call("read_attack_file", "id" to "poisoned-1"), "s1")
+            assertTrue("reading inside the engagement root must work: $insideOut", insideOk)
+            assertTrue("content must be returned for an allowed path: $insideOut", insideOut.contains("INSIDE-CONTENT"))
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `poc delete removes the record`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+        val (addOk, addOut) = fresh.execute(call("poc_add", "title" to "cve-x", "code" to "CVE-X", "content" to "p"), "s1")
+        assertTrue(addOut, addOk)
+
+        val (ok, out) = fresh.execute(call("poc_delete", "code" to "CVE-X"), "s1")
+        assertTrue(out, ok)
+        assertTrue("delete must report the removed record: $out", out.contains("deleted="))
+
+        val (_, listOut) = fresh.execute(call("poc_list"), "s1")
+        assertFalse("deleted poc must be gone: $listOut", listOut.contains("CVE-X"))
+    }
+
     private fun call(action: String, vararg pairs: Pair<String, String>): JsonObject = buildJsonObject {
         put("action", action)
         pairs.forEach { (key, value) -> put(key, value) }
@@ -629,6 +748,10 @@ class RedTeamCoordinatorTest {
 
         override suspend fun deleteForSession(sessionId: String) {
             rows.removeAll { it.sessionId == sessionId }
+        }
+
+        override suspend fun deleteById(sessionId: String, id: String) {
+            rows.removeAll { it.sessionId == sessionId && it.id == id }
         }
     }
 
