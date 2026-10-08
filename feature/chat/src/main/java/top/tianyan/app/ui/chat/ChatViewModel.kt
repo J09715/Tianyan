@@ -1962,6 +1962,9 @@ class ChatViewModel @Inject constructor(
             rawText
         }
 
+        // 先认目标再发：让本轮的工具调用一开始就有授权范围可用。
+        maybeAutoBindRedTeamTarget(effectiveText)
+
         if (!running.value) {
             harnessLoop.send(effectiveText, imageUrls = imageUrls)
         } else {
@@ -2068,6 +2071,47 @@ class ChatViewModel @Inject constructor(
             if (id.isBlank()) kotlinx.coroutines.flow.flowOf(emptyList()) else redTeamFactRepository.observeForSession(id)
         }
 
+    /**
+     * 用户直接说目标就自动绑定，不再要求先去面板手填。
+     *
+     * 触发条件刻意收紧到「红队会话 + 还没绑目标 + 消息里能认出目标」：
+     *   · 已绑定就不动 —— 用户可能是中途补充说明，随便改绑会把范围悄悄换掉，
+     *     而后续所有派活与越界校验都挂在这个范围上；
+     *   · 认不出就不绑 —— 宁可让用户手动补，也不能瞎绑一个词，
+     *     绑错目标比不绑危险得多。
+     *
+     * 范围按目标类型放宽一档（IP → /24，域名 → 域名本身），
+     * 只授权单个 IP 的话同段横向路径立刻全部越界，演练第一步就卡住。
+     */
+    private fun maybeAutoBindRedTeamTarget(text: String) {
+        val sessionId = currentSessionId.value.takeIf { it.isNotBlank() } ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            val session = runCatching { sessionDao.findById(sessionId) }.getOrNull() ?: return@launch
+            if (session.redTeamMode != top.tianyan.app.core.model.RedTeamMode.RED_TEAM.id) return@launch
+            if (!session.redTeamTarget.isNullOrBlank()) return@launch
+            val hit = top.tianyan.app.core.model.RedTeamTargetExtractor.extract(text) ?: return@launch
+            val scope = top.tianyan.app.core.model.RedTeamTargetExtractor.defaultScope(hit)
+            runCatching { redTeamCoordinator.bind(sessionId, hit.target, scope) }
+                .onSuccess {
+                    _redTeamAutoBind.value = "已从消息中识别目标并绑定：${hit.target}（范围 $scope）"
+                    // 绑定后刷新控制台与体检，否则面板还显示「未绑定靶标」。
+                    refreshRedTeamConsole()
+                    refreshRedTeamSkillHealth()
+                }
+                .onFailure { error ->
+                    _redTeamAutoBind.value = "目标自动绑定失败：${error.message ?: "未知错误"}"
+                }
+        }
+    }
+
+    private val _redTeamAutoBind = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    /** 自动绑定的一次性提示；面板显示后由界面调 [consumeRedTeamAutoBind] 清掉。 */
+    val redTeamAutoBind: kotlinx.coroutines.flow.StateFlow<String?> = _redTeamAutoBind.asStateFlow()
+
+    fun consumeRedTeamAutoBind() {
+        _redTeamAutoBind.value = null
+    }
+
     fun bindRedTeamTarget(target: String, scope: String) {
         val sessionId = currentSessionId.value.takeIf { it.isNotBlank() } ?: return
         viewModelScope.launch(Dispatchers.IO) {
@@ -2103,14 +2147,13 @@ class ChatViewModel @Inject constructor(
         _redTeamConsole.value = block(_redTeamConsole.value)
     }
 
-    /** 打开面板即拉一次首屏：面板常开，每次重组都拉会把事实库读穿。 */
-    fun toggleRedTeamConsole() {
-        val next = !_redTeamConsole.value.open
-        updateConsole { it.copy(open = next) }
-        if (next) refreshRedTeamConsole()
-    }
-
-    fun closeRedTeamConsole() = updateConsole { it.copy(open = false) }
+    /**
+     * 进控制台前拉一次首屏。
+     *
+     * 面板改成「点入口才整页进入」之后，不再有常开状态需要维护；
+     * 由界面在打开时调这个方法，避免每次重组都读一遍事实库。
+     */
+    fun openRedTeamConsole() = refreshRedTeamConsole()
 
     fun setRedTeamConsoleTab(tab: RedTeamConsoleTab) {
         updateConsole { it.copy(tab = tab) }

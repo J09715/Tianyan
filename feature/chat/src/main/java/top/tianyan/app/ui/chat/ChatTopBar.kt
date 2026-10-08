@@ -55,6 +55,9 @@ internal fun ChatTopBar(
     browserHighlight: Boolean = false,
     onOpenGit: () -> Unit = {},
     gitUncommittedCount: Int = 0,
+    /** 红队控制台入口；只在红队会话下由调用方传值。 */
+    onOpenRedTeam: (() -> Unit)? = null,
+    redTeamTarget: String? = null,
     /** 运行日志入口（与浏览器同一条工具条）；为空时不显示该项。 */
     onOpenLogs: (() -> Unit)? = null,
 ) {
@@ -110,34 +113,9 @@ internal fun ChatTopBar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                // 🌟 0. Git 面板（绑定当前会话，不跨会话共享）
-                androidx.compose.foundation.layout.Box {
-                    IconButton(
-                        onClick = onOpenGit,
-                        contentDescription = stringResource(R.string.chat_open_git),
-                    ) {
-                        RuntimeIcon(RuntimeIconName.GitBranch, Modifier.size(19.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    if (gitUncommittedCount > 0) {
-                        val badgeText = if (gitUncommittedCount > 99) "99+" else gitUncommittedCount.toString()
-                        androidx.compose.foundation.layout.Box(
-                            modifier = Modifier
-                                .align(androidx.compose.ui.Alignment.TopEnd)
-                                .padding(top = 4.dp, end = 4.dp)
-                                .background(MaterialTheme.colorScheme.error, androidx.compose.foundation.shape.CircleShape)
-                                .padding(horizontal = 4.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                badgeText,
-                                color = MaterialTheme.colorScheme.onError,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontSize = 9.sp,
-                                maxLines = 1,
-                            )
-                        }
-                    }
-                }
+                // 仓库入口只在下方工作台条上留一个（带未提交改动数）。
+                // 顶栏这里原本还有一个同样的 Git 图标，同一功能两个入口，
+                // 用户看到的是「上方一个、下方一个」的重复，不知道该点哪个。
 
                 // 🌟 1. 智枢悬浮小窗收起按钮 (Collapse to Floating Window)
                 IconButton(
@@ -179,6 +157,8 @@ internal fun ChatTopBar(
             browserHighlight = browserHighlight,
             onOpenGit = onOpenGit,
             gitUncommittedCount = gitUncommittedCount,
+            onOpenRedTeam = onOpenRedTeam,
+            redTeamTarget = redTeamTarget,
             onOpenLogs = onOpenLogs,
         )
     }

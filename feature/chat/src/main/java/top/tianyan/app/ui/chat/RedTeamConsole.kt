@@ -1,10 +1,13 @@
 package top.tianyan.app.ui.chat
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -25,6 +28,8 @@ import top.tianyan.app.core.model.RedTeamPreflightReport
 import top.tianyan.app.harness.redteam.RedTeamSkillStore
 import top.tianyan.app.ui.components.RuntimeCard
 import top.tianyan.app.ui.components.RuntimeIcon
+import top.tianyan.app.ui.components.RuntimeIconButton
+import top.tianyan.app.ui.components.RuntimeTopBar
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeTextButton
 
@@ -44,7 +49,7 @@ internal fun RedTeamConsole(
     facts: List<RedTeamFactEntity>,
     state: RedTeamConsoleState,
     onBindTarget: (String, String) -> Unit,
-    onToggle: () -> Unit,
+    onDismiss: () -> Unit,
     onSelectTab: (RedTeamConsoleTab) -> Unit,
     onRefresh: () -> Unit,
     onSelectSegment: (String?) -> Unit,
@@ -66,63 +71,88 @@ internal fun RedTeamConsole(
     onSaveSkill: () -> Unit,
     onDeleteSkill: () -> Unit,
     onSetAgentsMax: (Int) -> Unit,
+    /** 自动绑定提示；界面显示一次后回调清掉。 */
+    autoBindNotice: String? = null,
+    onConsumeAutoBind: () -> Unit = {},
     skillHealth: RedTeamPreflightReport? = null,
     onRefreshSkillHealth: (() -> Unit)? = null,
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
+    // 整页而不是叠在对话上：和 Git 面板同一套语义（fillMaxSize + RuntimeTopBar + BackHandler）。
+    // 原来它是个 fillMaxWidth 的卡片堆，和 Scaffold 里的对话内容并存——
+    // 对话正文、快捷开始、输入框会从半透明卡片下面透出来，看着就是「两页糊在一起」。
+    BackHandler(onBack = onDismiss)
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+    ) {
+        RuntimeTopBar(
+            title = "RedTeam 控制台",
+            onBack = onDismiss,
+            actions = {
+                RuntimeIconButton(onClick = onRefresh, enabled = !state.loading) {
+                    RuntimeIcon(RuntimeIconName.Refresh, Modifier.size(18.dp))
+                }
+            },
+        )
         ConsoleChrome(
             session = session,
             state = state,
-            onToggle = onToggle,
             onSelectTab = onSelectTab,
-            onRefresh = onRefresh,
         )
 
-        // 收起要真的收起整块内容。只藏页签条的话，红队会话一进来看到的仍是一屏
-        // 资产/技能列表——而靶标绑定表单藏在这里面，用户以为没有靶标入口。
-        if (state.open) {
         when (state.tab) {
-                RedTeamConsoleTab.OVERVIEW -> {
-                    RedTeamAgentsCard(state = state, onSetMax = onSetAgentsMax)
-                    RedTeamPanel(
-                        session = session,
-                        facts = facts,
-                        onBindTarget = onBindTarget,
-                        skillHealth = skillHealth,
-                        onRefreshSkillHealth = onRefreshSkillHealth,
-                    )
+            RedTeamConsoleTab.OVERVIEW -> {
+                // 自动绑定提示：用户根本没进面板就绑上了目标，不提示一下会以为是系统乱改。
+                autoBindNotice?.let { notice ->
+                    androidx.compose.runtime.LaunchedEffect(notice) { onConsumeAutoBind() }
+                    RuntimeCard(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                    ) {
+                        Text(notice, style = MaterialTheme.typography.labelMedium)
+                    }
                 }
-
-                RedTeamConsoleTab.ASSETS -> RedTeamAssetsTab(
-                    state = state,
-                    onSelectSegment = onSelectSegment,
-                    onQueryChange = onQueryChange,
-                    onServiceChange = onServiceChange,
-                    onPortChange = onPortChange,
-                    onSubmitQuery = onSubmitQuery,
-                    onProvenanceChange = onProvenanceChange,
-                    onSortChange = onSortChange,
-                    onViewChange = onViewChange,
-                    onToggleAsset = onToggleAsset,
+                RedTeamAgentsCard(state = state, onSetMax = onSetAgentsMax)
+                RedTeamPanel(
+                    session = session,
+                    facts = facts,
+                    onBindTarget = onBindTarget,
+                    skillHealth = skillHealth,
+                    onRefreshSkillHealth = onRefreshSkillHealth,
                 )
+            }
 
-                RedTeamConsoleTab.PROMPTS -> RedTeamPromptsTab(
-                    state = state,
-                    onSelectRole = onSelectRole,
-                    onDraftChange = onRoleDraftChange,
-                    onSave = onSaveRole,
-                    onReset = onResetRole,
-                )
+            RedTeamConsoleTab.ASSETS -> RedTeamAssetsTab(
+                state = state,
+                onSelectSegment = onSelectSegment,
+                onQueryChange = onQueryChange,
+                onServiceChange = onServiceChange,
+                onPortChange = onPortChange,
+                onSubmitQuery = onSubmitQuery,
+                onProvenanceChange = onProvenanceChange,
+                onSortChange = onSortChange,
+                onViewChange = onViewChange,
+                onToggleAsset = onToggleAsset,
+            )
 
-                RedTeamConsoleTab.SKILLS -> RedTeamSkillsTab(
-                    state = state,
-                    onSelectSkill = onSelectSkill,
-                    onNewSkill = onNewSkill,
-                    onDraftChange = onSkillDraftChange,
-                    onSave = onSaveSkill,
-                    onDelete = onDeleteSkill,
-                )
-        }
+            RedTeamConsoleTab.PROMPTS -> RedTeamPromptsTab(
+                state = state,
+                onSelectRole = onSelectRole,
+                onDraftChange = onRoleDraftChange,
+                onSave = onSaveRole,
+                onReset = onResetRole,
+            )
+
+            RedTeamConsoleTab.SKILLS -> RedTeamSkillsTab(
+                state = state,
+                onSelectSkill = onSelectSkill,
+                onNewSkill = onNewSkill,
+                onDraftChange = onSkillDraftChange,
+                onSave = onSaveSkill,
+                onDelete = onDeleteSkill,
+            )
         }
     }
 }
@@ -217,9 +247,7 @@ private fun RedTeamAgentsCard(
 private fun ConsoleChrome(
     session: HarnessSessionEntity,
     state: RedTeamConsoleState,
-    onToggle: () -> Unit,
     onSelectTab: (RedTeamConsoleTab) -> Unit,
-    onRefresh: () -> Unit,
 ) {
     val phase = RedTeamPhase.fromId(session.redTeamPhase)
     RuntimeCard(
@@ -253,41 +281,33 @@ private fun ConsoleChrome(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            RuntimeTextButton(onClick = onRefresh, enabled = !state.loading) {
-                RuntimeIcon(RuntimeIconName.Refresh, Modifier.size(16.dp))
-            }
-            RuntimeTextButton(onClick = onToggle) {
-                Text(if (state.open) "收起" else "展开", style = MaterialTheme.typography.labelMedium)
-            }
         }
 
-        if (state.open) {
-            Row(
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                RedTeamConsoleTab.entries.forEach { tab ->
-                    val selected = tab == state.tab
-                    RuntimeTextButton(
-                        onClick = { onSelectTab(tab) },
-                        colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
-                            contentColor = if (selected) {
-                                MaterialTheme.colorScheme.error
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                        ),
-                    ) {
-                        Text(
-                            tab.label,
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                            maxLines = 1,
-                        )
-                    }
+    Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            RedTeamConsoleTab.entries.forEach { tab ->
+                val selected = tab == state.tab
+                RuntimeTextButton(
+                    onClick = { onSelectTab(tab) },
+                    colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                        contentColor = if (selected) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    ),
+                ) {
+                    Text(
+                        tab.label,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                        maxLines = 1,
+                    )
                 }
             }
         }
+        }
     }
-}

@@ -204,6 +204,7 @@ fun ChatScreen(
     val redTeamFacts by viewModel.redTeamFacts.collectAsStateWithLifecycle(initialValue = emptyList())
     val redTeamSkillHealth by viewModel.redTeamSkillHealth.collectAsStateWithLifecycle()
     val redTeamConsole by viewModel.redTeamConsole.collectAsStateWithLifecycle()
+    val redTeamAutoBind by viewModel.redTeamAutoBind.collectAsStateWithLifecycle()
     val gitCredentials by viewModel.gitCredentials.collectAsStateWithLifecycle()
     val matchedCredId by viewModel.matchedCredentialId.collectAsStateWithLifecycle()
     val gitUncommittedCount = gitPanelState.let { s -> s.staged.size + s.unstaged.size + s.untrackedCount }
@@ -226,6 +227,8 @@ fun ChatScreen(
     var showFloatingPermissionDialog by rememberSaveable { mutableStateOf(false) }
     var branchFromMessageId by rememberSaveable { mutableStateOf<String?>(null) }
     var showGitPanel by rememberSaveable { mutableStateOf(false) }
+    /** 红队控制台入口状态；与 Git 面板一样，点入口才整页进入。 */
+    var showRedTeamConsole by rememberSaveable { mutableStateOf(false) }
     // 进入 chat 时异步刷一次 git 状态（顶栏徽标要显示未提交数），不阻塞首帧
     LaunchedEffect(Unit) { viewModel.refreshGitStatus() }
     // 编辑目标消息只保存 id，避免把不可保存的实体放进状态保存器
@@ -469,6 +472,12 @@ fun ChatScreen(
                     onOpenGit = { viewModel.refreshGitStatus(); showGitPanel = true },
                     gitUncommittedCount = gitUncommittedCount,
                     onOpenLogs = onOpenLogs,
+                    onOpenRedTeam = if (currentSession?.redTeamMode == top.tianyan.app.core.model.RedTeamMode.RED_TEAM.id) {
+                        { viewModel.openRedTeamConsole(); showRedTeamConsole = true }
+                    } else {
+                        null
+                    },
+                    redTeamTarget = currentSession?.redTeamTarget,
                 )
                 // Git 流式进度横幅（clone/pull/push 时可见）
                 gitProgress?.let { p ->
@@ -774,17 +783,19 @@ fun ChatScreen(
         )
     }
 
-    if (currentSession?.redTeamMode == top.tianyan.app.core.model.RedTeamMode.RED_TEAM.id && !showGitPanel) {
+    // 与 Git 面板同构：点入口才整页进入，不再作为卡片叠在对话上。
+    // 之前它无条件渲染，对话正文、快捷开始、输入框会从半透明卡片下面透出来。
+    if (showRedTeamConsole && currentSession != null) {
         // 进面板即体检一次：技能能列出来 ≠ 能跑，缺环境变量与工具要在开工前就提示。
-        androidx.compose.runtime.LaunchedEffect(currentSession?.id) {
-            if (currentSession?.id != null) viewModel.refreshRedTeamSkillHealth()
+        androidx.compose.runtime.LaunchedEffect(currentSession.id) {
+            viewModel.refreshRedTeamSkillHealth()
         }
         RedTeamConsole(
             session = currentSession,
             facts = redTeamFacts,
             state = redTeamConsole,
             onBindTarget = viewModel::bindRedTeamTarget,
-            onToggle = viewModel::toggleRedTeamConsole,
+            onDismiss = { showRedTeamConsole = false },
             onSelectTab = viewModel::setRedTeamConsoleTab,
             onRefresh = viewModel::refreshRedTeamConsole,
             onSelectSegment = viewModel::selectRedTeamConsoleSegment,
@@ -806,6 +817,8 @@ fun ChatScreen(
             onSaveSkill = viewModel::saveConsoleSkill,
             onDeleteSkill = viewModel::deleteConsoleSkill,
             onSetAgentsMax = viewModel::setConsoleAgentsMax,
+            autoBindNotice = redTeamAutoBind,
+            onConsumeAutoBind = viewModel::consumeRedTeamAutoBind,
             skillHealth = redTeamSkillHealth,
             onRefreshSkillHealth = viewModel::refreshRedTeamSkillHealth,
         )

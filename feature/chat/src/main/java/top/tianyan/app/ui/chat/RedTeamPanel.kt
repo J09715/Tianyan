@@ -79,6 +79,14 @@ internal fun RedTeamPanel(
                 Text(phase.displayName, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
             }
 
+            // 手填是兜底：直接在对话里说目标就会自动绑定，这里给需要精确控制范围的场景用。
+            if (session.redTeamTarget.isNullOrBlank()) {
+                Text(
+                    "直接在对话里说目标（如「帮我测一下 example.com」）就会自动绑定，下面也可以手动指定。",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             OutlinedTextField(
                 value = target,
                 onValueChange = { target = it },

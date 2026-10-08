@@ -101,6 +101,9 @@ internal fun CollapsibleChatWorkbenchStrip(
     gitUncommittedCount: Int = 0,
     /** 运行日志入口；沿用开发者页那套读取/清空/导出，不在这里重做一份。 */
     onOpenLogs: (() -> Unit)? = null,
+    /** 红队控制台入口；与浏览器/仓库/日志同一条工具条，点进去是整页而不是叠在对话上。 */
+    onOpenRedTeam: (() -> Unit)? = null,
+    redTeamTarget: String? = null,
 ) {
     val roundCount = runtimeEvents.count { it is HarnessEvent.ProviderRoundStarted }
     val activeModelName = activeModel?.let { entity ->
@@ -203,6 +206,20 @@ internal fun CollapsibleChatWorkbenchStrip(
                     label = stringResource(R.string.chat_open_logs),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     onClick = onOpenLogs,
+                )
+            }
+
+            // 8. 红队控制台入口：只在红队会话出现，标签直接带靶标名，
+            // 省掉「点进去才知道这个会话绑的是谁」。
+            if (onOpenRedTeam != null) {
+                StatusDivider()
+                val bound = !redTeamTarget.isNullOrBlank()
+                WorkbenchStatusItem(
+                    icon = RuntimeIconName.Shield,
+                    label = if (bound) "红队 · $redTeamTarget" else "红队",
+                    tint = if (bound) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                    highlight = bound,
+                    onClick = onOpenRedTeam,
                 )
             }
         }

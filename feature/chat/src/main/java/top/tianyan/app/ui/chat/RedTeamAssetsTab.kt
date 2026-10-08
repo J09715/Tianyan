@@ -352,7 +352,8 @@ private fun AssetListCard(state: RedTeamConsoleState, onToggleAsset: (String) ->
             AssetRow(
                 asset = asset,
                 expanded = state.expandedAsset == asset.id,
-                detail = state.detail?.takeIf { state.expandedAsset == asset.id }?.asset?.let { state.detail },
+                // 详情只属于当前展开的那台资产；换台之后旧的详情不能串过去。
+                detail = state.detail?.takeIf { state.expandedAsset == asset.id },
                 onToggle = { onToggleAsset(asset.id) },
             )
         }
@@ -483,7 +484,7 @@ private fun AssetDetail(detail: RedTeamConsoleModel.Detail?) {
             }.ifBlank { "—" },
         )
 
-        val observations = detail?.observations.orEmpty().take(8)
+        val observations = detail.observations.take(8)
         DetailBlock(
             "采集溯源（最近 ${observations.size} 条）",
             observations.joinToString("\n") { row ->
