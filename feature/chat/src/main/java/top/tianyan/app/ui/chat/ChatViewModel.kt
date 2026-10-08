@@ -6,6 +6,7 @@ import top.tianyan.app.core.tools.AiProfileWriter
 import top.tianyan.app.core.model.ExecutionMode
 import top.tianyan.app.core.model.McpConnectionState
 import top.tianyan.app.core.model.ApprovalMode
+import top.tianyan.app.core.model.RedTeamConsoleModel
 import top.tianyan.app.core.model.RedTeamMode
 import top.tianyan.app.core.model.RedTeamPhase
 import top.tianyan.app.core.database.AiModelRepository
@@ -2088,6 +2089,286 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             runCatching { redTeamCoordinator.skillHealth(sessionId) }
                 .onSuccess { _redTeamSkillHealth.value = it }
+        }
+    }
+
+    // ── RedTeam 控制台 ────────────────────────────────────────────────────────
+    // 面板要的是结构化行，不是工具输出的散文：让面板去正则抠 `assets=12`，
+    // 工具输出改一个字面板就瞎了。这里直接走协调器的投影 API。
+
+    private val _redTeamConsole = kotlinx.coroutines.flow.MutableStateFlow(RedTeamConsoleState())
+    val redTeamConsole: kotlinx.coroutines.flow.StateFlow<RedTeamConsoleState> = _redTeamConsole.asStateFlow()
+
+    private fun updateConsole(block: (RedTeamConsoleState) -> RedTeamConsoleState) {
+        _redTeamConsole.value = block(_redTeamConsole.value)
+    }
+
+    /** 打开面板即拉一次首屏：面板常开，每次重组都拉会把事实库读穿。 */
+    fun toggleRedTeamConsole() {
+        val next = !_redTeamConsole.value.open
+        updateConsole { it.copy(open = next) }
+        if (next) refreshRedTeamConsole()
+    }
+
+    fun closeRedTeamConsole() = updateConsole { it.copy(open = false) }
+
+    fun setRedTeamConsoleTab(tab: RedTeamConsoleTab) {
+        updateConsole { it.copy(tab = tab) }
+        when (tab) {
+            RedTeamConsoleTab.PROMPTS -> if (_redTeamConsole.value.roles.isEmpty()) loadConsoleRoles()
+            RedTeamConsoleTab.SKILLS -> if (_redTeamConsole.value.skills.isEmpty()) loadConsoleSkills()
+            else -> Unit
+        }
+    }
+
+    fun refreshRedTeamConsole() {
+        val sessionId = currentSessionId.value.takeIf { it.isNotBlank() } ?: return
+        updateConsole { it.copy(loading = true, error = null) }
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val snapshot = redTeamCoordinator.consoleSnapshot(sessionId)
+                val state = _redTeamConsole.value
+                val filter = state.filter.copy(cidr = state.selectedSegment)
+                val (total, rows) = redTeamCoordinator.consoleAssets(sessionId, filter)
+                Triple(snapshot, total, rows)
+            }.onSuccess { (snapshot, total, rows) ->
+                updateConsole {
+                    it.copy(
+                        loading = false,
+                        engagements = snapshot.engagements,
+                        currentEngagement = snapshot.current,
+                        stats = snapshot.stats,
+                        segments = snapshot.segments,
+                        assets = rows,
+                        total = total,
+                        error = null,
+                    )
+                }
+            }.onFailure { error ->
+                updateConsole { it.copy(loading = false, error = error.message ?: "控制台读取失败") }
+            }
+        }
+    }
+
+    /** 过滤条件变了就重查一次；总数与列表必须同一次算出，否则底栏和列表会对不上。 */
+    private fun requeryConsoleAssets() {
+        val sessionId = currentSessionId.value.takeIf { it.isNotBlank() } ?: return
+        val state = _redTeamConsole.value
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                redTeamCoordinator.consoleAssets(sessionId, state.filter.copy(cidr = state.selectedSegment))
+            }.onSuccess { (total, rows) ->
+                updateConsole { it.copy(total = total, assets = rows, error = null) }
+            }.onFailure { error ->
+                updateConsole { it.copy(error = error.message ?: "资产查询失败") }
+            }
+        }
+    }
+
+    fun selectRedTeamConsoleSegment(cidr: String?) {
+        updateConsole { it.copy(selectedSegment = cidr, expandedAsset = null, detail = null) }
+        requeryConsoleAssets()
+        if (_redTeamConsole.value.view == RedTeamConsoleView.GRAPH) loadConsoleGraph()
+    }
+
+    fun updateRedTeamConsoleQuery(value: String) = updateConsole { it.copy(queryDraft = value) }
+
+    fun updateRedTeamConsoleService(value: String) = updateConsole { it.copy(serviceDraft = value) }
+
+    fun updateRedTeamConsolePort(value: String) = updateConsole { it.copy(portDraft = value.filter { ch -> ch.isDigit() }) }
+
+    /** 回车提交：把草稿并进过滤条件后重查。 */
+    fun submitRedTeamConsoleQuery() {
+        val state = _redTeamConsole.value
+        updateConsole {
+            it.copy(
+                filter = it.filter.copy(
+                    q = state.queryDraft.trim().ifBlank { null },
+                    service = state.serviceDraft.trim().ifBlank { null },
+                    port = state.portDraft.toIntOrNull(),
+                ),
+            )
+        }
+        requeryConsoleAssets()
+    }
+
+    fun setRedTeamConsoleProvenance(provenance: String?) {
+        updateConsole { it.copy(filter = it.filter.copy(provenance = provenance)) }
+        requeryConsoleAssets()
+    }
+
+    fun setRedTeamConsoleSort(sort: RedTeamConsoleModel.Sort) {
+        updateConsole { it.copy(filter = it.filter.copy(sort = sort)) }
+        requeryConsoleAssets()
+    }
+
+    fun setRedTeamConsoleView(view: RedTeamConsoleView) {
+        updateConsole { it.copy(view = view) }
+        if (view == RedTeamConsoleView.GRAPH) loadConsoleGraph()
+    }
+
+    fun loadConsoleGraph() {
+        val sessionId = currentSessionId.value.takeIf { it.isNotBlank() } ?: return
+        val cidr = _redTeamConsole.value.selectedSegment
+        updateConsole { it.copy(graphLoading = true) }
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { redTeamCoordinator.consoleGraph(sessionId, cidr) }
+                .onSuccess { graph -> updateConsole { it.copy(graph = graph, graphLoading = false) } }
+                .onFailure { error ->
+                    updateConsole { it.copy(graphLoading = false, error = error.message ?: "图谱加载失败") }
+                }
+        }
+    }
+
+    /** 展开一台资产才去查详情：一次拉全部资产的观测溯源等于把事实库读两遍。 */
+    fun toggleRedTeamConsoleAsset(assetId: String) {
+        val sessionId = currentSessionId.value.takeIf { it.isNotBlank() } ?: return
+        if (_redTeamConsole.value.expandedAsset == assetId) {
+            updateConsole { it.copy(expandedAsset = null, detail = null) }
+            return
+        }
+        updateConsole { it.copy(expandedAsset = assetId, detail = null) }
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { redTeamCoordinator.consoleAssetDetail(sessionId, assetId) }
+                .onSuccess { detail -> updateConsole { it.copy(detail = detail) } }
+        }
+    }
+
+    fun loadConsoleRoles() {
+        val sessionId = currentSessionId.value.takeIf { it.isNotBlank() } ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { redTeamCoordinator.consoleRoles(sessionId) }
+                .onSuccess { roles ->
+                    updateConsole { state ->
+                        val keep = state.roleId?.takeIf { id -> roles.any { it.id == id } } ?: roles.firstOrNull()?.id
+                        state.copy(
+                            roles = roles,
+                            roleId = keep,
+                            roleDraft = roles.firstOrNull { it.id == keep }?.content ?: state.roleDraft,
+                        )
+                    }
+                }
+                .onFailure { error -> updateConsole { it.copy(roleMessage = error.message ?: "读取角色提示词失败") } }
+        }
+    }
+
+    fun selectConsoleRole(roleId: String) {
+        updateConsole { state ->
+            state.copy(roleId = roleId, roleDraft = state.roles.firstOrNull { it.id == roleId }?.content.orEmpty(), roleMessage = null)
+        }
+    }
+
+    fun updateConsoleRoleDraft(text: String) = updateConsole { it.copy(roleDraft = text, roleMessage = null) }
+
+    fun saveConsoleRole() {
+        val sessionId = currentSessionId.value.takeIf { it.isNotBlank() } ?: return
+        val state = _redTeamConsole.value
+        val roleId = state.roleId ?: return
+        updateConsole { it.copy(roleSaving = true, roleMessage = null) }
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { redTeamCoordinator.consoleSaveRolePrompt(sessionId, roleId, state.roleDraft) }
+                .onSuccess { overridden ->
+                    updateConsole { it.copy(roleSaving = false, roleMessage = if (overridden) "已保存" else "已恢复内置文案") }
+                    loadConsoleRoles()
+                }
+                .onFailure { error ->
+                    updateConsole { it.copy(roleSaving = false, roleMessage = error.message ?: "保存失败") }
+                }
+        }
+    }
+
+    /** 恢复内置：保存空正文即上游的 reset 语义，不需要另一个按钮。 */
+    fun resetConsoleRole() {
+        updateConsole { it.copy(roleDraft = "") }
+        saveConsoleRole()
+    }
+
+    fun loadConsoleSkills() {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { redTeamCoordinator.consoleSkills() }
+                .onSuccess { skills -> updateConsole { it.copy(skills = skills) } }
+                .onFailure { error -> updateConsole { it.copy(skillMessage = error.message ?: "读取技能库失败") } }
+        }
+    }
+
+    fun selectConsoleSkill(id: String) {
+        updateConsole { state ->
+            state.copy(skillDraft = state.skills.firstOrNull { it.id == id }, skillMessage = null)
+        }
+    }
+
+    fun newConsoleSkill() {
+        updateConsole {
+            it.copy(
+                skillDraft = top.tianyan.app.harness.redteam.RedTeamSkillStore.Skill(
+                    id = "",
+                    name = "",
+                    role = null,
+                    enabled = true,
+                    description = "",
+                    whenToUse = null,
+                    body = "",
+                    path = null,
+                    builtin = false,
+                ),
+                skillMessage = null,
+            )
+        }
+    }
+
+    fun updateConsoleSkillDraft(transform: (top.tianyan.app.harness.redteam.RedTeamSkillStore.Skill) -> top.tianyan.app.harness.redteam.RedTeamSkillStore.Skill) {
+        updateConsole { state -> state.skillDraft?.let { state.copy(skillDraft = transform(it), skillMessage = null) } ?: state }
+    }
+
+    fun saveConsoleSkill() {
+        val draft = _redTeamConsole.value.skillDraft ?: return
+        if (draft.name.isBlank()) {
+            updateConsole { it.copy(skillMessage = "技能名不能为空") }
+            return
+        }
+        if (draft.body.isBlank()) {
+            updateConsole { it.copy(skillMessage = "技能正文不能为空") }
+            return
+        }
+        updateConsole { it.copy(skillSaving = true, skillMessage = null) }
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { redTeamCoordinator.consoleSaveSkill(draft) }
+                .onSuccess { saved ->
+                    updateConsole { it.copy(skillSaving = false, skillDraft = saved, skillMessage = "已保存") }
+                    loadConsoleSkills()
+                }
+                .onFailure { error ->
+                    updateConsole { it.copy(skillSaving = false, skillMessage = error.message ?: "保存失败") }
+                }
+        }
+    }
+
+    fun deleteConsoleSkill() {
+        val draft = _redTeamConsole.value.skillDraft ?: return
+        if (draft.builtin) {
+            updateConsole { it.copy(skillMessage = "内置技能不可删除") }
+            return
+        }
+        if (draft.id.isBlank()) {
+            updateConsole { it.copy(skillDraft = null, skillMessage = null) }
+            return
+        }
+        updateConsole { it.copy(skillSaving = true, skillMessage = null) }
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { redTeamCoordinator.consoleDeleteSkill(draft.id) }
+                .onSuccess { removed ->
+                    updateConsole {
+                        it.copy(
+                            skillSaving = false,
+                            skillDraft = null,
+                            skillMessage = if (removed) "已删除" else "删除失败：技能不存在或为内置技能",
+                        )
+                    }
+                    loadConsoleSkills()
+                }
+                .onFailure { error ->
+                    updateConsole { it.copy(skillSaving = false, skillMessage = error.message ?: "删除失败") }
+                }
         }
     }
 

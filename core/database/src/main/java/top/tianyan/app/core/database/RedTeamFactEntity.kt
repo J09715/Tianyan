@@ -38,6 +38,15 @@ interface RedTeamFactDao {
     @Query("SELECT * FROM red_team_facts WHERE sessionId = :sessionId ORDER BY updatedAt DESC LIMIT :limit")
     suspend fun recent(sessionId: String, limit: Int): List<RedTeamFactEntity>
 
+    /**
+     * 控制台专用：按类型整批取回。
+     *
+     * `recent` 的 500 上限对工具调用够用，对面板不够——上游面板默认就展示 400 台资产，
+     * 再叠上端口/漏洞/得分事实，一次演练很容易越过 500，面板会显示成「记录变少了」。
+     */
+    @Query("SELECT * FROM red_team_facts WHERE sessionId = :sessionId AND kind IN (:kinds) ORDER BY updatedAt DESC LIMIT :limit")
+    suspend fun byKinds(sessionId: String, kinds: List<String>, limit: Int): List<RedTeamFactEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(fact: RedTeamFactEntity)
 

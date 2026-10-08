@@ -18,6 +18,13 @@ enum class RedTeamFactKind(val id: String) {
     SCORE_POINT("score_point"),
     /** 阶段覆盖层：用户对阶段名称/目标/手段分组/工具的编辑。 */
     STAGE("stage"),
+    /**
+     * 角色提示词覆盖层：用户改过的角色提示词。
+     *
+     * 与 stage/score_point 同一套持久化——上游存在 SQLite 的 prompt 表里，
+     * 只放进程内存的话重启就没了，用户改过的提示词会静默回退成内置文案。
+     */
+    PROMPT("prompt"),
     REPORT("report"),
     KNOWLEDGE("knowledge"),
     SKILL("skill"),

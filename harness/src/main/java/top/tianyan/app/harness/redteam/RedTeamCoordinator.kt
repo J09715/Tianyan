@@ -6,6 +6,7 @@ import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.Json
@@ -23,6 +24,8 @@ import top.tianyan.app.core.model.RedTeamPreflightResult
 import top.tianyan.app.core.model.RedTeamIpUtils
 import top.tianyan.app.core.model.RedTeamReportReplay
 import top.tianyan.app.core.model.RedTeamPreflightReport
+import top.tianyan.app.core.model.RedTeamConsoleModel
+import top.tianyan.app.core.model.RedTeamMode
 import top.tianyan.app.core.model.RedTeamRole
 import top.tianyan.app.core.model.RedTeamSettings
 import top.tianyan.app.core.model.RedTeamStage
@@ -46,6 +49,8 @@ class RedTeamCoordinator @Inject constructor(
     private val events: HarnessEventBus,
     /** 红队技能来源；缺省为空，单测无需构造完整技能库。 */
     private val skills: RedTeamSkillSource = RedTeamSkillSource.Empty,
+    /** 技能库读写接缝（控制台「技能库」页签）；缺省不可用，单测无需构造 Room。 */
+    private val skillStore: RedTeamSkillStore = RedTeamSkillStore.Unsupported,
 ) {
     /** 落盘根目录的就地覆盖（测试用，避免写到真实 home）。 */
     @Volatile
@@ -78,6 +83,12 @@ class RedTeamCoordinator @Inject constructor(
     private data class SlotReservation(val key: String, val label: String, val at: Long)
 
     /** 会话级角色提示词覆盖；未设置时回落到内置职责描述，进程重启后回到内置值。 */
+    /**
+     * 角色提示词覆盖层的读缓存。
+     *
+     * 真值在 `prompt` 事实里（`id = prompt:<role>`，正文放 payload.content）；这里只是
+     * 避免每次派活/查提示词都扫一遍事实库。缓存随保存写穿，重启后从事实库重建。
+     */
     private val rolePrompts = java.util.concurrent.ConcurrentHashMap<String, MutableMap<String, String>>()
 
     suspend fun record(
@@ -379,7 +390,13 @@ class RedTeamCoordinator @Inject constructor(
                 "score_chain" -> scoreChain(sessionId, args)
                 "poc_stats" -> pocStats(sessionId)
                 "role_prompt" -> rolePrompt(sessionId, args)
+                "role_prompt_save" -> saveRolePrompt(sessionId, args)
                 "role_prompt_reset" -> rolePromptReset(sessionId, args)
+                "prompts" -> prompts(sessionId)
+                "skill_list" -> skillList()
+                "skill_get" -> skillGet(args)
+                "skill_save" -> skillSave(args)
+                "skill_delete" -> skillDelete(args)
                 "sessions" -> "当前会话 ${sessionId}（红队模式的目标与事实均为会话级，不跨会话共享）"
                 "session_check", "engagement_open", "session_bind" -> sessionCheck(sessionId)
                 else -> error("unsupported redteam action: $action")
@@ -420,6 +437,134 @@ class RedTeamCoordinator @Inject constructor(
             else -> error("agent_slot sub_action must be status/acquire/release")
         }
     }
+
+    // ── 控制台投影 API ────────────────────────────────────────────────────────
+    // 面板不解析工具输出：那是写给模型看的散文。让面板去正则抠 `assets=12`，
+    // 工具输出改一个字面板就瞎了，而且没有任何编译期保护。这里直接给结构化行。
+
+    /**
+     * 面板一次要读的事实类型。
+     *
+     * 端口/指纹/域名不是独立事实，它们挂在资产 payload 的数组里，所以只取三类；
+     * 多取类型只会让面板在无关行上白跑投影。
+     */
+    private val consoleKinds = listOf(
+        RedTeamFactKind.ASSET.id,
+        RedTeamFactKind.EDGE.id,
+        RedTeamFactKind.EVENT.id,
+    )
+
+    /** 面板单次读事实的上限：上游 `listAssets` 硬上限 2000，这里留出端口/漏洞的余量。 */
+    private val consoleFactLimit = 8000
+
+    private fun RedTeamFactEntity.toConsoleFact() = RedTeamConsoleModel.Fact(
+        id = id,
+        kind = kind,
+        title = title,
+        target = target,
+        status = status,
+        payload = payload,
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+    )
+
+    suspend fun consoleFacts(sessionId: String): List<RedTeamConsoleModel.Fact> = withContext(Dispatchers.IO) {
+        facts.byKinds(sessionId, consoleKinds, consoleFactLimit).map { it.toConsoleFact() }
+    }
+
+    /**
+     * 面板首屏：靶标清单 + 当前靶标 + 资产 + 网段 + 底栏统计。
+     *
+     * 一次取全，避免「切页签时统计已经变了、列表还是旧的」——
+     * 底栏数字和列表对不上，比慢一点更让人不信任。
+     */
+    suspend fun consoleSnapshot(sessionId: String): RedTeamConsoleModel.Snapshot = withContext(Dispatchers.IO) {
+        val rows = consoleFacts(sessionId)
+        val assets = RedTeamConsoleModel.assets(rows)
+        val engagements = sessions.listAll()
+            .filter { it.redTeamMode == RedTeamMode.RED_TEAM.id }
+            .sortedByDescending { it.updatedAt }
+            .map {
+                RedTeamConsoleModel.Engagement(
+                    id = it.id,
+                    name = it.title.ifBlank { it.redTeamTarget ?: it.id },
+                    target = it.redTeamTarget,
+                    scope = it.redTeamScope,
+                )
+            }
+        RedTeamConsoleModel.Snapshot(
+            engagements = engagements,
+            current = sessionId,
+            assets = assets,
+            segments = RedTeamConsoleModel.segments(rows, assets),
+            stats = RedTeamConsoleModel.stats(rows, assets),
+        )
+    }
+
+    /** 资产列表：返回（过滤后总数，当前页）。 */
+    suspend fun consoleAssets(
+        sessionId: String,
+        filter: RedTeamConsoleModel.Filter = RedTeamConsoleModel.Filter(),
+    ): Pair<Int, List<RedTeamConsoleModel.Asset>> = withContext(Dispatchers.IO) {
+        RedTeamConsoleModel.query(consoleFacts(sessionId), filter)
+    }
+
+    /** 单台资产详情（含采集溯源）；找不到返回 null，由面板显示空态而不是编一行假数据。 */
+    suspend fun consoleAssetDetail(sessionId: String, assetId: String): RedTeamConsoleModel.Detail? =
+        withContext(Dispatchers.IO) {
+            val rows = consoleFacts(sessionId)
+            val asset = RedTeamConsoleModel.assets(rows).firstOrNull { it.id == assetId || it.ip == assetId }
+                ?: return@withContext null
+            RedTeamConsoleModel.Detail(asset, RedTeamConsoleModel.observationsOf(rows, asset))
+        }
+
+    suspend fun consoleGraph(
+        sessionId: String,
+        cidr: String? = null,
+        maxNodes: Int = 600,
+    ): RedTeamConsoleModel.Graph = withContext(Dispatchers.IO) {
+        RedTeamConsoleModel.graph(consoleFacts(sessionId), cidr, maxNodes.coerceIn(10, 2000))
+    }
+
+    /** 角色提示词清单（面板「智能体提示词」页签）。 */
+    suspend fun consoleRoles(sessionId: String): List<RedTeamConsoleModel.Role> = withContext(Dispatchers.IO) {
+        val overrides = facts.byKinds(sessionId, listOf(RedTeamFactKind.PROMPT.id), consoleFactLimit)
+            .associate { fact ->
+                val role = payloadOf(fact)["role"]?.jsonPrimitive?.contentOrNull ?: fact.id.removePrefix("prompt:")
+                role to (payloadOf(fact)["content"]?.jsonPrimitive?.contentOrNull.orEmpty() to fact.updatedAt)
+            }
+        RedTeamRole.entries.map { role ->
+            val hit = overrides[role.id]
+            RedTeamConsoleModel.Role(
+                id = role.id,
+                title = role.displayName,
+                source = if (hit != null && hit.first.isNotBlank()) {
+                    RedTeamConsoleModel.Role.SOURCE_OVERRIDE
+                } else {
+                    RedTeamConsoleModel.Role.SOURCE_BUILTIN
+                },
+                content = hit?.first?.takeIf { it.isNotBlank() } ?: ROLE_DUTIES.getValue(role),
+                updatedAt = hit?.second,
+            )
+        }
+    }
+
+    /** 面板保存角色提示词；空正文恢复内置。返回是否落成覆盖。 */
+    suspend fun consoleSaveRolePrompt(sessionId: String, roleId: String, content: String): Boolean {
+        val args = buildJsonObject {
+            put("role", JsonPrimitive(roleId))
+            put("content", JsonPrimitive(content))
+        }
+        return saveRolePrompt(sessionId, args).contains("source=session-override")
+    }
+
+    /** 面板技能库读写：直接转发到技能库接缝，未装配时由接缝给出明确错误。 */
+    suspend fun consoleSkills(): List<RedTeamSkillStore.Skill> = withContext(Dispatchers.IO) { skillStore.list() }
+
+    suspend fun consoleSaveSkill(skill: RedTeamSkillStore.Skill): RedTeamSkillStore.Skill =
+        withContext(Dispatchers.IO) { skillStore.save(skill) }
+
+    suspend fun consoleDeleteSkill(id: String): Boolean = withContext(Dispatchers.IO) { skillStore.delete(id) }
 
     private suspend fun roleBrief(sessionId: String): String {
         val session = requireNotNull(sessions.findById(sessionId)) { "session not found" }
@@ -2010,7 +2155,7 @@ class RedTeamCoordinator @Inject constructor(
             ?: error("role is required")
         val role = RedTeamRole.entries.firstOrNull { it.id == roleId }
             ?: error("unknown role: $roleId (${RedTeamRole.entries.joinToString("/") { it.id }})")
-        val override = rolePrompts[sessionId]?.get(role.id)
+        val override = rolePromptOverrides(sessionId)[role.id]
         return buildString {
             appendLine("role=${role.id}｜${role.displayName}")
             appendLine("source=${if (override != null) "session-override" else "builtin"}")
@@ -2018,12 +2163,179 @@ class RedTeamCoordinator @Inject constructor(
         }
     }
 
+    /**
+     * 角色提示词覆盖层：从 `prompt` 事实读，按会话缓存。
+     *
+     * 与 stage/score_point 一致地把用户编辑落库，而不是只放内存——上游存在 SQLite，
+     * 只放内存的话重启后用户改过的提示词会静默回退成内置文案，而且没有任何提示。
+     */
+    private suspend fun rolePromptOverrides(sessionId: String): Map<String, String> {
+        val cached = rolePrompts[sessionId]
+        if (cached != null && cached.isNotEmpty()) return cached
+        val loaded = recent(sessionId, MAX_FACTS_SCANNED)
+            .filter { it.kind == RedTeamFactKind.PROMPT.id }
+            .associate { fact ->
+                val role = payloadOf(fact)["role"]?.jsonPrimitive?.contentOrNull
+                    ?: fact.id.removePrefix("prompt:")
+                role to fact.payload.let { payloadOf(fact)["content"]?.jsonPrimitive?.contentOrNull.orEmpty() }
+            }
+            .filterValues { it.isNotBlank() }
+        if (loaded.isNotEmpty()) rolePrompts.getOrPut(sessionId) { java.util.concurrent.ConcurrentHashMap() }.putAll(loaded)
+        return loaded
+    }
+
+    /**
+     * 保存角色提示词覆盖（上游 `savePrompt`）。
+     *
+     * 内容为空等于「恢复内置」：留一条空覆盖会让面板显示「已覆盖」但正文是空的，
+     * 比直接删掉更难看懂，所以这里走 reset 语义。
+     */
+    private suspend fun saveRolePrompt(sessionId: String, args: JsonObject): String {
+        requireBoundRedTeam(sessionId)
+        val roleId = args["role"]?.jsonPrimitive?.contentOrNull?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
+            ?: error("role is required")
+        val role = RedTeamRole.entries.firstOrNull { it.id == roleId }
+            ?: error("unknown role: $roleId (${RedTeamRole.entries.joinToString("/") { it.id }})")
+        val content = args["content"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        if (content.isBlank()) {
+            rolePrompts[sessionId]?.remove(role.id)
+            facts.deleteById(sessionId, "prompt:${role.id}")
+            events.emit(HarnessEvent.RedTeamFactChanged(sessionId, System.currentTimeMillis(), "prompt:${role.id}", "prompt", "reset"))
+            return "ok=true\nrole=${role.id}\nsource=builtin"
+        }
+        record(
+            sessionId = sessionId,
+            kind = RedTeamFactKind.PROMPT,
+            title = role.displayName,
+            payload = JsonObject(
+                mapOf(
+                    "role" to JsonPrimitive(role.id),
+                    "content" to JsonPrimitive(content),
+                ),
+            ).toString(),
+            id = "prompt:${role.id}",
+        )
+        rolePrompts.getOrPut(sessionId) { java.util.concurrent.ConcurrentHashMap() }[role.id] = content
+        return "ok=true\nrole=${role.id}\nchars=${content.length}\nsource=session-override"
+    }
+
+    /** 角色提示词清单（上游 `prompts` op）：一次性给出全部角色的标题、来源与正文。 */
+    private suspend fun prompts(sessionId: String): String {
+        requireBoundRedTeam(sessionId)
+        val overrides = rolePromptOverrides(sessionId)
+        return buildString {
+            appendLine("ok=true")
+            appendLine("count=${RedTeamRole.entries.size}")
+            RedTeamRole.entries.forEach { role ->
+                val override = overrides[role.id]
+                appendLine("## ${role.id}｜${role.displayName}")
+                appendLine("source=${if (override != null) "session-override" else "builtin"}")
+                appendLine("chars=${(override ?: ROLE_DUTIES.getValue(role)).length}")
+                appendLine(override ?: ROLE_DUTIES.getValue(role))
+            }
+        }
+    }
+
     private suspend fun rolePromptReset(sessionId: String, args: JsonObject): String {
         requireBoundRedTeam(sessionId)
         val roleId = args["role"]?.jsonPrimitive?.contentOrNull?.trim()?.lowercase()
-        val bucket = rolePrompts[sessionId] ?: return "ok=true\nreset=none"
-        val removed = if (roleId.isNullOrBlank()) bucket.keys.toList().also { bucket.clear() } else listOfNotNull(roleId.takeIf { bucket.remove(it) != null })
+        // 先清事实再清缓存：只清缓存的话重启后覆盖层会「复活」，用户会以为重置没生效。
+        val persisted = recent(sessionId, MAX_FACTS_SCANNED)
+            .filter { it.kind == RedTeamFactKind.PROMPT.id }
+            .map { it.id.removePrefix("prompt:") }
+            .filter { roleId.isNullOrBlank() || it == roleId }
+        persisted.forEach { facts.deleteById(sessionId, "prompt:$it") }
+        val bucket = rolePrompts[sessionId]
+        val cached = if (bucket == null) {
+            emptyList()
+        } else if (roleId.isNullOrBlank()) {
+            bucket.keys.toList().also { bucket.clear() }
+        } else {
+            listOfNotNull(roleId.takeIf { bucket.remove(it) != null })
+        }
+        val removed = (persisted + cached).distinct()
+        if (removed.isNotEmpty()) {
+            events.emit(HarnessEvent.RedTeamFactChanged(sessionId, System.currentTimeMillis(), "prompt", "prompt", "reset"))
+        }
         return "ok=true\nreset=${removed.joinToString(",").ifBlank { "none" }}"
+    }
+
+    /** 技能库清单（上游 `skillCatalog`）。 */
+    private suspend fun skillList(): String {
+        val rows = skillStore.list()
+        return buildString {
+            appendLine("ok=true")
+            appendLine("count=${rows.size}")
+            rows.forEach { skill ->
+                appendLine("- ${skill.id} | ${skill.name} | ${if (skill.enabled) "enabled" else "disabled"} | ${if (skill.builtin) "builtin" else "custom"}")
+                skill.description.takeIf { it.isNotBlank() }?.let { appendLine("  desc: $it") }
+                skill.whenToUse?.let { appendLine("  when: $it") }
+                skill.path?.let { appendLine("  path: $it") }
+            }
+            if (rows.isEmpty()) append("技能库为空；用 skill_save 新建，或把 SKILL.md 目录放进技能扫描根目录后同步。")
+        }
+    }
+
+    /** 读单个技能正文（上游 `skillRead`）。 */
+    private suspend fun skillGet(args: JsonObject): String {
+        val id = args["id"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
+            ?: args["name"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
+            ?: error("skill_get 需要 id 或 name")
+        val skill = skillStore.list().firstOrNull { it.id == id || it.name == id }
+            ?: return "ok=false\nerror=技能不存在：$id"
+        return buildString {
+            appendLine("ok=true")
+            appendLine("id=${skill.id}")
+            appendLine("name=${skill.name}")
+            appendLine("enabled=${skill.enabled}")
+            appendLine("builtin=${skill.builtin}")
+            skill.role?.let { appendLine("role=$it") }
+            // whenToUse / description 是面板编辑器的字段，读不回来就等于面板一打开就丢内容。
+            skill.whenToUse?.let { appendLine("when_to_use=$it") }
+            skill.description.takeIf { it.isNotBlank() }?.let { appendLine("description=$it") }
+            skill.path?.let { appendLine("path=$it") }
+            appendLine("## 正文")
+            append(skill.body)
+        }
+    }
+
+    /** 新建/更新技能（上游 `saveSkill`）。 */
+    private suspend fun skillSave(args: JsonObject): String {
+        val name = args["name"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
+            ?: error("skill_save 需要 name")
+        val body = args["body"]?.jsonPrimitive?.contentOrNull
+            ?: args["content"]?.jsonPrimitive?.contentOrNull
+            ?: error("skill_save 需要 body（技能正文）")
+        val id = args["id"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+        val existing = id.takeIf { it.isNotEmpty() }?.let { skillStore.read(it) }
+        val saved = skillStore.save(
+            RedTeamSkillStore.Skill(
+                id = existing?.id ?: id,
+                name = name,
+                role = args["role"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() } ?: existing?.role,
+                enabled = args["enabled"]?.jsonPrimitive?.contentOrNull?.toBooleanStrictOrNull() ?: existing?.enabled ?: true,
+                description = args["description"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
+                    ?: existing?.description.orEmpty(),
+                whenToUse = args["when_to_use"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
+                    ?: existing?.whenToUse,
+                body = body,
+                path = existing?.path,
+                builtin = existing?.builtin ?: false,
+            ),
+        )
+        return "ok=true\nid=${saved.id}\nname=${saved.name}\nenabled=${saved.enabled}"
+    }
+
+    /** 删除自建技能（上游 `deleteSkill`）。内置技能拒绝删除并说明原因，而不是静默不动。 */
+    private suspend fun skillDelete(args: JsonObject): String {
+        val id = args["id"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
+            ?: args["name"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
+            ?: error("skill_delete 需要 id 或 name")
+        val skill = skillStore.list().firstOrNull { it.id == id || it.name == id }
+            ?: return "ok=false\nerror=技能不存在：$id"
+        if (skill.builtin) return "ok=false\nerror=内置技能不可删除：${skill.name}"
+        val removed = skillStore.delete(skill.id)
+        return if (removed) "ok=true\ndeleted=${skill.id}" else "ok=false\nerror=删除失败：${skill.id}"
     }
 
     private suspend fun sessionCheck(sessionId: String): String {

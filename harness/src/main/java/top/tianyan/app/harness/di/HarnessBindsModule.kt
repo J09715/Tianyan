@@ -13,6 +13,8 @@ import top.tianyan.app.harness.projection.LiveMessagePort
 import top.tianyan.app.harness.projection.SessionMessageProjector
 import top.tianyan.app.harness.redteam.RedTeamSkillSource
 import top.tianyan.app.harness.redteam.RepositoryRedTeamSkillSource
+import top.tianyan.app.harness.redteam.RedTeamSkillStore
+import top.tianyan.app.harness.redteam.RepositoryRedTeamSkillStore
 
 /** Harness 模块内的 Hilt 端点绑定：可测接缝在此收口。 */
 @Module
@@ -45,4 +47,11 @@ abstract class HarnessBindsModule {
     abstract fun bindRedTeamSkillSource(
         impl: RepositoryRedTeamSkillSource,
     ): RedTeamSkillSource
+
+    /** 技能库读写接缝 → 落库实现（控制台「技能库」页签的新建/编辑/删除）。 */
+    @Binds
+    @Singleton
+    abstract fun bindRedTeamSkillStore(
+        impl: RepositoryRedTeamSkillStore,
+    ): RedTeamSkillStore
 }

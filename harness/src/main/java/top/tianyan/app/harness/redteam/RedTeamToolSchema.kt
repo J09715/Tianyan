@@ -17,11 +17,12 @@ object RedTeamToolSchema {
     /** 会话控制类：不产出事实记录，只读状态或调整闸门。 */
     val CONTROL_ACTIONS = listOf(
         "session_info", "preflight", "agent_slot", "roles",
-        "fact_add", "role_prompt", "role_prompt_reset",
+        "fact_add", "role_prompt", "role_prompt_save", "role_prompt_reset",
         "sessions", "session_check", "engagement_open", "session_bind",
         "score_points", "score_point_save", "stages", "save_stage", "role_dispatch", "group_slot",
         "asset_assess", "asset_test", "active_tests", "test_stats", "console_digest", "import_bundle",
         "template_search", "template_stats", "probe_sessions", "snapshot", "bootstrap",
+        "skill_save", "skill_delete",
     )
 
     /**
@@ -48,6 +49,7 @@ object RedTeamToolSchema {
         "score_list", "score_report", "poc_search", "poc_list", "poc_get", "poc_use",
         "report_targets", "report", "domain_index", "web_list", "attack_path", "fact_query",
         "vuln_stats", "http_evidence_list", "score_chain", "poc_stats",
+        "prompts", "skill_list", "skill_get",
         // 攻击文件读回：路径来自库里被智能体写过的 path 列，读取必须过靶标根目录校验。
         "read_attack_file",
     )
@@ -93,6 +95,14 @@ object RedTeamToolSchema {
             append(""""query":{"type":"string","description":"template_search 的模板名/标签/CVE 关键字"},""")
             append(""""limit":{"type":"integer","description":"结果上限：模板检索默认 40、硬上限 200；active_tests 默认 8、硬上限 50"},""")
             append(""""timeout_ms":{"type":"integer","description":"probe_sessions 的连接超时，收敛到 1000..20000 毫秒，默认 6000"},""")
+            append(""""name":{"type":"string","description":"skill_save/skill_delete 的技能名"},""")
+            append(""""body":{"type":"string","description":"skill_save 的技能正文（Markdown）"},""")
+            append(""""content":{"type":"string","description":"role_prompt_save 的角色提示词正文；传空字符串恢复内置文案"},""")
+            append(""""when_to_use":{"type":"string","description":"skill_save 的「何时使用」"},""")
+            append(""""enabled":{"type":"string","enum":["true","false"],"description":"skill_save 的启用开关"},""")
+            append(""""vuln_id":{"type":"string","description":"http_evidence_list 按漏洞过滤"},""")
+            append(""""asset_id":{"type":"string","description":"http_evidence_list 按资产过滤"},""")
+            append(""""full":{"type":"string","enum":["true","false"],"description":"http_evidence_list 是否附完整原始报文，默认只给请求首行"},""")
             append(""""id":{"type":"string","description":"可选稳定 ID，重复写入同一实体时覆盖"}},""")
             append(""""required":["action"],"additionalProperties":true,"allOf":[""")
             val clauses = buildList {
@@ -100,7 +110,11 @@ object RedTeamToolSchema {
                 add("""{"if":{"properties":{"action":{"enum":[""" + FACTS_REQUIRING_TITLE.joinToString(",") { "\"$it\"" } + """]}},"required":["action"]},"then":{"required":["title"]}}""")
                 add("""{"if":{"properties":{"action":{"const":"agent_slot"}},"required":["action"]},"then":{"required":["sub_action"]}}""")
                 add("""{"if":{"properties":{"action":{"const":"role_prompt"}},"required":["action"]},"then":{"required":["role"]}}""")
+                add("""{"if":{"properties":{"action":{"const":"role_prompt_save"}},"required":["action"]},"then":{"required":["role","content"]}}""")
                 add("""{"if":{"properties":{"action":{"const":"role_dispatch"}},"required":["action"]},"then":{"required":["role","task"]}}""")
+                add("""{"if":{"properties":{"action":{"const":"skill_save"}},"required":["action"]},"then":{"required":["name","body"]}}""")
+                add("""{"if":{"properties":{"action":{"const":"skill_delete"}},"required":["action"]},"then":{"required":["name"]}}""")
+                add("""{"if":{"properties":{"action":{"const":"skill_get"}},"required":["action"]},"then":{"required":["name"]}}""")
                 add("""{"if":{"properties":{"action":{"const":"asset_link"}},"required":["action"]},"then":{"required":["src_id","dst_id","relation"]}}""")
                 add("""{"if":{"properties":{"action":{"enum":[""" + ID_REQUIRED_ACTIONS.joinToString(",") { "\"$it\"" } + """]}},"required":["action"]},"then":{"required":["id"]}}""")
                 add("""{"if":{"properties":{"action":{"enum":[""" + UPDATE_ACTIONS.joinToString(",") { "\"$it\"" } + """]}},"required":["action"]},"then":{"required":["id"]}}""")

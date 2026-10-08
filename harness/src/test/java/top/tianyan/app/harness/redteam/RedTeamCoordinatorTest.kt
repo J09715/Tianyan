@@ -252,6 +252,11 @@ class RedTeamCoordinatorTest {
                 put("src_id", "a")
                 put("dst_id", "b")
                 put("relation", "resolves")
+                // 新增的条件必填字段也要喂：否则 skill_* / role_prompt_save 只在前置校验里
+                // 就被挡下，契约测试看着过了，实际分支从没跑过。
+                put("name", "probe-skill")
+                put("body", "# probe")
+                put("content", "probe prompt")
             }
             val (_, message) = fresh.execute(args, "s1")
             assertFalse(
@@ -1242,6 +1247,163 @@ class RedTeamCoordinatorTest {
         FakeSessions(sessions.toList()),
         events,
     )
+
+    /**
+     * 共享同一份事实库的构造器：验证「保存后重启仍在」必须换一个协调器实例去读，
+     * 用同一个实例读等于在测内存缓存，测不出有没有落库。
+     */
+    private fun coordinatorOn(
+        facts: RedTeamFactRepository,
+        vararg sessions: HarnessSessionEntity,
+        skillStore: RedTeamSkillStore = RedTeamSkillStore.Unsupported,
+    ) = RedTeamCoordinator(
+        facts,
+        FakeSessions(sessions.toList()),
+        events,
+        RedTeamSkillSource.Empty,
+        skillStore,
+    )
+
+    /** 内存技能库：只记状态，不碰 Room，用来验证四个技能动作的分支行为。 */
+    private class FakeSkillStore : RedTeamSkillStore {
+        private val rows = linkedMapOf<String, RedTeamSkillStore.Skill>()
+        var failNextSave = false
+
+        override suspend fun list() = rows.values.toList()
+
+        override suspend fun read(id: String) = rows[id]
+
+        override suspend fun save(skill: RedTeamSkillStore.Skill): RedTeamSkillStore.Skill {
+            if (failNextSave) error("磁盘满了")
+            val id = skill.id.takeIf { it.isNotBlank() } ?: "custom_${rows.size + 1}"
+            val stored = skill.copy(id = id)
+            rows[id] = stored
+            return stored
+        }
+
+        override suspend fun delete(id: String) = rows.remove(id) != null
+
+        fun seed(skill: RedTeamSkillStore.Skill) {
+            rows[skill.id] = skill
+        }
+    }
+
+    /** 角色提示词覆盖必须落库：只放内存的话重启后用户改过的提示词会静默变回内置文案。 */
+    @Test
+    fun `role prompt override persists as a fact and survives a new coordinator`() = runBlocking {
+        val facts = FakeFacts()
+        val session = session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24")
+        coordinatorOn(facts, session).execute(
+            call("role_prompt_save", "role" to "recon", "content" to "只做被动测绘，不许碰目标"),
+            "s1",
+        )
+
+        // 换一个协调器实例读：证明真值在事实库里，不在内存缓存里。
+        val (ok, out) = coordinatorOn(facts, session).execute(call("role_prompt", "role" to "recon"), "s1")
+        assertTrue(out, ok)
+        assertTrue("override must survive: $out", out.contains("只做被动测绘，不许碰目标"))
+        assertTrue("source must say override: $out", out.contains("source=session-override"))
+    }
+
+    @Test
+    fun `saving a blank role prompt restores the builtin text`() = runBlocking {
+        val facts = FakeFacts()
+        val session = session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24")
+        val first = coordinatorOn(facts, session)
+        first.execute(call("role_prompt_save", "role" to "recon", "content" to "自定义"), "s1")
+        first.execute(call("role_prompt_save", "role" to "recon", "content" to ""), "s1")
+
+        val (_, out) = coordinatorOn(facts, session).execute(call("role_prompt", "role" to "recon"), "s1")
+        assertTrue("blank content must fall back to builtin: $out", out.contains("source=builtin"))
+        assertFalse("override must be gone: $out", out.contains("自定义"))
+    }
+
+    @Test
+    fun `role prompt reset drops the persisted override`() = runBlocking {
+        val facts = FakeFacts()
+        val session = session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24")
+        coordinatorOn(facts, session).execute(
+            call("role_prompt_save", "role" to "exploit", "content" to "只打一次"),
+            "s1",
+        )
+        val (resetOk, reset) = coordinatorOn(facts, session).execute(call("role_prompt_reset", "role" to "exploit"), "s1")
+        assertTrue(reset, resetOk)
+        assertTrue("reset must report the role: $reset", reset.contains("exploit"))
+
+        val (_, out) = coordinatorOn(facts, session).execute(call("role_prompt", "role" to "exploit"), "s1")
+        assertTrue("reset must clear the fact, not just the cache: $out", out.contains("source=builtin"))
+    }
+
+    @Test
+    fun `prompts lists every role with its source`() = runBlocking {
+        val facts = FakeFacts()
+        val session = session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24")
+        coordinatorOn(facts, session).execute(
+            call("role_prompt_save", "role" to "assess", "content" to "按优先级排序"),
+            "s1",
+        )
+        val (ok, out) = coordinatorOn(facts, session).execute(call("prompts"), "s1")
+        assertTrue(out, ok)
+        assertTrue("all roles must be listed: $out", out.contains("count=${RedTeamRole.entries.size}"))
+        assertTrue("overridden role must be marked: $out", out.contains("assess") && out.contains("session-override"))
+        assertTrue("builtin roles must be marked: $out", out.contains("source=builtin"))
+    }
+
+    @Test
+    fun `skill actions list read save and delete`() = runBlocking {
+        val store = FakeSkillStore()
+        val fresh = coordinatorOn(FakeFacts(), session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"), skillStore = store)
+
+        val (saveOk, saved) = fresh.execute(
+            call("skill_save", "name" to "内网横向", "body" to "# 横向\n用 fscan", "when_to_use" to "拿到边界权限后", "role" to "internal"),
+            "s1",
+        )
+        assertTrue(saved, saveOk)
+        assertTrue("save must report the id: $saved", saved.contains("name=内网横向"))
+
+        val (listOk, list) = fresh.execute(call("skill_list"), "s1")
+        assertTrue(list, listOk)
+        assertTrue("saved skill must be listed: $list", list.contains("内网横向"))
+
+        val (getOk, one) = fresh.execute(call("skill_get", "name" to "内网横向"), "s1")
+        assertTrue(one, getOk)
+        assertTrue("body must round-trip: $one", one.contains("用 fscan"))
+        assertTrue("when_to_use must be kept: $one", one.contains("拿到边界权限后"))
+
+        val (delOk, deleted) = fresh.execute(call("skill_delete", "name" to "内网横向"), "s1")
+        assertTrue(deleted, delOk)
+        assertTrue("delete must be reported: $deleted", deleted.contains("deleted="))
+
+        val (_, after) = fresh.execute(call("skill_list"), "s1")
+        assertFalse("deleted skill must be gone: $after", after.contains("内网横向"))
+    }
+
+    /** 内置技能不可改不可删：改了就回不到出厂文案，而面板上没有「恢复默认」。 */
+    @Test
+    fun `builtin skills are rejected instead of silently skipped`() = runBlocking {
+        val store = FakeSkillStore()
+        store.seed(
+            RedTeamSkillStore.Skill(
+                id = "builtin_1",
+                name = "内置技能",
+                role = null,
+                enabled = true,
+                description = "出厂",
+                whenToUse = null,
+                body = "# 出厂",
+                path = null,
+                builtin = true,
+            ),
+        )
+        val fresh = coordinatorOn(FakeFacts(), session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"), skillStore = store)
+
+        val (_, del) = fresh.execute(call("skill_delete", "name" to "内置技能"), "s1")
+        assertTrue("builtin delete must report failure: $del", del.contains("ok=false"))
+        assertTrue("the reason must be explicit: $del", del.contains("内置技能不可删除"))
+
+        val (_, missing) = fresh.execute(call("skill_get", "name" to "不存在"), "s1")
+        assertTrue("missing skill must say so: $missing", missing.contains("技能不存在"))
+    }
 
     private class FakeFacts : RedTeamFactRepository {
         private val rows = mutableListOf<RedTeamFactEntity>()

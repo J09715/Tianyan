@@ -203,6 +203,7 @@ fun ChatScreen(
     val gitPanelState by viewModel.gitPanelState.collectAsStateWithLifecycle()
     val redTeamFacts by viewModel.redTeamFacts.collectAsStateWithLifecycle(initialValue = emptyList())
     val redTeamSkillHealth by viewModel.redTeamSkillHealth.collectAsStateWithLifecycle()
+    val redTeamConsole by viewModel.redTeamConsole.collectAsStateWithLifecycle()
     val gitCredentials by viewModel.gitCredentials.collectAsStateWithLifecycle()
     val matchedCredId by viewModel.matchedCredentialId.collectAsStateWithLifecycle()
     val gitUncommittedCount = gitPanelState.let { s -> s.staged.size + s.unstaged.size + s.untrackedCount }
@@ -778,10 +779,32 @@ fun ChatScreen(
         androidx.compose.runtime.LaunchedEffect(currentSession?.id) {
             if (currentSession?.id != null) viewModel.refreshRedTeamSkillHealth()
         }
-        RedTeamPanel(
+        RedTeamConsole(
             session = currentSession,
             facts = redTeamFacts,
+            state = redTeamConsole,
             onBindTarget = viewModel::bindRedTeamTarget,
+            onToggle = viewModel::toggleRedTeamConsole,
+            onSelectTab = viewModel::setRedTeamConsoleTab,
+            onRefresh = viewModel::refreshRedTeamConsole,
+            onSelectSegment = viewModel::selectRedTeamConsoleSegment,
+            onQueryChange = viewModel::updateRedTeamConsoleQuery,
+            onServiceChange = viewModel::updateRedTeamConsoleService,
+            onPortChange = viewModel::updateRedTeamConsolePort,
+            onSubmitQuery = viewModel::submitRedTeamConsoleQuery,
+            onProvenanceChange = viewModel::setRedTeamConsoleProvenance,
+            onSortChange = viewModel::setRedTeamConsoleSort,
+            onViewChange = viewModel::setRedTeamConsoleView,
+            onToggleAsset = viewModel::toggleRedTeamConsoleAsset,
+            onSelectRole = viewModel::selectConsoleRole,
+            onRoleDraftChange = viewModel::updateConsoleRoleDraft,
+            onSaveRole = viewModel::saveConsoleRole,
+            onResetRole = viewModel::resetConsoleRole,
+            onSelectSkill = viewModel::selectConsoleSkill,
+            onNewSkill = viewModel::newConsoleSkill,
+            onSkillDraftChange = viewModel::updateConsoleSkillDraft,
+            onSaveSkill = viewModel::saveConsoleSkill,
+            onDeleteSkill = viewModel::deleteConsoleSkill,
             skillHealth = redTeamSkillHealth,
             onRefreshSkillHealth = viewModel::refreshRedTeamSkillHealth,
         )
