@@ -46,4 +46,7 @@ interface RedTeamFactDao {
 
     @Query("DELETE FROM red_team_facts WHERE sessionId = :sessionId")
     suspend fun deleteForSession(sessionId: String)
+
+    @Query("DELETE FROM red_team_facts WHERE sessionId = :sessionId AND id = :id")
+    suspend fun deleteById(sessionId: String, id: String)
 }
