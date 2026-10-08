@@ -704,6 +704,119 @@ class RedTeamCoordinatorTest {
         assertFalse("deleted poc must be gone: $listOut", listOut.contains("CVE-X"))
     }
 
+    /**
+     * 自建得分点必须真的参与计分，不能只是「列表里看得见」。
+     * 只存不合并的话，界面能新增、算分时当不存在——这比没有这个功能更难查。
+     */
+    @Test
+    fun `custom score points actually change the total`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+
+        val (saveOk, saveOut) = fresh.execute(
+            call("score_point_save", "code" to "custom-flag", "name" to "自定义成果", "points" to "77"),
+            "s1",
+        )
+        assertTrue(saveOut, saveOk)
+        assertTrue("must report the created code: $saveOut", saveOut.contains("custom-flag"))
+
+        // 命中不自带分值 → 应当走自建点的 77 分。
+        fresh.execute(call("score_hit", "title" to "h1", "code" to "custom-flag"), "s1")
+        val (_, report) = fresh.execute(call("score_report"), "s1")
+        assertTrue("custom point value must be applied: $report", report.contains("total=77"))
+
+        val (_, list) = fresh.execute(call("score_points"), "s1")
+        assertTrue("custom point must be listed: $list", list.contains("自定义成果"))
+    }
+
+    /** 内置点只能停用：改分值会被锁定，且停用后必须真的不计分。 */
+    @Test
+    fun `builtin score points are locked and disabling them stops scoring`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+
+        val (ok, out) = fresh.execute(
+            call("score_point_save", "code" to "domain-control", "name" to "改名尝试", "points" to "9999"),
+            "s1",
+        )
+        assertTrue(out, ok)
+        assertTrue("builtin must report locked fields: $out", out.contains("locked_fields="))
+        assertTrue("builtin must stay enabled-neutral: $out", out.contains("builtin=true"))
+
+        // 分值没有被改掉：命中的分值仍按规则目录。
+        fresh.execute(call("score_hit", "title" to "d", "code" to "domain-control"), "s1")
+        val (_, before) = fresh.execute(call("score_report"), "s1")
+        assertTrue("locked value must remain the rule value: $before", before.contains("total=50"))
+
+        // 停用后不再计分。
+        fresh.execute(call("score_point_save", "code" to "domain-control", "enabled" to "false"), "s1")
+        val (_, after) = fresh.execute(call("score_report"), "s1")
+        assertTrue("disabled point must stop scoring: $after", after.contains("total=0"))
+    }
+
+    /** 内置点不能删除：删掉会让规则表缺一条。 */
+    @Test
+    fun `builtin score points cannot be deleted`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+        val (ok, out) = fresh.execute(call("delete_score_point", "code" to "domain-control"), "s1")
+        assertFalse("builtin deletion must be refused", ok)
+        assertTrue("error should explain why: $out", out.contains("停用"))
+    }
+
+    @Test
+    fun `custom score points can be deleted`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+        fresh.execute(call("score_point_save", "code" to "custom-x", "name" to "临时点", "points" to "10"), "s1")
+        val (ok, out) = fresh.execute(call("delete_score_point", "code" to "custom-x"), "s1")
+        assertTrue(out, ok)
+        val (_, list) = fresh.execute(call("score_points"), "s1")
+        assertFalse("deleted custom point must be gone: $list", list.contains("临时点"))
+    }
+
+    /**
+     * 阶段编辑是**部分补丁**：没传的字段必须沿用当前值。
+     * 少了这层回落，界面上只改一句「目标」就会把这一阶段的名称、手段分组、工具全清空。
+     */
+    @Test
+    fun `stage edits are partial patches`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+
+        val (ok, out) = fresh.execute(call("save_stage", "code" to "recon", "goal" to "只改目标"), "s1")
+        assertTrue(out, ok)
+        assertTrue("goal must be updated: $out", out.contains("sections=3"))
+
+        val (_, list) = fresh.execute(call("stages"), "s1")
+        assertTrue("edited goal must show: $list", list.contains("只改目标"))
+        // 关键：名称与手段分组不能被清空。
+        assertTrue("name must survive a partial patch: $list", list.contains("信息收集"))
+        assertTrue("sections must survive a partial patch: $list", list.contains("资产测绘"))
+        assertTrue("tools must survive a partial patch: $list", list.contains("fscan"))
+        assertTrue("stage must be marked edited: $list", list.contains("已编辑"))
+    }
+
+    @Test
+    fun `stages list keeps the five engagement stages in order`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+        val (_, out) = fresh.execute(call("stages"), "s1")
+        assertTrue("must report five stages: $out", out.contains("count=5"))
+        val order = listOf("信息收集", "互联网资产权限", "边界突破", "内网资产权限", "靶标权限")
+        val positions = order.map { out.indexOf(it) }
+        assertTrue("every stage must be present: $out", positions.all { it >= 0 })
+        assertEquals("stage order must follow the engagement flow", positions.sorted(), positions)
+    }
+
+    /** 自建阶段要能新增并出现在链路里。 */
+    @Test
+    fun `custom stages can be added`() = runBlocking {
+        val fresh = coordinator(session("s1", redTeam = true, target = "a.com", scope = "10.0.0.0/24"))
+        val (ok, out) = fresh.execute(
+            call("save_stage", "code" to "reporting", "name" to "复盘归档", "goal" to "固化成果"),
+            "s1",
+        )
+        assertTrue(out, ok)
+        val (_, list) = fresh.execute(call("stages"), "s1")
+        assertTrue("custom stage must be listed: $list", list.contains("复盘归档"))
+        assertTrue("custom stage adds to the count: $list", list.contains("count=6"))
+    }
+
     private fun call(action: String, vararg pairs: Pair<String, String>): JsonObject = buildJsonObject {
         put("action", action)
         pairs.forEach { (key, value) -> put(key, value) }
