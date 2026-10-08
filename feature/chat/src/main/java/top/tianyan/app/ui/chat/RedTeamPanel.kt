@@ -344,6 +344,9 @@ private val RedTeamFactKind.label: String
         RedTeamFactKind.ATTACK_STEP -> "攻击链"
         RedTeamFactKind.ATTACK_FILE -> "攻击文件"
         RedTeamFactKind.SCORE_HIT -> "评分"
+        // 覆盖层类事实：只承载用户对得分点/阶段的编辑，不算作战数据（故不进上面的展示顺序）。
+        RedTeamFactKind.SCORE_POINT -> "得分点设置"
+        RedTeamFactKind.STAGE -> "阶段设置"
         RedTeamFactKind.REPORT -> "报告"
         RedTeamFactKind.KNOWLEDGE -> "知识库"
         RedTeamFactKind.SKILL -> "技能"
