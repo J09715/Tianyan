@@ -19,7 +19,7 @@ object RedTeamToolSchema {
         "session_info", "preflight", "agent_slot", "roles",
         "fact_add", "role_prompt", "role_prompt_reset",
         "sessions", "session_check", "engagement_open", "session_bind",
-        "score_points", "role_dispatch", "group_slot",
+        "score_points", "score_point_save", "stages", "save_stage", "role_dispatch", "group_slot",
         "asset_assess", "asset_test",
     )
 
@@ -27,7 +27,7 @@ object RedTeamToolSchema {
      * 删除类：与写入分开列，避免与 UPDATE_ACTIONS 的「必须带 id」规则混淆——
      * 删除按 id 或 code 定位，缺一不可，但不需要 title。
      */
-    val DELETE_ACTIONS = listOf("poc_delete")
+    val DELETE_ACTIONS = listOf("poc_delete", "delete_score_point")
 
     /** 事实写入类：全部要求 title；更新类额外要求 id。 */
     val WRITE_ACTIONS = listOf(
