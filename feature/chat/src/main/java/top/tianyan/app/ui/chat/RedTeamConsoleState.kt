@@ -24,7 +24,8 @@ enum class RedTeamConsoleView(val label: String) {
  * 视图数据变没变」，拆开写很容易出现底栏统计已经更新、资产列表还是上一份的错位。
  */
 data class RedTeamConsoleState(
-    val open: Boolean = false,
+    /** 默认展开：红队会话一进来就该看到靶标绑定入口，收起是用户主动的选择。 */
+    val open: Boolean = true,
     val tab: RedTeamConsoleTab = RedTeamConsoleTab.OVERVIEW,
     val loading: Boolean = false,
     val error: String? = null,

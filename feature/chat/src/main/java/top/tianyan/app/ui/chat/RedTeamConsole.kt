@@ -77,44 +77,48 @@ internal fun RedTeamConsole(
             onRefresh = onRefresh,
         )
 
+        // 收起要真的收起整块内容。只藏页签条的话，红队会话一进来看到的仍是一屏
+        // 资产/技能列表——而靶标绑定表单藏在这里面，用户以为没有靶标入口。
+        if (state.open) {
         when (state.tab) {
-            RedTeamConsoleTab.OVERVIEW -> RedTeamPanel(
-                session = session,
-                facts = facts,
-                onBindTarget = onBindTarget,
-                skillHealth = skillHealth,
-                onRefreshSkillHealth = onRefreshSkillHealth,
-            )
+                RedTeamConsoleTab.OVERVIEW -> RedTeamPanel(
+                    session = session,
+                    facts = facts,
+                    onBindTarget = onBindTarget,
+                    skillHealth = skillHealth,
+                    onRefreshSkillHealth = onRefreshSkillHealth,
+                )
 
-            RedTeamConsoleTab.ASSETS -> RedTeamAssetsTab(
-                state = state,
-                onSelectSegment = onSelectSegment,
-                onQueryChange = onQueryChange,
-                onServiceChange = onServiceChange,
-                onPortChange = onPortChange,
-                onSubmitQuery = onSubmitQuery,
-                onProvenanceChange = onProvenanceChange,
-                onSortChange = onSortChange,
-                onViewChange = onViewChange,
-                onToggleAsset = onToggleAsset,
-            )
+                RedTeamConsoleTab.ASSETS -> RedTeamAssetsTab(
+                    state = state,
+                    onSelectSegment = onSelectSegment,
+                    onQueryChange = onQueryChange,
+                    onServiceChange = onServiceChange,
+                    onPortChange = onPortChange,
+                    onSubmitQuery = onSubmitQuery,
+                    onProvenanceChange = onProvenanceChange,
+                    onSortChange = onSortChange,
+                    onViewChange = onViewChange,
+                    onToggleAsset = onToggleAsset,
+                )
 
-            RedTeamConsoleTab.PROMPTS -> RedTeamPromptsTab(
-                state = state,
-                onSelectRole = onSelectRole,
-                onDraftChange = onRoleDraftChange,
-                onSave = onSaveRole,
-                onReset = onResetRole,
-            )
+                RedTeamConsoleTab.PROMPTS -> RedTeamPromptsTab(
+                    state = state,
+                    onSelectRole = onSelectRole,
+                    onDraftChange = onRoleDraftChange,
+                    onSave = onSaveRole,
+                    onReset = onResetRole,
+                )
 
-            RedTeamConsoleTab.SKILLS -> RedTeamSkillsTab(
-                state = state,
-                onSelectSkill = onSelectSkill,
-                onNewSkill = onNewSkill,
-                onDraftChange = onSkillDraftChange,
-                onSave = onSaveSkill,
-                onDelete = onDeleteSkill,
-            )
+                RedTeamConsoleTab.SKILLS -> RedTeamSkillsTab(
+                    state = state,
+                    onSelectSkill = onSelectSkill,
+                    onNewSkill = onNewSkill,
+                    onDraftChange = onSkillDraftChange,
+                    onSave = onSaveSkill,
+                    onDelete = onDeleteSkill,
+                )
+        }
         }
     }
 }
