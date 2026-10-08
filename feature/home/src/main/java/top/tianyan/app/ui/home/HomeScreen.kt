@@ -604,13 +604,15 @@ private fun EnvironmentDoctorCard(
                                 }
                             }
 
-                            // Android 环境未安装：展示离线包 / 在线插件两条获取路径
+                            // Android 环境未安装：直接引导到插件中心在线安装。
+                            // 原来这里还并排一个「进群取离线包」按钮，指向 QQ 群——
+                            // 环境体检是排障路径，把用户支去加群解决不了任何问题，
+                            // 而且群链接失效时那个按钮就是个死路。
                             val missingAndroidEnv = report.items.any {
                                 it.id == "android_environment" && it.status != DoctorStatus.HEALTHY
                             }
                             if (missingAndroidEnv) {
                                 AndroidEnvAcquisitionCard(
-                                    onJoinQqGroup = { joinQqGroup(context) },
                                     onOpenToolCenter = onOpenToolCenter,
                                 )
                             }
@@ -772,11 +774,13 @@ private fun DoctorItemRow(
 }
 
 /**
- * Android 环境未安装引导卡：提供「QQ 群全量离线插件包」与「插件中心在线安装」两条获取路径。
+ * Android 环境未安装引导卡：引导到插件中心在线安装。
+ *
+ * 只留一条路径：环境缺失是排障场景，需要的是「点一下就去装」，
+ * 而不是把用户支去加群领离线包——群链接会失效，且多一层跳转解决不了环境问题。
  */
 @Composable
 private fun AndroidEnvAcquisitionCard(
-    onJoinQqGroup: () -> Unit,
     onOpenToolCenter: () -> Unit,
 ) {
     RuntimeCard(
@@ -818,66 +822,21 @@ private fun AndroidEnvAcquisitionCard(
                 }
             }
 
-            Row(
+            RuntimeButton(
+                onClick = onOpenToolCenter,
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
             ) {
-                RuntimeButton(
-                    onClick = onJoinQqGroup,
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-                ) {
-                    RuntimeIcon(RuntimeIconName.Qq, Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        text = stringResource(R.string.home_android_env_qq),
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                FilledTonalButton(
-                    onClick = onOpenToolCenter,
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-                ) {
-                    RuntimeIcon(RuntimeIconName.Extension, Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        text = stringResource(R.string.home_android_env_tool_center),
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+                RuntimeIcon(RuntimeIconName.Extension, Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = stringResource(R.string.home_android_env_tool_center),
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
-    }
-}
-
-/**
- * 天衍官方交流群号。
- *
- * 与 `legacy_strings.xml` 的 settings_text_0064 / 0272 保持同一个值：
- * 这里原来是 `000000000` 占位符，未装 QQ 时兜底复制给用户的是一个假群号，
- * 搜不到任何群，而且提示还说「已复制群号」——比不提示更误导。
- */
-private const val TIANYAN_QQ_GROUP_ID = "905971993"
-
-/** 跳转 QQ 加群；未安装 QQ 时兜底复制群号并提示。 */
-private fun joinQqGroup(context: Context) {
-    val uri = Uri.parse(
-        "https://qm.qq.com/q/mWMli9UriE",
-    )
-    val intent = Intent(Intent.ACTION_VIEW, uri).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
-    runCatching {
-        context.startActivity(intent)
-    }.onFailure {
-        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-        clipboard?.setPrimaryClip(
-            ClipData.newPlainText(context.getString(R.string.home_qq_clipboard_label), TIANYAN_QQ_GROUP_ID),
-        )
-        Toast.makeText(context, context.getString(R.string.home_qq_copied, TIANYAN_QQ_GROUP_ID), Toast.LENGTH_LONG).show()
     }
 }
 

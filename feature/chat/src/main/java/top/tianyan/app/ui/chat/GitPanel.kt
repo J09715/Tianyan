@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -253,12 +254,37 @@ fun GitPanel(
                 GitWorkspaceHeader(state = state)
             }
 
-            // AiCode 布局：3 页 HorizontalPager + 底部悬浮 FloatingTabBar（状态/分支/提交）
+            // 状态 / 分支 / 提交 三页：页签条放在内容上方（SecondaryTabRow），
+            // 不再用底部悬浮 FloatingTabBar —— 那个悬浮栏固定在 BottomCenter，
+            // 会和 App 自己的底部中枢导航（天衍/智枢/工坊/乾坤）叠在一起，
+            // 用户看到两层导航叠着，还点不准。
             val panelScope = rememberCoroutineScope()
             val pagerState = androidx.compose.foundation.pager.rememberPagerState(initialPage = selectedTab.coerceAtMost(2)) { 3 }
             LaunchedEffect(pagerState.currentPage) { selectedTab = pagerState.currentPage }
             LaunchedEffect(selectedTab) {
                 if (pagerState.currentPage != selectedTab) pagerState.animateScrollToPage(selectedTab)
+            }
+            SecondaryTabRow(
+                selectedTabIndex = pagerState.currentPage,
+                containerColor = Color.Transparent,
+                divider = {},
+            ) {
+                listOf("状态" to RuntimeIconName.Activity, "分支" to RuntimeIconName.GitBranch, "提交" to RuntimeIconName.GitCommit)
+                    .forEachIndexed { index, (label, icon) ->
+                        Tab(
+                            selected = pagerState.currentPage == index,
+                            onClick = { panelScope.launch { pagerState.animateScrollToPage(index) } },
+                            text = {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
+                                    RuntimeIcon(icon, Modifier.size(16.dp))
+                                    Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                                }
+                            },
+                        )
+                    }
             }
             Box(Modifier.fillMaxSize()) {
                 androidx.compose.foundation.pager.HorizontalPager(
@@ -279,27 +305,14 @@ fun GitPanel(
                         page == 2 -> LogTab(state, onCommitDetail = onCommitDetail, onCloseCommit = onClearCommitDetail, onCommitFileDiff = onCommitFileDiff, onLoadMore = onLoadMoreCommits, onUnshallow = onUnshallow)
                     }
                 }
-                if (!state.loading && !state.notARepo && state.branch != null) {
-                    top.tianyan.app.ui.components.FloatingTabBar(
-                        selected = pagerState.currentPage,
-                        onSelect = { panelScope.launch { pagerState.animateScrollToPage(it) } },
-                        items = listOf(
-                            top.tianyan.app.ui.components.FloatingTabItem(top.tianyan.app.ui.components.RuntimeIconName.Activity, "状态"),
-                            top.tianyan.app.ui.components.FloatingTabItem(top.tianyan.app.ui.components.RuntimeIconName.GitBranch, "分支"),
-                            top.tianyan.app.ui.components.FloatingTabItem(top.tianyan.app.ui.components.RuntimeIconName.GitCommit, "提交"),
-                        ),
-                        maskColor = MaterialTheme.colorScheme.background,
-                        modifier = Modifier.align(Alignment.BottomCenter),
-                    )
-                }
-                // Git 操作反馈 Snackbar：常驻面板底部（notARepo 时 clone 失败也要看得见），
-                // 仓库态抬高 84dp 避开悬浮栏。
+                // Git 操作反馈 Snackbar：常驻面板底部（notARepo 时 clone 失败也要看得见）。
+                // 页签条已经移到顶部，底部不再有悬浮栏，所以不需要再留 84dp 的避让空隙。
                 androidx.compose.material3.SnackbarHost(
                     hostState = gitSnackHost,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .padding(horizontal = 16.dp)
-                        .padding(bottom = if (!state.loading && !state.notARepo && state.branch != null) 84.dp else 16.dp),
+                        .padding(bottom = 16.dp),
                 )
             }
         }
@@ -731,8 +744,11 @@ private fun GitWorkspaceHeader(state: GitPanelState) {
                 verticalAlignment = Alignment.Top,
             ) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    // 用「仓库」而不是「Git 工作区」：本 App 里「工作区」特指工坊那个
+                    // 项目目录（WorkspaceDestination），而这里说的是当前会话目录里的
+                    // Git 仓库。两个词混用会让人以为这个面板管的是工坊工作区。
                     Text(
-                        "当前会话 · Git 工作区",
+                        "当前会话 · Git 仓库",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.74f),
                     )
@@ -815,32 +831,10 @@ private fun StatusTab(
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // 工作区摘要：大目录只显示总数，不把所有 skill 路径展开成 UI 节点。
-        RuntimeCard(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 14.dp),
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("工作区概览", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                    Text(
-                        if (clean) "干净" else "有改动",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = if (clean) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary,
-                    )
-                }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                StatItem("已暂存", staged.size.toString(), Color(0xFF2E7D32))
-                StatItem("已修改", unstaged.size.toString(), Color(0xFFB45309))
-                StatItem("未跟踪", if (state.untrackedOverflow) "99+" else untrackedCount.toString(), Color(0xFF757575))
-                }
-            }
-        }
-
+        // 这里原本还有一张「工作区概览」卡，但面板顶部的 GitWorkspaceHeader 已经
+        // 展示了同样的四个数字（暂存/修改/未跟踪/同步），两处并排显示同一份数据，
+        // 用户会以为其中一个是别的口径。摘要只保留顶部那张。
+        //
         // 主操作：提交（有已暂存改动且已配置署名才可用）
         RuntimeButton(
             onClick = { showCommitDialog = true },
@@ -1003,22 +997,6 @@ private fun SectionHeader(title: String, actionLabel: String? = null, onAction: 
         if (actionLabel != null && onAction != null) {
             RuntimeTextButton(onClick = onAction) { Text(actionLabel, style = MaterialTheme.typography.labelSmall) }
         }
-    }
-}
-
-@Composable
-private fun StatItem(label: String, count: String, color: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            count,
-            style = MaterialTheme.typography.titleMedium.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold),
-            color = color,
-        )
-        Text(
-            label,
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 

@@ -57,11 +57,8 @@
     <string name="home_refresh">Refresh</string>
     <string name="home_grant_access">Grant access</string>
     <string name="home_android_env_title">Get the full Android development environment</string>
-    <string name="home_android_env_desc">The offline package bundles Android, Flutter, and reverse-engineering toolchains</string>
-    <string name="home_android_env_qq">Join group for offline package</string>
+    <string name="home_android_env_desc">Install the Android, Flutter, and reverse-engineering toolchains in one go</string>
     <string name="home_android_env_tool_center">Install via Tool Center</string>
-    <string name="home_qq_clipboard_label">Tianyan official QQ group</string>
-    <string name="home_qq_copied">QQ group ID copied: %1$s. Search it in QQ to join.</string>
     <string name="home_webchat_title">WebChat desktop collaboration</string>
     <string name="home_webchat_running">LAN service running · kept alive</string>
     <string name="home_webchat_idle">Off by default · enable on demand to save battery</string>

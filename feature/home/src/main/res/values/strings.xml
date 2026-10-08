@@ -57,11 +57,8 @@
     <string name="home_refresh">刷新</string>
     <string name="home_grant_access">去授权</string>
     <string name="home_android_env_title">获取 Android 全量开发环境</string>
-    <string name="home_android_env_desc">离线包已集成 Android · Flutter · 反编译三大环境</string>
-    <string name="home_android_env_qq">进群取离线包</string>
+    <string name="home_android_env_desc">一键装齐 Android · Flutter · 反编译三大环境</string>
     <string name="home_android_env_tool_center">插件中心安装</string>
-    <string name="home_qq_clipboard_label">天衍官方交流群</string>
-    <string name="home_qq_copied">已复制 QQ 群号：%1$s，可打开 QQ 搜索加入</string>
     <string name="home_webchat_title">WebChat 电脑大屏协作</string>
     <string name="home_webchat_running">局域网服务运行中 · 已保活</string>
     <string name="home_webchat_idle">默认关闭 · 按需开启免耗电</string>
