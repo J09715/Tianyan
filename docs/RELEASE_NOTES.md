@@ -1,8 +1,24 @@
-# 天衍 · Tianyan v0.17.6 发布记录
+# 天衍 · Tianyan v0.17.7 发布记录
 
 > **发布时间**：2026-10-08
-> **版本号**：v0.17.6（`appVersionName = 0.17.6`，`appVersionCode = 64`）
+> **版本号**：v0.17.7（`appVersionName = 0.17.7`，`appVersionCode = 65`）
 > **支持范围**：Android 10+ · arm64-v8a（无 Root / PRoot 沙箱）
+
+---
+
+## 🆕 v0.17.7 补充
+
+### 开发者全栈套件（Dev Bundles）装配修复
+
+两个会让装配直接失败的问题：
+
+- **apt 回落链的运算符优先级错误**：脚本里写的是 `A || B && C`，sh 解析成 `A || (B && C)`。B 是 `apt-get -f install`（修依赖），C 是重试主安装。当修依赖这一步失败时，**重试永远不会执行**——「修完依赖再重试」这条恢复路径恰好在该用的时候是死的。改为显式分组 `A || { B && C; }`；
+- **强删了被其它包依赖的包**：清理被中断的 unzip 事务时连带用 `--force-depends` 删掉了 `java-wrappers`。而安装列表里的 `apktool` 依赖 `default-jre`，后者经 `java-common` 拉入 `java-wrappers`。强删会留下「apktool 已装、其依赖没了」的状态，紧接着的 `apt-get install` 要么被迫重装它（等于白删），要么直接以 Unmet dependencies 失败。现在只清 unzip，半装的 java-wrappers 交由 `dpkg --configure -a` 修复；
+- **补一道依赖收敛**：自愈阶段显式跑一次 `apt-get -f install`，避免残留的不满足依赖直接撞上批量安装。
+
+### 新增回归测试
+
+`DevEnvironmentSuiteTest`（12 项）：回落链必须显式分组、不得强删被依赖的包、生成结果不得残留未展开的 Kotlin 变量、依赖修复必须排在批量安装之前、`apt-get update` 只跑一次、组件 id 唯一、每个组件都有探针命令、后置脚本用 `/bin/sh` 调用、基础包始终隐式安装、只选一个组件时不串入别的组件的脚本。
 
 ---
 
