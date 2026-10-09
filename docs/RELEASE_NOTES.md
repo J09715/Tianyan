@@ -1,8 +1,34 @@
-# 天衍 · Tianyan v0.18.0 发布记录
+# 天衍 · Tianyan v0.18.1 发布记录
 
 > **发布时间**：2026-10-08
-> **版本号**：v0.18.0（`appVersionName = 0.18.0`，`appVersionCode = 68`）
+> **版本号**：v0.18.1（`appVersionName = 0.18.1`，`appVersionCode = 69`）
 > **支持范围**：Android 10+ · arm64-v8a（无 Root / PRoot 沙箱）
+
+---
+
+## 🆕 v0.18.1 补充（审计遗留项清理）
+
+### 编译警告清零
+
+全应用编译现在**零警告**。修掉的都是编译器实证的项，不是推测：
+
+- **`LocalClipboardManager` 废弃**（3 处）：官方提示改用 `LocalClipboard`，但新 API 是挂起的 `setClipEntry(ClipEntry, Continuation)`，直接在点击回调里调不了。新增 `rememberTextCopier()`（`feature/components`）收口：内部起协程作用域、把字符串包成 `ClipData` → `ClipEntry`，并吞掉异常——长按复制一个路径失败时弹崩溃，比没复制更糟；
+- **`hiltViewModel` 废弃导入路径**（1 处）：迁到 `androidx.hilt.lifecycle.viewmodel.compose`，与其余 33 处一致；
+- **`WorkflowGuiPilot` 恒真条件**（1 处）：`success && failedReason == null` 中后者已含在 `success` 定义里。
+
+### 修复协程作用域泄漏
+
+`HostBridge.stop()` 只取消了 `serverJob`，从未取消 `bridgeScope`。它是 Singleton 字段，进程存活期内不会回收，反复 start/stop 会让作用域里累积的任务一直留着。现在 `stop()` 一并取消作用域，`start()` 在检测到作用域已取消时重建（复用已取消的作用域会让 `launch` 立刻失败，表现为「重启监听后端口没起来也没有日志」）。
+
+### 审计方法的自我更正
+
+这一轮我把上一版审计里几条**基于字符串匹配得出的结论**逐条验证，发现三条是错的：
+
+- 「47 处 TODO/FIXME」→ 主源码实际只有 4 处匹配，且全是误报（`Sort.TODO` 枚举值、`mktemp` 的 `XXXXXX` 模板、文档里讲 `\uXXXX` 转义）。**生产代码零真实 TODO**；
+- 「`BackHandler(enabled=)` 已废弃」→ 编译器对此**没有任何警告**，不应改；
+- 「211 处空 catch 块」→ 检测脚本在 `} catch (...) {` 这种同一行含一开一闭的写法上算错了括号深度，实际只有 **11 处**，且全部是有注释说明的刻意行为（降级 intent 重试、下游统一处理、尽力而为的清理）。
+
+结论：异常处理与 TODO 这两项**不需要修**。审计报告里的数字应当以编译器输出为准，而不是正则匹配。
 
 ---
 
