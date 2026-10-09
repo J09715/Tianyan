@@ -109,7 +109,7 @@ fun AboutTianyanScreen(
                         icon = RuntimeIconName.Cpu,
                         title = "运行时",
                         value = when (val s = runtimeState) {
-                            is RuntimeState.Ready -> "PRoot 就绪 · ${activeDistroId ?: "未选定"}"
+                            is RuntimeState.Ready -> "PRoot 就绪 · ${activeDistroId.ifBlank { "未选定" }}"
                             is RuntimeState.Initializing -> s.step
                             is RuntimeState.Error -> "异常 · ${s.throwable.message}"
                             else -> "未启动"
@@ -118,7 +118,7 @@ fun AboutTianyanScreen(
                     SettingsRowLocal(
                         icon = RuntimeIconName.Server,
                         title = "已安装发行版",
-                        value = if (installedDistros.isEmpty()) "无" else "${installedDistros.size} 套 · 当前 ${activeDistroId ?: "未选定"}",
+                        value = if (installedDistros.isEmpty()) "无" else "${installedDistros.size} 套 · 当前 ${activeDistroId.ifBlank { "未选定" }}",
                     )
                 }
             }
@@ -224,7 +224,8 @@ private fun rememberDeviceSnapshot(context: Context): DeviceSnapshot {
     return androidx.compose.runtime.remember {
         try {
             val model = Build.MANUFACTURER + " " + Build.MODEL
-            val cores = (Runtime.getRuntime().availableProcessors() ?: 0).toString()
+            // availableProcessors() 返回非空 Int，Elvis 冗余（编译器已提示）。
+            val cores = Runtime.getRuntime().availableProcessors().toString()
             val totalRam = (Runtime.getRuntime().totalMemory() / 1024 / 1024 / 1024).toInt()
             val freeRam = (Runtime.getRuntime().freeMemory() / 1024 / 1024 / 1024).toInt()
             val statfs = runCatching { StatFs(Environment.getDataDirectory().absolutePath) }.getOrNull()

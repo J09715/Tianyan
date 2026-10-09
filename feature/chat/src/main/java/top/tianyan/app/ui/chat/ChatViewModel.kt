@@ -2178,6 +2178,9 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch { harnessLoop.loadSession(id) }
     }
 
+    // flatMapLatest 仍标记为 ExperimentalCoroutinesApi；此处语义明确（会话切换时切数据源），
+    // 显式 OptIn 而不是依赖编译器默认放行，避免将来版本收紧后突然报错。
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val redTeamFacts: kotlinx.coroutines.flow.Flow<List<top.tianyan.app.core.database.RedTeamFactEntity>>
         get() = currentSessionId.flatMapLatest { id ->
             if (id.isBlank()) kotlinx.coroutines.flow.flowOf(emptyList()) else redTeamFactRepository.observeForSession(id)

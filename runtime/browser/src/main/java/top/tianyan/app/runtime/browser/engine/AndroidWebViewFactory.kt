@@ -25,7 +25,10 @@ object AndroidWebViewFactory {
         val s: WebSettings = view.settings
         s.javaScriptEnabled = true
         s.domStorageEnabled = true
-        s.databaseEnabled = true
+        // databaseEnabled 自 API 35 起弃用：WebView 已默认启用 DOM Storage 数据库，
+        // 显式设置只在旧版本有意义，用版本判断保留兼容、避免弃用警告。
+        @Suppress("DEPRECATION")
+        if (android.os.Build.VERSION.SDK_INT < 35) s.databaseEnabled = true
         s.loadWithOverviewMode = true
         s.useWideViewPort = true
         s.setSupportZoom(true)

@@ -589,7 +589,15 @@ class WebChatBridgeServer @Inject constructor(
             acquire(24 * 60 * 60 * 1000L)
         }
         val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
-        wifiLock = wifi?.createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "tianyan:webchat_bridge_wifi")?.apply {
+        // WIFI_MODE_FULL_HIGH_PERF 自 API 34 弃用，官方替代是 LOW_LATENCY（API 29+）。
+        // 低版本回退到旧常量，保证在旧设备上仍能拿到高性能锁。
+        @Suppress("DEPRECATION")
+        val wifiMode = if (android.os.Build.VERSION.SDK_INT >= 29) {
+            android.net.wifi.WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+        } else {
+            android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF
+        }
+        wifiLock = wifi?.createWifiLock(wifiMode, "tianyan:webchat_bridge_wifi")?.apply {
             setReferenceCounted(false)
             acquire()
         }

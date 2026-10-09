@@ -78,6 +78,12 @@ object RedTeamSettings {
         }.getOrNull()
     }
 
+    /**
+     * 复用同一个 Json 实例：每次调用都新建 Json{prettyPrint} 会被编译器提示
+     * 「Redundant creation of Json format」（实例创建本身有成本）。
+     */
+    private val PRETTY_JSON = kotlinx.serialization.json.Json { prettyPrint = true }
+
     /** 生成写回的 settings.json 内容（保留其它字段）。 */
     fun withMaxAgents(existingJson: String?, applied: Int): String {
         val existing = runCatching {
@@ -87,7 +93,7 @@ object RedTeamSettings {
         val merged = kotlinx.serialization.json.JsonObject(
             existing + ("maxAgents" to kotlinx.serialization.json.JsonPrimitive(applied)),
         )
-        return kotlinx.serialization.json.Json { prettyPrint = true }.encodeToString(
+        return PRETTY_JSON.encodeToString(
             kotlinx.serialization.json.JsonObject.serializer(),
             merged,
         ) + "\n"

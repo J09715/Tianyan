@@ -69,7 +69,8 @@ class TianyanCloudClient @Inject constructor(
         val request = Request.Builder().url(url).header("User-Agent", "Tianyan-App").get().build()
         httpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw IllegalStateException("云端响应错误 HTTP ${response.code}")
-            return response.body?.string().orEmpty()
+            // body 在成功响应下必非空（前面已判 isSuccessful），去掉多余的 ?.
+            return response.body.string()
         }
     }
 

@@ -647,7 +647,8 @@ fun EnvironmentVariableSettingsScreen(
             },
             onSave = { key, value, note ->
                 if (editing == null) viewModel.addEnvironmentVariable(key, value, note) { if (it) { showEditor = false } }
-                else viewModel.updateEnvironmentVariable(editing!!.id, key, value, note) { if (it) { showEditor = false; editingKey = null } }
+                // 已进入 else（editing != null）分支，不再需要 !!。
+                else viewModel.updateEnvironmentVariable(editing.id, key, value, note) { if (it) { showEditor = false; editingKey = null } }
             },
         )
     }

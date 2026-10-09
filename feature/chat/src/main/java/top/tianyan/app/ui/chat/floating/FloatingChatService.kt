@@ -91,6 +91,9 @@ class FloatingChatService : Service() {
             x = initialX
             y = initialY
             dimAmount = 0.0f
+            // SOFT_INPUT_ADJUST_RESIZE 自 API 30 弃用：新版由 WindowInsets 驱动，
+            // 悬浮窗仍需要它才能在旧版本正确避让输入法，故保留并显式压制警告。
+            @Suppress("DEPRECATION")
             softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
         }
         windowParams = params
@@ -227,6 +230,7 @@ class FloatingChatService : Service() {
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
                 WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED) and
                 WindowManager.LayoutParams.FLAG_DIM_BEHIND.inv()
+            @Suppress("DEPRECATION")
             currentParams.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
         } else {
             // 胶囊态：不拦截背景焦点

@@ -58,7 +58,8 @@ object RedTeamScorePointEdit {
         takenCodes: Set<String>,
     ): Pair<SaveResult, Overrides.() -> Overrides> {
         val builtin = existingCode?.let { RedTeamScoring.POINTS_BY_CODE[it] } != null
-        if (builtin && existingCode != null) {
+        // builtin 为真已经蕴含 existingCode != null，不再重复判断（编译器也提示恒真）。
+        if (builtin) {
             val on = enabled ?: true
             val note = "这是随《突破入侵类得分规则》分发的内置得分点：分值、上限、计分口径、名称与条款正文" +
                 "都由规则锁定（同一条规则的上限按组内所有得分点累计，单独改分值会让一条命中吃掉整组上限）。" +

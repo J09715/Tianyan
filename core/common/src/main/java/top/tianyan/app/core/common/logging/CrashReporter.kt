@@ -76,7 +76,9 @@ class CrashReporter @Inject constructor(
                 appendLine("package=${context.packageName}")
                 appendLine("version=${appVersion()}")
                 appendLine("processId=${Process.myPid()}")
-                appendLine("thread=${thread.name} (${thread.id})")
+                // Thread.id 已弃用（Java 19+）；用 Android 的 Process.myTid() 取线程 id，
+                // 语义一致（当前线程的系统级 id）且不依赖已弃用 API。
+                appendLine("thread=${thread.name} (${android.os.Process.myTid()})")
                 appendLine("device=${Build.MANUFACTURER} ${Build.MODEL}")
                 appendLine("android=${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
                 appendLine("exception=${throwable.javaClass.name}")

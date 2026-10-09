@@ -140,13 +140,14 @@ class HostGuiToolkit @Inject constructor(
             if (!AccessibilityGestureBridge.isAvailable()) {
                 accessibilityEnabler.ensureEnabled()
             }
+            // 外层 if 已把 key 收窄到 BACK/HOME/RECENTS 三者，when 因此是穷尽的、
+            // 结果非空（原来的 `else -> null` 与随后的 `global != null` 都成了死代码）。
             val global = when (key) {
                 GuiKey.BACK -> AccessibilityService.GLOBAL_ACTION_BACK
                 GuiKey.HOME -> AccessibilityService.GLOBAL_ACTION_HOME
                 GuiKey.RECENTS -> AccessibilityService.GLOBAL_ACTION_RECENTS
-                else -> null
             }
-            if (global != null && TianyanGuiAccessibilityService.performGlobal(global)) {
+            if (TianyanGuiAccessibilityService.performGlobal(global)) {
                 return GuiExecResult(true, "已触发按键：${key.name.lowercase()}", GuiBackendId.ACCESSIBILITY)
             }
             attempts += GuiAttempt(GuiBackendId.ACCESSIBILITY, false, "无障碍全局动作不可用（已尝试特权自授权）")

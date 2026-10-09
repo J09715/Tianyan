@@ -1624,16 +1624,16 @@ private fun GraphCanvas(
             val x = l * lanePx + lanePx / 2f + padPx
             if (inTop && inBot) {
                 if (suppressTopLane) {
-                    drawLine(color, Offset(x, centerY), Offset(x, size.height.toFloat()), strokeWidth = stroke, cap = StrokeCap.Round)
+                    drawLine(color, Offset(x, centerY), Offset(x, size.height), strokeWidth = stroke, cap = StrokeCap.Round)
                 } else {
-                    drawLine(color, Offset(x, 0f), Offset(x, size.height.toFloat()), strokeWidth = stroke, cap = StrokeCap.Round)
+                    drawLine(color, Offset(x, 0f), Offset(x, size.height), strokeWidth = stroke, cap = StrokeCap.Round)
                 }
             } else if (inTop) {
                 if (!suppressTopLane) {
                     drawLine(color, Offset(x, 0f), Offset(x, centerY), strokeWidth = stroke, cap = StrokeCap.Round)
                 }
             } else if (inBot) {
-                drawLine(color, Offset(x, centerY), Offset(x, size.height.toFloat()), strokeWidth = stroke, cap = StrokeCap.Round)
+                drawLine(color, Offset(x, centerY), Offset(x, size.height), strokeWidth = stroke, cap = StrokeCap.Round)
             }
         }
 
@@ -1645,11 +1645,11 @@ private fun GraphCanvas(
             val midY = centerY + (size.height - centerY) * 0.5f
             val path = androidx.compose.ui.graphics.Path().apply {
                 if (edge.isMergeIn) {
-                    moveTo(toX, size.height.toFloat())
+                    moveTo(toX, size.height)
                     cubicTo(toX, midY, fromX, midY, fromX, centerY)
                 } else {
                     moveTo(fromX, centerY)
-                    cubicTo(fromX, midY, toX, midY, toX, size.height.toFloat())
+                    cubicTo(fromX, midY, toX, midY, toX, size.height)
                 }
             }
             drawPath(path, color, style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
