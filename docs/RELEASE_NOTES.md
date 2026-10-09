@@ -1,8 +1,33 @@
-# 天衍 · Tianyan v0.18.2 发布记录
+# 天衍 · Tianyan v0.18.3 发布记录
 
 > **发布时间**：2026-10-08
-> **版本号**：v0.18.2（`appVersionName = 0.18.2`，`appVersionCode = 70`）
+> **版本号**：v0.18.3（`appVersionName = 0.18.3`，`appVersionCode = 71`）
 > **支持范围**：Android 10+ · arm64-v8a（无 Root / PRoot 沙箱）
+
+---
+
+## 🆕 v0.18.3 补充
+
+### 修复本地模型上下文配置不生效
+
+用户在模型配置里把上下文上限调到 64000，服务端仍以 4096 启动，稍长的对话直接：
+
+```
+HTTP 400：request (14317 tokens) exceeds the available context size (4096 tokens)
+```
+
+**根因**：启动 llama-server 时，`--ctx-size` 只按设备内存硬编码（< 6 GiB 给 2048，否则 4096），**完全忽略了模型档案里的 `contextTokens`**。配置界面能存能读，但那个值从来没到达服务端。
+
+修法：
+
+- 决策逻辑抽到 `core/model/LocalLlmContext`（纯逻辑，可单测）：**用户配置优先**，未配置才按设备内存推断，两者都收敛到 `[2048, 131072]`。下限是因为低于它连系统提示词加一轮工具输出都放不下；上限是因为 llama.cpp 按 ctx 预分配 KV cache，给到 128k 以上手机会在启动阶段被 OOM killer 干掉；
+- `LocalLlmManager.start(fileName, contextTokens)` 透传配置值；`LocalLlmViewModel.start()` 从档案读出后传入；
+- **同模型换上下文会自动重启服务**：`--ctx-size` 只在启动时生效，若服务已在运行且 ctx 变了，先停再按新值拉起——否则用户改完配置点启动会静默沿用旧值，看起来仍像「没生效」；
+- `Running` 状态记录当前生效的 ctx，用于判断是否需要重启。
+
+### 顺带清理
+
+**运行日志被刷屏**：`HostSystemBindings` 在每次 PRoot 启动时都会对 `/apex`、`/data/app`、`/data/dalvik-cache`、`/plat_property_contexts`、`/property_contexts` 这 5 条路径打警告——但应用进程在 Android 10+ 上**永远读不到**这些路径（平台限制，不是环境损坏）。实测同一秒能刷十几条，把真正需要注意的缺失淹没了。现在只对「预期可用却读不到」的路径告警。
 
 ---
 
