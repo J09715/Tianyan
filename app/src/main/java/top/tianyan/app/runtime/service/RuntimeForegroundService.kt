@@ -9,7 +9,7 @@ import android.content.Intent
 import android.net.wifi.WifiManager
 import android.os.IBinder
 import android.os.PowerManager
-import android.util.Log
+import top.tianyan.app.core.common.logging.AppLogger
 import androidx.core.app.NotificationCompat
 import top.tianyan.app.R
 import top.tianyan.app.runtime.service.LocalServiceLauncher
@@ -30,6 +30,7 @@ class RuntimeForegroundService : Service() {
     @Inject lateinit var localServiceLauncher: LocalServiceLauncher
     @Inject lateinit var sshServiceManager: SshServiceManager
     @Inject lateinit var ftpServiceManager: FtpServiceManager
+    @Inject lateinit var appLogger: AppLogger
     /** 停止后的沙箱进程清理作用域：独立于服务生命周期，服务销毁后也要跑完。 */
     private val cleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -108,8 +109,8 @@ class RuntimeForegroundService : Service() {
                 wakeLock = getSystemService(PowerManager::class.java)
                     .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_LOCK_TAG)
                     .also { it.acquire(LOCK_TIMEOUT_MS) }
-                Log.i(TAG, "Acquired partial wake lock for runtime service")
-            }.onFailure { Log.w(TAG, "获取 CPU 唤醒锁失败", it) }
+                appLogger.i("Acquired partial wake lock for runtime service")
+            }.onFailure { appLogger.w("获取 CPU 唤醒锁失败", it) }
         }
         if (wifiLock?.isHeld != true) {
             runCatching {
@@ -117,21 +118,21 @@ class RuntimeForegroundService : Service() {
                 wifiLock = getSystemService(WifiManager::class.java)
                     .createWifiLock(WifiManager.WIFI_MODE_FULL, WIFI_LOCK_TAG)
                     .also { it.acquire() }
-                Log.i(TAG, "Acquired Wi-Fi lock for runtime service")
-            }.onFailure { Log.w(TAG, "获取 Wi-Fi 锁失败", it) }
+                appLogger.i("Acquired Wi-Fi lock for runtime service")
+            }.onFailure { appLogger.w("获取 Wi-Fi 锁失败", it) }
         }
     }
 
     private fun releaseLocks() {
         runCatching {
             wakeLock?.takeIf { it.isHeld }?.release()
-            Log.i(TAG, "Released wake lock")
-        }.onFailure { Log.w(TAG, "释放 CPU 唤醒锁失败", it) }
+            appLogger.i("Released wake lock")
+        }.onFailure { appLogger.w("释放 CPU 唤醒锁失败", it) }
         wakeLock = null
         runCatching {
             wifiLock?.takeIf { it.isHeld }?.release()
-            Log.i(TAG, "Released Wi-Fi lock")
-        }.onFailure { Log.w(TAG, "释放 Wi-Fi 锁失败", it) }
+            appLogger.i("Released Wi-Fi lock")
+        }.onFailure { appLogger.w("释放 Wi-Fi 锁失败", it) }
         wifiLock = null
     }
 
@@ -165,7 +166,6 @@ class RuntimeForegroundService : Service() {
         private const val CHANNEL_ID = "tianyan-runtime-v5"
         private const val LEGACY_CAPSULE_CHANNEL_ID = "tianyan-runtime-capsule-v4"
         private const val NOTIFICATION_ID = 1001
-        private const val TAG = "RuntimeForegroundService"
         private const val WAKE_LOCK_TAG = "tianyan:runtime-service"
         private const val WIFI_LOCK_TAG = "tianyan:runtime-wifi"
         /** 唤醒锁超时：8 小时兜底，避免异常情况下永久持有。 */

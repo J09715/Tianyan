@@ -1,0 +1,85 @@
+name: Unit Tests
+
+# 单元测试此前只挂在 android-apk.yml 的 tag 构建里（且仅在 push tag 时触发），
+# 日常 push / PR 完全不跑，导致接口变更后测试代码编译失败长期无人发现。
+# 这里独立成 workflow，覆盖每次 push 与 PR，做真正的全模块回归。
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unit-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-test:
+    name: 全模块单元测试
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      # --continue：一次跑完所有模块再统一报错，避免只暴露第一个失败模块、
+      # 修完再跑又撞上下一个模块，把 CI 轮次浪费在排队上。
+      - name: Run unit tests
+        run: |
+          chmod +x gradlew
+          ./gradlew testDebugUnitTest --console=plain --no-daemon --continue
+
+      - name: Collect per-module test results
+        if: always()
+        run: |
+          set -uo pipefail
+          total=0; failed=0; skipped=0
+          echo "| 模块 | 用例 | 失败 | 跳过 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          for xml in $(find . -path "*/build/test-results/testDebugUnitTest/*.xml" | sort); do
+            module=$(echo "$xml" | sed -E 's|^\./||; s|/build/.*||')
+            read -r t f s < <(python3 - "$xml" <<'PY'
+          import sys, xml.etree.ElementTree as ET
+          r = ET.parse(sys.argv[1]).getroot()
+          print(r.get("tests", "0"), r.get("failures", "0"), r.get("skipped", "0"))
+          PY
+          )
+            echo "| $module | $t | $f | $s |" >> "$GITHUB_STEP_SUMMARY"
+            total=$((total + t)); failed=$((failed + f)); skipped=$((skipped + s))
+          done
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**合计：$total 用例，失败 $failed，跳过 $skipped**" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$failed" -gt 0 ]; then
+            echo "::error::$failed 个单元测试失败"
+            exit 1
+          fi
+          if [ "$total" -eq 0 ]; then
+            echo "::error::没有收集到任何测试结果，测试任务可能未真正执行"
+            exit 1
+          fi
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports-${{ github.ref_name }}
+          path: "**/build/reports/tests/testDebugUnitTest/**"
+          if-no-files-found: warn
+          retention-days: 14

@@ -5,7 +5,11 @@
         因此网络层允许明文连接，再由各业务端点策略收口；MCP 目前仅允许
         localhost/回环地址与 192.168.*，公网 MCP 仍强制 HTTPS。
     -->
-    <base-config cleartextTrafficPermitted="true" />
+    <!--
+        默认禁止明文流量。此前 base-config 为 true，等于对所有域名放行 HTTP，
+        中间人可直接降级 hijack 任意业务请求；改为 false 后仅下方白名单域可用明文。
+    -->
+    <base-config cleartextTrafficPermitted="false" />
 
     <!-- 豁免本地沙箱回环通信（HostBridge 7980、沙箱本地 Web 服务等）明文 HTTP -->
     <domain-config cleartextTrafficPermitted="true">

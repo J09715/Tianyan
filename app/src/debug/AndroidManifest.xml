@@ -3,7 +3,7 @@
     <application>
         <receiver
             android:name="top.tianyan.app.debug.DebugReceiver"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
                 <action android:name="top.tianyan.app.DEBUG_CLONE" />
                 <action android:name="top.tianyan.app.DEBUG_DIAG" />
