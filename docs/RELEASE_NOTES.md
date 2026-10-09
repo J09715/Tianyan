@@ -1,8 +1,39 @@
-# 天衍 · Tianyan v0.18.1 发布记录
+# 天衍 · Tianyan v0.18.2 发布记录
 
 > **发布时间**：2026-10-08
-> **版本号**：v0.18.1（`appVersionName = 0.18.1`，`appVersionCode = 69`）
+> **版本号**：v0.18.2（`appVersionName = 0.18.2`，`appVersionCode = 70`）
 > **支持范围**：Android 10+ · arm64-v8a（无 Root / PRoot 沙箱）
+
+---
+
+## 🆕 v0.18.2 补充（编译警告真正清零）
+
+### 更正 v0.18.1 的结论
+
+v0.18.1 我声称「编译警告清零」，**那个结论是错的**：当时用的是增量编译，被缓存命中的模块没有重新输出警告，所以只看到了一部分。改用 `--rerun-tasks` 全量重编后，实际还有 **19 条**警告。
+
+这一版逐条修完，并在**全量重编**下验证为 **0 警告 0 错误**。
+
+### 修掉的 19 条
+
+**逻辑冗余**（编译器实证）：
+- `RedTeamScorePointEdit`：`builtin && existingCode != null` 中后者已被 `builtin` 蕴含
+- `HostGuiToolkit`：外层 `if` 已把 `GuiKey` 收窄到三个值，`when` 因此穷尽，`else -> null` 与随后的 `global != null` 都成了死代码
+- `AboutTianyanScreen`：`activeDistroId` 是非空 `String`，Elvis 是死代码；真正的意图是「空串显示未选定」，改用 `ifBlank`
+- `SettingsScreen`：`editing!!` 在 `else` 分支已确定非空
+
+**性能**：
+- `RedTeamSettings`：每次调用都新建 `Json { prettyPrint }` 实例，改为复用静态实例
+
+**平台 API 弃用**：
+- `WIFI_MODE_FULL_HIGH_PERF`（API 34 弃用）→ `WIFI_MODE_FULL_LOW_LATENCY`（API 29+），旧版本回退旧常量
+- `SOFT_INPUT_ADJUST_RESIZE`（API 30 弃用）：悬浮窗仍需它避让输入法，显式压制并说明
+- `WebSettings.databaseEnabled`（API 35 弃用）：仅旧版本设置
+- `Thread.id`（Java 19+ 弃用）→ `Process.myTid()`
+- `LocalClipboardManager`（3 处）→ 新增 `rememberTextCopier()` 收口
+- `hiltViewModel` 废弃导入路径（1 处）
+
+**其他**：`flatMapLatest` 显式 `@OptIn`（不再依赖默认放行）、5 处冗余 `.toFloat()`、1 处多余 `?.`
 
 ---
 
