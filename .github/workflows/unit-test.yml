@@ -75,14 +75,11 @@ jobs:
             exit 1
           fi
 
-      # 同时上传 HTML 报告（人读）与 test-results XML（机器可读，供外部聚合统计）。
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: unit-test-reports-${{ github.ref_name }}
-          path: |
-            **/build/reports/tests/testDebugUnitTest/**
-            **/build/test-results/testDebugUnitTest/**
+          path: "**/build/reports/tests/testDebugUnitTest/**"
           if-no-files-found: warn
           retention-days: 14

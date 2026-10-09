@@ -64,122 +64,130 @@ fun AboutTianyanScreen(
     val appVersion = rememberAppVersion()
     val deviceInfo = rememberDeviceSnapshot(context)
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .liquidGlassContent()
-            .padding(top = 0.dp),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 120.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        item {
-            RuntimeTopBar("关于天衍", onBack = onBack)
-        }
-        item {
-            SectionHeader("应用信息")
-            RuntimeCard(Modifier.fillMaxWidth()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    TianyanBrandBadge(size = 52.dp)
-                    Column {
-                        Text("天衍 · Tianyan", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text("黑白观象，知行相衍", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    // 顶栏必须由 Scaffold 的 topBar 承载，不能塞进 LazyColumn 的 item。
+    //
+    // 塞进列表项的后果：顶栏会跟着内容一起滚动，而且被 LazyColumn 按「可滚动项」测量，
+    // 在澄明主题下（drawBackdrop 的玻璃层需要确定高度）会被拉成一条很高的色块——
+    // 就是用户看到的那张「关于天衍」顶部异常撑高的图。
+    // 设置页其余 10 个二级页全部用 Scaffold(topBar = ...)，这里与之对齐。
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = { RuntimeTopBar("关于天衍", onBack = onBack) },
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .liquidGlassContent()
+                .padding(padding),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 120.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            item {
+                SectionHeader("应用信息")
+                RuntimeCard(Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        TianyanBrandBadge(size = 52.dp)
+                        Column {
+                            Text("天衍 · Tianyan", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text("黑白观象，知行相衍", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    Column(Modifier.padding(vertical = 4.dp)) {
+                        SettingsRowLocal(
+                            icon = RuntimeIconName.Info,
+                            title = "天衍 · Tianyan",
+                            value = "Android 原生 Linux PRoot 沙箱与 AI 结对中枢",
+                        )
+                        SettingsRowLocal(
+                            icon = RuntimeIconName.Package,
+                            title = "版本",
+                            value = "v$appVersion",
+                        )
+                        SettingsRowLocal(
+                            icon = RuntimeIconName.Package,
+                            title = "包名",
+                            value = context.packageName,
+                        )
+                        SettingsRowLocal(
+                            icon = RuntimeIconName.Cpu,
+                            title = "运行时",
+                            value = when (val s = runtimeState) {
+                                is RuntimeState.Ready -> "PRoot 就绪 · ${activeDistroId.ifBlank { "未选定" }}"
+                                is RuntimeState.Initializing -> s.step
+                                is RuntimeState.Error -> "异常 · ${s.throwable.message}"
+                                else -> "未启动"
+                            },
+                        )
+                        SettingsRowLocal(
+                            icon = RuntimeIconName.Server,
+                            title = "已安装发行版",
+                            value = if (installedDistros.isEmpty()) "无" else "${installedDistros.size} 套 · 当前 ${activeDistroId.ifBlank { "未选定" }}",
+                        )
                     }
                 }
-                Column(Modifier.padding(vertical = 4.dp)) {
-                    SettingsRowLocal(
-                        icon = RuntimeIconName.Info,
-                        title = "天衍 · Tianyan",
-                        value = "Android 原生 Linux PRoot 沙箱与 AI 结对中枢",
-                    )
-                    SettingsRowLocal(
-                        icon = RuntimeIconName.Package,
-                        title = "版本",
-                        value = "v$appVersion",
-                    )
-                    SettingsRowLocal(
-                        icon = RuntimeIconName.Package,
-                        title = "包名",
-                        value = context.packageName,
-                    )
-                    SettingsRowLocal(
-                        icon = RuntimeIconName.Cpu,
-                        title = "运行时",
-                        value = when (val s = runtimeState) {
-                            is RuntimeState.Ready -> "PRoot 就绪 · ${activeDistroId.ifBlank { "未选定" }}"
-                            is RuntimeState.Initializing -> s.step
-                            is RuntimeState.Error -> "异常 · ${s.throwable.message}"
-                            else -> "未启动"
-                        },
-                    )
-                    SettingsRowLocal(
-                        icon = RuntimeIconName.Server,
-                        title = "已安装发行版",
-                        value = if (installedDistros.isEmpty()) "无" else "${installedDistros.size} 套 · 当前 ${activeDistroId.ifBlank { "未选定" }}",
-                    )
+            }
+            item {
+                SectionHeader("设备信息")
+                RuntimeCard(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(vertical = 4.dp)) {
+                        SettingsRowLocal(icon = RuntimeIconName.Cpu, title = "设备型号", value = deviceInfo.deviceModel)
+                        SettingsRowLocal(icon = RuntimeIconName.Info, title = "Android 版本", value = "API ${Build.VERSION.SDK_INT}")
+                        SettingsRowLocal(icon = RuntimeIconName.Speed, title = "CPU 核心数", value = deviceInfo.cpuCores)
+                        SettingsRowLocal(icon = RuntimeIconName.Speed, title = "运行内存", value = "${deviceInfo.totalRamGib} GiB（可用 ${deviceInfo.freeRamGib} GiB）")
+                        SettingsRowLocal(icon = RuntimeIconName.FolderOpen, title = "内部存储", value = "${deviceInfo.totalStorageGib} GiB（可用 ${deviceInfo.freeStorageGib} GiB）")
+                    }
                 }
             }
-        }
-        item {
-            SectionHeader("设备信息")
-            RuntimeCard(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(vertical = 4.dp)) {
-                    SettingsRowLocal(icon = RuntimeIconName.Cpu, title = "设备型号", value = deviceInfo.deviceModel)
-                    SettingsRowLocal(icon = RuntimeIconName.Info, title = "Android 版本", value = "API ${Build.VERSION.SDK_INT}")
-                    SettingsRowLocal(icon = RuntimeIconName.Speed, title = "CPU 核心数", value = deviceInfo.cpuCores)
-                    SettingsRowLocal(icon = RuntimeIconName.Speed, title = "运行内存", value = "${deviceInfo.totalRamGib} GiB（可用 ${deviceInfo.freeRamGib} GiB）")
-                    SettingsRowLocal(icon = RuntimeIconName.FolderOpen, title = "内部存储", value = "${deviceInfo.totalStorageGib} GiB（可用 ${deviceInfo.freeStorageGib} GiB）")
+            item {
+                SectionHeader("沙箱网络")
+                RuntimeCard(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(vertical = 4.dp)) {
+                        Text(
+                            "沙箱内置 HTTP 代理：让沙箱内的 git / curl / apt 走指定代理。留空表示不启用，回落到系统全局网络。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        SettingsRowLocal(
+                            icon = RuntimeIconName.Network,
+                            title = "沙箱 HTTP 代理",
+                            value = sandboxProxy.ifBlank { "未设置" },
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "当前值：${sandboxProxy.ifBlank { "（空）" }}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
-        }
-        item {
-            SectionHeader("沙箱网络")
-            RuntimeCard(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(vertical = 4.dp)) {
-                    Text(
-                        "沙箱内置 HTTP 代理：让沙箱内的 git / curl / apt 走指定代理。留空表示不启用，回落到系统全局网络。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    SettingsRowLocal(
-                        icon = RuntimeIconName.Network,
-                        title = "沙箱 HTTP 代理",
-                        value = sandboxProxy.ifBlank { "未设置" },
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "当前值：${sandboxProxy.ifBlank { "（空）" }}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-        item {
-            SectionHeader("引导与权限")
-            RuntimeCard(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(vertical = 4.dp)) {
-                    SettingsRowLocal(
-                        icon = RuntimeIconName.Play,
-                        title = "重看功能引导",
-                        value = "清除首次使用标记",
-                        onClick = { viewModel.replayFirstUseGuides() },
-                    )
-                    SettingsRowLocal(
-                        icon = RuntimeIconName.Admin,
-                        title = "系统设置与电池优化",
-                        value = "跳转到系统设置",
-                        onClick = {
-                            val intent = Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                data = Uri.parse("package:" + context.packageName)
-                            }
-                            context.startActivity(intent)
-                        },
-                    )
+            item {
+                SectionHeader("引导与权限")
+                RuntimeCard(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(vertical = 4.dp)) {
+                        SettingsRowLocal(
+                            icon = RuntimeIconName.Play,
+                            title = "重看功能引导",
+                            value = "清除首次使用标记",
+                            onClick = { viewModel.replayFirstUseGuides() },
+                        )
+                        SettingsRowLocal(
+                            icon = RuntimeIconName.Admin,
+                            title = "系统设置与电池优化",
+                            value = "跳转到系统设置",
+                            onClick = {
+                                val intent = Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                    data = Uri.parse("package:" + context.packageName)
+                                }
+                                context.startActivity(intent)
+                            },
+                        )
+                    }
                 }
             }
         }

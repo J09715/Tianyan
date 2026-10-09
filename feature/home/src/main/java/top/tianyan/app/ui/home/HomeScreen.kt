@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -291,12 +293,18 @@ fun HomeScreen(
             }
 
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // 两张卡强制等高：内容长度不同（如「总空间 0.0 GB」换行）时，
+                    // Row 默认按各自内容高度排布，会出现「一张高一张矮」的不对称，
+                    // 而指标加载完成后文本变短又会自己对齐——用户看到的是先歪一下再正。
+                    // IntrinsicSize.Min + fillMaxHeight 让两卡取同一高度，从首帧就对称。
+                    .height(IntrinsicSize.Min),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 // 内存指标
                 ResourceMetricCard(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
                     title = stringResource(R.string.home_memory),
                     primaryValue = "${metrics.memoryUsedMb} MB",
                     secondaryValue = stringResource(R.string.home_memory_total, metrics.memoryTotalMb),
@@ -309,7 +317,7 @@ fun HomeScreen(
 
                 // 存储指标
                 ResourceMetricCard(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
                     title = stringResource(R.string.home_storage),
                     primaryValue = "${metrics.storageUsedGb} GB",
                     secondaryValue = stringResource(R.string.home_storage_total, metrics.storageTotalGb),
@@ -1243,7 +1251,10 @@ private fun ResourceMetricCard(
                     text = secondaryValue,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
+                    // 单行 + 省略号：允许换行会让两张卡内容行数不同，高度随之不等，
+                    // 而 Row 里的卡片本该永远对齐。指标文本（如「总空间 0.0 GB」）足够短，
+                    // 真放不下时省略比换行更整齐。
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = androidx.compose.ui.text.style.TextAlign.End,
                     modifier = Modifier.weight(1f),
