@@ -33,7 +33,8 @@
 5. PRoot 及其加载器
    文件：app/src/main/jniLibs/arm64-v8a/libproot.so、libproot-loader.so
    版权：PRoot 项目及其贡献者
-   许可证：GPL-2.0
+   许可证：GPL-2.0-or-later（上游 README.rst 标注 SPDX-License-Identifier: GPL-2.0-or-later，
+           允许按 GPL-3.0 使用，与本仓库整体许可兼容）
 
 6. talloc
    文件：app/src/main/jniLibs/arm64-v8a/libtalloc.so

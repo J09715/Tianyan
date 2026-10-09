@@ -18,14 +18,21 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -35,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.tianyan.app.core.model.RuntimeState
 import top.tianyan.app.ui.components.RuntimeCard
+import top.tianyan.app.ui.components.RuntimeAlertDialog
 import top.tianyan.app.ui.components.TianyanBrandBadge
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
@@ -63,6 +71,9 @@ fun AboutTianyanScreen(
 
     val appVersion = rememberAppVersion()
     val deviceInfo = rememberDeviceSnapshot(context)
+
+    // GPL-3.0 许可全文对话框：文本随 APK assets 分发（licenses/gpl-3.0.txt）。
+    var showLicense by remember { mutableStateOf(false) }
 
     // 顶栏必须由 Scaffold 的 topBar 承载，不能塞进 LazyColumn 的 item。
     //
@@ -126,6 +137,22 @@ fun AboutTianyanScreen(
                             icon = RuntimeIconName.Server,
                             title = "已安装发行版",
                             value = if (installedDistros.isEmpty()) "无" else "${installedDistros.size} 套 · 当前 ${activeDistroId.ifBlank { "未选定" }}",
+                        )
+                        SettingsRowLocal(
+                            icon = RuntimeIconName.File,
+                            title = "开源许可",
+                            value = "GPL-3.0 · 点击查看全文",
+                            onClick = { showLicense = true },
+                        )
+                        SettingsRowLocal(
+                            icon = RuntimeIconName.Github,
+                            title = "源码仓库",
+                            value = "github.com/J09715/Tianyan",
+                            onClick = {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/J09715/Tianyan")),
+                                )
+                            },
                         )
                     }
                 }
@@ -191,7 +218,41 @@ fun AboutTianyanScreen(
                 }
             }
         }
+
+        if (showLicense) {
+            LicenseTextDialog(context = context, onDismiss = { showLicense = false })
+        }
     }
+}
+
+/** GPL-3.0 许可全文对话框：从 APK assets 读取，满足 GPL「随二进制提供许可文本」的分发要求。 */
+@Composable
+private fun LicenseTextDialog(context: Context, onDismiss: () -> Unit) {
+    val licenseText = remember(context) {
+        runCatching {
+            context.assets.open("licenses/gpl-3.0.txt").bufferedReader().use { it.readText() }
+        }.getOrDefault("许可文本加载失败，请访问 https://github.com/J09715/Tianyan/blob/main/LICENSE 查看。")
+    }
+    RuntimeAlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
+        title = { Text("开源许可 · GPL-3.0") },
+        text = {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                // 许可证全文为 35KB 英文法律文本：绕过 LocalizedText 桥（避免整段走本地化正则链），
+                // 直接用 material3.Text 并用小号等宽风格排版。
+                androidx.compose.material3.Text(
+                    text = licenseText,
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp, lineHeight = 14.sp),
+                )
+            }
+        },
+    )
 }
 
 /** 本地版 SettingsRow：与 SettingsScreen.SettingsRow 同构，但无网络/社区依赖。 */
