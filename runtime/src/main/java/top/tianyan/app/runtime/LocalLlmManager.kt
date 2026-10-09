@@ -1,6 +1,7 @@
 package top.tianyan.app.runtime
 
 import android.os.Build
+import android.os.PowerManager
 import android.app.ActivityManager
 import android.content.Context
 import java.io.File
@@ -86,6 +87,15 @@ class LocalLlmManager @Inject constructor(
     private val managerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val serviceMutex = Mutex()
     private var serviceProcess: ManagedProcess? = null
+
+    /**
+     * 推理期间的 CPU 唤醒锁。
+     *
+     * 与 SSH/FTP 服务一致：本地推理是长时间 CPU 密集任务，而 llama-server 是 PRoot 子进程，
+     * 息屏后系统会冻结进程组 —— 表现就是「刚提示启动成功，回到列表已变成未启动」。
+     * 之前这里没有任何保活机制，所以模型服务必然在息屏后掉线。
+     */
+    private var wakeLock: PowerManager.WakeLock? = null
     private var serviceMonitorJob: Job? = null
 
     init {
@@ -262,6 +272,7 @@ class LocalLlmManager @Inject constructor(
                 )
             }
             serviceProcess = handle.process
+            acquireWakeLock()
             _serviceState.value = LocalLlmServiceState.Running(model.name, handle.url, contextSize)
             monitorService(handle.process)
         } catch (cancellation: CancellationException) {
@@ -288,6 +299,7 @@ class LocalLlmManager @Inject constructor(
     private suspend fun stopInternal() {
         serviceMonitorJob?.cancel()
         serviceMonitorJob = null
+        releaseWakeLock()
         serviceProcess = null
         serviceLauncher.stop(SERVICE_ID)
         _serviceState.value = LocalLlmServiceState.Stopped
@@ -365,12 +377,31 @@ class LocalLlmManager @Inject constructor(
             serviceMutex.withLock {
                 if (serviceProcess === process) {
                     serviceLauncher.stop(SERVICE_ID)
+                    releaseWakeLock()
                     serviceProcess = null
                     serviceMonitorJob = null
                     _serviceState.value = LocalLlmServiceState.Stopped
                 }
             }
         }
+    }
+
+    private fun acquireWakeLock() {
+        if (wakeLock?.isHeld == true) return
+        val pm = runCatching {
+            context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+        }.getOrNull() ?: return
+        val lock = wakeLock ?: pm.newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK,
+            "Tianyan::LocalLlm",
+        ).also { it.setReferenceCounted(false) }
+        wakeLock = lock
+        runCatching { lock.acquire(WAKE_LOCK_TIMEOUT_MS) }
+    }
+
+    private fun releaseWakeLock() {
+        runCatching { wakeLock?.takeIf { it.isHeld }?.release() }
+        wakeLock = null
     }
 
     companion object {
@@ -387,6 +418,9 @@ class LocalLlmManager @Inject constructor(
         private const val ENGINE_PROBE_TIMEOUT_MS = 10_000L
         private const val SERVICE_START_TIMEOUT_MS = 5 * 60_000L
         private const val SERVICE_MONITOR_INTERVAL_MS = 1_000L
+
+        /** 与 SSH/FTP 一致的 12 小时上限：足够长，且不会永久占住唤醒锁。 */
+        private const val WAKE_LOCK_TIMEOUT_MS = 12 * 60 * 60 * 1000L
 
         private const val MIN_INFERENCE_THREADS = 2
         private const val MAX_INFERENCE_THREADS = 4

@@ -241,8 +241,13 @@ fun ToolDetailScreen(
                 )
             }
 
-            // ── 3. 模型配置（仅 AI 类工具：AI Agent / Coding Agent，非 AI 的纯开发工具不需要模型注入） ──
-            if (tool.category == "AI_AGENT" || tool.category == "CODING_AGENT") {
+            // ── 3. 模型配置（仅「调用云端模型」的工具：AI Agent / Coding Agent） ──
+            //
+            // 本地推理引擎（llama-cpp）必须排除：它自己就是模型服务端，
+            // 启动时只吃 `-m <GGUF 文件>`，不读 provider/baseUrl/apiKey。
+            // 给它显示「注入云档案」卡片是误导——用户会以为选个云档案就能让本地引擎跑起来，
+            // 而真正该做的是在「本地 LLM」页下载并启动 GGUF 模型。
+            if (top.tianyan.app.core.model.ToolModelInjection.acceptsRemoteModelInjection(tool.id, tool.category)) {
                 ModelApplyCard(
                     toolName = tool.name,
                     models = state.models,
