@@ -2,6 +2,7 @@ package top.tianyan.app.core.model
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * 本地推理上下文窗口的决策规则。
@@ -60,6 +61,35 @@ class LocalLlmContextTest {
     fun `boundary values pass through unchanged`() {
         assertEquals(LocalLlmContext.MIN_CONTEXT, LocalLlmContext.resolve(LocalLlmContext.MIN_CONTEXT, normalRam))
         assertEquals(LocalLlmContext.MAX_CONTEXT, LocalLlmContext.resolve(LocalLlmContext.MAX_CONTEXT, normalRam))
+    }
+
+    /**
+     * 默认值必须能装下系统提示词。
+     *
+     * 这条是为了钉住一个真实故障：默认值曾是 2048/4096，而天衍的系统提示词
+     * （工具说明 + 技能 + MCP 能力 + 长期记忆）本身就有 3k~4k token。
+     * 于是「新开会话」也必然 400（request exceeds the available context size），
+     * 因为失败与历史长度无关——系统提示词一项就超了服务端窗口。
+     */
+    @Test
+    fun `defaults are large enough for the system prompt`() {
+        // 实测系统提示词约 3k~4k token，留一倍余量给一轮对话。
+        val minimumUsable = 8_192
+        assertTrue(
+            LocalLlmContext.LOW_MEMORY_CONTEXT >= minimumUsable,
+            "低内存兜底 ${LocalLlmContext.LOW_MEMORY_CONTEXT} 小于系统提示词开销，开局即 400",
+        )
+        assertTrue(
+            LocalLlmContext.DEFAULT_CONTEXT >= minimumUsable,
+            "常规兜底 ${LocalLlmContext.DEFAULT_CONTEXT} 小于系统提示词开销，开局即 400",
+        )
+        assertTrue(
+            LocalLlmContext.MIN_CONTEXT >= minimumUsable,
+            "下限 ${LocalLlmContext.MIN_CONTEXT} 会把用户配置收敛到不可用区间",
+        )
+        // 未配置时在两个档位上都不该落进不可用区。
+        assertTrue(LocalLlmContext.resolve(null, 4L * 1024 * 1024 * 1024) >= minimumUsable)
+        assertTrue(LocalLlmContext.resolve(null, 8L * 1024 * 1024 * 1024) >= minimumUsable)
     }
 
     /** 结果永远落在合法区间内，任何输入都不会漏出去。 */

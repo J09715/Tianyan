@@ -261,7 +261,15 @@ class LocalLlmViewModel @Inject constructor(
                 reasoningMode = existing?.reasoningMode,
                 reasoningEffort = existing?.reasoningEffort,
                 toolCallMode = existing?.toolCallMode,
-                contextTokens = existing?.contextTokens ?: if (deviceRamBytes < 6L * GIB) 2048 else 4096,
+                // 与 LocalLlmContext 的默认值保持一致：以前这里写死 2048/4096，
+                // 比系统提示词本身还小，新建档案后开局即 400。
+                //
+                // 旧档案要一并抬升：升级前创建的本地档案里存的就是 2048/4096，
+                // 只改「新建默认值」救不了这些设备——用户装完新版仍会开局 400，
+                // 而且会以为是没修好。低于可用下限的值一律按设备能力重新推断。
+                contextTokens = existing?.contextTokens
+                    ?.takeIf { it >= top.tianyan.app.core.model.LocalLlmContext.MIN_CONTEXT }
+                    ?: top.tianyan.app.core.model.LocalLlmContext.resolve(null, deviceRamBytes),
                 customHeaders = existing?.customHeaders.orEmpty(),
                 pureChatMode = existing?.pureChatMode ?: false,
                 visionEnabled = false,

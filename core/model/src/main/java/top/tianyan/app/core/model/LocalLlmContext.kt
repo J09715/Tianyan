@@ -11,17 +11,32 @@ package top.tianyan.app.core.model
  */
 object LocalLlmContext {
 
-    /** 低内存设备（< 6 GiB）的兜底上下文。 */
-    const val LOW_MEMORY_CONTEXT = 2048
-
-    /** 常规设备的兜底上下文。 */
-    const val DEFAULT_CONTEXT = 4096
+    /**
+     * 低内存设备（< 6 GiB）的兜底上下文。
+     *
+     * 从 2048 提到 8192：天衍的系统提示词本身（工具说明 + 技能 + MCP 能力 + 记忆）
+     * 实测就有 3k~4k token。2048 连系统提示词都放不下，服务端必然立刻 400
+     * （request exceeds the available context size）——用户看到的是「新开会话也失败」，
+     * 因为失败与历史长度无关，系统提示词一项就超了。
+     */
+    const val LOW_MEMORY_CONTEXT = 8192
 
     /**
-     * 上下文下限：低于此值连系统提示词加一轮工具输出都放不下，
-     * 启动后必然立刻 400，不如在启动时就收敛掉。
+     * 常规设备的兜底上下文。
+     *
+     * 从 4096 提到 32768：4096 只够放系统提示词，放不下任何真实对话。
+     * 用户实测新会话首个请求就有 14317 token，4096 的默认值等于开局即失败。
      */
-    const val MIN_CONTEXT = 2048
+    const val DEFAULT_CONTEXT = 32_768
+
+    /**
+     * 上下文下限。
+     *
+     * 取 8192 而不是更低：天衍的系统提示词（工具 schema + 技能 + MCP 能力 + 记忆）
+     * 本身就占 3k~4k token，再加上一轮用户消息与工具输出，
+     * 低于 8192 的窗口在真实使用中开局即 400。
+     */
+    const val MIN_CONTEXT = 8192
 
     /**
      * 上下文上限：llama.cpp 按 ctx 预分配 KV cache，
