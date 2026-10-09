@@ -6,8 +6,8 @@ import java.util.Properties
 import org.gradle.kotlin.dsl.configure
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
-val appVersionName = "0.18.11"
-val appVersionCode = 79
+val appVersionName = "0.18.12"
+val appVersionCode = 80
 
 // TianyanDev 双包构建开关：CI（.github/workflows/tianyandev-build.yml）设 TIANYAN_DEV_BUILD=1 时，
 // 产出独立预览包 top.tianyan.app.dev / 应用名 TianyanDev / 版本后缀 -dev，

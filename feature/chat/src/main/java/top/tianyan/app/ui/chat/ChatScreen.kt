@@ -5,6 +5,10 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.animation.AnimatedVisibility
@@ -191,6 +195,7 @@ fun ChatScreen(
     val installedDistros by viewModel.installedDistros.collectAsStateWithLifecycle()
     val allSkills by viewModel.allSkills.collectAsStateWithLifecycle()
     val pendingSkillCandidates by viewModel.pendingSkillCandidates.collectAsStateWithLifecycle()
+    val distillFailure by viewModel.distillFailure.collectAsStateWithLifecycle()
     val pinnedCapabilities by viewModel.pinnedCapabilities.collectAsStateWithLifecycle()
     val pinnedMentionIds by viewModel.pinnedMentionIds.collectAsStateWithLifecycle()
     val memories by viewModel.memories.collectAsStateWithLifecycle()
@@ -566,6 +571,8 @@ fun ChatScreen(
                     pendingSkillCandidates = pendingSkillCandidates,
                     onAcceptSkillCandidate = viewModel::acceptSkillCandidate,
                     onDismissSkillCandidate = viewModel::dismissSkillCandidate,
+                    distillFailure = distillFailure,
+                    onConsumeDistillFailure = viewModel::consumeDistillFailure,
                     onSend = viewModel::sendFromComposer,
                     onStop = viewModel::stop,
                     lastAssistantMessageId = lastAssistantMessageId,
@@ -1093,6 +1100,8 @@ private fun ChatPaneContent(
     pendingSkillCandidates: List<PendingSkillCandidate> = emptyList(),
     onAcceptSkillCandidate: (PendingSkillCandidate) -> Unit = {},
     onDismissSkillCandidate: (PendingSkillCandidate) -> Unit = {},
+    distillFailure: String? = null,
+    onConsumeDistillFailure: () -> Unit = {},
     onOpenFile: ((projectName: String, relativePath: String) -> Unit)?,
     onEditMessage: (UserMessage) -> Unit,
     onDeleteMessage: (String) -> Unit,
@@ -1230,11 +1239,20 @@ private fun ChatPaneContent(
             onDismiss = onDismissWorkflowSuggestion,
         )
 
-        PendingSkillCandidatesBanner(
-            candidates = pendingSkillCandidates,
-            onAccept = onAcceptSkillCandidate,
-            onDismiss = onDismissSkillCandidate,
+        // 技能提炼失败必须可见：此前静默吞掉，用户以为功能从未工作过
+        DistillFailureBanner(
+            message = distillFailure,
+            onConsume = onConsumeDistillFailure,
         )
+
+        // 候选确认弹窗：一次弹一个，采纳/忽略后自动弹下一个
+        pendingSkillCandidates.firstOrNull()?.let { candidate ->
+            SkillCandidateConfirmDialog(
+                candidate = candidate,
+                onAccept = onAcceptSkillCandidate,
+                onDismiss = onDismissSkillCandidate,
+            )
+        }
 
         ChatComposer(
             listState = listState,
@@ -1318,72 +1336,155 @@ private fun McpRecommendationBanner(
 }
 
 /**
- * 会话完成后的技能学习候选卡片：提炼器产生的可复用经验，
- * 用户可「采纳」入库为自定义技能，或「忽略」仅撤下卡片。多张候选纵向堆叠。
+ * 技能候选确认弹窗：提炼器产出候选后弹出，展示技能名、描述与提示词全文预览，
+ * 用户「采纳入库」或「忽略」。一次弹一个，处理完自动弹下一个。
  */
 @Composable
-private fun PendingSkillCandidatesBanner(
-    candidates: List<PendingSkillCandidate>,
+private fun SkillCandidateConfirmDialog(
+    candidate: PendingSkillCandidate,
     onAccept: (PendingSkillCandidate) -> Unit,
     onDismiss: (PendingSkillCandidate) -> Unit,
 ) {
+    RuntimeAlertDialog(
+        onDismissRequest = { onDismiss(candidate) },
+        confirmButton = {
+            Button(onClick = { onAccept(candidate) }) {
+                RuntimeIcon(RuntimeIconName.Brain, Modifier.size(16.dp), MaterialTheme.colorScheme.onPrimary)
+                Spacer(Modifier.width(6.dp))
+                Text("采纳入库", color = MaterialTheme.colorScheme.onPrimary)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { onDismiss(candidate) }) {
+                Text(stringResource(R.string.chat_ignore), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
+        icon = {
+            Box(
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                RuntimeIcon(RuntimeIconName.Brain, Modifier.size(26.dp), MaterialTheme.colorScheme.primary)
+            }
+        },
+        title = {
+            Column {
+                Text(
+                    "发现可沉淀的技能",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    "本次会话中有值得复用的经验，确认后加入技能库",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        text = {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 320.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(
+                        Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            candidate.name,
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                        Text(
+                            candidate.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.85f),
+                        )
+                        if (candidate.triggerCommand.isNotBlank()) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            ) {
+                                Text(
+                                    candidate.triggerCommand,
+                                    Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
+                    }
+                }
+                Text(
+                    "技能提示词预览",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    candidate.systemPrompt,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                )
+            }
+        },
+    )
+}
+
+/** 技能提炼失败横幅：让静默失败可见（可手动关闭）。 */
+@Composable
+private fun DistillFailureBanner(
+    message: String?,
+    onConsume: () -> Unit,
+) {
     AnimatedVisibility(
-        visible = candidates.isNotEmpty(),
+        visible = !message.isNullOrBlank(),
         enter = fadeIn() + expandVertically(),
         exit = fadeOut() + shrinkVertically(),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.errorContainer,
         ) {
-            candidates.forEach { candidate ->
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer,
+            Row(
+                Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.error.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Row(
-                        Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(34.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            RuntimeIcon(RuntimeIconName.Brain, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
-                        }
-                        Column(
-                            Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(2.dp),
-                        ) {
-                            Text(
-                                candidate.name,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                candidate.description,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
-                                style = MaterialTheme.typography.bodySmall,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        Button(onClick = { onAccept(candidate) }) {
-                            Text("采纳", color = MaterialTheme.colorScheme.onPrimary)
-                        }
-                        TextButton(onClick = { onDismiss(candidate) }) {
-                            Text(stringResource(R.string.chat_ignore), color = MaterialTheme.colorScheme.onSecondaryContainer)
-                        }
-                    }
+                    RuntimeIcon(
+                        RuntimeIconName.Alert,
+                        Modifier.size(16.dp),
+                        MaterialTheme.colorScheme.error,
+                    )
+                }
+                Text(
+                    message.orEmpty(),
+                    Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                TextButton(onClick = onConsume) {
+                    Text("知道了", color = MaterialTheme.colorScheme.onErrorContainer)
                 }
             }
         }

@@ -84,6 +84,19 @@ class SkillDistillationManager @Inject constructor(
     private val _pendingCandidates = MutableStateFlow<Map<String, List<PendingSkillCandidate>>>(emptyMap())
     val pendingCandidates: StateFlow<Map<String, List<PendingSkillCandidate>>> = _pendingCandidates.asStateFlow()
 
+    /**
+     * 最近一次提炼失败的消息（供 UI 展示）。
+     * 此前失败只写日志、用户完全无感知，导致「功能存在却从未产出」无法排查；
+     * 弹窗确认交互落地后，失败必须可见。
+     */
+    private val _lastFailure = MutableStateFlow<String?>(null)
+    val lastFailure: StateFlow<String?> = _lastFailure.asStateFlow()
+
+    /** UI 展示完失败提示后调用，清除状态。 */
+    fun consumeFailure() {
+        _lastFailure.value = null
+    }
+
     /** 会话级冷却记录：sessionId → 上次提炼时的用户消息数。 */
     private val distillRecords = ConcurrentHashMap<String, DistillRecord>()
 
@@ -156,6 +169,7 @@ class SkillDistillationManager @Inject constructor(
             }
         }.onFailure { throwable ->
             logger.w("技能提炼失败（会话 $sessionId）：${throwable.message}", throwable)
+            _lastFailure.value = "技能提炼失败：${throwable.message ?: throwable.javaClass.simpleName}"
         }
     }
 

@@ -98,7 +98,6 @@ fun AgentSettingsScreen(
     val maxConsecutiveFailures by viewModel.maxConsecutiveFailures.collectAsStateWithLifecycle()
     val contextBudgetTokens by viewModel.contextBudgetTokens.collectAsStateWithLifecycle()
     val skills by viewModel.allSkills.collectAsStateWithLifecycle()
-    val autoSkillDistillation by viewModel.autoSkillDistillation.collectAsStateWithLifecycle()
     val subagents by viewModel.allSubagents.collectAsStateWithLifecycle()
     val autoSubagentDelegation by viewModel.autoSubagentDelegationEnabled.collectAsStateWithLifecycle()
     val models by viewModel.models.collectAsStateWithLifecycle()
@@ -398,17 +397,6 @@ fun AgentSettingsScreen(
             }
             item {
                 AgentBlockTitle("技能管理")
-            }
-            item {
-                AgentSettingsGroup {
-                    AgentToggleRow(
-                        icon = RuntimeIconName.Brain,
-                        title = "会话自动学习技能",
-                        subtitle = "会话完成时自动提炼可复用经验为技能候选，确认后入库",
-                        checked = autoSkillDistillation,
-                        onCheckedChange = viewModel::setAutoSkillDistillation,
-                    )
-                }
             }
             item {
                 OutlinedButton(onClick = { skillArchivePicker.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")) }, modifier = Modifier.fillMaxWidth().height(44.dp)) {

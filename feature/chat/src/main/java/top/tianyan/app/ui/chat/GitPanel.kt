@@ -293,11 +293,13 @@ fun GitPanel(
                         state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             RuntimeCircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 3.dp)
                         }
+                        // error 优先于"非仓库"引导：超时/失败时 branch 为 null，
+                        // 若 notARepo 判断在前，真实错误会被吞成"非仓库"引导页。
+                        state.error != null -> CenterHint(state.error, isError = true)
                         state.notARepo || state.branch == null -> NotARepoView(
                             onInit = onInitRepo,
                             onOpenClone = { showCloneDialog = true },
                         )
-                        state.error != null -> CenterHint(state.error, isError = true)
                         page == 0 -> StatusTab(state, onFileDiff, onStage, onUnstage, onStageAll, onUnstageAll, onCommit, onPull, onPush, onRevert, onRevertAll, onDeleteUntracked, aiCommit, onAiGenerate, onStash, onStashPop)
                         page == 1 -> BranchesTab(state, onCheckout, onCreateBranch, onDeleteBranch, onRenameBranch, onDeleteRemoteBranch, onCreateTag, onDeleteTag)
                         page == 2 -> LogTab(state, onCommitDetail = onCommitDetail, onCloseCommit = onClearCommitDetail, onCommitFileDiff = onCommitFileDiff, onLoadMore = onLoadMoreCommits, onUnshallow = onUnshallow)

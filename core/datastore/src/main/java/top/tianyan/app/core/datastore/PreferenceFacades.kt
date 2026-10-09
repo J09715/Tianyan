@@ -159,12 +159,10 @@ class AgentPreferences @Inject constructor(private val store: SettingsDataStore)
     val contextBudgetTokens get() = store.contextBudgetTokens
     val maxToolsPerRound get() = store.maxToolsPerRound
     val maxConsecutiveFailures get() = store.maxConsecutiveFailures
-    val autoSkillDistillation get() = store.autoSkillDistillation
     val providerModel get() = store.providerModel
     val environmentPrivacyMode get() = store.environmentPrivacyMode
     suspend fun setThinkingExpanded(value: Boolean) = store.setThinkingExpanded(value)
     suspend fun setCommandOutputCompressionEnabled(value: Boolean) = store.setCommandOutputCompressionEnabled(value)
-    suspend fun setAutoSkillDistillation(value: Boolean) = store.setAutoSkillDistillation(value)
     suspend fun removeModelApiKey(secretRef: String) = store.removeModelApiKey(secretRef)
 }
 

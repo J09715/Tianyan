@@ -345,7 +345,16 @@ class ChatViewModel @Inject constructor(
             // Git's default untracked mode collapses large directories (e.g. an 800-skill pack)
             // into one entry. Never materialize thousands of paths into Compose state.
             val statusOut = runGitRead(ws, "git status --porcelain -b -u")
-            if (statusOut == null || statusOut.contains("not a git repository", ignoreCase = true)) {
+            if (statusOut == null) {
+                // 超时/执行失败 ≠ 非仓库：之前误标 notARepo，用户会以为仓库没了。
+                // 真实场景是仓库过大（如误把 /workspace 根 init 成仓库）导致 15s 超时。
+                _gitPanelState.value = GitPanelState(
+                    loading = false,
+                    error = "git status 执行失败/超时（15s）：git 未就绪、仓库过大或存储 IO 过慢。若当前在工作区根目录，请切到具体项目目录",
+                )
+                return@launch
+            }
+            if (statusOut.contains("not a git repository", ignoreCase = true)) {
                 _gitPanelState.value = GitPanelState(loading = false, notARepo = true)
                 return@launch
             }
@@ -702,7 +711,20 @@ class ChatViewModel @Inject constructor(
     }
     fun gitCreateBranch(name: String) = runGitWrite("git checkout -b ${shellQuote(name)}")
     fun gitDeleteBranch(branch: String) = runGitWrite("git branch -d ${shellQuote(branch)}")
-    fun gitInit() = runGitWrite("git init")
+    fun gitInit() {
+        // 仓库归仓库、工作区归工作区：/workspace 根混着 jdk/recon/嵌套项目等海量文件，
+        // 在这里 init 会让 git status 遍历全部内容（每条命令 15s 超时 × 10 条串行 = 面板卡死）。
+        // 2026-10-09 实锤过一次：/workspace 被误 init + add 2194 个文件（含 200MB jdk tarball）。
+        val ws = workspace.value.ifBlank { "/workspace" }.let { if (it.startsWith("/")) it else "/workspace/$it" }
+        if (ws == "/workspace") {
+            _gitOpMessage.value = GitOpMessage.Error(
+                "工作区根目录不初始化 Git 仓库——里面混着 jdk/recon/项目目录，init 后面板一刷新就卡死。" +
+                    "请克隆到子目录，或先把工作区切到项目目录再初始化",
+            )
+            return
+        }
+        runGitWrite("git init")
+    }
     /**
      * 克隆到当前工作区下的一个以仓库名命名的子目录。**流式进度**通过 [gitProgress] StateFlow 上抛，
      * 顶栏横幅实时显示；成功后 [gitOpMessage] 带 [GitOpAction.SwitchWorkspaceTo] 一键切工作区。
@@ -1629,6 +1651,14 @@ class ChatViewModel @Inject constructor(
         harnessLoop.currentSessionId.flatMapLatest { sessionId ->
             skillDistillationManager.pendingCandidates.map { it[sessionId].orEmpty() }.distinctUntilChanged()
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * 最近一次技能提炼失败（弹窗交互改造后失败必须可见，不再静默吞掉）。
+     */
+    val distillFailure: StateFlow<String?> = skillDistillationManager.lastFailure
+
+    /** UI 展示完失败提示后清除。 */
+    fun consumeDistillFailure() = skillDistillationManager.consumeFailure()
 
     /** 采纳技能候选：构造自定义技能入库并撤下候选卡片。 */
     fun acceptSkillCandidate(candidate: top.tianyan.app.harness.skill.PendingSkillCandidate) {

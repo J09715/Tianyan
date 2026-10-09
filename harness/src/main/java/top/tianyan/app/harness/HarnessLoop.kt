@@ -944,9 +944,10 @@ class HarnessLoop @Inject constructor(
                     stateMirrors.setRunState(sessId, SessionRunState.COMPLETED)
                     // 会话正常完成后 fire-and-forget 触发技能自动提炼：
                     // 独立协程执行、异常全部吞掉，绝不阻塞或影响 finishRun 主流程。
+                    // 2026-10-09 起移除设置开关：提炼结果一律在聊天界面弹窗确认，
+                    // 失败也通过 lastFailure 流对用户可见，不再静默。
                     loopScope.launch {
                         runCatching {
-                            if (!settingsDataStore.autoSkillDistillation.first()) return@runCatching
                             skillDistillationManager.distill(sessId, messageProjector.messagesFlow(sessId).value)
                         }.onFailure { throwable ->
                             logger.w("会话技能自动提炼触发失败：$sessId", throwable)

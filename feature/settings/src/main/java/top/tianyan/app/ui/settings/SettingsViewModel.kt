@@ -589,10 +589,6 @@ class SettingsViewModel @Inject constructor(
     val maxConsecutiveFailures: StateFlow<Int> = settingsDataStore.maxConsecutiveFailures
         .stateIn(viewModelScope, SharingStarted.Eagerly, 8)
 
-    /** 会话完成后是否自动提炼技能候选；默认开启。 */
-    val autoSkillDistillation: StateFlow<Boolean> = settingsDataStore.autoSkillDistillation
-        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
-
     val allSkills: StateFlow<List<top.tianyan.app.core.model.AgentSkill>> = agentSkillRepository.allSkills
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -659,10 +655,6 @@ class SettingsViewModel @Inject constructor(
 
     fun setMaxToolsPerRound(value: Int) {
         viewModelScope.launch { settingsDataStore.setMaxToolsPerRound(value) }
-    }
-
-    fun setAutoSkillDistillation(value: Boolean) {
-        viewModelScope.launch { settingsDataStore.setAutoSkillDistillation(value) }
     }
 
     fun setMaxConsecutiveFailures(value: Int) {
