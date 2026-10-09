@@ -311,9 +311,32 @@ private fun ChengmingBackdrop(modifier: Modifier, darkTheme: Boolean, background
         value = withContext(Dispatchers.IO) {
             backgroundUri?.takeIf { it.isNotBlank() }?.let { savedUri ->
                 runCatching {
-                    context.contentResolver.openInputStream(Uri.parse(savedUri))?.use { stream ->
-                        android.graphics.BitmapFactory.decodeStream(stream)?.asImageBitmap()?.let(::BitmapPainter)
+                    // 两段解码：先以 inJustDecodeBounds 只读原始尺寸（不分配像素内存），
+                    // 按屏幕短边计算 2 的幂 inSampleSize（目标短边 ≤1080px）后再真正解码，
+                    // 避免全分辨率壁纸占用数倍内存并拖慢首帧；壁纸重设时才解码一次。
+                    val bounds = android.graphics.BitmapFactory.Options().apply {
+                        inJustDecodeBounds = true
                     }
+                    context.contentResolver.openInputStream(Uri.parse(savedUri))?.use { stream ->
+                        android.graphics.BitmapFactory.decodeStream(stream, null, bounds)
+                    }
+                    val decodeOptions = android.graphics.BitmapFactory.Options()
+                    if (bounds.outWidth > 0 && bounds.outHeight > 0) {
+                        val displayMetrics = context.resources.displayMetrics
+                        val targetShortEdge = minOf(
+                            displayMetrics.widthPixels,
+                            displayMetrics.heightPixels,
+                        ).coerceAtMost(1080)
+                        var shortEdge = minOf(bounds.outWidth, bounds.outHeight)
+                        var sampleSize = 1
+                        while (shortEdge / sampleSize > targetShortEdge) {
+                            sampleSize *= 2
+                        }
+                        decodeOptions.inSampleSize = sampleSize
+                    }
+                    context.contentResolver.openInputStream(Uri.parse(savedUri))?.use { stream ->
+                        android.graphics.BitmapFactory.decodeStream(stream, null, decodeOptions)
+                    }?.asImageBitmap()?.let(::BitmapPainter)
                 }.getOrNull()
             }
         }

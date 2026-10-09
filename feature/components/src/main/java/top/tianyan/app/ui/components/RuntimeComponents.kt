@@ -325,7 +325,10 @@ private fun LiquidGlassBottomBar(
         contentAlignment = Alignment.CenterStart,
     ) {
         val tabWidth = with(density) { (constraints.maxWidth.toFloat() - 8.dp.toPx()) / destinations.size }
-        val panelOffset by remember(offsetAnimation.value, constraints.maxWidth) {
+        // 动画值不放进 remember key：derivedStateOf 只随 constraints.maxWidth 重建一次，
+        // offsetAnimation.value 在派生块内部读取，动画期间每帧仅触发派生重算 + graphicsLayer
+        // 重绘（panelOffset 全部在 draw 阶段消费），不再每帧新建 DerivedState，也不触发重组。
+        val panelOffset by remember(constraints.maxWidth) {
             derivedStateOf {
                 val fraction = (offsetAnimation.value / constraints.maxWidth).fastCoerceIn(-1f, 1f)
                 with(density) { 4.dp.toPx() * fraction.sign * EaseOut.transform(abs(fraction)) }

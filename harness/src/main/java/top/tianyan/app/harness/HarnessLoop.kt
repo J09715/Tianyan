@@ -115,6 +115,7 @@ class HarnessLoop @Inject constructor(
     private val agentTaskStateMachine: AgentStateMachine,
     private val turnRunner: TurnRunner,
     private val rewindController: top.tianyan.app.harness.checkpoint.RewindController,
+    private val skillDistillationManager: top.tianyan.app.harness.skill.SkillDistillationManager,
 ) {
     private val loopScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -941,6 +942,16 @@ class HarnessLoop @Inject constructor(
                     taskId?.let { agentTaskStateMachine.markCompleted(it) }
                     operationCoordinator.finish(sessId, "completed", messageProjector.messagesFlow(sessId).value.lastOrNull()?.id)
                     stateMirrors.setRunState(sessId, SessionRunState.COMPLETED)
+                    // 会话正常完成后 fire-and-forget 触发技能自动提炼：
+                    // 独立协程执行、异常全部吞掉，绝不阻塞或影响 finishRun 主流程。
+                    loopScope.launch {
+                        runCatching {
+                            if (!settingsDataStore.autoSkillDistillation.first()) return@runCatching
+                            skillDistillationManager.distill(sessId, messageProjector.messagesFlow(sessId).value)
+                        }.onFailure { throwable ->
+                            logger.w("会话技能自动提炼触发失败：$sessId", throwable)
+                        }
+                    }
                 }
                 RunResult.WaitingApproval -> {
                     taskId?.let { agentTaskStateMachine.markWaitingApproval(it) }

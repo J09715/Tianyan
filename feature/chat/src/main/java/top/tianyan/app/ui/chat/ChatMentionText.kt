@@ -22,16 +22,18 @@ internal fun buildMentionRegex(knownNames: List<String>): Regex {
     return Regex(pattern)
 }
 
-/** 为文本中的 @能力 实体添加自适应半透明高亮样式（支持带空格全称） */
+/** 为文本中的 @能力 实体添加自适应半透明高亮样式（支持带空格全称）。
+ *  [cachedRegex] 传入调用方按名单缓存好的正则，为空时才现场构建，避免每次键击重复编译。 */
 internal fun formatMentionText(
     text: String,
     knownNames: List<String>,
     mentionColor: Color,
     mentionBg: Color,
+    cachedRegex: Regex? = null,
 ): AnnotatedString {
     if (!text.contains("@")) return AnnotatedString(text)
     val builder = AnnotatedString.Builder(text)
-    val regex = buildMentionRegex(knownNames)
+    val regex = cachedRegex ?: buildMentionRegex(knownNames)
     for (match in regex.findAll(text)) {
         val range = match.range
         builder.addStyle(
@@ -56,8 +58,11 @@ internal class MentionVisualTransformation(
     private val mentionColor: Color,
     private val mentionBg: Color,
 ) : VisualTransformation {
+    // 正则随实例按名单缓存一次：filter() 每次键击/重排都会调用，避免重复编译
+    private val mentionRegex: Regex = buildMentionRegex(knownNames)
+
     override fun filter(text: AnnotatedString): TransformedText {
-        val transformed = formatMentionText(text.text, knownNames, mentionColor, mentionBg)
+        val transformed = formatMentionText(text.text, knownNames, mentionColor, mentionBg, mentionRegex)
         return TransformedText(transformed, OffsetMapping.Identity)
     }
 }

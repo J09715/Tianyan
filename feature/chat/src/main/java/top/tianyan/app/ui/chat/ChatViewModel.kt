@@ -66,6 +66,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.Dispatchers
@@ -124,6 +125,7 @@ class ChatViewModel @Inject constructor(
     private val debugActionBus: top.tianyan.app.runtime.debug.DebugActionBus,
     private val textExtractor: top.tianyan.app.runtime.sandbox.SandboxTextExtractor,
     private val fullSettingsStore: top.tianyan.app.core.datastore.SettingsDataStore,
+    private val skillDistillationManager: top.tianyan.app.harness.skill.SkillDistillationManager,
 ) : ViewModel() {
 
     /**
@@ -1618,6 +1620,29 @@ class ChatViewModel @Inject constructor(
     val allSkills: StateFlow<List<top.tianyan.app.core.model.AgentSkill>> = agentSkillRepository.allSkills
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /**
+     * 当前会话待确认的技能候选（会话完成后由提炼器自动生成）。
+     * 由 manager 的全量候选表按 currentSessionId 投影得到；用户采纳或忽略后即消失。
+     */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val pendingSkillCandidates: StateFlow<List<top.tianyan.app.harness.skill.PendingSkillCandidate>> =
+        harnessLoop.currentSessionId.flatMapLatest { sessionId ->
+            skillDistillationManager.pendingCandidates.map { it[sessionId].orEmpty() }.distinctUntilChanged()
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** 采纳技能候选：构造自定义技能入库并撤下候选卡片。 */
+    fun acceptSkillCandidate(candidate: top.tianyan.app.harness.skill.PendingSkillCandidate) {
+        viewModelScope.launch {
+            runCatching { skillDistillationManager.acceptCandidate(candidate.sessionId, candidate) }
+                .onFailure { throwable -> Log.w(TAG, "采纳技能候选失败：${throwable.message}") }
+        }
+    }
+
+    /** 忽略技能候选：仅撤下候选卡片，不写库。 */
+    fun dismissSkillCandidate(candidate: top.tianyan.app.harness.skill.PendingSkillCandidate) {
+        skillDistillationManager.dismissCandidate(candidate.sessionId, candidate)
+    }
+
     val mcpServers: StateFlow<List<top.tianyan.app.core.model.McpServerConfig>> = mcpServerRepository.servers
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -1672,8 +1697,10 @@ class ChatViewModel @Inject constructor(
             cachedTokens = totalCachedTokens,
             cacheHitRatePercent = cacheHitPct,
         )
-
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ContextUsage())
+    // 估算涉及对全部消息文本的逐字符扫描（长会话 + 大技能包时每分片达百万级字符迭代），
+    // flowOn 移到 Default 线程池执行，stateIn 的 Main 收集方只接收最终结果。
+    }.flowOn(Dispatchers.Default)
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ContextUsage())
 
     /** 各 MCP 服务的实时连通性状态（与 McpManager 共享，聊天挂载面板 / 设置页联动）。 */
     val mcpConnectionStates: StateFlow<Map<String, McpConnectionState>> = mcpManager.connectionStates

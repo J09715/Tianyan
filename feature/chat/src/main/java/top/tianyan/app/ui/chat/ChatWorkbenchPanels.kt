@@ -105,7 +105,8 @@ internal fun CollapsibleChatWorkbenchStrip(
     onOpenRedTeam: (() -> Unit)? = null,
     redTeamTarget: String? = null,
 ) {
-    val roundCount = runtimeEvents.count { it is HarnessEvent.ProviderRoundStarted }
+    // 轮次数只在事件列表变化时重算一次；此前未 remember 导致每次重组都做 O(n) 全表扫描
+    val roundCount = remember(runtimeEvents) { runtimeEvents.count { it is HarnessEvent.ProviderRoundStarted } }
     val activeModelName = activeModel?.let { entity ->
         entity.model.split(",").firstOrNull()?.trim().takeUnless { it.isNullOrBlank() } ?: entity.name
     } ?: stringResource(R.string.chat_no_model_selected)

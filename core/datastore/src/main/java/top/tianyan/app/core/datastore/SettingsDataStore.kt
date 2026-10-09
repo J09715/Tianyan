@@ -697,6 +697,11 @@ class SettingsDataStore @Inject constructor(
     val maxConsecutiveFailures: Flow<Int> = context.settingsDataStore.data.map { it[maxConsecutiveFailuresKey] ?: 8 }
     suspend fun setMaxConsecutiveFailures(value: Int) { context.settingsDataStore.edit { it[maxConsecutiveFailuresKey] = value.coerceIn(1, 50) } }
 
+    /** 会话完成后是否自动提炼可复用技能候选；默认开启。 */
+    private val autoSkillDistillationKey = booleanPreferencesKey("agent_auto_skill_distillation")
+    val autoSkillDistillation: Flow<Boolean> = context.settingsDataStore.data.map { it[autoSkillDistillationKey] ?: true }
+    suspend fun setAutoSkillDistillation(value: Boolean) { context.settingsDataStore.edit { it[autoSkillDistillationKey] = value } }
+
     // ==================== 内置 ADB（宿主桥接插件） ====================
 
     private val adbWirelessPortKey = androidx.datastore.preferences.core.intPreferencesKey("adb_wireless_debug_port")

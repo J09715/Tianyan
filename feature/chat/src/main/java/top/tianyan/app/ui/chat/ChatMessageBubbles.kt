@@ -450,7 +450,13 @@ internal fun AssistantBubble(
                 } else {
                     SelectionContainer {
                         Text(
-                            text = message.text.take(MAX_LIVE_TEXT_CHARS),
+                            // 流式期间只渲染尾部窗口：超长正文每 100ms 分片到达时避免全量重排掉帧；
+                            // 完成后（非 live）走 MarkdownText 全文渲染，SelectionContainer 结构不变
+                            text = if (message.text.length > LIVE_PREVIEW_CHARS) {
+                                LIVE_PREVIEW_PREFIX + message.text.takeLast(LIVE_PREVIEW_CHARS)
+                            } else {
+                                message.text.take(MAX_LIVE_TEXT_CHARS)
+                            },
                             modifier = Modifier.fillMaxWidth(),
                             style = MaterialTheme.typography.bodyMedium,
                         )
@@ -535,6 +541,16 @@ internal fun AssistantBubble(
 }
 
 private const val MAX_LIVE_TEXT_CHARS = 64_000
+
+/**
+ * 流式期间正文/思考链只渲染尾部窗口的字符数：
+ * live 时每 100ms 分片到达，若对超长 Text 全量重排会持续掉帧；
+ * 完成后（非 live）恢复全文渲染，不影响最终展示与复制。
+ */
+private const val LIVE_PREVIEW_CHARS = 4_000
+
+/** 流式预览窗口的截断前缀，仅 live 且超窗时出现。 */
+private const val LIVE_PREVIEW_PREFIX = "…（流式预览）\n"
 /** Avoid rescanning a multi-megabyte Base64 response whenever its lazy-list item re-enters composition. */
 private val generatedImageFlagCache = LruCache<String, Boolean>(64)
 
@@ -816,7 +832,12 @@ internal fun ThinkingBlock(
                 if (live) {
                     SelectionContainer {
                         Text(
-                            text = reasoning,
+                            // 思考链流式期间同样只渲染尾部窗口，避免超长 reasoning 每 100ms 全量重排
+                            text = if (reasoning.length > LIVE_PREVIEW_CHARS) {
+                                LIVE_PREVIEW_PREFIX + reasoning.takeLast(LIVE_PREVIEW_CHARS)
+                            } else {
+                                reasoning
+                            },
                             modifier = Modifier.fillMaxWidth(),
                             style = MaterialTheme.typography.bodySmall.copy(
                                 fontSize = 12.sp,

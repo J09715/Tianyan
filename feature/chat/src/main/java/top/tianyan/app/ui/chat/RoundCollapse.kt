@@ -12,6 +12,9 @@ sealed interface ChatRenderItem {
 
     data class MessageItem(
         val message: HarnessMessage,
+        /** 工具卡是否展示其思考链：投影时按「前文是否已出现过相同 reasoning」预计算，
+         *  避免列表项重组时对整个消息流做 O(n) 回扫；非 ToolCall 消息无意义，恒为 true。 */
+        val showReasoning: Boolean = true,
     ) : ChatRenderItem {
         override val stableKey: String get() = message.id
     }
@@ -41,8 +44,17 @@ fun projectChatMessages(
 ): List<ChatRenderItem> {
     if (messages.isEmpty()) return emptyList()
 
-    // 过滤掉已被 ToolCard 内部独立消费渲染的 ToolResult，所有思考过程与工具调用按自然单行流呈现
+    // 过滤掉已被 ToolCard 内部独立消费渲染的 ToolResult，所有思考过程与工具调用按自然单行流呈现。
+    // 工具卡的思考链可见性（前文去重）在投影时一次性预计算进 MessageItem，
+    // 列表项重组时不再对整个 messages 做 indexOfFirst + 回扫两次 O(n)。
     return messages
-        .filter { it !is ToolResult }
-        .map { ChatRenderItem.MessageItem(it) }
+        .mapIndexedNotNull { index, message ->
+            if (message is ToolResult) return@mapIndexedNotNull null
+            val showReasoning = if (message is ToolCall) {
+                message.reasoning != null && !reasoningAlreadyShown(messages, index, message.reasoning)
+            } else {
+                true
+            }
+            ChatRenderItem.MessageItem(message, showReasoning)
+        }
 }

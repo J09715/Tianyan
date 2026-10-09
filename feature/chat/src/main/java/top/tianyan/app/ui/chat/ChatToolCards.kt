@@ -59,6 +59,10 @@ private val DotFailed = Color(0xFFBA1A1A)
 private val DiffAddedColor = Color(0xFF2E7D32)
 private val DiffDeletedColor = Color(0xFFC62828)
 
+/** 下载进度百分比正则：从 liveStatus 提取 "(45%)" 样式的进度值。
+ *  提为顶层常量预编译，避免下载流式刷新期间每次重组在组合体内重新构建。 */
+private val DOWNLOAD_PERCENT_REGEX = Regex("""\((\d+)%\)""")
+
 @Composable
 internal fun ToolCard(
     call: ToolCall,
@@ -192,7 +196,7 @@ internal fun ToolCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontFamily = FontFamily.Monospace,
                 )
-                val percent = Regex("\\((\\d+)%\\)").find(downloadStatus)
+                val percent = DOWNLOAD_PERCENT_REGEX.find(downloadStatus)
                     ?.groupValues?.getOrNull(1)?.toFloatOrNull()?.div(100f)
                 if (percent == null) {
                     LinearProgressIndicator(

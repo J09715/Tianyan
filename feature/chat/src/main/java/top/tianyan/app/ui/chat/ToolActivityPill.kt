@@ -38,6 +38,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -46,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -127,17 +129,22 @@ fun ToolActivityPill(
         }
     }
 
-    // 脉冲与呼吸光效
-    val transition = rememberInfiniteTransition(label = "toolPillPulse")
-    val pulseAlpha by transition.animateFloat(
-        initialValue = 0.4f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "pillPulseAlpha",
-    )
+    // 脉冲与呼吸光效：仅在运行中才创建无限动画（帧时钟），空闲时不跑任何帧；
+    // 动画值只保留 State 引用，实际读取下沉到 drawBehind 绘制阶段，每帧只重绘状态点
+    val pulseAlphaState: State<Float> = if (running) {
+        val transition = rememberInfiniteTransition(label = "toolPillPulse")
+        transition.animateFloat(
+            initialValue = 0.4f,
+            targetValue = 1.0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(800, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "pillPulseAlpha",
+        )
+    } else {
+        remember { mutableStateOf(1f) }
+    }
 
     AnimatedVisibility(
         visible = running,
@@ -192,7 +199,10 @@ fun ToolActivityPill(
                         modifier = Modifier
                             .size(5.dp)
                             .clip(CircleShape)
-                            .background(pillAccent.copy(alpha = pulseAlpha))
+                            .drawBehind {
+                                // 绘制阶段读取脉冲动画值：每帧只重绘本圆点，不触发胶囊重组
+                                drawCircle(color = pillAccent.copy(alpha = pulseAlphaState.value))
+                            }
                             .semantics { contentDescription = runningDotLabel },
                     )
 

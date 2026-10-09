@@ -7,11 +7,17 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.height
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.material3.Button
 import androidx.compose.material3.IconButton
 import androidx.compose.foundation.layout.PaddingValues
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
+import top.tianyan.app.harness.skill.PendingSkillCandidate
 import top.tianyan.app.harness.workflow.ProactiveWorkflowSuggestion
 
 import androidx.compose.runtime.getValue
@@ -184,6 +190,7 @@ fun ChatScreen(
     val activeDistroId by viewModel.activeDistroId.collectAsStateWithLifecycle()
     val installedDistros by viewModel.installedDistros.collectAsStateWithLifecycle()
     val allSkills by viewModel.allSkills.collectAsStateWithLifecycle()
+    val pendingSkillCandidates by viewModel.pendingSkillCandidates.collectAsStateWithLifecycle()
     val pinnedCapabilities by viewModel.pinnedCapabilities.collectAsStateWithLifecycle()
     val pinnedMentionIds by viewModel.pinnedMentionIds.collectAsStateWithLifecycle()
     val memories by viewModel.memories.collectAsStateWithLifecycle()
@@ -222,10 +229,15 @@ fun ChatScreen(
     var showApprovalModes by rememberSaveable { mutableStateOf(false) }
     var showSkillsMcpSheet by rememberSaveable { mutableStateOf(false) }
     var showBranches by rememberSaveable { mutableStateOf(false) }
+    // 稳定 setter 引用：remember 委托本身不变，lambda 只需创建一次；
+    // 避免每分片重组生成新 lambda 实例导致 ChatPane 整树 skip 失效。
+    val openBranches = remember { { showBranches = true } }
+    val openSkillsMcpSheet = remember { { showSkillsMcpSheet = true } }
     var showRuntimeTimeline by rememberSaveable { mutableStateOf(false) }
     var showMemorySheet by rememberSaveable { mutableStateOf(false) }
     var showFloatingPermissionDialog by rememberSaveable { mutableStateOf(false) }
     var branchFromMessageId by rememberSaveable { mutableStateOf<String?>(null) }
+    val createBranchFromMessage: (String) -> Unit = remember { { id -> branchFromMessageId = id } }
     var showGitPanel by rememberSaveable { mutableStateOf(false) }
     /** 红队控制台入口状态；与 Git 面板一样，点入口才整页进入。 */
     var showRedTeamConsole by rememberSaveable { mutableStateOf(false) }
@@ -233,6 +245,8 @@ fun ChatScreen(
     LaunchedEffect(Unit) { viewModel.refreshGitStatus() }
     // 编辑目标消息只保存 id，避免把不可保存的实体放进状态保存器
     var editTargetMessageId by rememberSaveable { mutableStateOf<String?>(null) }
+    // 稳定引用直接对齐 (UserMessage) -> Unit 签名，消除参数位置包装层的新实例
+    val editMessageById: (UserMessage) -> Unit = remember { { m -> editTargetMessageId = m.id } }
     val editTargetMessage = remember(messages, editTargetMessageId) {
         messages.filterIsInstance<UserMessage>().firstOrNull { it.id == editTargetMessageId }
     }
@@ -465,7 +479,7 @@ fun ChatScreen(
                     onOpenSessions = { showSessions = true },
                     onOpenModels = { showModels = true },
                     onOpenApprovalModes = { showApprovalModes = true },
-                    onOpenBranches = { showBranches = true },
+                    onOpenBranches = openBranches,
                     onOpenRuntime = { showRuntimeTimeline = true },
                     onOpenBrowser = onOpenBrowser,
                     browserHighlight = browserHighlight,
@@ -522,7 +536,7 @@ fun ChatScreen(
                     workspace = workspace,
                     workspaceProject = effectiveWorkspaceProject,
                     onOpenFile = onOpenFile,
-                    onEditMessage = { editTargetMessageId = it.id },
+                    onEditMessage = editMessageById,
                     onDeleteMessage = viewModel::deleteMessage,
                     onRewindMessage = viewModel::rewindToMessage,
                     error = error,
@@ -549,15 +563,18 @@ fun ChatScreen(
                     workflowSuggestions = workflowSuggestions,
                     onLaunchWorkflowSuggestion = viewModel::launchWorkflowSuggestion,
                     onDismissWorkflowSuggestion = viewModel::dismissWorkflowSuggestion,
+                    pendingSkillCandidates = pendingSkillCandidates,
+                    onAcceptSkillCandidate = viewModel::acceptSkillCandidate,
+                    onDismissSkillCandidate = viewModel::dismissSkillCandidate,
                     onSend = viewModel::sendFromComposer,
                     onStop = viewModel::stop,
                     lastAssistantMessageId = lastAssistantMessageId,
                     onRegenerate = viewModel::regenerateLast,
-                    onCreateBranch = { branchFromMessageId = it },
+                    onCreateBranch = createBranchFromMessage,
                     onRetryTool = viewModel::retryToolCall,
                     initializing = initializing,
                     pinnedCapabilities = pinnedCapabilities,
-                    onOpenSkillsMcp = { showSkillsMcpSheet = true },
+                    onOpenSkillsMcp = openSkillsMcpSheet,
                     onUnpinMention = viewModel::unpinMention,
                     activePlan = activePlan,
                     pendingApprovals = pendingApprovals,
@@ -571,7 +588,7 @@ fun ChatScreen(
                     mcpRecommendations = mcpRecommendations,
                     onEnableMcpRecommendation = viewModel::enableMcpRecommendation,
                     onDismissMcpRecommendation = viewModel::dismissMcpRecommendation,
-                    onViewSubagentLanes = { showBranches = true },
+                    onViewSubagentLanes = openBranches,
                     subagentBranches = branches,
                     onOpenSubagentBranch = viewModel::openSubagentResult,
                 )
@@ -1073,6 +1090,9 @@ private fun ChatPaneContent(
     workflowSuggestions: List<ProactiveWorkflowSuggestion> = emptyList(),
     onLaunchWorkflowSuggestion: (ProactiveWorkflowSuggestion) -> Unit = {},
     onDismissWorkflowSuggestion: (String) -> Unit = {},
+    pendingSkillCandidates: List<PendingSkillCandidate> = emptyList(),
+    onAcceptSkillCandidate: (PendingSkillCandidate) -> Unit = {},
+    onDismissSkillCandidate: (PendingSkillCandidate) -> Unit = {},
     onOpenFile: ((projectName: String, relativePath: String) -> Unit)?,
     onEditMessage: (UserMessage) -> Unit,
     onDeleteMessage: (String) -> Unit,
@@ -1210,6 +1230,12 @@ private fun ChatPaneContent(
             onDismiss = onDismissWorkflowSuggestion,
         )
 
+        PendingSkillCandidatesBanner(
+            candidates = pendingSkillCandidates,
+            onAccept = onAcceptSkillCandidate,
+            onDismiss = onDismissSkillCandidate,
+        )
+
         ChatComposer(
             listState = listState,
             running = running,
@@ -1285,6 +1311,79 @@ private fun McpRecommendationBanner(
                 }
                 TextButton(onClick = { onDismiss(recommendation.presetId) }) {
                     Text(stringResource(R.string.chat_ignore), color = MaterialTheme.colorScheme.onSecondaryContainer)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 会话完成后的技能学习候选卡片：提炼器产生的可复用经验，
+ * 用户可「采纳」入库为自定义技能，或「忽略」仅撤下卡片。多张候选纵向堆叠。
+ */
+@Composable
+private fun PendingSkillCandidatesBanner(
+    candidates: List<PendingSkillCandidate>,
+    onAccept: (PendingSkillCandidate) -> Unit,
+    onDismiss: (PendingSkillCandidate) -> Unit,
+) {
+    AnimatedVisibility(
+        visible = candidates.isNotEmpty(),
+        enter = fadeIn() + expandVertically(),
+        exit = fadeOut() + shrinkVertically(),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            candidates.forEach { candidate ->
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            RuntimeIcon(RuntimeIconName.Brain, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
+                        }
+                        Column(
+                            Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            Text(
+                                candidate.name,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                candidate.description,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        Button(onClick = { onAccept(candidate) }) {
+                            Text("采纳", color = MaterialTheme.colorScheme.onPrimary)
+                        }
+                        TextButton(onClick = { onDismiss(candidate) }) {
+                            Text(stringResource(R.string.chat_ignore), color = MaterialTheme.colorScheme.onSecondaryContainer)
+                        }
+                    }
                 }
             }
         }

@@ -210,7 +210,6 @@ internal fun ChatMessageList(
                                 onCreateBranch = { onCreateBranch(message.id) },
                             )
                             is ToolCall -> {
-                                val rawIndex = messages.indexOfFirst { it.id == message.id }
                                 if (message.tool == HarnessTool.SUBAGENT) {
                                     SubagentCard(
                                         call = message,
@@ -227,8 +226,8 @@ internal fun ChatMessageList(
                                         onOpenFile = onOpenFile,
                                         running = running,
                                         liveStatus = status,
-                                        showReasoning = message.reasoning != null &&
-                                            !reasoningAlreadyShown(messages, rawIndex, message.reasoning),
+                                        // 思考链去重已在投影时预计算，重组路径零扫描
+                                        showReasoning = item.showReasoning,
                                         defaultExpanded = thinkingExpanded,
                                         onRetry = { onRetryTool(message.id) },
                                     )

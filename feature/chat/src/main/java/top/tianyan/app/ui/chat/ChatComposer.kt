@@ -41,16 +41,21 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -73,6 +78,17 @@ import kotlinx.coroutines.launch
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.text.BasicTextField
 import top.tianyan.app.harness.QueuedPrompt
+
+/** 极光流光边框的渐变色序列（青 → 紫 → 品红 → 青，循环平铺），提为顶层常量避免逐帧分配。 */
+private val AuroraBorderColors = listOf(
+    Color(0xFF00E5FF),
+    Color(0xFF7C4DFF),
+    Color(0xFFFF4081),
+    Color(0xFF00E5FF),
+)
+
+/** 极光边框圆角，与输入胶囊 Surface 的 20dp 圆角保持一致。 */
+private val AuroraCapsuleShape = RoundedCornerShape(20.dp)
 
 /**
  * 输入区：斜杠/@ 弹窗、排队指令、附件预览、推理强度滑块、工具状态胶囊与一体化输入胶囊。
@@ -117,12 +133,14 @@ internal fun ChatComposer(
     var showReasoningSlider by rememberSaveable { mutableStateOf(false) }
 
     // 🌟 任务执行中的极光流光边框动效 (Aurora Glow Border Animation)
-    // 仅在任务运行中时才动画，空闲时保持静态，避免聊天页每帧重组。
-    val glowOffset: Float
-    val glowPulse: Float
+    // 仅在任务运行中时才创建无限动画，空闲时不跑任何帧时钟。
+    // 动画值只保留 State 引用、组合域不读取 .value：实际读取下沉到 drawBehind 绘制阶段，
+    // 帧时钟每帧只触发边框层重绘，不再驱动整个输入区重组，也不再在组合域每帧新建 Brush。
+    val glowOffsetState: State<Float>?
+    val glowPulseState: State<Float>?
     if (running) {
         val transition = rememberInfiniteTransition(label = "capsuleGlowTransition")
-        glowOffset = transition.animateFloat(
+        glowOffsetState = transition.animateFloat(
             initialValue = 0f,
             targetValue = 1000f,
             animationSpec = infiniteRepeatable(
@@ -130,8 +148,8 @@ internal fun ChatComposer(
                 repeatMode = RepeatMode.Restart,
             ),
             label = "glowOffset",
-        ).value
-        glowPulse = transition.animateFloat(
+        )
+        glowPulseState = transition.animateFloat(
             initialValue = 0.65f,
             targetValue = 1.0f,
             animationSpec = infiniteRepeatable(
@@ -139,15 +157,20 @@ internal fun ChatComposer(
                 repeatMode = RepeatMode.Reverse,
             ),
             label = "glowPulse",
-        ).value
+        )
     } else {
-        glowOffset = 0f
-        glowPulse = 1f
+        glowOffsetState = null
+        glowPulseState = null
     }
 
     val focusRequester = remember { FocusRequester() }
     var textFieldValue by remember {
         mutableStateOf(TextFieldValue(input, TextRange(input.length)))
+    }
+
+    // 退格删除整段 @提及 的正则按已知名单缓存：避免每次键击/退格在组合内重复编译两层 Regex
+    val mentionDeleteRegex = remember(knownMentionNames) {
+        Regex("""(${buildMentionRegex(knownMentionNames).pattern})\s*""")
     }
 
     LaunchedEffect(input) {
@@ -269,35 +292,37 @@ internal fun ChatComposer(
 
 
     // 现代化一体化输入胶囊 (Unified Chat Input Capsule with Aurora Glow)
-    val auroraBrush = if (running) {
-        androidx.compose.ui.graphics.Brush.linearGradient(
-            colors = listOf(
-                Color(0xFF00E5FF),
-                Color(0xFF7C4DFF),
-                Color(0xFFFF4081),
-                Color(0xFF00E5FF),
-            ),
-            start = androidx.compose.ui.geometry.Offset(glowOffset, 0f),
-            end = androidx.compose.ui.geometry.Offset(glowOffset + 600f, 600f),
-            tileMode = androidx.compose.ui.graphics.TileMode.Repeated,
-        )
-    } else null
+    // 🌟 极光流光边框改为 drawBehind 绘制阶段消费动画值：
+    //    渐变 Brush 与描边宽度都在 draw lambda 内按当前帧值构建，帧时钟只触发本层重绘。
+    //    描边用与 Modifier.border(Brush) 一致的 Outline + Square 端点，视觉无差异。
+    val auroraGlowOffset = glowOffsetState
+    val auroraGlowPulse = glowPulseState
+    val auroraBorderModifier = if (running && auroraGlowOffset != null && auroraGlowPulse != null) {
+        Modifier.drawBehind {
+            val glowOffset = auroraGlowOffset.value
+            val glowPulse = auroraGlowPulse.value
+            val auroraBrush = Brush.linearGradient(
+                colors = AuroraBorderColors,
+                start = Offset(glowOffset, 0f),
+                end = Offset(glowOffset + 600f, 600f),
+                tileMode = TileMode.Repeated,
+            )
+            drawOutline(
+                outline = AuroraCapsuleShape.createOutline(size, layoutDirection, this),
+                brush = auroraBrush,
+                style = Stroke(
+                    width = (1.2f + 0.3f * glowPulse).dp.toPx(),
+                    cap = StrokeCap.Square,
+                ),
+            )
+        }
+    } else Modifier
 
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 6.dp, bottom = 6.dp)
-            .then(
-                if (running && auroraBrush != null) {
-                    Modifier.border(
-                        androidx.compose.foundation.BorderStroke(
-                            (1.2f + 0.3f * glowPulse).dp,
-                            auroraBrush,
-                        ),
-                        RoundedCornerShape(20.dp),
-                    )
-                } else Modifier
-            ),
+            .then(auroraBorderModifier),
         shape = RoundedCornerShape(20.dp),
         color = if (running) MaterialTheme.colorScheme.surfaceContainerHighest else MaterialTheme.colorScheme.surfaceContainerHigh,
         border = if (!running) androidx.compose.foundation.BorderStroke(
@@ -434,8 +459,8 @@ internal fun ChatComposer(
                         val updatedValue = if (newValue.text.length < textFieldValue.text.length) {
                             val oldText = textFieldValue.text
                             val deletedPos = newValue.selection.start
-                            val baseRegex = buildMentionRegex(knownMentionNames)
-                            val regex = Regex("""(${baseRegex.pattern})\s*""")
+                            // 使用组合域按名单缓存的正则，键击路径不再即时编译
+                            val regex = mentionDeleteRegex
                             var handled: TextFieldValue? = null
                             for (match in regex.findAll(oldText)) {
                                 val range = match.range
