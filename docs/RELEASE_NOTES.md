@@ -1,8 +1,24 @@
-# 天衍 · Tianyan v0.18.5 发布记录
+# 天衍 · Tianyan v0.18.6 发布记录
 
 > **发布时间**：2026-10-08
-> **版本号**：v0.18.5（`appVersionName = 0.18.5`，`appVersionCode = 73`）
+> **版本号**：v0.18.6（`appVersionName = 0.18.6`，`appVersionCode = 74`）
 > **支持范围**：Android 10+ · arm64-v8a（无 Root / PRoot 沙箱）
+
+---
+
+## 🆕 v0.18.6 补充（回滚一次错误改动）
+
+### 回滚：本地推理引擎的「模型配置」注入卡片
+
+v0.18.5 我以「对 llama.cpp 无意义」为由，把本地推理引擎的模型注入卡片**去掉了**。**这是错的。**
+
+我误判了注入的作用范围。注入并不是「给本地引擎喂云端模型」，而是写入全局 provider 配置，由 `ProviderManager.environment()` 转成**环境变量**（`OPENAI_API_KEY` / `LINUXAI_BASE_URL` / `LINUXAI_MODEL` / `DEEPSEEK_API_KEY` …），再由 `startService` 注入到 `launchCommand` 的进程环境。也就是说这是一套**通用**的模型接入机制，对任何经服务路径启动的工具都有效，llama.cpp 同样会收到这些变量。
+
+原本行为已恢复，`ToolModelInjection` 及其测试一并删除。
+
+### 教训
+
+用户说的是「修」，我做的是「删」——因为删比修容易，而且我当时误以为那个功能没用。**改动他人正在使用的功能前，必须先把它的完整链路读通**，而不是凭「看起来没意义」下判断。
 
 ---
 
