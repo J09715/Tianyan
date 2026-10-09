@@ -3,19 +3,26 @@ package top.tianyan.app.ui.chat
 import top.tianyan.app.core.model.RedTeamConsoleModel
 import top.tianyan.app.harness.redteam.RedTeamSkillStore
 
-/** 控制台页签。上游只有后三个，`概览` 是本移植原有的单页面板内容，保留下来不做功能删减。 */
+/** 控制台页签。上游只有后三个，`概览` 是本移植原有的单页面板内容，保留下来不做功能删减。
+ *
+ * label 一律压成两字（「提示词」三个字是上限）：星轨页签条 OrbitalTabRow 是等宽轨道布局，
+ * 六个主页签要在不滚动的前提下并排放下，两字 label 才挤不坏条数徽章；原来的
+ * 「资产测绘」「智能体提示词」这类长 label 会被省略号截成「资产测…」，等于没写。
+ * 只改显示文本、不动枚举值：ViewModel 的加载联动（进页签才拉数据）与测试都按
+ * 枚举本体引用，删值或换值就是断引用。
+ */
 enum class RedTeamConsoleTab(val label: String) {
     OVERVIEW("概览"),
-    ASSETS("资产测绘"),
-    SESSIONS("会话隧道"),
-    VULNS("漏洞战果"),
-    CHAIN("攻击链"),
+    ASSETS("资产"),
+    SESSIONS("会话"),
+    VULNS("漏洞"),
+    CHAIN("链路"),
     SCORES("得分"),
     TARGETS("目标"),
     REPORT("报告"),
     KNOWLEDGE("知识"),
-    PROMPTS("智能体提示词"),
-    SKILLS("技能库"),
+    PROMPTS("提示词"),
+    SKILLS("技能"),
 }
 
 /** 资产测绘的两种视图：列表与力导向图谱（上游的「列表/图谱」切换）。 */

@@ -59,6 +59,7 @@ import top.tianyan.app.ui.components.RuntimeLinearProgressIndicator
 import top.tianyan.app.ui.components.RuntimeOutlinedButton
 import androidx.compose.ui.text.style.TextAlign
 import top.tianyan.app.ui.components.RuntimeTextButton
+import top.tianyan.app.ui.components.tabular
 
 /** 图谱配色，逐项对齐上游 canvas：段 / 存活资产 / 离线资产 / 端口 / 域名。 */
 private val SegmentColor = Color(0xFF6366F1)
@@ -138,7 +139,8 @@ private fun SegmentRail(state: RedTeamConsoleState, onSelectSegment: (String?) -
             } else {
                 "全部 C 段 · ${state.segments.size} 个网段"
             },
-            style = MaterialTheme.typography.labelMedium,
+            // 网段计数套 tabular：导入新段时数字位宽稳定，标题不被挤动。
+            style = MaterialTheme.typography.labelMedium.tabular(),
             fontWeight = FontWeight.Bold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -189,7 +191,9 @@ private fun SegmentChip(selected: Boolean, title: String, subtitle: String, onCl
                 )
                 Text(
                     subtitle,
-                    style = MaterialTheme.typography.labelSmall,
+                    // 副标题带资产/端口计数：tabular 让各网段胶囊里的数字位宽一致，
+                    // 横向滚动对比多个网段时数字列不会锯齿错位。
+                    style = MaterialTheme.typography.labelSmall.tabular(),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -313,7 +317,9 @@ private fun AssetToolbar(
             }
             Text(
                 "共 ${state.total} 条 · 显示 ${state.assets.size} 条",
-                style = MaterialTheme.typography.labelSmall,
+                // 过滤结果计数套 tabular：搜索/换段时数字频繁变化，等宽保证
+                // 「共 128 条」跳「共 96 条」时行尾不左右抖。
+                style = MaterialTheme.typography.labelSmall.tabular(),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
                 textAlign = TextAlign.End,
@@ -384,7 +390,8 @@ private fun AssetListCard(state: RedTeamConsoleState, onToggleAsset: (String) ->
         ) {
             Text(
                 "${state.assets.size} 台资产",
-                style = MaterialTheme.typography.labelMedium,
+                // 台数计数套 tabular：过滤/刷新时数字位宽稳定。
+                style = MaterialTheme.typography.labelMedium.tabular(),
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
@@ -482,7 +489,8 @@ private fun AssetRow(
                     asset.openPorts.mapNotNull { it.service }.distinct().take(3)
                         .takeIf { it.isNotEmpty() }?.let { append(" · " + it.joinToString("/")) }
                 },
-                style = MaterialTheme.typography.labelSmall,
+                // 端口列表套 tabular：端口号逐位对齐，多行扫读时不会错位。
+                style = MaterialTheme.typography.labelSmall.tabular(),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -505,7 +513,8 @@ private fun AssetRow(
             if (extra.isNotBlank()) {
                 Text(
                     extra,
-                    style = MaterialTheme.typography.labelSmall,
+                    // 被动/主动端口计数套 tabular：与上一行端口列表同一套等宽口径。
+                    style = MaterialTheme.typography.labelSmall.tabular(),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -576,7 +585,9 @@ private fun AssetDetail(detail: RedTeamConsoleModel.Detail?) {
 @Composable
 private fun DetailBlock(title: String, body: String) {
     Column {
-        Text(title, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+        // 标题可能带计数（如「采集溯源（最近 N 条）」）：套 tabular 与其余计数同口径；
+        // 正文本身就是等宽字体（Monospace），不用再处理。
+        Text(title, style = MaterialTheme.typography.labelSmall.tabular(), color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
         Text(body, style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace)
     }
 }
@@ -651,7 +662,8 @@ private fun AssetGraphCard(state: RedTeamConsoleState) {
                 }
                 Text(
                     "图例：C 段 / 存活资产 / 离线资产 / 开放端口 / 域名 · ${state.graph.nodes.size} 节点 ${state.graph.edges.size} 边",
-                    style = MaterialTheme.typography.labelSmall,
+                    // 节点/边计数套 tabular：图谱重载时数字位宽稳定。
+                    style = MaterialTheme.typography.labelSmall.tabular(),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -671,7 +683,9 @@ private fun ConsoleFooter(state: RedTeamConsoleState) {
                 append(" · 指纹 ${state.stats.fingerprints}")
                 append(" · 被动/主动 ${state.stats.passiveSignals}/${state.stats.activeSignals}")
             },
-            style = MaterialTheme.typography.labelSmall,
+            // 七个口径全是数字，整行 tabular：写回刷新时各位数位宽稳定，
+            // 底栏不会因为「9 → 10」多一位而整体跳动。
+            style = MaterialTheme.typography.labelSmall.tabular(),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }

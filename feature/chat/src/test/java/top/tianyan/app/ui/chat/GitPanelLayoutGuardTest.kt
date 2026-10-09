@@ -31,6 +31,10 @@ class GitPanelLayoutGuardTest {
      *
      * 悬浮栏会和 App 底部导航（天衍/智枢/工坊/乾坤）落在同一块区域，
      * 两层导航叠着显示，点击也互相抢触摸目标。
+     *
+     * 页签条本体从 SecondaryTabRow 升级为 OrbitalTabRow（星轨轨道滑块，
+     * components 模块共享组件）：位置语义不变（内容上方、非悬浮），
+     * 断言跟随组件名更新——若回退到底部悬浮栏，第一条仍会红。
      */
     @Test
     fun gitTabsAreNotBottomFloating() {
@@ -40,8 +44,8 @@ class GitPanelLayoutGuardTest {
             !source.contains("FloatingTabBar("),
         )
         assertTrue(
-            "GitPanel 应该用 SecondaryTabRow 承载状态/分支/提交三个页签",
-            source.contains("SecondaryTabRow("),
+            "GitPanel 应该用 OrbitalTabRow（内容上方轨道页签条）承载状态/分支/提交三个页签",
+            source.contains("OrbitalTabRow("),
         )
     }
 

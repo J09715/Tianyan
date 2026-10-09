@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import top.tianyan.app.core.model.RedTeamConsoleModel
 import top.tianyan.app.ui.components.RuntimeCard
 import top.tianyan.app.ui.components.RuntimeTextButton
+import top.tianyan.app.ui.components.tabular
 
 /**
  * 智能体提示词页签（上游 `prompts` / `savePrompt`）。
@@ -50,7 +51,8 @@ internal fun RedTeamPromptsTab(
         RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(10.dp)) {
             Text(
                 "角色提示词 · ${state.roles.size} 个角色",
-                style = MaterialTheme.typography.labelMedium,
+                // 计数行套 tabular：角色条数变化（同步新角色）时位宽稳定，标题不抖。
+                style = MaterialTheme.typography.labelMedium.tabular(),
                 fontWeight = FontWeight.Bold,
             )
             Row(
@@ -186,7 +188,8 @@ internal fun RedTeamSkillsTab(
             ) {
                 Text(
                     "技能库 · ${state.skills.size} 个技能",
-                    style = MaterialTheme.typography.labelMedium,
+                    // 计数行套 tabular：新建/删除技能后数字位宽稳定，行内按钮不被挤动。
+                    style = MaterialTheme.typography.labelMedium.tabular(),
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f),
                 )

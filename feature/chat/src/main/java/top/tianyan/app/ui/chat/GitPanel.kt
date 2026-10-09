@@ -3,6 +3,13 @@
 package top.tianyan.app.ui.chat
 
 import androidx.activity.compose.BackHandler
+// 星轨动效依赖：HEAD 呼吸光环的无限动画（rememberInfiniteTransition + 800ms Reverse）
+import androidx.compose.animation.core.EaseOutCubic
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -27,13 +34,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -45,6 +49,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+// 变更摘要比例条整条圆角裁剪用：不裁的话两端的段会露出直角
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -54,6 +60,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.PaddingValues
 import top.tianyan.app.feature.chat.R
+// 星轨 Orbital 共享组件：与红队指挥室共用同一套轨道页签/呼吸点/等宽数字/交错入场
+import top.tianyan.app.ui.components.OrbitalTabRow
+import top.tianyan.app.ui.components.OrbitalTabSpec
+import top.tianyan.app.ui.components.PulseDot
 import top.tianyan.app.ui.components.RuntimeAlertDialog
 import top.tianyan.app.ui.components.RuntimeButton
 import top.tianyan.app.ui.components.RuntimeCard
@@ -68,6 +78,8 @@ import top.tianyan.app.ui.components.gitCardSurface
 import top.tianyan.app.ui.components.gitSubtleBorder
 import top.tianyan.app.ui.components.gitSubtleText
 import top.tianyan.app.ui.components.RuntimeTopBar
+import top.tianyan.app.ui.components.staggeredEntrance
+import top.tianyan.app.ui.components.tabular
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Spacer
@@ -254,38 +266,24 @@ fun GitPanel(
                 GitWorkspaceHeader(state = state)
             }
 
-            // 状态 / 分支 / 提交 三页：页签条放在内容上方（SecondaryTabRow），
-            // 不再用底部悬浮 FloatingTabBar —— 那个悬浮栏固定在 BottomCenter，
-            // 会和 App 自己的底部中枢导航（天衍/智枢/工坊/乾坤）叠在一起，
-            // 用户看到两层导航叠着，还点不准。
+            // 状态 / 分支 / 提交 三页：星轨轨道页签条（OrbitalTabRow）放在内容上方。
+            // 为什么弃用 SecondaryTabRow：它的下划线指示器切页时直接瞬移，三个
+            // 「图标+文字」页签在窄屏上还会互相挤压；OrbitalTabRow 的胶囊滑块沿
+            // 等宽轨道 spring 滑动（有过冲、有运动过程），且与红队指挥室共用同一套
+            // 星轨母题 —— 动效规格改一处全 App 生效。依旧不用底部悬浮 FloatingTabBar：
+            // 那会与 App 自己的底部中枢导航叠在一起，两层导航叠影还点不准。
             val panelScope = rememberCoroutineScope()
             val pagerState = androidx.compose.foundation.pager.rememberPagerState(initialPage = selectedTab.coerceAtMost(2)) { 3 }
             LaunchedEffect(pagerState.currentPage) { selectedTab = pagerState.currentPage }
             LaunchedEffect(selectedTab) {
                 if (pagerState.currentPage != selectedTab) pagerState.animateScrollToPage(selectedTab)
             }
-            SecondaryTabRow(
-                selectedTabIndex = pagerState.currentPage,
-                containerColor = Color.Transparent,
-                divider = {},
-            ) {
-                listOf("状态" to RuntimeIconName.Activity, "分支" to RuntimeIconName.GitBranch, "提交" to RuntimeIconName.GitCommit)
-                    .forEachIndexed { index, (label, icon) ->
-                        Tab(
-                            selected = pagerState.currentPage == index,
-                            onClick = { panelScope.launch { pagerState.animateScrollToPage(index) } },
-                            text = {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                ) {
-                                    RuntimeIcon(icon, Modifier.size(16.dp))
-                                    Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
-                                }
-                            },
-                        )
-                    }
-            }
+            OrbitalTabRow(
+                specs = listOf(OrbitalTabSpec("状态"), OrbitalTabSpec("分支"), OrbitalTabSpec("提交")),
+                selectedIndex = pagerState.currentPage,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                onSelect = { panelScope.launch { pagerState.animateScrollToPage(it) } },
+            )
             Box(Modifier.fillMaxSize()) {
                 androidx.compose.foundation.pager.HorizontalPager(
                     state = pagerState,
@@ -733,7 +731,11 @@ private fun GitWorkspaceHeader(state: GitPanelState) {
     val totalChanges = state.staged.size + state.unstaged.size + untrackedCount
     val syncText = state.aheadBehind?.let { (ahead, behind) -> "↑$ahead  ↓$behind" } ?: "已同步"
     RuntimeCard(
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier = Modifier
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+            // 驾驶舱首屏第 0 位交错入场：头卡最先浮现，状态页各区块（1/2/3 位）
+            // 随后跟上，打开面板时视线顺着动画从「仓库概况」自然落到「文件清单」。
+            .staggeredEntrance(0),
         containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.34f),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
     ) {
@@ -752,19 +754,63 @@ private fun GitWorkspaceHeader(state: GitPanelState) {
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.74f),
                     )
-                    Text(
-                        state.branch ?: "未命名分支",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        // 分支名配 GitBranch 小图标：驾驶舱语义下「当前在哪个分支」是
+                        // 第一等公民，图标 + titleMedium 让它比副标签醒目、又比原来的
+                        // titleLarge 省一行高度，右侧才放得下状态组。
+                        RuntimeIcon(
+                            RuntimeIconName.GitBranch,
+                            Modifier.size(14.dp),
+                            MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                        Text(
+                            state.branch ?: "未命名分支",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
-                Text(
-                    if (totalChanges == 0) "干净" else "${if (state.untrackedOverflow) "99+" else totalChanges} 项改动",
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                    color = if (totalChanges == 0) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary,
-                )
+                // 右侧状态组：呼吸点（工作区干净/脏）+ 同步胶囊（ahead/behind）。
+                // 原来的纯文本「干净 / N 项改动」要逐字读才知道状态；呼吸点是余光
+                // 可辨的信号，改动计数移到状态页的比例条上，这里只留「要不要行动」。
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    PulseDot(
+                        // 干净 = 绿点持续呼吸（一切正常，仓库是「活」的）；
+                        // 有改动 = 琥珀点静止高亮（需要注意，但不制造紧迫感）。
+                        color = if (totalChanges == 0) Color(0xFF2E7D32) else Color(0xFFF59E0B),
+                        pulsing = totalChanges == 0,
+                    )
+                    val aheadBehind = state.aheadBehind
+                    if (aheadBehind != null && (aheadBehind.first > 0 || aheadBehind.second > 0)) {
+                        // 有未推/未拉提交：primary 底 + onPrimary 字的反色胶囊，在
+                        // primaryContainer 卡面上对比度最强 —— 这是需要用户行动的信号。
+                        // 数字用 tnum 等宽：↑↓ 数字跳动时胶囊宽度不抖。
+                        Text(
+                            "↑${aheadBehind.first} ↓${aheadBehind.second}",
+                            style = MaterialTheme.typography.labelMedium.tabular(),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier
+                                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(999.dp))
+                                .padding(horizontal = 8.dp, vertical = 2.dp),
+                            maxLines = 1,
+                        )
+                    } else {
+                        // 与远端一致（或离线时 ahead/behind 未知）：低饱和的「已同步」即可
+                        Text(
+                            "已同步",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -782,7 +828,9 @@ private fun GitWorkspaceHeader(state: GitPanelState) {
 @Composable
 private fun GitHeaderMetric(label: String, value: String, modifier: Modifier = Modifier) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(value, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onPrimaryContainer, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        // value 加 tnum 等宽数字：四个指标横排、刷新时数字跳动，比例数字的「1」比
+        // 「8」窄，宽度抖动会带着整列标签一起晃；等宽后数字变化只换字形不换宽度。
+        Text(value, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold).tabular(), color = MaterialTheme.colorScheme.onPrimaryContainer, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f), maxLines = 1)
     }
 }
@@ -812,6 +860,9 @@ private fun StatusTab(
     val unstaged = state.unstaged
     val untracked = state.untracked
     val untrackedCount = state.untrackedCount.coerceAtLeast(untracked.size)
+    // 比例条与「共 N 项改动」文案共用的总口径：与 GitWorkspaceHeader 的
+    // totalChanges 完全同一算法，两处数字必须一致，否则用户会怀疑口径不同。
+    val totalChanges = staged.size + unstaged.size + untrackedCount
     val clean = staged.isEmpty() && unstaged.isEmpty() && untrackedCount == 0
 
     var showCommitDialog by rememberSaveable { mutableStateOf(false) }
@@ -834,6 +885,66 @@ private fun StatusTab(
         // 这里原本还有一张「工作区概览」卡，但面板顶部的 GitWorkspaceHeader 已经
         // 展示了同样的四个数字（暂存/修改/未跟踪/同步），两处并排显示同一份数据，
         // 用户会以为其中一个是别的口径。摘要只保留顶部那张。
+        //
+        // 变更摘要比例条：三段色带按文件数占比分宽，先于数字给出「改动堆在哪一层」
+        // 的直觉 —— primary=已暂存、琥珀=未暂存、蓝灰=未跟踪，与下方 FileRow 徽章
+        // 同一套状态语义色，扫一眼色带比例就知道该先「提交」还是先「暂存」。
+        // clean 时不渲染：空条没有任何信息量，只会占一行位置。
+        if (!clean) {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    // 总数用 tnum：刷新后数字变化不带动文案宽度抖动
+                    Text(
+                        "共 ${if (state.untrackedOverflow) "99+" else totalChanges} 项改动",
+                        style = MaterialTheme.typography.labelSmall.tabular(),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        "暂存区 ${staged.size} / 修改 ${unstaged.size} / 未跟踪 ${if (state.untrackedOverflow) "99+" else untrackedCount}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.End,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                // 比例条本体：6dp 高、整条圆角裁剪（clip 在外层，段与段无缝拼接）；
+                // 每段 weight = 段文件数 / max(1,总数)，0 项的段直接不渲染 ——
+                // 0 宽段既无信息又会把圆角边缘挤变形。
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp)),
+                ) {
+                    if (staged.isNotEmpty()) {
+                        Box(
+                            Modifier
+                                .weight(staged.size.toFloat() / totalChanges.coerceAtLeast(1))
+                                .fillMaxHeight()
+                                .background(MaterialTheme.colorScheme.primary),
+                        )
+                    }
+                    if (unstaged.isNotEmpty()) {
+                        Box(
+                            Modifier
+                                .weight(unstaged.size.toFloat() / totalChanges.coerceAtLeast(1))
+                                .fillMaxHeight()
+                                .background(Color(0xFFF59E0B)),
+                        )
+                    }
+                    if (untrackedCount > 0) {
+                        Box(
+                            Modifier
+                                .weight(untrackedCount.toFloat() / totalChanges.coerceAtLeast(1))
+                                .fillMaxHeight()
+                                .background(Color(0xFF90A4AE)),
+                        )
+                    }
+                }
+            }
+        }
         //
         // 主操作：提交（有已暂存改动且已配置署名才可用）
         RuntimeButton(
@@ -899,44 +1010,63 @@ private fun StatusTab(
                 )
             }
         } else {
+            // 三个文件区块交错入场（驾驶舱头卡是第 0 位，这里是 1/2/3 位）：整段
+            // （SectionHeader + 文件卡）作为一单位浮现，视线自然从暂存→修改→未跟踪
+            // 往下扫。staggeredEntrance 内部用 graphicsLayer 只动绘制层，布局一次
+            // 成型，滚动中的列表不会跳高度。
             if (staged.isNotEmpty()) {
-                SectionHeader("已暂存 (${staged.size})", actionLabel = "全部取消暂存", onAction = onUnstageAll)
-                RuntimeCard(contentPadding = PaddingValues(0.dp)) {
-                    Column {
-                        staged.forEachIndexed { i, f ->
-                            if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-                            FileRow(f, action = "取消暂存", onAction = { onUnstage(f.path) }, onClick = { onFileDiff(f.path) })
+                Column(
+                    modifier = Modifier.staggeredEntrance(1),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    SectionHeader("已暂存 (${staged.size})", actionLabel = "全部取消暂存", onAction = onUnstageAll)
+                    RuntimeCard(contentPadding = PaddingValues(0.dp)) {
+                        Column {
+                            staged.forEachIndexed { i, f ->
+                                if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                                FileRow(f, action = "取消暂存", onAction = { onUnstage(f.path) }, onClick = { onFileDiff(f.path) })
+                            }
                         }
                     }
                 }
             }
             if (unstaged.isNotEmpty()) {
-                SectionHeader("已修改 (${unstaged.size})", actionLabel = if (unstaged.isNotEmpty()) "全部回退" else null, onAction = onRevertAll)
-                RuntimeCard(contentPadding = PaddingValues(0.dp)) {
-                    Column {
-                        unstaged.forEachIndexed { i, f ->
-                            if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-                            FileRow(f, action = "暂存", onAction = { onStage(f.path) }, onClick = { onFileDiff(f.path) }, secondaryAction = "回退", onSecondaryAction = { onRevert(f.path) })
+                Column(
+                    modifier = Modifier.staggeredEntrance(2),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    SectionHeader("已修改 (${unstaged.size})", actionLabel = if (unstaged.isNotEmpty()) "全部回退" else null, onAction = onRevertAll)
+                    RuntimeCard(contentPadding = PaddingValues(0.dp)) {
+                        Column {
+                            unstaged.forEachIndexed { i, f ->
+                                if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                                FileRow(f, action = "暂存", onAction = { onStage(f.path) }, onClick = { onFileDiff(f.path) }, secondaryAction = "回退", onSecondaryAction = { onRevert(f.path) })
+                            }
                         }
                     }
                 }
             }
             if (untracked.isNotEmpty()) {
-                SectionHeader("未跟踪 (${if (state.untrackedOverflow) "99+" else untrackedCount})")
-                RuntimeCard(contentPadding = PaddingValues(0.dp)) {
-                    Column {
-                        untracked.forEachIndexed { i, path ->
-                            if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-                            FileRow(GitFileChange('?', path), action = "添加", onAction = { onStage(path) }, onClick = { onFileDiff(path) }, secondaryAction = "删除", onSecondaryAction = { onDeleteUntracked(path) })
+                Column(
+                    modifier = Modifier.staggeredEntrance(3),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    SectionHeader("未跟踪 (${if (state.untrackedOverflow) "99+" else untrackedCount})")
+                    RuntimeCard(contentPadding = PaddingValues(0.dp)) {
+                        Column {
+                            untracked.forEachIndexed { i, path ->
+                                if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                                FileRow(GitFileChange('?', path), action = "添加", onAction = { onStage(path) }, onClick = { onFileDiff(path) }, secondaryAction = "删除", onSecondaryAction = { onDeleteUntracked(path) })
+                            }
                         }
-                    }
-                    if (state.untrackedOverflow) {
-                        Text(
-                            "仅显示 ${untracked.size} 个入口，共 $untrackedCount 项；大目录已聚合，避免打开 Git 时卡顿。",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                        )
+                        if (state.untrackedOverflow) {
+                            Text(
+                                "仅显示 ${untracked.size} 个入口，共 $untrackedCount 项；大目录已聚合，避免打开 Git 时卡顿。",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            )
+                        }
                     }
                 }
             }
@@ -1009,7 +1139,6 @@ private fun FileRow(
     secondaryAction: String? = null,
     onSecondaryAction: (() -> Unit)? = null,
 ) {
-    val color = statusColor(change.status)
     val copyText = top.tianyan.app.ui.components.rememberTextCopier()
     val context = androidx.compose.ui.platform.LocalContext.current
     Row(
@@ -1023,17 +1152,9 @@ private fun FileRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Surface(color = color.copy(alpha = 0.14f), shape = RoundedCornerShape(5.dp)) {
-            Text(
-                change.status.toString(),
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    color = color,
-                ),
-            )
-        }
+        // 22dp 固定边长彩色底徽章：原来 Surface 随字母宽度收缩，M/A/D 各行左侧
+        // 参差不齐；固定尺寸后纵向扫一眼就是一条直线，色彩语义也更醒目。
+        StatusLetterBadge(change.status)
         Text(
             change.path,
             style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
@@ -1046,6 +1167,43 @@ private fun FileRow(
         if (secondaryAction != null && onSecondaryAction != null) {
             RuntimeTextButton(onClick = onSecondaryAction) { Text(secondaryAction, style = MaterialTheme.typography.labelSmall) }
         }
+    }
+}
+
+/**
+ * 状态字母徽章：22dp 边长、6dp 圆角的彩色底方块 + 彩色字母。
+ *
+ * 为什么固定 22dp：字母只有一位，尺寸随内容收缩会让 M/A/D 各行左侧参差，
+ * 固定边长 + 居中后纵向扫一眼就是一条直线；22dp 恰好容纳 labelSmall 不显挤。
+ * 底色统一 10% 透明度（0x1A 前缀字面量，与既有 Color(0xFF...) 风格一致）：
+ * 低饱和底 + 高饱和字在浅色列表上可读，且与驾驶舱比例条、呼吸点共用同一套
+ * 状态语义色 —— 用户在状态页顶部看到什么颜色，滚到文件行就是什么颜色。
+ * 字母用 tnum 等宽 + Bold：单字母本身不受比例字宽影响，但保持与计数数字同
+ * 一渲染口径，避免徽章内基线随字体特性微调而跳动。
+ */
+@Composable
+private fun StatusLetterBadge(status: Char) {
+    val (bg, fg) = when (status) {
+        'M' -> Color(0x1AF59E0B) to Color(0xFFF59E0B)  // 修改：琥珀（与比例条未暂存段同色）
+        'A' -> Color(0x1A2E7D32) to Color(0xFF2E7D32)  // 新增：绿（与干净呼吸点同色）
+        'D' -> MaterialTheme.colorScheme.error.copy(alpha = 0.1f) to MaterialTheme.colorScheme.error  // 删除：主题红
+        '?' -> MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) to MaterialTheme.colorScheme.primary  // 未跟踪：主题色
+        'R' -> Color(0x1A7C4DFF) to Color(0xFF7C4DFF)  // 重命名：紫
+        // 其余状态码（C/U/T…）沿用旧 statusColor 兜底，避免新枚举漏配色
+        else -> statusColor(status).let { it.copy(alpha = 0.1f) to it }
+    }
+    Box(
+        modifier = Modifier
+            .size(22.dp)
+            .background(bg, RoundedCornerShape(6.dp)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            status.toString(),
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold).tabular(),
+            color = fg,
+            maxLines = 1,
+        )
     }
 }
 
@@ -1522,6 +1680,9 @@ private fun GraphCommitRow(
                 canvasWidth = canvasWidth,
                 laneWidth = laneWidth,
                 suppressTopLane = isTopTerminal,
+                // HEAD 行（index==0，最新提交）单独标记：suppressTopLane 管的是
+                // 「上半段泳道线画不画」，光环语义是「这是不是最新提交」，分开传。
+                isHead = isTopTerminal,
                 modifier = Modifier.width(canvasWidth).fillMaxHeight(),
             )
             Column(
@@ -1603,9 +1764,32 @@ private fun GraphCanvas(
     canvasWidth: androidx.compose.ui.unit.Dp,
     laneWidth: androidx.compose.ui.unit.Dp,
     suppressTopLane: Boolean = false,
+    // HEAD（最新提交）行标记：与 suppressTopLane 语义不同 —— 那个控制上半段
+    // 泳道线要不要画，这个只决定节点要不要画呼吸光环，分开传避免含义纠缠。
+    isHead: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val nodeColor = laneColors.getOrElse(lane) { Color.Gray }
+    // HEAD 呼吸光环 alpha：只有 HEAD 行才创建 InfiniteTransition —— 提交列表一屏
+    // 十几行、长仓库滚动累计上百行，每行都挂一个无限动画纯属耗电；光环语义只属于
+    // 最新提交。非 HEAD 行给恒定 1f 的静态 State 占位（isHead=false 时根本不画光环）。
+    // 注意 alpha 必须在 draw lambda 里读 State（by 委托每次访问都读 .value），
+    // Canvas 的绘制块会观察快照读取并逐帧失效重绘，动画才转得起来。
+    val headHaloAlpha by if (isHead) {
+        rememberInfiniteTransition(label = "gitHeadHalo").animateFloat(
+            initialValue = 1f,
+            targetValue = 0.35f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(800, easing = EaseOutCubic),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "gitHeadHaloAlpha",
+        )
+    } else {
+        remember { mutableStateOf(1f) }
+    }
+    // 主题色必须在组合期读取：DrawScope 里访问不到 MaterialTheme
+    val headHaloColor = MaterialTheme.colorScheme.primary
     androidx.compose.foundation.Canvas(modifier = modifier) {
         val lanePx = laneWidth.toPx()
         val padPx = 4.dp.toPx()
@@ -1656,6 +1840,18 @@ private fun GraphCanvas(
         }
 
         val nodeRadius = if (isMerge) 7.dp.toPx() else 5.dp.toPx()
+        // HEAD 节点呼吸光环：画在节点圆点之下、半径大 4dp 的 primary 晕圈，base
+        // alpha 0.35 随 800ms Reverse 呼吸（与 PulseDot 同规格）。为什么用呼吸而不是
+        // 静态高亮：静态高亮会和「选中态」混淆，呼吸是「这是活着的 HEAD」的信号，
+        // 上百行历史里一眼锁定最新提交。headHaloAlpha 在本 lambda 内读取（快照
+        // 观察 → 逐帧重绘），若在外面先取值成 Float，动画就死了。
+        if (isHead) {
+            drawCircle(
+                color = headHaloColor.copy(alpha = 0.35f * headHaloAlpha),
+                radius = nodeRadius + 4.dp.toPx(),
+                center = Offset(centerX, centerY),
+            )
+        }
         if (isMerge) {
             drawCircle(nodeColor, radius = nodeRadius, center = Offset(centerX, centerY), style = Stroke(width = 2.5.dp.toPx()))
             drawCircle(nodeColor, radius = nodeRadius / 2f, center = Offset(centerX, centerY))
