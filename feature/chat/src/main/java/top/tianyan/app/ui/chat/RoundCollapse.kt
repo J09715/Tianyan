@@ -1,6 +1,7 @@
 package top.tianyan.app.ui.chat
 
 import top.tianyan.app.harness.HarnessMessage
+import top.tianyan.app.harness.ToolCall
 import top.tianyan.app.harness.ToolResult
 
 /**

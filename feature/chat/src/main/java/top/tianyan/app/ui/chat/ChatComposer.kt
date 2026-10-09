@@ -52,6 +52,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TileMode
@@ -88,7 +89,8 @@ private val AuroraBorderColors = listOf(
 )
 
 /** 极光边框圆角，与输入胶囊 Surface 的 20dp 圆角保持一致。 */
-private val AuroraCapsuleShape = RoundedCornerShape(20.dp)
+// 极光胶囊描边尺寸（drawBehind 内用 CornerRadius 直接绘制圆角矩形，不再需要 Shape 对象）
+private val AuroraCapsuleCornerRadiusDp = 20.dp
 
 /**
  * 输入区：斜杠/@ 弹窗、排队指令、附件预览、推理强度滑块、工具状态胶囊与一体化输入胶囊。
@@ -307,9 +309,9 @@ internal fun ChatComposer(
                 end = Offset(glowOffset + 600f, 600f),
                 tileMode = TileMode.Repeated,
             )
-            drawOutline(
-                outline = AuroraCapsuleShape.createOutline(size, layoutDirection, this),
+            drawRoundRect(
                 brush = auroraBrush,
+                cornerRadius = CornerRadius(AuroraCapsuleCornerRadiusDp.toPx(), AuroraCapsuleCornerRadiusDp.toPx()),
                 style = Stroke(
                     width = (1.2f + 0.3f * glowPulse).dp.toPx(),
                     cap = StrokeCap.Square,
