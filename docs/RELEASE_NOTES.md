@@ -1,8 +1,33 @@
-# 天衍 · Tianyan v0.18.4 发布记录
+# 天衍 · Tianyan v0.18.5 发布记录
 
 > **发布时间**：2026-10-08
-> **版本号**：v0.18.4（`appVersionName = 0.18.4`，`appVersionCode = 72`）
+> **版本号**：v0.18.5（`appVersionName = 0.18.5`，`appVersionCode = 73`）
 > **支持范围**：Android 10+ · arm64-v8a（无 Root / PRoot 沙箱）
+
+---
+
+## 🆕 v0.18.5 补充
+
+### 修复本地模型服务启动后掉线
+
+现象：提示「模型服务已启动，并已设为当前对话模型」，回到列表却显示「服务未启动」。
+
+**根因**：`LocalLlmManager` **没有任何保活机制**。llama-server 是 PRoot 子进程，息屏后系统会冻结整个进程组，进程随即死亡，monitor 检测到后把状态置回 `Stopped`。同类服务里 SSH 与 FTP 都持有 `PARTIAL_WAKE_LOCK`，只有本地推理漏了。
+
+修法：推理期间申请 `PARTIAL_WAKE_LOCK`（12 小时上限，与 SSH/FTP 一致），并在**两条退出路径**上都释放——用户主动停止/换上下文重启（`stopInternal`）与进程自行退出（`monitorService`）。只覆盖一条会泄漏唤醒锁，持续占 CPU 且被系统记录。
+
+### 修复「模型配置」注入卡对本地引擎无效
+
+llama.cpp 的工具详情页显示了「一键将已配置的 AI 模型（API Key、Base URL 与 Model）注入」卡片，点「应用」会写全局 provider 兜底。但**本地推理引擎自己就是模型服务端**：启动命令只吃 `-m <GGUF 文件>`，从不读 provider / baseUrl / apiKey。用户按提示选云端档案点应用，本地引擎不会有任何变化。
+
+判断逻辑抽到 `core/model/ToolModelInjection`（纯逻辑，可单测）并排除本地推理引擎。该判断此前内联在 UI 里、只看分类，而 llama-cpp 的分类正是 `AI_AGENT`，所以必然误显示。
+
+### 新增回归守卫
+
+- `ToolModelInjectionTest`（5 项）：本地推理引擎永不接受云端注入、大小写不敏感、纯开发工具不显示；
+- `LongRunningServiceKeepAliveTest`（3 项）：长驻服务必须持有唤醒锁、`LocalLlmManager` 必须真的调用 `acquireWakeLock()`（只声明不调用等于没保活）、两条退出路径都要释放、锁必须有超时。
+
+两条守卫都做过反向验证：删掉 `acquireWakeLock()` 调用后立刻变红——第一版守卫只检查常量字符串存在，**没能拦住**，已改成检查真实调用点。
 
 ---
 
