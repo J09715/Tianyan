@@ -239,9 +239,24 @@ class ProotCommandBuilder private constructor(
                 skipped.add(path)
             }
         }
-        // 记录被跳过的绑定——这些缺失会导致沙箱内 Android 二进制无法执行（"无 linker"问题）
-        if (skipped.isNotEmpty()) {
-            logWarning("HostSystemBindings: ${skipped.size} path(s) skipped (not exist/unreadable): $skipped")
+        // 记录被跳过的绑定——这些缺失会导致沙箱内 Android 二进制无法执行（"无 linker"问题）。
+        //
+        // 但要区分「本就不该存在」与「本该有却读不到」：
+        // 应用进程在 Android 10+ 上永远读不到 /apex、/data/app、/data/dalvik-cache
+        // 以及 SELinux 的 property_contexts（这是平台限制，不是环境损坏）。
+        // 每次都按警告打日志会把运行日志刷满（实测同一秒能刷十几条），
+        // 真正需要注意的缺失反而被淹没。所以只对「预期可用」的路径告警。
+        val expectedMissing = setOf(
+            "/apex",
+            "/data/app",
+            "/data/dalvik-cache",
+            "/data/misc/apexdata/com.android.art/dalvik-cache",
+            "/plat_property_contexts",
+            "/property_contexts",
+        )
+        val unexpected = skipped.filterNot { it in expectedMissing }
+        if (unexpected.isNotEmpty()) {
+            logWarning("HostSystemBindings: ${unexpected.size} path(s) skipped (not exist/unreadable): $unexpected")
         }
     }
 

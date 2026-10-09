@@ -55,7 +55,11 @@ sealed interface LocalModelTransfer {
 sealed interface LocalLlmServiceState {
     data object Stopped : LocalLlmServiceState
     data class Starting(val fileName: String) : LocalLlmServiceState
-    data class Running(val fileName: String, val endpoint: String) : LocalLlmServiceState
+    /**
+     * [contextSize] 是服务端当前实际生效的 --ctx-size。
+     * 记录它是为了在用户改了配置后能判断「需要重启才生效」，而不是静默沿用旧值。
+     */
+    data class Running(val fileName: String, val endpoint: String, val contextSize: Int = 0) : LocalLlmServiceState
     data class Failed(val message: String) : LocalLlmServiceState
 }
 
@@ -190,7 +194,15 @@ class LocalLlmManager @Inject constructor(
         return import(source.name, { FileInputStream(source) }, source.length())
     }
 
-    suspend fun start(fileName: String) = serviceMutex.withLock {
+    /**
+     * 启动本地推理服务。
+     *
+     * [contextTokens] 是模型档案里配置的上下文上限，会作为 `--ctx-size` 传给 llama-server。
+     * 这个参数必须透传：早先这里只按设备内存选 2048/4096，完全忽略用户配置——
+     * 用户在模型配置里把上下文调到 64000，服务端仍以 4096 启动，
+     * 于是任何稍长的对话都直接 400（request exceeds the available context size）。
+     */
+    suspend fun start(fileName: String, contextTokens: Int? = null) = serviceMutex.withLock {
         check(Build.SUPPORTED_ABIS.any { it.equals("arm64-v8a", ignoreCase = true) }) {
             "当前设备不是 ARM64，无法运行本地 llama.cpp 推理引擎"
         }
@@ -198,13 +210,20 @@ class LocalLlmManager @Inject constructor(
         require(model.isFile) { "模型文件不存在：$fileName" }
         validateGguf(model)
 
+        // 先把目标 ctx 算出来：early-return 分支也要用它判断是否需要重启。
+        // 决策逻辑放在 core/model 的 LocalLlmContext，便于单测（本类依赖 Android Context）。
+        val contextSize = top.tianyan.app.core.model.LocalLlmContext.resolve(contextTokens, deviceRamBytes())
+
         val currentState = _serviceState.value
         val currentProcess = serviceProcess
         if (currentState is LocalLlmServiceState.Running && currentProcess?.session?.isAlive == true) {
             check(currentState.fileName == model.name) {
                 "已有本地模型正在运行，请先停止后再启动其他模型"
             }
-            return@withLock
+            // 同一个模型但上下文变了：llama.cpp 的 --ctx-size 只在启动时生效，
+            // 沿用旧进程会让用户「改了配置没反应」。这里主动停掉，让本次调用按新值重启。
+            if (currentState.contextSize == contextSize) return@withLock
+            stopInternal()
         }
 
         serviceMonitorJob?.cancel()
@@ -220,7 +239,6 @@ class LocalLlmManager @Inject constructor(
             )
             check(probe.isSuccess) { "尚未安装 llama.cpp 推理引擎，请先在工具中心安装" }
             val guestModel = "$GUEST_MODEL_DIRECTORY/${model.name}"
-            val contextSize = if (deviceRamBytes() < SIX_GIB) LOW_MEMORY_CONTEXT_SIZE else DEFAULT_CONTEXT_SIZE
             val threads = Runtime.getRuntime().availableProcessors().coerceIn(MIN_INFERENCE_THREADS, MAX_INFERENCE_THREADS)
             val handle = serviceLauncher.start(
                 LocalServiceSpec(
@@ -244,7 +262,7 @@ class LocalLlmManager @Inject constructor(
                 )
             }
             serviceProcess = handle.process
-            _serviceState.value = LocalLlmServiceState.Running(model.name, handle.url)
+            _serviceState.value = LocalLlmServiceState.Running(model.name, handle.url, contextSize)
             monitorService(handle.process)
         } catch (cancellation: CancellationException) {
             serviceProcess = null
@@ -259,7 +277,15 @@ class LocalLlmManager @Inject constructor(
         }
     }
 
-    suspend fun stop() = serviceMutex.withLock {
+    suspend fun stop() = serviceMutex.withLock { stopInternal() }
+
+    /**
+     * 停止服务但不加锁——调用方已持有 [serviceMutex]。
+     *
+     * 抽出来是为了让「同模型换上下文需要重启」这条路径能复用同一套清理逻辑：
+     * 复制一份必然漏掉某一步（例如忘了取消 monitor job，旧进程状态会继续覆盖新状态）。
+     */
+    private suspend fun stopInternal() {
         serviceMonitorJob?.cancel()
         serviceMonitorJob = null
         serviceProcess = null
@@ -361,11 +387,9 @@ class LocalLlmManager @Inject constructor(
         private const val ENGINE_PROBE_TIMEOUT_MS = 10_000L
         private const val SERVICE_START_TIMEOUT_MS = 5 * 60_000L
         private const val SERVICE_MONITOR_INTERVAL_MS = 1_000L
-        private const val LOW_MEMORY_CONTEXT_SIZE = 2048
-        private const val DEFAULT_CONTEXT_SIZE = 4096
+
         private const val MIN_INFERENCE_THREADS = 2
         private const val MAX_INFERENCE_THREADS = 4
-        private const val SIX_GIB = 6L * 1024L * 1024L * 1024L
         private val GGUF_MAGIC = byteArrayOf('G'.code.toByte(), 'G'.code.toByte(), 'U'.code.toByte(), 'F'.code.toByte())
         private val SAFE_FILE_NAME = Regex("[A-Za-z0-9][A-Za-z0-9._+() -]{0,239}")
     }

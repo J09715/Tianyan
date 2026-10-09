@@ -160,7 +160,12 @@ class LocalLlmViewModel @Inject constructor(
             _message.value = null
             _messageIsError.value = false
             runCatching {
-                localLlmManager.start(fileName)
+                // 把档案里配置的上下文上限透传给服务端 --ctx-size。
+                // 不透传的话服务端固定按设备内存选 2048/4096，用户改了配置也不生效，
+                // 稍长的对话直接 400（request exceeds the available context size）。
+                val distroId = linuxRuntime.activeDistroId.value
+                val configuredContext = aiModelRepository.findById("local-llamacpp-$distroId")?.contextTokens
+                localLlmManager.start(fileName, contextTokens = configuredContext)
                 activateLocalProfile(fileName)
             }.onSuccess {
                 showMessage("模型服务已启动，并已设为当前对话模型", isError = false)
