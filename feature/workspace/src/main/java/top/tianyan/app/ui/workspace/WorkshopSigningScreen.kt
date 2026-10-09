@@ -286,6 +286,46 @@ private fun CreateKeystoreDialog(
     )
 }
 
+/**
+ * 生成签名密钥库口令。
+ *
+ * 之前是 `${项目名}#${年份}_${4位随机}`，随机部分只有 4 个字符（36 选 4 无放回），
+ * 约 20 bits 熵；而项目名和年份都可枚举或已知。这个口令保护的是有效期 25 年的
+ * 签名密钥库，可被暴力枚举——一旦泄露，攻击者能用同一身份签名假冒 APK。
+ *
+ * 改用 SecureRandom 从 64 字符集取 24 位，约 144 bits 熵，且不暴露任何可预测片段。
+ */
+private val PASSWORD_ALPHABET: CharArray =
+    ("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#\$%^&*-_=+").toCharArray()
+private const val PASSWORD_LENGTH = 24
+
+/**
+ * 先保证每类字符各出现一次，再填满剩余长度，最后整体打乱。
+ *
+ * 「保证出现」与「随机」要分开处理：纯随机会有小概率某一类一个都没抽到
+ * （24 次抽样、72 字符集时，数字类一次都不出现的概率不为零），
+ * 用 SecureRandom 洗牌既保证覆盖又不引入可预测的位置规律。
+ */
+private fun generateStrongPassword(): String {
+    val random = java.security.SecureRandom()
+    val pick = { chars: CharArray -> chars[random.nextInt(chars.size)] }
+    val upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".toCharArray()
+    val lower = "abcdefghijklmnopqrstuvwxyz".toCharArray()
+    val digits = "0123456789".toCharArray()
+    val symbols = "!@#\$%^&*-_=+".toCharArray()
+
+    val chars = mutableListOf(pick(upper), pick(lower), pick(digits), pick(symbols))
+    repeat(PASSWORD_LENGTH - chars.size) { chars += pick(PASSWORD_ALPHABET) }
+    // Fisher-Yates：用 SecureRandom 保证洗牌不可预测
+    for (i in chars.size - 1 downTo 1) {
+        val j = random.nextInt(i + 1)
+        val tmp = chars[i]
+        chars[i] = chars[j]
+        chars[j] = tmp
+    }
+    return chars.joinToString("")
+}
+
 internal fun generateDefaultSigningDraft(prefixInput: String): WorkshopSigningCreationDraft {
     val cleanInput = prefixInput.trim()
         .replace(Regex("-\\d{8}-[a-fA-F0-9]+$"), "")
@@ -295,7 +335,6 @@ internal fun generateDefaultSigningDraft(prefixInput: String): WorkshopSigningCr
     val hexSuffix = java.util.UUID.randomUUID().toString().replace("-", "").take(4).lowercase(Locale.getDefault())
     val name = "$safePrefix-$dateStr-$hexSuffix"
     val alias = "$safePrefix-key"
-    val yearStr = SimpleDateFormat("yyyy", Locale.getDefault()).format(Date())
     val capPrefix = if (safePrefix == "tianyan-release") {
         "Tianyan"
     } else {
@@ -304,8 +343,7 @@ internal fun generateDefaultSigningDraft(prefixInput: String): WorkshopSigningCr
             .joinToString("") { it.replaceFirstChar { c -> c.uppercase(Locale.getDefault()) } }
             .ifBlank { "Tianyan" }
     }
-    val randomChars = (('a'..'z') + ('0'..'9')).shuffled().take(4).joinToString("")
-    val password = "${capPrefix}#${yearStr}_$randomChars"
+    val password = generateStrongPassword()
     val org = "$capPrefix Developer"
     return WorkshopSigningCreationDraft(
         name = name,

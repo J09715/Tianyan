@@ -180,7 +180,7 @@ fun PermissionGuideScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(KeepaliveTopic.entries) { topic ->
+                    items(KeepaliveTopic.entries, key = { it.name }) { topic ->
                         val isSelected = topic == selectedTopic
                         val isGranted = statusMap[topic] == true
                         val hasRealStatus = topic == KeepaliveTopic.BATTERY_UNRESTRICTED ||

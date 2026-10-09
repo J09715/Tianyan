@@ -298,7 +298,7 @@ fun StorageUsageScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    items(StorageFilter.entries) { filter ->
+                    items(StorageFilter.entries, key = { it.name }) { filter ->
                         FilterChip(
                             selected = activeFilter == filter,
                             onClick = { viewModel.setFilter(filter) },

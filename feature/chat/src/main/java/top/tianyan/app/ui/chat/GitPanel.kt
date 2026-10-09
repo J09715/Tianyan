@@ -1084,7 +1084,7 @@ private fun BranchesTab(
             LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
                 if (state.localBranches.isNotEmpty()) {
                     item { SectionHeader("本地分支") }
-                    items(state.localBranches) { branch ->
+                    items(state.localBranches, key = { it }) { branch ->
                         val isCurrent = branch == state.branch
                         Row(
                             modifier = Modifier.fillMaxWidth().clickable(enabled = !isCurrent) { onCheckout(branch) }.padding(horizontal = 16.dp, vertical = 11.dp),
@@ -1108,7 +1108,7 @@ private fun BranchesTab(
                 }
                 if (state.remoteBranches.isNotEmpty()) {
                     item { SectionHeader("远程分支") }
-                    items(state.remoteBranches) { branch ->
+                    items(state.remoteBranches, key = { it }) { branch ->
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 11.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -1123,7 +1123,7 @@ private fun BranchesTab(
                 }
                 if (state.tags.isNotEmpty()) {
                     item { SectionHeader("标签") }
-                    items(state.tags) { tag ->
+                    items(state.tags, key = { it }) { tag ->
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 11.dp),
                             verticalAlignment = Alignment.CenterVertically,

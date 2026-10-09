@@ -198,7 +198,7 @@ fun ToolCenterScreen(
                     .padding(horizontal = 16.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(categories) { (catId, label) ->
+                items(categories, key = { (catId, _) -> catId }) { (catId, label) ->
                     val isSelected = selectedCategory == catId
                     FilterChip(
                         selected = isSelected,

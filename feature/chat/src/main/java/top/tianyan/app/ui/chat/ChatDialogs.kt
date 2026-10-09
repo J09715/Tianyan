@@ -720,7 +720,7 @@ internal fun ProviderModelPickerDialog(
                                 .heightIn(max = 280.dp),
                             verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
-                            items(modelIds) { modelId ->
+                            items(modelIds, key = { it }) { modelId ->
                                 val selected = modelId == selectedModelVariant
                                 Row(
                                     Modifier

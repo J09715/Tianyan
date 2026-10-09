@@ -183,6 +183,74 @@ class GitPanelLayoutGuardTest {
         )
     }
 
+    /**
+     * 同一 composable 内不得出现「无界滚动嵌无界滚动」。
+     *
+     * 这是 0.17.8 线上崩溃的成因：两层无界纵向滚动嵌套时内层拿到无限 maxHeight，
+     * Compose 抛 IllegalStateException。这类问题编译期和单元测试都看不见，
+     * 只有真机进页面才崩，所以用源码结构断言拦住。
+     *
+     * 判据刻意保守：只查「同一个 composable 内部、缩进更深的那层又声明了无界滚动」。
+     * 早先用「A 调用了 B 且两者都滚动」的跨函数规则，会把互斥分支
+     * （如 GitPanel 的 showCredentialsPage 与 pager）误判成嵌套，
+     * 按那个结果改代码反而会破坏本来正常的界面。
+     */
+    @Test
+    fun noNestedUnboundedScrollWithinOneComposable() {
+        val files = listOf("RedTeamConsole.kt", "RedTeamAssetsTab.kt", "RedTeamConsoleTabs.kt", "RedTeamPanel.kt", "GitPanel.kt")
+            .map { File("src/main/java/top/tianyan/app/ui/chat/$it") }
+
+        files.forEach { file ->
+            val lines = file.readLines()
+            // 每个 composable 的起止行
+            val bounds = mutableListOf<Triple<String, Int, Int>>()
+            var name: String? = null
+            var start = 0
+            var depth = 0
+            lines.forEachIndexed { i, l ->
+                val m = Regex("""\s*(?:internal |private )?fun (\w+)\(""").find(l)
+                if (m != null && lines.subList(maxOf(0, i - 3), i).any { it.contains("@Composable") }) {
+                    if (name != null) bounds += Triple(name!!, start, i)
+                    name = m.groupValues[1]
+                    start = i
+                    depth = 0
+                }
+                if (name != null) {
+                    depth += l.count { it == '{' } - l.count { it == '}' }
+                    if (depth <= 0 && i > start) {
+                        bounds += Triple(name!!, start, i)
+                        name = null
+                    }
+                }
+            }
+
+            bounds.forEach { (fn, from, to) ->
+                val scrolls = (from..to).mapNotNull { i ->
+                    val l = lines[i]
+                    if (!l.contains("verticalScroll(") || l.trimStart().startsWith("import")) null
+                    else {
+                        val ctx = lines.subList(maxOf(0, i - 4), i + 1).joinToString(" ")
+                        val indent = l.length - l.trimStart().length
+                        Triple(i + 1, indent, !ctx.contains("heightIn"))
+                    }
+                }.filter { it.third } // 只要无界的
+
+                if (scrolls.size >= 2) {
+                    val sorted = scrolls.sortedBy { it.first }
+                    for (k in 1 until sorted.size) {
+                        val prev = sorted[k - 1]
+                        val cur = sorted[k]
+                        assertTrue(
+                            "${file.name} 的 $fn() 内出现嵌套无界滚动：L${prev.first}(indent ${prev.second}) " +
+                                "包裹 L${cur.first}(indent ${cur.second})——内层会拿到无限 maxHeight 并崩溃",
+                            cur.second <= prev.second,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     /** 群号占位符不得再出现：它曾被兜底复制给用户，搜不到任何群还提示「已复制」。 */
     @Test
     fun noPlaceholderGroupNumberAnywhere() {
