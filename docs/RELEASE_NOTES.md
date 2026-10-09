@@ -1,8 +1,36 @@
-# 天衍 · Tianyan v0.18.6 发布记录
+# 天衍 · Tianyan v0.18.7 发布记录
 
 > **发布时间**：2026-10-08
-> **版本号**：v0.18.6（`appVersionName = 0.18.6`，`appVersionCode = 74`）
+> **版本号**：v0.18.7（`appVersionName = 0.18.7`，`appVersionCode = 75`）
 > **支持范围**：Android 10+ · arm64-v8a（无 Root / PRoot 沙箱）
+
+---
+
+## 🆕 v0.18.7 补充
+
+### 修复「模型返回了空响应」误报
+
+推理模型（DeepSeek-R1 类）有时只产出 `reasoningContent` 而不给正文。界面上用户能看到整段「推理思考过程」，却被告知执行失败。
+
+两处都只看 `displayText`：
+
+- `TurnRunner` 的空响应判定 → 这类正常回复被判 Failed；
+- `HarnessLoop.persistAssistantOutput` 的落库条件 → 这类回复**整条不落库**，连思考过程都看不到。
+
+两处都补上 `reasoningContent` 判断（空字符串不算内容，仍走失败关闭）。
+
+**这条测试是我自己写错的**：上一轮我加了一条 `reasoning without answer text does not complete the task`，断言这种回复**应当**失败——把一个真实缺陷锁死成了「预期行为」。已改正为断言成功，并补两条边界用例（真·空响应仍失败、空白 reasoning 不算内容）。
+
+### 修复澄明主题冷启动首帧错乱
+
+现象：澄明主题下启动时界面像没加载完，过一会儿自己好了；调整缩放时同样。
+
+**根因**：主题风格、壁纸、字号缩放三项都用 `collectAsStateWithLifecycle(initialValue = 默认值)` 读取，首帧必然按「玄同 + 无壁纸 + 缩放 1.0」布局，DataStore 读完后整棵树再按真实值重排——三次跳变叠加。`LocalDensity` 变化还会触发全量重新测量。
+
+修法：
+
+- 新增 `SettingsDataStore.appearanceSnapshot()`：冷启动在 `setContent` 之前**同步读一次**真实值，首帧就用对；后续仍由 Flow 驱动，设置页改动照常实时生效；
+- 壁纸未就绪时的覆盖层改为同色系低透明度版本，避免加载完成瞬间从「无覆盖」突变到「有覆盖」的闪烁。
 
 ---
 
