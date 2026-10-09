@@ -197,56 +197,16 @@ class SkillDistillationManager @Inject constructor(
     }
 
     /** 触发命令规范化：空值返回 null；非 / 开头的补 /。 */
-    private fun normalizeTriggerCommand(raw: String): String? {
-        val trimmed = raw.trim()
-        if (trimmed.isEmpty()) return null
-        return if (trimmed.startsWith("/")) trimmed else "/$trimmed"
-    }
+    private fun normalizeTriggerCommand(raw: String): String? = normalizeCommand(raw)
 
     /**
      * 组装提炼素材：用户与智能体消息各取最近若干条（每条截断），
      * 附上工具使用轨迹；总量硬性控制在 12K 字符内。
      */
-    private fun buildMaterial(messages: List<HarnessMessage>): String {
-        val userTexts = messages.filterIsInstance<UserMessage>()
-            .takeLast(RECENT_MESSAGES_PER_ROLE)
-            .map { it.text.trim().take(MAX_SNIPPET_CHARS) }
-            .filter { it.isNotEmpty() }
-        val assistantTexts = messages.filterIsInstance<AssistantText>()
-            .takeLast(RECENT_MESSAGES_PER_ROLE)
-            .map { it.text.trim().take(MAX_SNIPPET_CHARS) }
-            .filter { it.isNotEmpty() }
-        val toolNames = messages.filterIsInstance<ToolCall>()
-            .map { it.rawToolName ?: it.tool.name.lowercase() }
-            .distinct()
-        if (userTexts.isEmpty()) return ""
-
-        val builder = StringBuilder()
-        builder.append("【用户消息（最近，已截断）】\n")
-        userTexts.forEachIndexed { index, text -> builder.append("用户").append(index + 1).append("：").append(text).append('\n') }
-        builder.append("\n【智能体回复（最近，已截断）】\n")
-        assistantTexts.forEachIndexed { index, text -> builder.append("回复").append(index + 1).append("：").append(text).append('\n') }
-        if (toolNames.isNotEmpty()) {
-            builder.append("\n【会话中使用过的工具】\n").append(toolNames.joinToString("、"))
-        }
-        return builder.toString().take(MAX_MATERIAL_CHARS)
-    }
+    private fun buildMaterial(messages: List<HarnessMessage>): String = buildDistillMaterial(messages)
 
     /** 剥除模型可能输出的 ```json 代码围栏，并截取首个 { 到最后一个 } 的 JSON 主体。 */
-    private fun extractJsonBody(raw: String): String {
-        var text = raw.trim()
-        if (text.startsWith("```")) {
-            text = text.lineSequence()
-                .drop(1) // 去掉首行 ```json 围栏
-                .takeWhile { it.trim() != "```" } // 去掉结尾围栏
-                .joinToString("\n")
-                .trim()
-        }
-        val start = text.indexOf('{')
-        val end = text.lastIndexOf('}')
-        if (start < 0 || end <= start) throw IllegalStateException("模型输出中未找到 JSON 主体")
-        return text.substring(start, end + 1)
-    }
+    private fun extractJsonBody(raw: String): String = extractJson(raw)
 
     companion object {
         /** 每类角色最多取最近的消息条数。 */
@@ -267,6 +227,55 @@ class SkillDistillationManager @Inject constructor(
         private const val MIN_PROMPT_CHARS = 40
         /** 学习类技能使用的图标名（对应 RuntimeIconName.Brain，真实存在于图标体系）。 */
         private const val LEARNED_SKILL_ICON = "Brain"
+
+        /** 触发命令规范化（纯函数，测试可见）：空值返回 null；非 / 开头的补 /。 */
+        internal fun normalizeCommand(raw: String): String? {
+            val trimmed = raw.trim()
+            if (trimmed.isEmpty()) return null
+            return if (trimmed.startsWith("/")) trimmed else "/$trimmed"
+        }
+
+        /** 组装提炼素材（纯函数，测试可见）：无用户消息时返回空串。 */
+        internal fun buildDistillMaterial(messages: List<HarnessMessage>): String {
+            val userTexts = messages.filterIsInstance<UserMessage>()
+                .takeLast(RECENT_MESSAGES_PER_ROLE)
+                .map { it.text.trim().take(MAX_SNIPPET_CHARS) }
+                .filter { it.isNotEmpty() }
+            val assistantTexts = messages.filterIsInstance<AssistantText>()
+                .takeLast(RECENT_MESSAGES_PER_ROLE)
+                .map { it.text.trim().take(MAX_SNIPPET_CHARS) }
+                .filter { it.isNotEmpty() }
+            val toolNames = messages.filterIsInstance<ToolCall>()
+                .map { it.rawToolName ?: it.tool.name.lowercase() }
+                .distinct()
+            if (userTexts.isEmpty()) return ""
+
+            val builder = StringBuilder()
+            builder.append("【用户消息（最近，已截断）】\n")
+            userTexts.forEachIndexed { index, text -> builder.append("用户").append(index + 1).append("：").append(text).append('\n') }
+            builder.append("\n【智能体回复（最近，已截断）】\n")
+            assistantTexts.forEachIndexed { index, text -> builder.append("回复").append(index + 1).append("：").append(text).append('\n') }
+            if (toolNames.isNotEmpty()) {
+                builder.append("\n【会话中使用过的工具】\n").append(toolNames.joinToString("、"))
+            }
+            return builder.toString().take(MAX_MATERIAL_CHARS)
+        }
+
+        /** 剥除 ```json 围栏并截取 JSON 主体（纯函数，测试可见）。 */
+        internal fun extractJson(raw: String): String {
+            var text = raw.trim()
+            if (text.startsWith("```")) {
+                text = text.lineSequence()
+                    .drop(1) // 去掉首行 ```json 围栏
+                    .takeWhile { it.trim() != "```" } // 去掉结尾围栏
+                    .joinToString("\n")
+                    .trim()
+            }
+            val start = text.indexOf('{')
+            val end = text.lastIndexOf('}')
+            if (start < 0 || end <= start) throw IllegalStateException("模型输出中未找到 JSON 主体")
+            return text.substring(start, end + 1)
+        }
 
         /**
          * 提炼协议专用 Json 实例：局部创建、宽松解析，
