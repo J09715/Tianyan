@@ -310,7 +310,8 @@ class WorkflowGuiPilot @Inject constructor(
             appendLine()
             append(log.toString().trimEnd())
         }
-        onProgress(if (success && failedReason == null) "GUI 试飞结束" else "GUI 试飞未完成")
+        // success 的定义里已含 failedReason == null，这里不再重复判断（编译器也提示恒真）。
+        onProgress(if (success) "GUI 试飞结束" else "GUI 试飞未完成")
         return NodeExecutionOutput(
             status = if (failedReason == null) NodeRunStatus.SUCCESS else NodeRunStatus.FAILED,
             exitCode = if (failedReason == null) 0 else 1,

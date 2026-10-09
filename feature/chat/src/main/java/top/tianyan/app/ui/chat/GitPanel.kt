@@ -1010,13 +1010,13 @@ private fun FileRow(
     onSecondaryAction: (() -> Unit)? = null,
 ) {
     val color = statusColor(change.status)
-    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+    val copyText = top.tianyan.app.ui.components.rememberTextCopier()
     val context = androidx.compose.ui.platform.LocalContext.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(onClick = onClick, onLongClick = {
-                clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(change.path))
+                copyText(change.path)
                 android.widget.Toast.makeText(context, "已复制：${change.path}", android.widget.Toast.LENGTH_SHORT).show()
             })
             .padding(start = 14.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
@@ -1430,11 +1430,11 @@ private fun CommitDetailSheet(
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
-                RuntimeTextButton(onClick = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(commit.shortHash)) }) {
+                val copyHash = top.tianyan.app.ui.components.rememberTextCopier()
+                RuntimeTextButton(onClick = { copyHash(commit.shortHash) }) {
                     Text("复制短哈希", style = MaterialTheme.typography.labelMedium)
                 }
-                RuntimeTextButton(onClick = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(commit.hash)) }) {
+                RuntimeTextButton(onClick = { copyHash(commit.hash) }) {
                     Text("复制完整哈希", style = MaterialTheme.typography.labelMedium)
                 }
             }

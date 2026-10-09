@@ -9,6 +9,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -73,7 +74,9 @@ class HostBridge @Inject constructor(
     private val _isRunning = MutableStateFlow(false)
     val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
 
-    private val bridgeScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    /** 可重建：stop() 会取消它，start() 重建，避免已取消的作用域被复用（launch 会立即失败）。 */
+    @Volatile
+    private var bridgeScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     /** 启动 HTTP 监听。重复调用安全，且绑定操作不会被并发启动打断。 */
     @Synchronized
@@ -83,6 +86,11 @@ class HostBridge @Inject constructor(
             val socket = ServerSocket(BRIDGE_PORT, 16, InetAddress.getByName(BRIDGE_HOST))
             serverSocket = socket
             _isRunning.value = true
+            // stop() 取消了旧作用域，这里必须重建：复用已取消的作用域会让 launch 立刻失败，
+            // 表现为「重启监听后没有任何日志、端口也没起来」。
+            if (bridgeScope.coroutineContext[Job]?.isActive != true) {
+                bridgeScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+            }
             serverJob = bridgeScope.launch {
                 logger.i("HostBridge listening on $BRIDGE_HOST:$BRIDGE_PORT")
                 while (isActive) {
@@ -102,10 +110,18 @@ class HostBridge @Inject constructor(
         }
     }
 
-    /** 停止 HTTP 监听。 */
+    /**
+     * 停止 HTTP 监听。
+     *
+     * 这里同时取消 [bridgeScope]：只 cancel serverJob 的话，作用域本身仍持有
+     * SupervisorJob 存活——它是 Singleton 的字段，进程生命周期内不会回收，
+     * 反复 start/stop 会让作用域里累积的挂起任务一直留着。
+     * 取消作用域后再用需重建，所以 start() 里重建它。
+     */
     @Synchronized
     fun stop() {
         serverJob?.cancel()
+        bridgeScope.cancel()
         serverSocket?.runCatching { close() }
         serverSocket = null
         _isRunning.value = false

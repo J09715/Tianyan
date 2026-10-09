@@ -61,8 +61,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -645,7 +643,7 @@ private fun RunConsoleModal(
     onCancelRun: () -> Unit,
     onRerun: () -> Unit,
 ) {
-    val clipboard = LocalClipboardManager.current
+    val copyText = top.tianyan.app.ui.components.rememberTextCopier()
     val isRunning = activeRunState.status in setOf(WorkflowRunStatus.RUNNING, WorkflowRunStatus.WAITING_APPROVAL)
     val startedAt = activeRunState.startedAt ?: 0L
     val finishedAt = activeRunState.finishedAt ?: 0L
@@ -776,7 +774,7 @@ private fun RunConsoleModal(
         confirmButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 RuntimeOutlinedButton(onClick = {
-                    clipboard.setText(AnnotatedString(consoleOutput))
+                    copyText(consoleOutput)
                 }) {
                     Text("复制日志")
                 }
