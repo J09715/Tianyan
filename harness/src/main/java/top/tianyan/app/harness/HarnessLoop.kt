@@ -1409,7 +1409,12 @@ class HarnessLoop @Inject constructor(
         displayText: String,
         hasToolCalls: Boolean,
     ) {
-        if (displayText.isNotEmpty()) {
+        // 判据要把「只有思考内容」也算作有内容：推理模型有时不产出正文，
+        // 只给 reasoningContent。早先这里只看 displayText，于是这类回复整条不落库，
+        // 界面上连思考过程都看不到——配合 TurnRunner 的空响应判定，
+        // 用户会看到「明明有回复却报执行失败」。
+        val hasReasoningOnly = displayText.isEmpty() && result.reasoningContent?.isNotBlank() == true
+        if (displayText.isNotEmpty() || hasReasoningOnly) {
             persistAssistant(
                 sessId,
                 assistantId,

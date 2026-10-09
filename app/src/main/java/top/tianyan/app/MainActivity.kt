@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.compose.setContent
+import kotlinx.coroutines.runBlocking
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -80,11 +81,24 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         handleNavigationIntent(intent)
         enableEdgeToEdge()
+        // 冷启动先把外观设置同步读出来，首帧就用真实值。
+        //
+        // 否则这三个值都要等 DataStore 异步回调：首帧按「玄同 + 无壁纸 + 缩放 1.0」渲染，
+        // 读完后整棵树再按真实值重排一次——用户看到的是「启动时界面不对，过一会自己好了」，
+        // 澄明主题下尤其明显（背景层重建 + 覆盖层渐变突变 + LocalDensity 变化触发全量重测量）。
+        // 只读一次，后续仍由 Flow 驱动，设置页改动照常实时生效。
+        val initialAppearance = runBlocking {
+            runCatching { settingsDataStore.appearanceSnapshot() }.getOrNull()
+        }
         setContent {
-            val themeMode by settingsDataStore.themeMode.collectAsStateWithLifecycle(initialValue = "system")
-            val themeStyle by settingsDataStore.themeStyle.collectAsStateWithLifecycle(initialValue = "xuantong")
-            val chengmingBackgroundUri by settingsDataStore.chengmingBackgroundUri.collectAsStateWithLifecycle(initialValue = null)
-            val pageScale by settingsDataStore.appFontScale.collectAsStateWithLifecycle(initialValue = 1f)
+            val themeMode by settingsDataStore.themeMode
+                .collectAsStateWithLifecycle(initialValue = initialAppearance?.themeMode ?: "system")
+            val themeStyle by settingsDataStore.themeStyle
+                .collectAsStateWithLifecycle(initialValue = initialAppearance?.themeStyle ?: "xuantong")
+            val chengmingBackgroundUri by settingsDataStore.chengmingBackgroundUri
+                .collectAsStateWithLifecycle(initialValue = initialAppearance?.chengmingBackgroundUri)
+            val pageScale by settingsDataStore.appFontScale
+                .collectAsStateWithLifecycle(initialValue = initialAppearance?.appFontScale ?: 1f)
             val systemDark = isSystemInDarkTheme()
             val systemDensity = LocalDensity.current
             val isDark = when (themeMode) {

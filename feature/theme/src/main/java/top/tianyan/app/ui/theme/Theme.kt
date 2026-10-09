@@ -337,8 +337,20 @@ private fun ChengmingBackdrop(modifier: Modifier, darkTheme: Boolean, background
             Modifier
                 .fillMaxSize()
                 .background(
+                    // 壁纸未就绪时也铺上与「有壁纸」同结构的覆盖层，只是整体更淡：
+                    // 早先这里给的是全透明渐变，壁纸加载完成的瞬间覆盖层从「无」突变到「有」，
+                    // 画面会明显闪一下（澄明主题冷启动可见）。
+                    // 用同色系低透明度过渡，视觉上是从淡到浓的连续变化，而不是跳变。
                     if (painter == null) {
-                        Brush.verticalGradient(listOf(Color.Transparent, Color.Transparent))
+                        if (darkTheme) {
+                            Brush.verticalGradient(
+                                listOf(Color(0x4D0A1020), Color(0x3D07142A), Color(0x59040914)),
+                            )
+                        } else {
+                            Brush.verticalGradient(
+                                listOf(Color.White.copy(alpha = 0.06f), Color.Transparent, Color(0xFFECF6FF).copy(alpha = 0.08f)),
+                            )
+                        }
                     } else if (darkTheme) {
                         Brush.verticalGradient(
                             listOf(Color(0xB80A1020), Color(0x8F07142A), Color(0xC9040914)),

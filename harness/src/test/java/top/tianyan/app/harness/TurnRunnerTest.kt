@@ -98,12 +98,56 @@ class TurnRunnerTest {
         assertEquals(listOf("persisted"), events)
     }
 
+    /**
+     * 只输出思考内容的回复必须算成功，而不是「空响应」。
+     *
+     * 这条测试此前断言的是相反的行为（要求 Failed），把一个真实缺陷锁死成了「预期」：
+     * 推理模型（DeepSeek-R1 类）有时只产出 reasoningContent 而不给正文，
+     * 界面上用户能看到整段「推理思考过程」，却被告知「模型返回了空响应，执行失败」。
+     * 用户实测的报错就是这个。
+     */
     @Test
-    fun `reasoning without answer text does not complete the task`() = runBlocking {
+    fun `reasoning-only response completes instead of failing`() = runBlocking {
+        val events = mutableListOf<String>()
         val outcome = runner.run(
             toolsEnabled = true,
             callProvider = {
                 TurnProviderOutcome.Success(ChatResult(content = null, toolCalls = emptyList(), reasoningContent = "thinking"), "")
+            },
+            persistAssistant = { events += "persisted" },
+            consumeFollowUps = { 0 },
+            enforceToolLimit = { calls, _ -> calls },
+            executeTools = { _, _ -> error("must not execute") },
+        )
+
+        assertEquals(TurnOutcome.Complete, outcome)
+        assertEquals("思考内容也要落库，否则界面连思考过程都看不到", listOf("persisted"), events)
+    }
+
+    /** 真·空响应（无正文、无思考、无工具调用）仍然必须失败关闭。 */
+    @Test
+    fun `truly empty response still fails closed`() = runBlocking {
+        val outcome = runner.run(
+            toolsEnabled = true,
+            callProvider = {
+                TurnProviderOutcome.Success(ChatResult(content = null, toolCalls = emptyList()), "")
+            },
+            persistAssistant = {},
+            consumeFollowUps = { 0 },
+            enforceToolLimit = { calls, _ -> calls },
+            executeTools = { _, _ -> error("must not execute") },
+        )
+
+        assertEquals(TurnOutcome.Failed("模型返回了空响应；本轮未收到可展示的答复或工具调用"), outcome)
+    }
+
+    /** 空字符串的 reasoning 不算内容，不能拿它绕过失败关闭。 */
+    @Test
+    fun `blank reasoning is not treated as content`() = runBlocking {
+        val outcome = runner.run(
+            toolsEnabled = true,
+            callProvider = {
+                TurnProviderOutcome.Success(ChatResult(content = null, toolCalls = emptyList(), reasoningContent = "   "), "")
             },
             persistAssistant = {},
             consumeFollowUps = { 0 },

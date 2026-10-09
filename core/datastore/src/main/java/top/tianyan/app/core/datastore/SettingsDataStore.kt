@@ -323,6 +323,36 @@ class SettingsDataStore @Inject constructor(
         }
     }
 
+    /**
+     * 外观设置的一次性同步快照。
+     *
+     * 为什么要这个：主题风格、壁纸、字号缩放三项此前都用
+     * `collectAsStateWithLifecycle(initialValue = 默认值)` 读取，于是首帧必然按
+     * 「玄同 + 无壁纸 + 缩放 1.0」布局，等 DataStore 读完后整棵树再按真实值重排一次。
+     * 用户看到的就是「启动时界面是错的，过一会儿自己好了」——
+     * 澄明主题下尤其明显（背景层与覆盖层渐变都会突变）。
+     *
+     * 在 setContent 之前同步读一次，首帧就用真实值，从根上消掉这次跳变。
+     * 只在冷启动读一次，不在每帧调用；读失败时回落到与 Flow 相同的默认值。
+     */
+    suspend fun appearanceSnapshot(): AppearanceSnapshot {
+        val prefs = runCatching { context.settingsDataStore.data.first() }.getOrNull()
+        return AppearanceSnapshot(
+            themeMode = prefs?.get(themeModeKey) ?: "system",
+            themeStyle = prefs?.get(themeStyleKey) ?: "xuantong",
+            chengmingBackgroundUri = prefs?.get(chengmingBackgroundUriKey),
+            appFontScale = (prefs?.get(appFontScaleKey) ?: 1.0f).coerceIn(0.8f, 1.3f),
+        )
+    }
+
+    /** 外观设置快照；字段与各自的 Flow 同源同默认值，避免两处口径漂移。 */
+    data class AppearanceSnapshot(
+        val themeMode: String,
+        val themeStyle: String,
+        val chengmingBackgroundUri: String?,
+        val appFontScale: Float,
+    )
+
     val themeMode: Flow<String> = context.settingsDataStore.data.map { preferences ->
         preferences[themeModeKey] ?: "system"
     }

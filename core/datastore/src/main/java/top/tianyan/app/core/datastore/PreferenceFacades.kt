@@ -10,6 +10,14 @@ class AppearancePreferences @Inject constructor(private val store: SettingsDataS
     val themeStyle get() = store.themeStyle
     val chengmingBackgroundUri get() = store.chengmingBackgroundUri
     val appFontScale get() = store.appFontScale
+
+    /**
+     * 冷启动时同步读一次外观设置，供首帧直接使用。
+     *
+     * 不这样做的话，主题/壁纸/缩放都要等 DataStore 异步回调，
+     * 首帧按默认值渲染、随后整棵树重排一次，表现为「启动时界面不对，过一会自己好了」。
+     */
+    suspend fun appearanceSnapshot() = store.appearanceSnapshot()
 }
 
 @Singleton
