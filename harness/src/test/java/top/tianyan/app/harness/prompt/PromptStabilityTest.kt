@@ -7,25 +7,26 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 提示词分层守卫。
+ * 提示词分层守卫：逐轮变化的内容不得留在可缓存前缀里。
  *
- * 这组断言守的是「前缀缓存不会被逐轮内容污染」这件事本身，
- * 而不是某个具体实现细节。背景与代价计算见 [PromptParts] 的注释。
+ * ## 边界说明（重要）
  *
- * 为什么用源码断言而不是只跑行为：
- * `SystemPromptBuilder` 依赖 `android.content.Context`，本机 aarch64 上
- * Robolectric 不可用，纯行为测试在本地跑不起来。而这条界线一旦被越过
- * （有人把逐轮变化的块放回 frozen），表现是**静默的**缓存失效 ——
- * 不会报错，只会每轮多花钱。所以这里用结构断言把它钉死。
+ * 这里只做**分节归属**的源码断言，它管的是「recallSection 有没有被放进
+ * dynamic 组」这一件事。
+ *
+ * 它**不能**证明请求字节真的稳定 —— 那由
+ * [top.tianyan.app.harness.session.RequestPrefixInvariantTest] 负责，
+ * 后者直接对 `HarnessApiMapper` 的真实渲染结果做断言。
+ *
+ * 保留源码断言的唯一理由：`SystemPromptBuilder` 依赖
+ * `android.content.Context`，本机 aarch64 上 Robolectric 不可用，
+ * 纯行为测试在本地跑不起来；而把逐轮块放回 frozen 的表现是**静默的**
+ * 缓存失效（不报错，只是每轮多花钱）。两道守卫互补，缺一不可。
  */
 class PromptStabilityTest {
 
     private val builderSource = File(
         "src/main/java/top/tianyan/app/harness/prompt/SystemPromptBuilder.kt",
-    )
-
-    private val assemblerSource = File(
-        "src/main/java/top/tianyan/app/harness/session/ApiContextAssembler.kt",
     )
 
     /** 依赖当轮输入、必须在 frozen 之外的四块。 */
@@ -39,7 +40,6 @@ class PromptStabilityTest {
     @Test
     fun sourcesAreReachable() {
         assertTrue("找不到 SystemPromptBuilder.kt：${builderSource.absolutePath}", builderSource.isFile)
-        assertTrue("找不到 ApiContextAssembler.kt：${assemblerSource.absolutePath}", assemblerSource.isFile)
     }
 
     /** 四块逐轮变化的内容必须落在 dynamic 组，不能留在 frozen。 */
@@ -73,43 +73,6 @@ class PromptStabilityTest {
                 frozenGroup.contains(name),
             )
         }
-    }
-
-    /** 组装器必须真正使用拆分结果：system 用 frozen，尾部用 dynamic。 */
-    @Test
-    fun assemblerKeepsSystemPromptFrozenAndAppendsTail() {
-        val text = assemblerSource.readText()
-        assertTrue(
-            "组装器必须用 buildParts(...).frozenText() 作为 system prompt",
-            text.contains("frozenText()"),
-        )
-        assertTrue(
-            "组装器必须把 dynamicText() 作为尾部内容注入",
-            text.contains("dynamicText()"),
-        )
-        // 旧的「一次性 build 出整段 system prompt」写法必须消失，
-        // 否则动态块会重新混进位置 0。
-        assertFalse(
-            "组装器不应再调用会被塞进 system 的整体 build()",
-            Regex("""systemPromptBuilder\.build\(""").containsMatchIn(text),
-        )
-    }
-
-    /** 尾部注入的具体位置：挂在最后一条 user 消息之后，而不是新建 system 消息。 */
-    @Test
-    fun dynamicTailIsAppendedToTheLastUserMessage() {
-        val text = assemblerSource.readText()
-        val tailIndex = text.indexOf("dynamicTail.isNotEmpty()")
-        assertTrue("组装器里找不到 dynamicTail 的注入点", tailIndex >= 0)
-        val context = text.substring(tailIndex, minOf(text.length, tailIndex + 900))
-        assertTrue(
-            "尾部必须挂到最后一条 user 消息上（只追加尾部才不破坏前缀缓存）",
-            context.contains("""indexOfLast { it.role == "user" }"""),
-        )
-        assertFalse(
-            "尾部不得作为新的 system 消息插入——那会改变位置 0 之后的字节",
-            context.contains("""role = "system""""),
-        )
     }
 
     /**

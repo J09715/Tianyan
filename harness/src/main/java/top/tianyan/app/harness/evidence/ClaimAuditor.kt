@@ -69,9 +69,9 @@ object ClaimAuditor {
         // 规则 1：没有成功/类型检查类声称，就没什么可审的。
         if (!claimsTest && !claimsTypecheck) return AuditResult(false, false, "")
 
-        // 规则 2：没改过代码就不审。文档/报告交付里出现的「全绿」通常是转述，不是自吹。
-        // BREAK2: rule 2 disabled
-        // if (state.filesModified.isEmpty()) return AuditResult(false, false, "")
+        // 规则 2：没改过代码就不审。文档/报告交付里出现的「全绿」通常是转述，不是自吹；
+        // 硬拦会产生大量误报，把真实告警淹没。
+        if (state.filesModified.isEmpty()) return AuditResult(false, false, "")
 
         val fresh = state.verifications.filter { it.at >= state.lastMutationAt }
         val freshPassing = fresh.filter { it.passed }
