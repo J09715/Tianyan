@@ -114,8 +114,10 @@ cd*.png
 cf*.png
 *_ocr.txt
 *_tsv.tsv
-# evidence 目录不入库（本机存证）
-evidence/
+# 本机存证目录不入库。**必须锚定到仓库根**：原来的 `evidence/` 会匹配任意层级
+# 同名目录，把 harness 的 evidence 源码包（交付闸门/证据追踪）一起吞掉 ——
+# 表现为文件本地存在、编译通过、但推送时静默缺失。
+/evidence/
 # taixu 上游对比参考（不入库）
 taixu-src/
 # AndroidX Baseline Profile 生成物（含过期类名引用，不入库）

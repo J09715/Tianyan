@@ -60,7 +60,33 @@ class SystemPromptBuilder @Inject constructor(
         projectTypeOverride: String = "",
         latestUserMessage: String = "",
         mcpTools: List<McpToolInfo> = emptyList(),
-    ): String {
+        /**
+         * 是否包含「每轮/每用户边界变化」的块。
+         *
+         * 为什么要有这个开关：系统提示位于请求位置 0，前缀缓存是精确前缀匹配——
+         * 位置 0 一旦有字节变化，其后的**整段对话历史**都要重新 prefill。
+         * 而 recallSection / routedBlocks / skillSection / planSection 都依赖
+         * 当轮用户消息或计划推进状态，天然逐轮变化。
+         *
+         * 传 false 得到「会话内常量」部分（可缓存），传 true 得到包含动态块的
+         * 完整结果（`build` 的旧行为，供测试与兼容保留）。
+         * 动态块请改用 [buildDynamicTail] 拼到消息尾部，见 ApiContextAssembler。
+         */
+        includeDynamic: Boolean = true,
+    ): String = runCatching { buildParts(workspacePath, toolCallMode, mentionedNames, sessionId, projectTypeOverride, latestUserMessage, mcpTools) }
+        .map { parts -> if (includeDynamic) parts.allText() else parts.frozenText() }
+        .getOrElse { error -> throw error }
+
+    /** 单次组装，返回已按缓存安全性拆分的分节；[build] 与尾部注入共用这一遍计算。 */
+    suspend fun buildParts(
+        workspacePath: String,
+        toolCallMode: ToolCallMode = ToolCallMode.NATIVE,
+        mentionedNames: Set<String> = emptySet(),
+        sessionId: String = "",
+        projectTypeOverride: String = "",
+        latestUserMessage: String = "",
+        mcpTools: List<McpToolInfo> = emptyList(),
+    ): PromptParts {
         val distroId = runCatching { settingsDataStore.selectedDistribution.first() }.getOrDefault("debian")
         val distroName = DistroCatalog.displayName(distroId)
         val pkgManager = DistroCatalog.packageManagerCommand(distroId)
@@ -71,6 +97,7 @@ class SystemPromptBuilder @Inject constructor(
         val allSkills = runCatching { skillRepository.allSkills.first() }.getOrDefault(emptyList())
         val selectedSkills = selectSkills(allSkills, mentionedNames)
 
+        // 技能段依赖当轮 @ 提及，属于动态内容（见文件末尾的 frozen/dynamic 拆分）。
         val skillSection = if (selectedSkills.isNotEmpty()) {
             "## 当前生效的专精技能指导规则 (Active Skills)\n\n" + selectedSkills.joinToString("\n\n") { skill ->
                 "### [专精技能] " + skill.name + " (" + skill.category + ")\n" + skill.systemPrompt.trim()
@@ -226,23 +253,94 @@ class SystemPromptBuilder @Inject constructor(
             activePlanExists = activePlanExists,
         ).joinToString("\n\n") { block -> promptAssets.read(block.assetPath) }
 
-        return listOf(
-            basePrompt,
-            toolsSection,
-            prootSection,
-            privilegeSection,
-            routedBlocks,
-            installedToolsSection,
-            mcpCapabilitySection,
-            pinnedSection,
-            recallSection,
-            planSection,
-            subagentSection,
-            toolCallSection,
-            workspaceGuidance,
-            workspaceParts?.projectContext.orEmpty(),
-            thinkingLanguageSection,
-        ).filter { it.isNotBlank() }.joinToString("\n\n") { it.trim() }
+        // ── 可缓存前缀 / 动态尾部 拆分 ────────────────────────────────────────
+        //
+        // 为什么要拆：system prompt 位于请求位置 0，而前缀缓存是**精确前缀匹配** ——
+        // 位置 0 一旦有字节变化，其后【整段对话历史】都要重新 prefill，成本随会话
+        // 长度线性增长（不是一次性的 8k 静态前缀）。
+        //
+        // 而下面这四块天然逐轮变化：
+        //  · skillSection    —— 依赖当轮 @ 提及
+        //  · routedBlocks     —— 依赖当轮用户消息里的信号词与计划状态
+        //  · recallSection    —— 按当轮用户消息检索记忆
+        //  · planSection      —— 计划每推进一步就变
+        //
+        // 它们原本夹在中间，导致其后所有块（含 workspaceGuidance 等）
+        // 连带失效。现在把它们抽到 dynamic 组，由 ApiContextAssembler 以
+        // 「user 消息尾部追加」的方式注入 —— 尾部追加不破坏已缓存前缀。
+        return PromptParts(
+            frozen = listOf(
+                basePrompt,
+                toolsSection,
+                prootSection,
+                privilegeSection,
+                installedToolsSection,
+                mcpCapabilitySection,
+                pinnedSection,
+                subagentSection,
+                toolCallSection,
+                workspaceGuidance,
+                workspaceParts?.projectContext.orEmpty(),
+                thinkingLanguageSection,
+            ),
+            dynamic = listOf(
+                routedBlocks,
+                skillSection,
+                recallSection,
+                planSection,
+            ),
+        )
+    }
+
+    /**
+     * 组装「可安全缓存」的会话常量前缀。
+     *
+     * 同一会话内，只要 [workspacePath] / [toolCallMode] / [projectTypeOverride]
+     * 不变，返回值应**逐字节相同** —— 这是 PromptStabilityTest 的断言对象。
+     * 注意 pinned 记忆与已安装工具清单也在此列：它们只在用户显式修改时变化，
+     * 变化时重建前缀是可接受的代价。
+     */
+    suspend fun buildFrozen(
+        workspacePath: String,
+        toolCallMode: ToolCallMode = ToolCallMode.NATIVE,
+        sessionId: String = "",
+        projectTypeOverride: String = "",
+        mcpTools: List<McpToolInfo> = emptyList(),
+    ): String = buildParts(
+        workspacePath = workspacePath,
+        toolCallMode = toolCallMode,
+        mentionedNames = emptySet(),
+        sessionId = sessionId,
+        projectTypeOverride = projectTypeOverride,
+        latestUserMessage = "",
+        mcpTools = mcpTools,
+    ).frozenText()
+
+    /**
+     * 组装「每轮/每用户边界可变」的尾部内容，追加到当前 user 消息之后。
+     *
+     * 放在 user 消息尾部而不是 system prompt 里，是因为尾部追加不会使
+     * 已缓存的请求前缀失效 —— 这是本设计存在的唯一理由。
+     */
+    suspend fun buildDynamicTail(
+        workspacePath: String,
+        toolCallMode: ToolCallMode = ToolCallMode.NATIVE,
+        mentionedNames: Set<String> = emptySet(),
+        sessionId: String = "",
+        projectTypeOverride: String = "",
+        latestUserMessage: String = "",
+        mcpTools: List<McpToolInfo> = emptyList(),
+    ): String {
+        val tail = buildParts(
+            workspacePath = workspacePath,
+            toolCallMode = toolCallMode,
+            mentionedNames = mentionedNames,
+            sessionId = sessionId,
+            projectTypeOverride = projectTypeOverride,
+            latestUserMessage = latestUserMessage,
+            mcpTools = mcpTools,
+        ).dynamicText()
+        return if (tail.isBlank()) "" else "<context-update>\n$tail\n</context-update>"
     }
 
     private suspend fun workspacePromptParts(

@@ -14,6 +14,12 @@ sealed interface TurnOutcome {
         val effectiveToolCallCount: Int,
         val toolsHadSuccess: Boolean,
         val followUpCount: Int = 0,
+        /**
+         * 交付闸门/声称审计要求模型补做的动作说明。
+         * 非空表示本轮「继续」不是因为有工具调用，而是因为闸门否决了收尾，
+         * HarnessLoop 需要把它写成一条会话内消息，让模型看到自己为什么还没结束。
+         */
+        val gateHint: String? = null,
     ) : TurnOutcome
     data class Failed(val message: String) : TurnOutcome
 }
@@ -35,6 +41,11 @@ class TurnRunner @Inject constructor(
         consumeFollowUps: suspend () -> Int,
         enforceToolLimit: suspend (List<ApiToolCallSpec>, ChatResult) -> List<ApiToolCallSpec>,
         executeTools: suspend (List<ApiToolCallSpec>, ChatResult) -> Boolean,
+        /**
+         * 收尾前的交付闸门：入参是本轮助手的可见正文，返回非空即表示「不要收尾，让模型补做」。
+         * 返回 null 表示放行完成。默认实现始终放行——不注入闸门时行为与改动前一致。
+         */
+        gateBeforeComplete: suspend (String) -> String? = { null },
     ): TurnOutcome {
         val provider = callProvider()
         if (provider is TurnProviderOutcome.Failed) return TurnOutcome.Failed(provider.message)
@@ -61,15 +72,24 @@ class TurnRunner @Inject constructor(
         }
         if (normalized.toolCalls.isEmpty()) {
             val followUpCount = consumeFollowUps()
-            return if (followUpCount == 0) {
-                TurnOutcome.Complete
-            } else {
-                TurnOutcome.Continue(
+            if (followUpCount > 0) {
+                return TurnOutcome.Continue(
                     effectiveToolCallCount = 0,
                     toolsHadSuccess = true,
                     followUpCount = followUpCount,
                 )
             }
+            // 闸门必须在 follow-up 之后、Complete 之前：有排队消息时本来就会继续，
+            // 此时再叠加闸门提示只会重复催促。
+            val gateHint = gateBeforeComplete(normalized.displayText)
+            if (gateHint != null) {
+                return TurnOutcome.Continue(
+                    effectiveToolCallCount = 0,
+                    toolsHadSuccess = true,
+                    gateHint = gateHint,
+                )
+            }
+            return TurnOutcome.Complete
         }
 
         val effectiveCalls = enforceToolLimit(normalized.toolCalls, normalized.result)

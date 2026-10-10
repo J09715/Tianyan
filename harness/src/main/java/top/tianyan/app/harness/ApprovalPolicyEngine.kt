@@ -80,7 +80,10 @@ class ApprovalPolicyEngine @Inject constructor(
         }
         if (tool == HarnessTool.READ || tool == HarnessTool.MEMORY || tool == HarnessTool.PLAN ||
             tool == HarnessTool.SCRATCHPAD || tool == HarnessTool.HISTORY_SEARCH || tool == HarnessTool.HISTORY_READ ||
-            tool == HarnessTool.LOAD_RULE || tool == HarnessTool.ASK_USER
+            tool == HarnessTool.LOAD_RULE || tool == HarnessTool.ASK_USER ||
+            // verify 与只读组同档：它是交付流程的收尾动作，卡审批会让模型直接跳过验证去编造结论，
+            // 闸门（DeliveryGate/ClaimAuditor）反而失去唯一的证据来源。
+            tool == HarnessTool.VERIFY
         ) {
             return ApprovalDecision(false)
         }
@@ -129,7 +132,7 @@ class ApprovalPolicyEngine @Inject constructor(
             }
             HarnessTool.READ, HarnessTool.MEMORY, HarnessTool.PLAN, HarnessTool.SCRATCHPAD,
             HarnessTool.HISTORY_SEARCH, HarnessTool.HISTORY_READ, HarnessTool.SUBAGENT, HarnessTool.LOAD_RULE,
-            HarnessTool.REDTEAM, HarnessTool.ASK_USER -> ApprovalDecision(false)
+            HarnessTool.REDTEAM, HarnessTool.ASK_USER, HarnessTool.VERIFY -> ApprovalDecision(false)
         }
     }
 

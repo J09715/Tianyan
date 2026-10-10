@@ -73,7 +73,8 @@ fun ToolDiffView(
             HarnessTool.EDIT -> EditToolDiff(call, result, workspace, onOpenFile)
             HarnessTool.WRITE -> WriteToolDiff(call, result, workspace, onOpenFile)
             HarnessTool.READ -> ReadToolDiff(call, result, workspace, onOpenFile)
-            HarnessTool.BASE -> BaseToolDiff(call, result)
+            // verify 与 base 同为「命令 + 退出码」形态，复用命令卡片展示。
+            HarnessTool.BASE, HarnessTool.VERIFY -> BaseToolDiff(call, result)
             HarnessTool.PROCESS, HarnessTool.HOST, HarnessTool.DOWNLOAD, HarnessTool.MEMORY, HarnessTool.PLAN, HarnessTool.SCRATCHPAD,
             HarnessTool.HISTORY_SEARCH, HarnessTool.HISTORY_READ, HarnessTool.BUILD_SCRIPT, HarnessTool.SUBAGENT, HarnessTool.MCP,
             HarnessTool.LOAD_RULE, HarnessTool.REDTEAM, HarnessTool.ASK_USER -> BaseToolDiff(call, result)

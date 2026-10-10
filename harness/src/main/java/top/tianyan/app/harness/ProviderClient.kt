@@ -1167,6 +1167,15 @@ class ProviderClient @Inject constructor(
             ),
             ApiToolDefinition(
                 function = ApiFunctionDefinition(
+                    name = "verify",
+                    description = "在 Debian Linux 沙箱中执行一条验证命令，并把结果登记为交付证据（测试 / 构建 / 类型检查）。只有当命令真正运行且退出码为 0 时，才算作「已验证」；验证失败会被记为本回合的未认领失败，必须修复后才能声称完成。可与 base 执行同样的命令，但 base 不会留下验证证据。任何编辑代码后的收尾都应当用它跑一次相关验证。",
+                    parameters = Json.parseToJsonElement(
+                        """{"type":"object","properties":{"command":{"type":"string","description":"要运行的验证命令，例如 ./gradlew :app:testDebugUnitTest 或 tsc --noEmit"},"cwd":{"type":"string","description":"工作目录；关联工作区时默认使用工作区，否则为 /root"}},"required":["command"]}""",
+                    ).jsonObject,
+                ),
+            ),
+            ApiToolDefinition(
+                function = ApiFunctionDefinition(
                     name = "base",
                     description = "在 Debian Linux 沙箱中执行前台 shell 命令，返回退出码/stdout/stderr。用于安装软件、运行脚本、检查状态和执行构建。默认超时由用户在 Agent 设置中配置；可用 timeout_seconds 为单次调用指定 1-3600 秒。常驻服务不要使用 nohup 或 &，应改用 process 工具。",
                     parameters = Json.parseToJsonElement(

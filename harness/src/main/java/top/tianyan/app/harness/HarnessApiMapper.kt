@@ -6,7 +6,19 @@ package top.tianyan.app.harness
 internal object HarnessApiMapper {
     fun toApiMessage(message: HarnessMessage): ApiMessage = when (message) {
         is CapabilityEvent -> ApiMessage(role = "system", content = null)
-        is UserMessage -> ApiMessage(role = "user", content = message.text, imageUrls = message.imageUrls)
+        is UserMessage -> ApiMessage(
+            role = "user",
+            // 动态上下文尾部取自消息自身的**持久化字段**，不是渲染期现算。
+            //
+            // 这是前缀缓存的硬前提：provider 按精确前缀匹配计费，第 N+1 轮请求的
+            // 前 |请求 N| 字节必须与请求 N 完全一致。若尾部在渲染期临时拼接，
+            // 下一轮这条消息成为历史消息时尾部消失、字节改变 —— 断裂点只是从
+            // system 位置 0 搬到这条消息，其后整段历史照样全量 prefill。
+            //
+            // 持久化字段让渲染成为「已存状态的纯函数」：字段不变则字节不变。
+            content = renderUserContent(message.text, message.contextTail),
+            imageUrls = message.imageUrls,
+        )
         is AssistantText -> ApiMessage(
             role = "assistant",
             content = message.text,
@@ -41,6 +53,7 @@ internal object HarnessApiMapper {
             lower == "read" -> HarnessTool.READ
             lower == "write" -> HarnessTool.WRITE
             lower == "edit" -> HarnessTool.EDIT
+            lower == "verify" -> HarnessTool.VERIFY
             lower == "process" -> HarnessTool.PROCESS
             lower == "host" -> HarnessTool.HOST
             lower == "download" -> HarnessTool.DOWNLOAD
@@ -63,6 +76,7 @@ internal object HarnessApiMapper {
         HarnessTool.READ -> "read"
         HarnessTool.WRITE -> "write"
         HarnessTool.EDIT -> "edit"
+        HarnessTool.VERIFY -> "verify"
         HarnessTool.BASE -> "base"
         HarnessTool.PROCESS -> "process"
         HarnessTool.HOST -> "host"
@@ -79,4 +93,17 @@ internal object HarnessApiMapper {
         HarnessTool.REDTEAM -> "redteam"
         HarnessTool.ASK_USER -> "ask_user_question"
     }
+
+    /**
+     * 用户消息正文 + 持久化的动态上下文尾部 → 最终 content。
+     *
+     * 纯函数：给定同样的 [text] 与 [tail]，永远产出同样的字节。
+     * 这是前缀不变式的落点 —— 请求字节只由已持久化的状态决定，
+     * 不受当前轮的语气、内存状态或渲染时机影响。
+     *
+     * [tail] 为空时不追加任何内容（包括分隔符），
+     * 否则历史消息会因为多出两个换行而与上一轮不同。
+     */
+    internal fun renderUserContent(text: String, tail: String): String =
+        if (tail.isBlank()) text else text.trimEnd() + "\n\n" + tail
 }

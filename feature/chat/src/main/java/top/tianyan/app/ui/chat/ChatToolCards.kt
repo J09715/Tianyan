@@ -325,6 +325,7 @@ internal fun toolName(tool: HarnessTool, rawToolName: String? = null): String {
         HarnessTool.READ -> "read"
         HarnessTool.WRITE -> "write"
         HarnessTool.EDIT -> "edit"
+        HarnessTool.VERIFY -> "verify"
         HarnessTool.BASE -> "base"
         HarnessTool.PROCESS -> "process"
         HarnessTool.HOST -> "host"

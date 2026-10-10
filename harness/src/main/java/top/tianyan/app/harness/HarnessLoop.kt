@@ -117,6 +117,10 @@ class HarnessLoop @Inject constructor(
     private val turnRunner: TurnRunner,
     private val rewindController: top.tianyan.app.harness.checkpoint.RewindController,
     private val skillDistillationManager: top.tianyan.app.harness.skill.SkillDistillationManager,
+    /** 交付证据账本：闸门与声称审计的唯一事实来源。 */
+    private val evidenceTracker: top.tianyan.app.harness.evidence.EvidenceTracker,
+    /** 闸门义务账本：保证闸门每个回合最多把交付延长一轮，不会变成死循环。 */
+    private val gateObligationTracker: top.tianyan.app.harness.evidence.GateObligationTracker,
 ) {
     private val loopScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -1051,8 +1055,27 @@ class HarnessLoop @Inject constructor(
         taskId: String? = null,
     ): RunResult {
         sessionLoopDetectors.getOrPut(sessId) { ToolCallLoopDetector() }.reset()
+        // 新用户回合开账/清账：上个回合的绿不能替本回合作证；
+        // 闸门的一次性义务也在此重新武装，否则第二个回合闸门将永久失去否决权。
+        evidenceTracker.reset(sessId)
+        gateObligationTracker.reset(sessId)
         agentEventLogger.log(sessId, "UserPrompt", userText)
-        val userMessage = UserMessage(id = newId(), createdAt = now(), text = userText, imageUrls = imageUrls)
+        // 动态上下文尾部在**消息创建时**算一次并随消息持久化，此后不再重算。
+        //
+        // 为什么不能放到渲染期现算（这是我上一版的错误）：provider 前缀缓存按
+        // 精确前缀匹配计费，第 N+1 轮请求的前 |请求 N| 字节必须与请求 N 完全一致。
+        // 若尾部在渲染时临时拼接，这条消息下一轮成为历史消息、尾部消失，字节随之
+        // 改变 —— 断裂点只是从 system 位置 0 搬到这条消息，其后整段历史照样全量 prefill。
+        //
+        // 持久化后，渲染是「已存状态的纯函数」：同一条消息永远产出同样的字节。
+        val contextTail = computeContextTail(sessId, userText)
+        val userMessage = UserMessage(
+            id = newId(),
+            createdAt = now(),
+            text = userText,
+            imageUrls = imageUrls,
+            contextTail = contextTail,
+        )
         rewindController.beginTurn(sessId, userText, userMessage.id)
         val operationId = operationCoordinator.acceptRun(sessId, userMessage)
         taskId?.let { agentTaskStateMachine.checkpoint(it, operationId, 0, 0, "任务已受理") }
@@ -1216,11 +1239,18 @@ class HarnessLoop @Inject constructor(
                         metrics = metrics,
                     )
                 },
+                gateBeforeComplete = { displayText -> evaluateDeliveryGate(sessId, displayText) },
             )
             when (turn) {
                 is TurnOutcome.Failed -> return RunResult.Failed(turn.message)
                 TurnOutcome.Complete -> return RunResult.Completed
                 is TurnOutcome.Continue -> {
+                    // 闸门否决收尾：本轮没有工具调用，继续的唯一理由是让模型补做验证/纠正确认。
+                    // 提示必须落成真实的会话消息，下一轮的请求才会带上它。
+                    turn.gateHint?.let { hint ->
+                        appendDeliveryGateHint(sessId, hint)
+                        metrics.steeringInjected(1)
+                    }
                     // 连续失败熔断：当一轮内所有工具调用均失败时计数。
                     if (turn.effectiveToolCallCount > 0 && !turn.toolsHadSuccess) {
                         consecutiveFailures++
@@ -1763,6 +1793,84 @@ class HarnessLoop @Inject constructor(
         return queued.size
     }
 
+    /**
+     * 交付闸门：收尾前用证据账本判一次「现在能不能说完成」。
+     *
+     * 顺序与边界：
+     * 1. 闸门只看 [EvidenceState] 事实，不看模型措辞；措辞由 [ClaimAuditor] 单独审。
+     * 2. 两种否决理由（闸门红灯 / 声称不实）各自占用一次义务额度，
+     *    由 [GateObligationTracker] 一次性授权——这是「闸门不会无限续跑」的硬保证。
+     * 3. 额度用尽后一律放行完成：宁可交一次未验证的活，也不要死循环。
+     */
+    private suspend fun evaluateDeliveryGate(sessId: String, displayText: String): String? {
+        val state = evidenceTracker.state(sessId)
+        val verdict = top.tianyan.app.harness.evidence.DeliveryGate.evaluate(state)
+        if (!verdict.canDeliver) {
+            agentEventLogger.log(sessId, "DeliveryGateRed", verdict.reason)
+            if (gateObligationTracker.shouldContinueOnce(sessId, GATE_KEY_DELIVERY)) {
+                return "【交付闸门】${verdict.reason}" +
+                    (verdict.nextAction?.let { "\n下一步：$it" } ?: "")
+            }
+            // 额度用尽：放行。已记日志，交付是否可信由日志与证据账本自行说明。
+            agentEventLogger.log(sessId, "DeliveryGateExhausted", verdict.reason)
+            return null
+        }
+        val audit = top.tianyan.app.harness.evidence.ClaimAuditor.audit(displayText, state)
+        if (audit.blocked) {
+            agentEventLogger.log(sessId, "ClaimAuditBlocked", audit.message)
+            // 注意不要在提示里复述模型自己的声称：那等于给下一次请求埋一句现成的假结论。
+            if (gateObligationTracker.shouldContinueOnce(sessId, GATE_KEY_CLAIM)) {
+                return "【完成声称审计】${audit.message}"
+            }
+            agentEventLogger.log(sessId, "ClaimAuditExhausted", audit.message)
+            return null
+        }
+        if (audit.warning) agentEventLogger.log(sessId, "ClaimAuditWarning", audit.message)
+        return null
+    }
+
+    /**
+     * 把闸门提示写成一条会话内的用户角色消息。
+     *
+     * 为什么复用 UserMessage：它会被 [SessionMessageProjector] 持久化进消息树，
+     * 因此既出现在 UI 转写里，也会在下一轮请求中作为真实上下文送达模型——
+     * 只在内存里提示模型是无效的，模型看不到。
+     */
+    /**
+     * 计算本轮的动态上下文尾部（技能 / 规则路由 / 记忆检索 / 计划看板）。
+     *
+     * 只在 user 消息创建时调用一次，结果随消息持久化 —— 见调用点的注释。
+     * 失败时返回空串：尾部是增强信息，取不到不应阻断本轮对话。
+     */
+    private suspend fun computeContextTail(sessId: String, userText: String): String {
+        val sessionEntity = runCatching { sessionDao.findById(sessId) }.getOrNull() ?: return ""
+        val toolCallMode = sessionEntity.modelId
+            ?.let { runCatching { providerClient.resolveConfigured(it, sessionEntity.modelVariant) }.getOrNull() }
+            ?.toolCallMode ?: ToolCallMode.NATIVE
+        return runCatching {
+            systemPromptBuilder.buildDynamicTail(
+                workspacePath = sessionEntity.workspace.orEmpty(),
+                toolCallMode = toolCallMode,
+                mentionedNames = MentionExtractor.parse(userText),
+                sessionId = sessId,
+                projectTypeOverride = sessionEntity.projectType.orEmpty(),
+                latestUserMessage = userText,
+                mcpTools = emptyList(),
+            )
+        }.getOrElse { throwable ->
+            logger.w("计算动态上下文尾部失败（本轮不注入尾部）", throwable)
+            ""
+        }
+    }
+
+    private suspend fun appendDeliveryGateHint(sessId: String, hint: String) {
+        agentEventLogger.log(sessId, "DeliveryGateHint", hint)
+        messageProjector.append(
+            sessId,
+            UserMessage(id = newId(), createdAt = now(), text = hint, imageUrls = emptyList()),
+        )
+    }
+
     private fun repairTruncatedJson(raw: String): String {
         val trimmed = raw.trim()
         if (trimmed.isEmpty()) return "{}"
@@ -2042,6 +2150,9 @@ class HarnessLoop @Inject constructor(
             }
         const val RETRY_BACKOFF_MS = 1_000L
         const val RETRY_BACKOFF_SEC = 2L
+        /** 闸门义务的键：红灯与声称审计各占一次机会，互不挤占。 */
+        private const val GATE_KEY_DELIVERY = "delivery-gate"
+        private const val GATE_KEY_CLAIM = "claim-audit"
 
         /**
          * 可并发执行的只读/低风险工具白名单：互不共享可变状态（Room 由 SQLite 串行化写入）。

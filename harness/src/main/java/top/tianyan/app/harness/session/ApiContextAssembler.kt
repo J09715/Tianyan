@@ -51,19 +51,24 @@ class ApiContextAssembler @Inject constructor(
         val latestUserText = msgs.filterIsInstance<UserMessage>().lastOrNull()?.text.orEmpty()
         val mentionedNames = MentionExtractor.parse(latestUserText)
 
-        val rawSystemPrompt = if (!model.pureChatMode) {
-            systemPromptBuilder.build(
-                workspacePath,
-                toolCallMode,
-                mentionedNames,
-                sessId,
-                projectTypeOverride,
-                latestUserText,
+        // 系统提示只放「会话内常量」部分：它位于请求位置 0，前缀缓存是精确前缀匹配，
+        // 位置 0 一旦变化，其后整段对话历史都要重新 prefill。逐轮变化的块
+        // （技能/规则路由/记忆检索/计划看板）改走下方 dynamicTail，追加到最新
+        // user 消息尾部 —— 尾部追加不破坏已缓存前缀。
+        val parts = if (!model.pureChatMode) {
+            systemPromptBuilder.buildParts(
+                workspacePath = workspacePath,
+                toolCallMode = toolCallMode,
+                mentionedNames = mentionedNames,
+                sessionId = sessId,
+                projectTypeOverride = projectTypeOverride,
+                latestUserMessage = latestUserText,
                 mcpTools = model.dynamicMcpTools,
             )
         } else {
-            ""
+            null
         }
+        val rawSystemPrompt = parts?.frozenText().orEmpty()
         val systemPrompt = ContextWindowPolicy.fitSystemPrompt(rawSystemPrompt, budgetTokens)
         return buildList {
             if (systemPrompt.isNotEmpty()) {

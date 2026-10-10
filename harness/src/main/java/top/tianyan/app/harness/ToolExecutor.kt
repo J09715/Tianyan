@@ -69,6 +69,11 @@ class ToolExecutor @Inject constructor(
     private val embeddedAdbManager: EmbeddedAdbManager? = null,
     private val redTeamCoordinator: top.tianyan.app.harness.redteam.RedTeamCoordinator? = null,
     private val questionBroker: top.tianyan.app.harness.question.AgentQuestionBroker? = null,
+    /**
+     * 交付证据账本。可空：单元测试直接构造本类时不需要它，
+     * 传 null 时所有证据记录静默跳过，执行路径行为不变。
+     */
+    private val evidenceTracker: top.tianyan.app.harness.evidence.EvidenceTracker? = null,
 ) {
     @Inject
     lateinit var settingsDataStore: AgentPreferences
@@ -201,15 +206,20 @@ class ToolExecutor @Inject constructor(
                 val path = requireString(args, "path")
                 val offset = args["offset"]?.jsonPrimitive?.content?.trim()?.toIntOrNull()
                 val limit = args["limit"]?.jsonPrimitive?.content?.trim()?.toIntOrNull()
-                activeFileAccess.read(path, offset, limit).toToolOutput(actionName = "read")
+                val outcome = activeFileAccess.read(path, offset, limit).toToolOutput(actionName = "read")
+                // 只有真正读出内容才算「读过」：失败路径记证据会把「存在性探测」误当成依据。
+                if (outcome.first) evidenceTracker?.recordRead(sessionId, path)
+                outcome
             }
             HarnessTool.WRITE -> {
                 val path = requireString(args, "path")
                 val content = requireString(args, "content")
                 captureBeforeWrite(sessionId, activeFileAccess, path)
                 val linesAdded = content.lines().size
-                activeFileAccess.write(path, content)
+                val outcome = activeFileAccess.write(path, content)
                     .toToolOutput("已写入 $path\nDIFF_STAT: +$linesAdded -0", actionName = "write")
+                if (outcome.first) evidenceTracker?.recordModified(sessionId, path)
+                outcome
             }
             HarnessTool.EDIT -> {
                 val path = requireString(args, "path")
@@ -218,9 +228,12 @@ class ToolExecutor @Inject constructor(
                 captureBeforeWrite(sessionId, activeFileAccess, path)
                 val linesAdded = newText.lines().size
                 val linesDeleted = oldText.lines().size
-                activeFileAccess.edit(path, oldText, newText)
+                val outcome = activeFileAccess.edit(path, oldText, newText)
                     .toToolOutput("已修改 $path\nDIFF_STAT: +$linesAdded -$linesDeleted", actionName = "edit")
+                if (outcome.first) evidenceTracker?.recordModified(sessionId, path)
+                outcome
             }
+            HarnessTool.VERIFY -> executeVerify(args, workspace, sessionId)
             HarnessTool.BASE -> executeBase(args, workspace)
             HarnessTool.PROCESS -> executeProcess(args, workspace)
             HarnessTool.HOST -> executeHost(args, operationId, sessionId)
@@ -657,6 +670,39 @@ class ToolExecutor @Inject constructor(
             )
         }
         return parsed.takeIf { it.isNotEmpty() }
+    }
+
+    /**
+     * 验证工具：走与 base 完全相同的命令执行路径，唯一的差别是把结果登记为交付证据。
+     *
+     * 为什么必须复用同一路径而不是另起一套：模型已经会用 base 跑测试，
+     * 若 verify 的执行语义有偏差（超时、cwd、输出压缩不同），模型会得出「同一个命令两种结论」，
+     * 闸门与声称审计的证据就不再可信。
+     */
+    private suspend fun executeVerify(
+        args: JsonObject,
+        workspace: String,
+        sessionId: String,
+    ): Pair<Boolean, String> {
+        val command = requireString(args, "command").trim()
+        val (passed, rawOutput) = executeBase(args, workspace)
+        // 证据必须在返回前落账：闸门读的就是这里写下的 passed 与时间戳。
+        evidenceTracker?.recordVerification(
+            sessionId = sessionId,
+            record = top.tianyan.app.harness.evidence.VerificationRecord(
+                command = command,
+                passed = passed,
+                at = System.currentTimeMillis(),
+                summary = rawOutput,
+            ),
+        )
+        val verdict = if (passed) "验证通过：$command" else "验证失败：$command"
+        val note = if (passed) {
+            "\n已登记为交付证据：本命令的退出码为 0。"
+        } else {
+            "\n已登记为交付证据：本次验证失败，修复后必须重新运行验证；在此之前不得声称任务完成。"
+        }
+        return passed to "【$verdict】$note\n$rawOutput"
     }
 
     private suspend fun executeBase(args: JsonObject, workspace: String): Pair<Boolean, String> {
