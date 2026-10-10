@@ -187,6 +187,7 @@ fun ChatScreen(
     val attachedMentions by viewModel.attachedMentions.collectAsStateWithLifecycle()
     val queuedPrompts by viewModel.queuedPrompts.collectAsStateWithLifecycle()
     val sendMode by viewModel.sendMode.collectAsStateWithLifecycle()
+    val pendingQuestion by viewModel.pendingQuestion.collectAsStateWithLifecycle()
     val branches by viewModel.branches.collectAsStateWithLifecycle()
     val runtimeEvents by viewModel.runtimeEvents.collectAsStateWithLifecycle()
     val currentSessionId by viewModel.currentSessionId.collectAsStateWithLifecycle()
@@ -555,6 +556,9 @@ fun ChatScreen(
                     onRemoveQueuedPrompt = viewModel::removeQueuedPrompt,
                     onConvertToSteer = viewModel::convertQueuedPromptToSteer,
                     sendMode = sendMode,
+                    onSendModeChange = viewModel::setSendMode,
+                    pendingQuestion = pendingQuestion,
+                    onAnswerQuestion = viewModel::answerQuestion,
                     input = input,
                     onInputChanged = viewModel::onInputChanged,
                     onApplyCommand = viewModel::applySlashCommand,
@@ -1117,6 +1121,9 @@ private fun ChatPaneContent(
     onRemoveQueuedPrompt: (QueuedPrompt) -> Unit,
     onConvertToSteer: (QueuedPrompt) -> Unit = {},
     sendMode: ComposerSendMode,
+    onSendModeChange: (ComposerSendMode) -> Unit = {},
+    pendingQuestion: top.tianyan.app.harness.question.PendingQuestion? = null,
+    onAnswerQuestion: (List<top.tianyan.app.core.model.AgentQuestionAnswer>) -> Unit = {},
     input: String,
     onInputChanged: (String) -> Unit,
     onApplyCommand: (SlashCommandItem) -> Unit,
@@ -1267,6 +1274,9 @@ private fun ChatPaneContent(
             onSend = onSend,
             onStop = onStop,
             sendMode = sendMode,
+            onSendModeChange = onSendModeChange,
+            pendingQuestion = pendingQuestion,
+            onAnswerQuestion = onAnswerQuestion,
             matchingCommands = matchingCommands,
             onApplyCommand = onApplyCommand,
             matchingMentions = matchingMentions,

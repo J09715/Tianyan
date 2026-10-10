@@ -1,17 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
     <!--
-        Android Network Security Config 不支持按 CIDR/通配符放行 192.168.0.0/16。
-        因此网络层允许明文连接，再由各业务端点策略收口；MCP 目前仅允许
-        localhost/回环地址与 192.168.*，公网 MCP 仍强制 HTTPS。
-    -->
-    <!--
-        默认禁止明文流量。此前 base-config 为 true，等于对所有域名放行 HTTP，
-        中间人可直接降级 hijack 任意业务请求；改为 false 后仅下方白名单域可用明文。
-    -->
-    <base-config cleartextTrafficPermitted="false" />
+        为什么 base-config 必须是 true，而不能改成按域名收紧：
 
-    <!-- 豁免本地沙箱回环通信（HostBridge 7980、沙箱本地 Web 服务等）明文 HTTP -->
+        Android Network Security Config 只支持精确域名 + includeSubdomains，
+        **不支持 CIDR / IP 段 / 通配符**。而本应用的模型端点大量是局域网地址
+        （llama.cpp 192.168.x.x:8080、Ollama 192.168.x.x:11434、LM Studio、
+        vLLM，以及用户自建服务），这些地址无法预先枚举进 XML。
+
+        v0.18.8 曾把这里改成 false，白名单只留 localhost/127.0.0.1/::1/10.0.2.2。
+        结果是局域网模型端点全部被系统层拦死，OkHttp 抛
+        "CLEARTEXT communication to X not permitted by network security policy"，
+        用户侧表现为「获取不了模型列表」。那是功能回归，不是加固。
+
+        因此：网络层放行明文，真正收口在业务端点策略层——
+          · ProviderManager.isSafeBaseUrl()            模型端点准入
+          · McpHttpTransport.validatedMcpHttpEndpoint() MCP 端点准入
+            （仅 localhost / 回环 / 192.168.* 允许明文，公网 MCP 强制 HTTPS）
+        两层一致性由 NetworkSecurityPolicyConsistencyTest 守卫。
+    -->
+    <base-config cleartextTrafficPermitted="true" />
+
+    <!-- 本地沙箱回环通信（HostBridge 7980、沙箱本地 Web 服务等）显式豁免，
+         使这些地址不受将来上层策略调整影响。 -->
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="false">localhost</domain>
         <domain includeSubdomains="false">127.0.0.1</domain>

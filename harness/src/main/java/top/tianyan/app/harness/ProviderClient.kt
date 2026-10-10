@@ -1263,6 +1263,15 @@ class ProviderClient @Inject constructor(
                     ).jsonObject,
                 ),
             ),
+            ApiToolDefinition(
+                function = ApiFunctionDefinition(
+                    name = "ask_user_question",
+                    description = "向用户提问以取得确认、选择或补充缺失信息，然后等待作答再继续。需要用户拿主意、信息不足无法推进、或要让用户在若干方案间选择时用它，不要凭空猜测用户意图。一次调用可带多个问题，按顺序逐题呈现、可跳过。若推荐某选项，把它放在 options 第一位并在标签末尾加 \"(Recommended)\"。",
+                    parameters = Json.parseToJsonElement(
+                        """{"type":"object","properties":{"questions":{"type":"array","minItems":1,"maxItems":8,"description":"要问的问题列表，按顺序呈现","items":{"type":"object","properties":{"id":{"type":"string","description":"本问题的稳定标识，作答结果按它对应"},"question":{"type":"string","description":"问题正文"},"header":{"type":"string","description":"可选短标题，如「确认」「选择模式」"},"options":{"type":"array","description":"候选选项；省略则由用户自由文本作答。推荐项放第一位并在标签末尾加 \"(Recommended)\"","items":{"type":"object","properties":{"label":{"type":"string","description":"选项标签；推荐项末尾加 \"(Recommended)\""},"description":{"type":"string","description":"可选补充说明"}},"required":["label"]}},"multi_select":{"type":"boolean","description":"是否多选，默认 false"}},"required":["id","question"]}}},"required":["questions"]}""",
+                    ).jsonObject,
+                ),
+            ),
         )
 
         /** 组装静态基础工具 + 动态 MCP 插件工具 */

@@ -100,6 +100,7 @@ class HarnessLoop @Inject constructor(
     private val operationCoordinator: OperationCoordinator,
     private val recoveryManager: RecoveryManager,
     private val promptQueueManager: PromptQueueManager,
+    private val questionBroker: top.tianyan.app.harness.question.AgentQuestionBroker,
     private val sessionTracker: CurrentSessionTracker,
     private val stateMirrors: SessionStateMirrors,
     private val messageProjector: SessionMessageProjector,
@@ -230,6 +231,23 @@ class HarnessLoop @Inject constructor(
     }
 
     val error: StateFlow<String?> get() = stateMirrors.error
+
+    /** 由 UI 侧上报一条可读提示（如提问作答已失效），复用会话级错误展示通道。 */
+    fun reportUserFacingNotice(sessionId: String, message: String) {
+        stateMirrors.setError(sessionId.ifBlank { sessionTracker.currentSessionId.value }, message)
+    }
+
+    /**
+     * 取消会话时唤醒本会话挂起的提问，以「全部跳过」结束等待。
+     *
+     * broker 是单例，但提问归属某个会话；只对本会话的提问收尾，
+     * 避免取消 A 会话时误伤 B 会话正在等待的作答。
+     */
+    private fun settlePendingQuestionForCancel(sessId: String) {
+        val pending = questionBroker.pending.value ?: return
+        if (pending.sessionId != sessId) return
+        questionBroker.cancel(pending.callId)
+    }
 
     /** 当前执行状态（供 UI / 后台通知显示进度）。运行结束或出错时置空。 */
     val status: StateFlow<String?> get() = stateMirrors.status
@@ -677,6 +695,14 @@ class HarnessLoop @Inject constructor(
                     .mapNotNull { it.second.taskId }
                 PromptQueue.entries.forEach { promptQueueManager.clear(sessId, it) }
                 queuedTaskIds.forEach { agentTaskStateMachine.markCancelled(it, "会话运行已停止") }
+                // 挂起中的提问必须显式唤醒：job.cancel() 只让协程进入取消态，
+                // ask() 的 finally 要等它真正被调度才会清掉 pending 状态，
+                // 期间提问卡片会留在界面上，用户点了也提交不进去。
+                //
+                // 注意：必须放在 sessionJobs[...] 之前——withLock 的返回值是
+                // 这个 lambda 的最后一行表达式，插在末尾会让 job 变成 Unit，
+                // 后面的 job?.cancelAndJoin() 就永远不生效（取消整个失效）。
+                this@HarnessLoop.settlePendingQuestionForCancel(sessId)
                 sessionJobs[sessId]?.also { it.cancel() }
             }
             job?.cancelAndJoin()

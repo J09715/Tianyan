@@ -68,6 +68,7 @@ class ToolExecutor @Inject constructor(
     private val dualAgentCoordinator: top.tianyan.app.harness.dual.DualAgentCoordinator? = null,
     private val embeddedAdbManager: EmbeddedAdbManager? = null,
     private val redTeamCoordinator: top.tianyan.app.harness.redteam.RedTeamCoordinator? = null,
+    private val questionBroker: top.tianyan.app.harness.question.AgentQuestionBroker? = null,
 ) {
     @Inject
     lateinit var settingsDataStore: AgentPreferences
@@ -121,6 +122,19 @@ class ToolExecutor @Inject constructor(
                         approvalRequestId = request.id,
                     )
                 }
+            }
+            // 子智能体等后台 Lane 没有可作答的 UI 通道（allowApprovalRequest=false），
+            // 放行提问会让协程永久悬挂。对齐 DSH 的 DELEGATED_CALLER：明确拒绝，
+            // 并引导子智能体把待定问题写进最终结果，交由主智能体询问用户。
+            if (toolCall.tool == HarnessTool.ASK_USER && !allowApprovalRequest) {
+                return ToolResult(
+                    id = UUID.randomUUID().toString(),
+                    createdAt = now,
+                    toolCallId = toolCall.id,
+                    success = false,
+                    output = "后台 Lane（子智能体）无法向用户提问：没有可作答的界面通道。" +
+                        "请把需要用户拍板的问题或选项写进你的最终结果，交由主智能体向用户询问。",
+                )
             }
             executeTool(toolCall.tool, toolCall.args, toolCall.rawToolName, sessionId, workspace, progressReporter, operationId)
         } catch (cancellation: CancellationException) {
@@ -225,6 +239,7 @@ class ToolExecutor @Inject constructor(
             HarnessTool.MCP -> mcpManager?.executeTool(rawToolName ?: "mcp", args, workspace) ?: (false to "未初始化 MCP 管理器")
             HarnessTool.REDTEAM -> redTeamCoordinator?.execute(args, sessionId)
                 ?: (false to "红队协调器未初始化")
+            HarnessTool.ASK_USER -> executeAskUserQuestion(args, sessionId)
             HarnessTool.LOAD_RULE -> {
                 val rule = requireString(args, "rule")
                 val content = promptRouter?.loadRule(rule)
@@ -580,6 +595,68 @@ class ToolExecutor @Inject constructor(
         is ToolCall -> "工具调用 ${message.rawToolName ?: message.tool}: ${message.args}" +
             if (full) "\nreasoning:\n${message.reasoning.orEmpty().take(MAX_HISTORY_READ_OUTPUT)}" else ""
         is ToolResult -> "工具结果：${message.output.take(if (full) MAX_HISTORY_READ_OUTPUT else 240)}"
+    }
+
+    /**
+     * 智能体向用户提问：解析 questions 数组 → 挂起等待作答 → 以紧凑 JSON 回传。
+     *
+     * 为什么回传原始标签而非剥离后的显示标签：模型是按自己给出的标签理解作答的，
+     * 把 "(Recommended)" 摘掉会让它认不出自己推荐的选项。
+     *
+     * 取消语义：协程被取消（用户停止生成 / 会话关闭）时，[AgentQuestionBroker.ask]
+     * 的 finally 会清掉挂起状态。这里把 CancellationException 原样抛出，
+     * 让 HarnessLoop 按既有的取消路径处理，不伪装成工具失败。
+     */
+    private suspend fun executeAskUserQuestion(
+        args: JsonObject,
+        sessionId: String,
+    ): Pair<Boolean, String> {
+        val broker = questionBroker ?: return false to "提问执行器未初始化"
+        val questions = parseQuestions(args)
+            ?: return false to "参数 questions 缺失或格式不正确：需要非空的问题数组，每项至少包含 id 与 question"
+
+        val callId = UUID.randomUUID().toString()
+        // 不捕获 CancellationException：取消（用户停止 / 会话关闭）要沿既有路径向上传播，
+        // 由 HarnessLoop 统一处理；broker.ask 的 finally 已负责清理挂起状态。
+        val response = broker.ask(sessionId = sessionId, callId = callId, questions = questions)
+
+        // 被取消的提问以「全部跳过」返回，明确告知模型用户没有作答，
+        // 而不是给一个空对象让它误以为得到了确认。
+        val allSkipped = response.answers.isNotEmpty() && response.answers.all { it.skipped }
+        val rendered = broker.render(response)
+        return if (allSkipped) {
+            true to "用户跳过了本次提问，未提供任何选择或补充信息。请勿因此假定用户已确认；改用合理默认继续，或换个角度再问一次。\n$rendered"
+        } else {
+            true to rendered
+        }
+    }
+
+    /** 解析 questions 数组；结构非法时返回 null 交由调用方报错。 */
+    private fun parseQuestions(args: JsonObject): List<top.tianyan.app.core.model.AgentQuestion>? {
+        val array = args["questions"] as? kotlinx.serialization.json.JsonArray ?: return null
+        if (array.isEmpty()) return null
+        val parsed = array.mapNotNull { element ->
+            val obj = element as? JsonObject ?: return@mapNotNull null
+            val id = obj["id"]?.jsonPrimitive?.content?.trim().orEmpty()
+            val question = obj["question"]?.jsonPrimitive?.content?.trim().orEmpty()
+            if (id.isEmpty() || question.isEmpty()) return@mapNotNull null
+            top.tianyan.app.core.model.AgentQuestion(
+                id = id,
+                question = question,
+                header = obj["header"]?.jsonPrimitive?.content?.trim()?.takeIf { it.isNotEmpty() },
+                options = (obj["options"] as? kotlinx.serialization.json.JsonArray)?.mapNotNull { optionElement ->
+                    val optionObj = optionElement as? JsonObject ?: return@mapNotNull null
+                    val label = optionObj["label"]?.jsonPrimitive?.content?.trim().orEmpty()
+                    if (label.isEmpty()) return@mapNotNull null
+                    top.tianyan.app.core.model.AgentQuestionOption(
+                        label = label,
+                        description = optionObj["description"]?.jsonPrimitive?.content?.trim()?.takeIf { it.isNotEmpty() },
+                    )
+                }.orEmpty(),
+                multiSelect = obj["multi_select"]?.jsonPrimitive?.content?.trim()?.lowercase() == "true",
+            )
+        }
+        return parsed.takeIf { it.isNotEmpty() }
     }
 
     private suspend fun executeBase(args: JsonObject, workspace: String): Pair<Boolean, String> {

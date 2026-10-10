@@ -126,6 +126,7 @@ class ChatViewModel @Inject constructor(
     private val textExtractor: top.tianyan.app.runtime.sandbox.SandboxTextExtractor,
     private val fullSettingsStore: top.tianyan.app.core.datastore.SettingsDataStore,
     private val skillDistillationManager: top.tianyan.app.harness.skill.SkillDistillationManager,
+    private val questionBroker: top.tianyan.app.harness.question.AgentQuestionBroker,
 ) : ViewModel() {
 
     /**
@@ -326,6 +327,28 @@ class ChatViewModel @Inject constructor(
 
     private val _sendMode = MutableStateFlow(ComposerSendMode.NEXT_RUN)
     val sendMode: StateFlow<ComposerSendMode> = _sendMode.asStateFlow()
+
+    /**
+     * 智能体提问：非空时输入区改为呈现提问卡片，用户作答后模型继续。
+     * 同一时刻至多一个问题（broker 侧强约束），因此这里用单值而非列表。
+     */
+    val pendingQuestion: StateFlow<top.tianyan.app.harness.question.PendingQuestion?> =
+        questionBroker.pending
+
+    /**
+     * 提交提问作答。broker 返回 false 说明该提问已失效
+     * （重复提交 / 会话已取消 / 进程重启后重放），此时给出可读提示而不是静默丢弃。
+     */
+    fun answerQuestion(answers: List<top.tianyan.app.core.model.AgentQuestionAnswer>) {
+        val pending = questionBroker.pending.value ?: return
+        val normalized = questionBroker.normalize(pending.questions, answers)
+        if (!questionBroker.submit(pending.callId, normalized)) {
+            harnessLoop.reportUserFacingNotice(
+                sessionId = pending.sessionId,
+                message = "该提问已失效（可能已作答或会话已取消），无需重复提交",
+            )
+        }
+    }
 
     // ===== Git 面板状态（绑定当前会话，不跨会话共享）=====
     private val _gitPanelState = MutableStateFlow(GitPanelState())

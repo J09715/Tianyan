@@ -339,6 +339,7 @@ internal fun toolName(tool: HarnessTool, rawToolName: String? = null): String {
         HarnessTool.MCP -> "mcp"
         HarnessTool.LOAD_RULE -> "load_rule"
         HarnessTool.REDTEAM -> "redteam"
+        HarnessTool.ASK_USER -> "ask_user_question"
     }
 }
 

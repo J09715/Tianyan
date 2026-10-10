@@ -109,6 +109,9 @@ internal fun ChatComposer(
     onSend: () -> Unit,
     onStop: () -> Unit,
     sendMode: ComposerSendMode,
+    onSendModeChange: (ComposerSendMode) -> Unit,
+    pendingQuestion: top.tianyan.app.harness.question.PendingQuestion?,
+    onAnswerQuestion: (List<top.tianyan.app.core.model.AgentQuestionAnswer>) -> Unit,
     matchingCommands: List<SlashCommandItem>,
     onApplyCommand: (SlashCommandItem) -> Unit,
     matchingMentions: List<MentionItem>,
@@ -228,6 +231,17 @@ internal fun ChatComposer(
         MentionPopup(
             mentions = matchingMentions,
             onSelect = onApplyMention,
+        )
+    }
+
+    // 智能体提问占据输入位：正在等待作答时，先呈现问题卡片，
+    // 用户作答后模型才会继续本轮（对齐 DSH 的 composer 占位做法）。
+    val activeQuestion = pendingQuestion
+    if (activeQuestion != null) {
+        AgentQuestionCard(
+            questions = activeQuestion.questions,
+            onAnswer = onAnswerQuestion,
+            modifier = Modifier.padding(horizontal = 12.dp),
         )
     }
 
@@ -560,6 +574,49 @@ internal fun ChatComposer(
                                     onOpenSkillsMcp()
                                 },
                             )
+                        }
+                    }
+
+                    // 🗣 插话 / 排队切换：只在运行中才有意义（空闲时发消息本就是新回合）。
+                    // 未插话时提示「排队」，点一下切成「插话」，再点切回。
+                    if (running) {
+                        val steerActive = sendMode == ComposerSendMode.STEER
+                        val steerTint = if (steerActive) Color(0xFF7C4DFF) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
+                        Surface(
+                            onClick = {
+                                onSendModeChange(
+                                    if (steerActive) ComposerSendMode.NEXT_RUN else ComposerSendMode.STEER,
+                                )
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            color = steerTint.copy(alpha = if (steerActive) 0.16f else 0.08f),
+                            border = BorderStroke(
+                                0.7.dp,
+                                steerTint.copy(alpha = if (steerActive) 0.5f else 0.2f),
+                            ),
+                            modifier = Modifier.padding(start = 2.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                RuntimeIcon(
+                                    name = if (steerActive) RuntimeIconName.Prompt else RuntimeIconName.More,
+                                    modifier = Modifier.size(11.dp),
+                                    tint = steerTint,
+                                )
+                                Text(
+                                    text = if (steerActive) "插话" else "排队",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                    ),
+                                    color = steerTint,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                         }
                     }
 
