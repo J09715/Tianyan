@@ -1068,7 +1068,7 @@ class ProviderClient @Inject constructor(
                 code == 429 || lowerMsg.contains("rate limit") || lowerMsg.contains("insufficient_quota") || lowerMsg.contains("quota") ->
                     "API 额度已用尽或请求频率超限 (HTTP $code)：$errorMsg"
                 code == 404 ->
-                    "模型名称或 API 地址不存在 (HTTP 404)：请检查模型名称是否拼写正确。"
+                    "模型名称或 API 地址不存在 (HTTP 404)：请检查「模型名称」是否拼写正确，以及「Base URL」路径是否完整正确（例如结尾是否缺少 /v1、是否指向了不存在的模型端点）。若该模型已改名或下线，请在模型设置中更新模型名或 Base URL。"
                 errorMsg.isNotBlank() ->
                     "LLM 请求失败 (HTTP $code)：$errorMsg"
                 else ->

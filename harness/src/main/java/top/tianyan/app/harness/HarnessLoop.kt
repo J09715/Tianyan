@@ -948,7 +948,15 @@ class HarnessLoop @Inject constructor(
                     // 失败也通过 lastFailure 流对用户可见，不再静默。
                     loopScope.launch {
                         runCatching {
-                            skillDistillationManager.distill(sessId, messageProjector.messagesFlow(sessId).value)
+                            // 把会话正在使用的模型配置（绑定档案 + 变体）传给提炼器，
+                            // 让技能提炼与当前会话「用同一个模型」，避免 404。
+                            val distillSession = sessionDao.findById(sessId)
+                            skillDistillationManager.distill(
+                                sessionId = sessId,
+                                messages = messageProjector.messagesFlow(sessId).value,
+                                modelId = distillSession?.modelId,
+                                modelVariant = distillSession?.modelVariant,
+                            )
                         }.onFailure { throwable ->
                             logger.w("会话技能自动提炼触发失败：$sessId", throwable)
                         }

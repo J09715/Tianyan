@@ -105,7 +105,12 @@ class SkillDistillationManager @Inject constructor(
      * 本方法自身做规模与冷却门槛，结果写入 [pendingCandidates]。
      * 任何异常都被吞掉并记 warn 日志，绝不向上抛出。
      */
-    suspend fun distill(sessionId: String, messages: List<HarnessMessage>) {
+    suspend fun distill(
+        sessionId: String,
+        messages: List<HarnessMessage>,
+        modelId: String? = null,
+        modelVariant: String? = null,
+    ) {
         runCatching {
             val userCount = messages.count { it is UserMessage }
             // 规模门槛：至少 2 条用户消息才值得分析
@@ -117,7 +122,11 @@ class SkillDistillationManager @Inject constructor(
             val material = buildMaterial(messages)
             if (material.isBlank()) return
 
-            val model = providerClient.resolveModel()
+            // 复用「当前会话正在使用的模型配置」（会话绑定档案 + 可选变体），
+            // 而不是全局 active 档案：彻底消除「会话用 A、提炼用 B」的漂移，
+            // 这也是 404「模型名称或 API 地址不存在」的主要根因——
+            // 提炼若走一份过期/错配的独立模型配置，请求打到不存在的路径即 404。
+            val model = providerClient.resolveConfigured(modelId, modelVariant)
             val apiMessages = listOf(
                 ApiMessage(role = "system", content = DISTILL_SYSTEM_PROMPT),
                 ApiMessage(role = "user", content = material),
