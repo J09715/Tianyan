@@ -520,28 +520,54 @@ class HarnessLoop @Inject constructor(
         }
     }
 
-    fun send(text: String, targetSessionId: String? = null, imageUrls: List<String> = emptyList()) {
+    fun send(
+        text: String,
+        targetSessionId: String? = null,
+        imageUrls: List<String> = emptyList(),
+        attachments: List<MessageAttachment> = emptyList(),
+    ) {
         val trimmed = text.trim()
         val sessId = targetSessionId?.ifBlank { null } ?: sessionTracker.currentSessionId.value
         if (trimmed.isEmpty() && imageUrls.isEmpty()) return
         if (sessId.isBlank()) return
 
-        val pending = PendingMessage(text = trimmed, imageUrls = imageUrls, taskId = newId())
+        val pending = PendingMessage(
+            text = trimmed,
+            imageUrls = imageUrls,
+            taskId = newId(),
+            attachments = attachments,
+        )
         startSessionRun(sessId, enqueueOnBusy = pending) {
-            runLoop(sessId, pending.text, pending.imageUrls, pending.taskId)
+            runLoop(sessId, pending.text, pending.imageUrls, pending.taskId, pending.attachments)
         }
         startForegroundServiceSafe()
     }
 
-    fun steer(text: String, targetSessionId: String? = null, imageUrls: List<String> = emptyList()) {
-        enqueueExplicit(PromptQueue.STEER, text, targetSessionId, imageUrls)
+    fun steer(
+        text: String,
+        targetSessionId: String? = null,
+        imageUrls: List<String> = emptyList(),
+        attachments: List<MessageAttachment> = emptyList(),
+    ) {
+        enqueueExplicit(PromptQueue.STEER, text, targetSessionId, imageUrls, attachments)
     }
 
-    fun followUp(text: String, targetSessionId: String? = null, imageUrls: List<String> = emptyList()) {
-        enqueueExplicit(PromptQueue.FOLLOW_UP, text, targetSessionId, imageUrls)
+    fun followUp(
+        text: String,
+        targetSessionId: String? = null,
+        imageUrls: List<String> = emptyList(),
+        attachments: List<MessageAttachment> = emptyList(),
+    ) {
+        enqueueExplicit(PromptQueue.FOLLOW_UP, text, targetSessionId, imageUrls, attachments)
     }
 
-    private fun enqueueExplicit(queue: PromptQueue, text: String, targetSessionId: String?, imageUrls: List<String>) {
+    private fun enqueueExplicit(
+        queue: PromptQueue,
+        text: String,
+        targetSessionId: String?,
+        imageUrls: List<String>,
+        attachments: List<MessageAttachment> = emptyList(),
+    ) {
         val sessId = targetSessionId?.ifBlank { null } ?: sessionTracker.currentSessionId.value
         val trimmed = text.trim()
         if (sessId.isBlank() || (trimmed.isBlank() && imageUrls.isEmpty())) return
@@ -551,9 +577,9 @@ class HarnessLoop @Inject constructor(
                 if (tombstonedSessions.contains(sessId)) return@withLock
                 if (isSessionBusy(sessId)) {
                     // Steering/follow-up belongs to the currently active durable task.
-                    promptQueueManager.enqueue(sessId, queue, PendingMessage(trimmed, imageUrls))
+                    promptQueueManager.enqueue(sessId, queue, PendingMessage(trimmed, imageUrls, attachments = attachments))
                 } else {
-                    val pending = PendingMessage(trimmed, imageUrls, taskId = newId())
+                    val pending = PendingMessage(trimmed, imageUrls, taskId = newId(), attachments = attachments)
                     createDurableTask(sessId, pending)
                     launchSessionJobLocked(sessId, pending.taskId) {
                         runLoop(sessId, pending.text, pending.imageUrls, pending.taskId)
@@ -1053,6 +1079,7 @@ class HarnessLoop @Inject constructor(
         userText: String,
         imageUrls: List<String> = emptyList(),
         taskId: String? = null,
+        attachments: List<MessageAttachment> = emptyList(),
     ): RunResult {
         sessionLoopDetectors.getOrPut(sessId) { ToolCallLoopDetector() }.reset()
         // 新用户回合开账/清账：上个回合的绿不能替本回合作证；
@@ -1075,6 +1102,7 @@ class HarnessLoop @Inject constructor(
             text = userText,
             imageUrls = imageUrls,
             contextTail = contextTail,
+            attachments = attachments,
         )
         rewindController.beginTurn(sessId, userText, userMessage.id)
         val operationId = operationCoordinator.acceptRun(sessId, userMessage)

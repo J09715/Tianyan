@@ -127,6 +127,29 @@ internal fun UserBubble(
                 }
             }
 
+            // 🌟 1.5 文件附件卡片
+            //
+            // 为什么必须有这一块：附件此前只在发送时被拼进提示词文本，气泡层只渲染
+            // message.text，于是用户看到的就是一整段带路径的文字（"发文件变成文字"）。
+            // 现在附件元信息随消息持久化（UserMessage.attachments），这里渲染成卡片；
+            // 提示词那侧保留挂载说明是为了告诉模型去哪里读文件，两者职责不同、不冲突。
+            val fileAttachments = message.attachments.filter { !it.isImage }
+            if (fileAttachments.isNotEmpty()) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier
+                        .padding(bottom = 2.dp)
+                        .widthIn(max = 560.dp),
+                ) {
+                    fileAttachments.forEach { attachment ->
+                        AttachmentFileCard(
+                            attachment = attachment,
+                            onClick = { showMenu = true },
+                        )
+                    }
+                }
+            }
+
             // 🌟 2. 用户文字气泡
             if (message.text.isNotBlank()) {
                 Surface(
@@ -448,17 +471,24 @@ internal fun AssistantBubble(
                         }
                     }
                 } else {
+                    // 流式期间也走 Markdown 渲染（此前是裸 Text，所以"输出完才排版"）。
+                    //
+                    // 掉帧风险用「尾部安全窗口」压住，而不是退回纯文本：窗口只在
+                    // 围栏/段落/换行边界处断开（见 truncateAtSafeMarkdownBoundary），
+                    // 保证解析结果始终是合法 Markdown —— 否则半个 ``` 会让整屏变成
+                    // 一个巨大代码块，比不排版更难看。
+                    val liveMarkdown = remember(message.text) {
+                        if (message.text.length > LIVE_PREVIEW_CHARS) {
+                            LIVE_PREVIEW_PREFIX + top.tianyan.app.harness.session
+                                .truncateAtSafeMarkdownBoundary(message.text, LIVE_PREVIEW_CHARS)
+                        } else {
+                            message.text.take(MAX_LIVE_TEXT_CHARS)
+                        }
+                    }
                     SelectionContainer {
-                        Text(
-                            // 流式期间只渲染尾部窗口：超长正文每 100ms 分片到达时避免全量重排掉帧；
-                            // 完成后（非 live）走 MarkdownText 全文渲染，SelectionContainer 结构不变
-                            text = if (message.text.length > LIVE_PREVIEW_CHARS) {
-                                LIVE_PREVIEW_PREFIX + message.text.takeLast(LIVE_PREVIEW_CHARS)
-                            } else {
-                                message.text.take(MAX_LIVE_TEXT_CHARS)
-                            },
+                        MarkdownText(
+                            markdown = liveMarkdown,
                             modifier = Modifier.fillMaxWidth(),
-                            style = MaterialTheme.typography.bodyMedium,
                         )
                     }
                 }

@@ -2094,7 +2094,17 @@ class ChatViewModel @Inject constructor(
         }
         _pendingAttachments.value = emptyList()
         _extractedTexts.value = emptyMap()
-        send(fullMessage, imageUrls)
+        // 附件元信息随消息持久化，气泡层据此渲染文件卡片（而不是把整段当正文文本）。
+        val persistedAttachments = attachments.map { att ->
+            top.tianyan.app.harness.MessageAttachment(
+                name = att.name,
+                isImage = att.isImage,
+                sizeBytes = att.sizeBytes,
+                guestPath = att.guestFilePath ?: "/attachments/${att.name}",
+                imageUrl = att.base64DataUrl?.takeIf { att.isImage },
+            )
+        }
+        send(fullMessage, imageUrls, persistedAttachments)
     }
 
     // ===== 工作流（taixu v0.13 /wf 命令 + 主动建议，逻辑逐字对齐）=====
@@ -2128,7 +2138,11 @@ class ChatViewModel @Inject constructor(
         )
     }
 
-    fun send(customText: String? = null, imageUrls: List<String> = emptyList()) {
+    fun send(
+        customText: String? = null,
+        imageUrls: List<String> = emptyList(),
+        attachments: List<top.tianyan.app.harness.MessageAttachment> = emptyList(),
+    ) {
         val rawText = (customText ?: _input.value).trim()
         if (rawText.isBlank() && imageUrls.isEmpty()) return
         WORKFLOW_COMMAND.matchEntire(rawText)?.let { match ->
@@ -2158,11 +2172,12 @@ class ChatViewModel @Inject constructor(
         maybeAutoBindRedTeamTarget(effectiveText)
 
         if (!running.value) {
-            harnessLoop.send(effectiveText, imageUrls = imageUrls)
+            harnessLoop.send(effectiveText, imageUrls = imageUrls, attachments = attachments)
         } else {
             when (_sendMode.value) {
-                ComposerSendMode.STEER -> harnessLoop.steer(effectiveText, imageUrls = imageUrls)
-                ComposerSendMode.NEXT_RUN -> harnessLoop.send(effectiveText, imageUrls = imageUrls)
+                // 插话/排队同样带上附件：排队消息也要在 UI 上显示文件卡片。
+                ComposerSendMode.STEER -> harnessLoop.steer(effectiveText, imageUrls = imageUrls, attachments = attachments)
+                ComposerSendMode.NEXT_RUN -> harnessLoop.send(effectiveText, imageUrls = imageUrls, attachments = attachments)
             }
         }
     }
