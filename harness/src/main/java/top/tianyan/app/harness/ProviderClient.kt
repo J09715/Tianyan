@@ -1266,9 +1266,9 @@ class ProviderClient @Inject constructor(
             ApiToolDefinition(
                 function = ApiFunctionDefinition(
                     name = "load_rule",
-                    description = "按需加载系统提示词的详细规则块（workflow / code-navigation / security / memory / environment-proot / tools）。当当前任务需要某块规则但系统提示词中未注入时调用；只读，无副作用。",
+                    description = "按需加载规则或专精技能正文。规则块：workflow / code-navigation / security / memory / environment-proot / tools。技能正文：填 skill:<id>（id 见提示词里的技能发现块）。技能只给摘要不预载正文，确实需要某项技能时先用本工具读取它的完整规则再执行；只读，无副作用。",
                     parameters = Json.parseToJsonElement(
-                        """{"type":"object","properties":{"rule":{"type":"string","enum":["workflow","code-navigation","security","memory","environment-proot","tools"],"description":"要加载的规则块名称"}},"required":["rule"]}""",
+                        """{"type":"object","properties":{"rule":{"type":"string","description":"规则块名称（workflow/code-navigation/security/memory/environment-proot/tools），或技能正文 key：skill:<id>"}},"required":["rule"]}""",
                     ).jsonObject,
                 ),
             ),

@@ -97,11 +97,18 @@ class SystemPromptBuilder @Inject constructor(
         val allSkills = runCatching { skillRepository.allSkills.first() }.getOrDefault(emptyList())
         val selectedSkills = selectSkills(allSkills, mentionedNames)
 
-        // 技能段依赖当轮 @ 提及，属于动态内容（见文件末尾的 frozen/dynamic 拆分）。
+        // 技能段：渐进式披露 —— 只注入「名称 + 摘要」，正文由 load_rule 按需取。
+        //
+        // 为什么不像以前那样直接注入 systemPrompt 正文（对齐天枢的教训）：
+        // 技能正文长度没有上限（用户可导入任意大小的 SKILL.md），逐轮整段注入
+        // 会让每轮请求多付一份与当轮任务无关的 token；正文越长越浪费，
+        // 而且一旦超出预算被截断，模型拿到的是**残缺的规则**却不自知。
+        //
+        // 分两层：
+        //  · Tier 1（这里，尾部）：名称 + 一句话摘要 + relevant 标记，预算受限；
+        //  · Tier 2（按需）：正文用 load_rule("skill:<id>") 读取，要用时才付成本。
         val skillSection = if (selectedSkills.isNotEmpty()) {
-            "## 当前生效的专精技能指导规则 (Active Skills)\n\n" + selectedSkills.joinToString("\n\n") { skill ->
-                "### [专精技能] " + skill.name + " (" + skill.category + ")\n" + skill.systemPrompt.trim()
-            }
+            buildSkillDiscoverySection(selectedSkills, latestUserMessage)
         } else ""
 
         val installedTools =
@@ -530,6 +537,65 @@ class SystemPromptBuilder @Inject constructor(
     companion object {
         // Key/value memory is a compact RAG layer, not another copy of conversation history.
         private const val MAX_PROMPT_MEMORIES = 32
+
+        /**
+         * 技能发现块的总字符预算。
+         * 取 1500（对齐天枢的默认值）：够列十来个技能摘要，又不至于挤占真实任务上下文。
+         */
+        private const val MAX_SKILL_DISCOVERY_CHARS = 1_500
+
+        /** 单条技能摘要上限，防止某一项的超长 description 吃掉整个预算。 */
+        private const val MAX_SKILL_DESC_CHARS = 200
+
+        /**
+         * 技能发现块（渐进式披露 Tier 1）：只给名称 + 摘要，不注入正文。
+         *
+         * 正文用 `load_rule("skill:<id>")` 按需读取 —— 模型只在真正要用某个技能时
+         * 才付它的 token 成本，而不是每轮都为所有被提及的技能付一遍。
+         *
+         * 预算保护（照天枢的做法）：
+         *  · 单条摘要截断到 [MAX_SKILL_DESC_CHARS]；
+         *  · 总预算 [MAX_SKILL_DISCOVERY_CHARS]，超预算的条目**跳过而不是截断列表尾部** ——
+         *    跳过后继续尝试后面的短条目，避免一个超大条目把其余技能全挤掉；
+         *  · 与当轮任务相关的技能排前面，预算不够时保住最有用的。
+         */
+        internal fun buildSkillDiscoverySection(
+            skills: List<AgentSkill>,
+            latestUserMessage: String,
+        ): String {
+            if (skills.isEmpty()) return ""
+            val hint = latestUserMessage.lowercase()
+            val ordered = skills.sortedWith(
+                compareBy(
+                    { skill -> if (hint.isNotBlank() && hint.contains(skill.name.lowercase())) 0 else 1 },
+                    { it.name },
+                ),
+            )
+            val lines = mutableListOf<String>()
+            var budget = MAX_SKILL_DISCOVERY_CHARS
+            var dropped = 0
+            ordered.forEach { skill ->
+                val desc = skill.description.replace(Regex("\\s+"), " ").trim().take(MAX_SKILL_DESC_CHARS)
+                val relevant = hint.isNotBlank() && hint.contains(skill.name.lowercase())
+                val line = "<skill id=\"${skill.id}\" name=\"${skill.name}\"${
+                    if (relevant) " relevant=\"true\"" else ""
+                }>$desc</skill>"
+                if (line.length > budget) {
+                    dropped++
+                    return@forEach
+                }
+                lines += line
+                budget -= line.length
+            }
+            if (lines.isEmpty()) return ""
+            val header = "## 可用专精技能（渐进式披露：此处只有摘要）\n\n" +
+                "这些技能**尚未加载正文**。当任务确实需要其中某项时，先用 " +
+                "`load_rule` 读取它的正文（rule 填 `skill:<id>`），再按其规则执行；" +
+                "不要在未读取正文的情况下凭摘要臆测它的具体流程。\n"
+            val droppedNote = if (dropped > 0) "\n（另有 $dropped 项因预算未列出，可用 load_rule 指定 id 直接读取）" else ""
+            return header + "\n" + lines.joinToString("\n") + droppedNote
+        }
+
         private const val MAX_PROMPT_MEMORY_KEY_CHARS = 128
         private const val MAX_PROMPT_MEMORY_VALUE_CHARS = 512
         private const val MAX_PROMPT_RECALL_QUERY_CHARS = 256

@@ -1,6 +1,7 @@
 package top.tianyan.app.harness.prompt
 
 import javax.inject.Inject
+import kotlinx.coroutines.flow.first
 import javax.inject.Singleton
 
 /**
@@ -15,6 +16,12 @@ import javax.inject.Singleton
 @Singleton
 class PromptRouter @Inject constructor(
     private val promptAssets: PromptAssetLoader,
+    /**
+     * 技能仓库：仅供 load_rule 按需读取技能正文（渐进式披露 Tier 2）。
+     *
+     * 可空以保持既有测试的构造方式不变（它们只关心规则块路由）。
+     */
+    private val skillRepository: top.tianyan.app.core.database.AgentSkillRepository? = null,
 ) {
     /** 可按需加载的规则块。[assetPath] 为 assets 内路径，[loadName] 为 load_rule 工具使用的标识。 */
     enum class RuleBlock(val assetPath: String, val loadName: String) {
@@ -71,12 +78,40 @@ class PromptRouter @Inject constructor(
     }
 
     /** load_rule 工具入口：按名称读取规则块正文；未知名称返回 null。 */
-    fun loadRule(name: String): String? {
-        val block = RuleBlock.entries.firstOrNull { it.loadName == name.trim().lowercase() } ?: return null
+    /**
+     * 按需加载规则块正文。
+     *
+     * 支持两类 key：
+     *  · 内置规则块：`workflow` / `code-navigation` / `security` / `memory` /
+     *    `environment-proot` / `tools`；
+     *  · 技能正文（渐进式披露 Tier 2）：`skill:<id>`。
+     *
+     * 技能之所以要按需取而不是逐轮整段注入：正文长度没有上限（用户可导入任意
+     * 大小的 SKILL.md），逐轮注入会让每轮都为用不到的技能付 token，且超预算被
+     * 截断时模型拿到的是残缺规则却不自知。发现块里只给 id + 摘要。
+     */
+    suspend fun loadRule(name: String): String? {
+        val key = name.trim()
+        if (key.startsWith(SKILL_PREFIX, ignoreCase = true)) {
+            val id = key.removePrefix(SKILL_PREFIX).removePrefix(SKILL_PREFIX.uppercase()).trim()
+            if (id.isBlank()) return null
+            val repo = skillRepository ?: return null
+            val skill = runCatching { repo.allSkills.first() }.getOrNull()
+                ?.firstOrNull { it.id == id || it.name.equals(id, ignoreCase = true) }
+                ?: return null
+            return "【专精技能：${skill.name}】\n${skill.systemPrompt.trim()}"
+        }
+        val block = RuleBlock.entries.firstOrNull { it.loadName == key.lowercase() } ?: return null
         return runCatching { promptAssets.read(block.assetPath) }.getOrNull()
     }
 
+    /** 判断某个 load_rule 的 key 是否是技能正文请求。 */
+    fun isSkillKey(name: String): Boolean = name.trim().startsWith(SKILL_PREFIX, ignoreCase = true)
+
     companion object {
+        /** 技能正文的 load_rule 前缀：`skill:<id>`。 */
+        const val SKILL_PREFIX = "skill:"
+
         private val CODE_SIGNALS = listOf(
             "重构", "调用链", "调用方", "被调用", "callee", "caller", "影响面", "符号",
             "函数", "方法", "类定义", "接口定义", "定义在哪", "代码分析", "架构", "源码",

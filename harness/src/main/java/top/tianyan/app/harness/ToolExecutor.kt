@@ -258,8 +258,12 @@ class ToolExecutor @Inject constructor(
                 val content = promptRouter?.loadRule(rule)
                 if (content != null) {
                     true to "【规则块：$rule】\n$content"
+                } else if (rule.trim().startsWith("skill:", ignoreCase = true)) {
+                    false to "未找到该技能正文：$rule。请核对发现块里列出的 id；" +
+                        "也可先看技能列表确认 id 拼写。"
                 } else {
-                    false to "未知规则块：$rule。可用：workflow / code-navigation / security / memory / environment-proot / tools"
+                    false to "未知规则块：$rule。可用：workflow / code-navigation / security / memory / " +
+                        "environment-proot / tools；读取技能正文用 skill:<id>（id 见发现块）"
                 }
             }
         }
