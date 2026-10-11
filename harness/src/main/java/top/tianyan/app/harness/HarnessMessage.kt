@@ -103,6 +103,8 @@ data class MessageAttachment(
     val guestPath: String = "",
     /** 图片的数据 URL（仅图片），供气泡内直接渲染缩略图。 */
     val imageUrl: String? = null,
+    /** Source MIME type, retained for native ACTION_VIEW playback when available. */
+    val mimeType: String? = null,
 )
 
 @Serializable

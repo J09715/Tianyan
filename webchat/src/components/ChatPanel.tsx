@@ -105,34 +105,87 @@ function attachmentName(attachment: Record<string, unknown>): string {
   return String(attachment.fileName ?? attachment.name ?? "附件");
 }
 
-function attachmentImage(attachment: Record<string, unknown>): string {
+function attachmentSource(attachment: Record<string, unknown>): string {
   const source = String(attachment.dataUrl ?? attachment.url ?? "");
+  return /^(?:data:(?:image|video)\/|https?:\/\/)/i.test(source) ? source : "";
+}
+
+function attachmentKind(attachment: Record<string, unknown>, source: string): "image" | "video" | "file" {
   const mimeType = String(attachment.mimeType ?? attachment.type ?? "");
-  const isImage = attachment.isImage === true
-    || mimeType.startsWith("image/")
-    || source.startsWith("data:image/")
-    || /\.(avif|gif|jpe?g|png|webp)(?:[?#]|$)/i.test(source);
-  return isImage && (source.startsWith("data:image/") || source.startsWith("https://") || source.startsWith("http://"))
-    ? source
-    : "";
+  if (attachment.isImage === true || mimeType.startsWith("image/") || source.startsWith("data:image/") || /\.(avif|gif|jpe?g|png|webp)(?:[?#]|$)/i.test(source)) return "image";
+  if (mimeType.startsWith("video/") || source.startsWith("data:video/") || /\.(mp4|m4v|mov|webm|ogv)(?:[?#]|$)/i.test(source)) return "video";
+  return "file";
+}
+
+function MediaAttachment({
+  name,
+  kind,
+  source,
+}: {
+  name: string;
+  kind: "image" | "video";
+  source: string;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog || !lightboxOpen || dialog.open) return;
+    dialog.showModal();
+  }, [lightboxOpen]);
+
+  function closeLightbox() {
+    dialogRef.current?.close();
+    setLightboxOpen(false);
+  }
+
+  return (
+    <>
+      {kind === "image" ? (
+        <button className="message-media-button" type="button" aria-label={`查看大图：${name}`} onClick={() => setLightboxOpen(true)}>
+          <img className="message-image" src={source} alt={name} />
+        </button>
+      ) : (
+        <video className="message-video" controls preload="metadata" aria-label={name} src={source} />
+      )}
+      {kind === "image" && (
+        <dialog
+          className="media-lightbox"
+          ref={dialogRef}
+          aria-label={`大图预览：${name}`}
+          onCancel={closeLightbox}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) closeLightbox();
+          }}
+        >
+          <button className="media-lightbox-close" type="button" aria-label="关闭大图" onClick={closeLightbox}>×</button>
+          <img src={source} alt={name} />
+        </dialog>
+      )}
+      {kind === "video" && <span className="sr-only">{name}</span>}
+    </>
+  );
 }
 
 function MessageAttachments({ attachments }: { attachments: Record<string, unknown>[] }) {
+  const visibleAttachments = attachments.map((attachment, index) => {
+    const source = attachmentSource(attachment);
+    return { attachment, index, name: attachmentName(attachment), kind: attachmentKind(attachment, source), source };
+  });
   if (!attachments.length) return null;
   return (
     <div className="message-attachments">
-      {attachments.map((attachment, index) => {
-        const image = attachmentImage(attachment);
-        const name = attachmentName(attachment);
-        return image ? (
-          <img className="message-image" src={image} alt={name} key={`${name}-${index}`} />
+      {visibleAttachments.map(({ index, name, kind, source }) => (
+        source && kind !== "file" ? (
+          <MediaAttachment name={name} kind={kind} source={source} key={`${name}-${index}`} />
         ) : (
           <span className="attachment-chip" key={`${name}-${index}`}>
             <Icon name="file" size={15} />
             <span>{name}</span>
           </span>
-        );
-      })}
+        )
+      ))}
     </div>
   );
 }
@@ -281,6 +334,7 @@ export function ChatPanel({
   const [draft, setDraft] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const messageListRef = useRef<HTMLDivElement>(null);
+  const shouldAutoScrollRef = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const sortedMessages = [...messages].sort((left, right) => messageTime(left) - messageTime(right));
@@ -291,9 +345,17 @@ export function ChatPanel({
   const isProcessing = sending || Boolean(activeTaskId);
   const canSend = !isProcessing && Boolean(draft.trim() || attachments.length);
 
+  function updateScrollIntent() {
+    const list = messageListRef.current;
+    if (!list) return;
+    const distanceFromBottom = list.scrollHeight - list.scrollTop - list.clientHeight;
+    shouldAutoScrollRef.current = distanceFromBottom <= 96;
+  }
+
   useEffect(() => {
     const list = messageListRef.current;
-    if (list) list.scrollTop = list.scrollHeight;
+    if (!list || !shouldAutoScrollRef.current) return;
+    list.scrollTop = list.scrollHeight;
   }, [messages, activeTaskId]);
 
   useEffect(() => {
@@ -366,7 +428,7 @@ export function ChatPanel({
 
       {globalError && <div className="global-error" role="alert">{globalError}</div>}
 
-      <div className="message-list" aria-live="polite" ref={messageListRef}>
+      <div className="message-list" aria-live="polite" ref={messageListRef} onScroll={updateScrollIntent}>
         {!sortedMessages.length && <EmptyGreeting />}
         {sortedMessages.map((message, index) => (
           <Message

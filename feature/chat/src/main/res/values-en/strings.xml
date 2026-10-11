@@ -334,6 +334,7 @@
     <string name="chat_remove_attachment">Remove attachment</string>
     <string name="chat_attachment_processing">Processing attachments…</string>
     <string name="chat_attachment_process_failed">%1$d attachment(s) failed to process, please retry</string>
+    <string name="chat_attachment_missing">Attachment file no longer exists, cannot open: %1$s</string>
     <!-- Model form validation -->
     <string name="chat_provider_label">Provider</string>
     <string name="chat_base_url_invalid">Base URL must start with http:// or https://</string>

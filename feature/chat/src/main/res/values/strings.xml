@@ -382,6 +382,7 @@
     <string name="chat_remove_attachment">移除附件</string>
     <string name="chat_attachment_processing">正在处理附件…</string>
     <string name="chat_attachment_process_failed">%1$d 个附件处理失败，请重试</string>
+    <string name="chat_attachment_missing">附件文件已不存在，无法打开：%1$s</string>
     <!-- 模型表单校验 -->
     <string name="chat_provider_label">Provider</string>
     <string name="chat_base_url_invalid">Base URL 需以 http:// 或 https:// 开头</string>

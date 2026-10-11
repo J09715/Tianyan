@@ -4,4 +4,6 @@
     <external-cache-path name="external_cache" path="." />
     <external-files-path name="external_files" path="." />
     <external-path name="external_storage" path="." />
+    <!-- 附件保存于内部存储 filesDir/linux-runtime/attachments，需 files-path 才能经 FileProvider 授予外部查看器 -->
+    <files-path name="files" path="." />
 </paths>

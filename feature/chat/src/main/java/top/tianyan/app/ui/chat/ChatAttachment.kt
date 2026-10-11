@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import top.tianyan.app.feature.chat.R
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
+import android.webkit.MimeTypeMap
 import java.io.File
 import java.util.Locale
 import java.util.UUID
@@ -51,6 +52,8 @@ data class ChatAttachment(
     val hostFilePath: String? = null,
     val guestFilePath: String? = null,
     val base64DataUrl: String? = null,
+    /** MIME type retained for opening persisted attachments in an external app. */
+    val mimeType: String? = null,
 ) {
     val localFilePath: String get() = guestFilePath ?: hostFilePath.orEmpty()
 }
@@ -89,8 +92,10 @@ object AttachmentHelper {
 
             val guestPath = "/attachments/${targetFile.name}"
             val sourceMimeType = contentResolver.getType(uri)
-                ?.takeIf { it.startsWith("image/", ignoreCase = true) }
-                ?: "image/jpeg"
+                ?: MimeTypeMap.getSingleton().getMimeTypeFromExtension(
+                    name.substringAfterLast('.', "").lowercase(Locale.US),
+                )
+                ?: if (isImage) "image/jpeg" else "application/octet-stream"
             val base64 = if (isImage) {
                 runCatching {
                     val boundsOptions = android.graphics.BitmapFactory.Options().apply {
@@ -134,6 +139,7 @@ object AttachmentHelper {
                 hostFilePath = targetFile.absolutePath,
                 guestFilePath = guestPath,
                 base64DataUrl = base64,
+                mimeType = sourceMimeType,
             )
         } catch (e: Exception) {
             // 失败不能静默：记录日志并由 ChatViewModel 统计后以 Toast 上抛给用户

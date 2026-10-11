@@ -63,7 +63,7 @@ function renderTable(lines: string[], start: number): { html: string; next: numb
   const body = rows.length
     ? `<tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td>${inlineMarkdown(cell)}</td>`).join("")}</tr>`).join("")}</tbody>`
     : "";
-  return { html: `<table>${head}${body}</table>`, next };
+  return { html: `<div class="markdown-table-wrap"><table>${head}${body}</table></div>`, next };
 }
 
 function renderBlocks(segment: string): string {
@@ -135,8 +135,21 @@ export function markdownToHtml(value: unknown): string {
   return source.split(/```/).map((block, index) => {
     if (index % 2 === 1) {
       const firstBreak = block.indexOf("\n");
-      const code = firstBreak >= 0 ? block.slice(firstBreak + 1) : block;
-      return `<pre><code>${escapeHtml(code.trimEnd())}</code></pre>`;
+      let code = block;
+      let language = "";
+      if (firstBreak >= 0) {
+        const info = block.slice(0, firstBreak).trim();
+        // Only treat a single identifier as a language; otherwise preserve the
+        // first line as code instead of silently dropping user content.
+        if (/^[a-z][\w+-]*$/i.test(info)) {
+          language = info;
+          code = block.slice(firstBreak + 1);
+        } else if (!info) {
+          code = block.slice(firstBreak + 1);
+        }
+      }
+      const className = language ? ` class="language-${escapeHtml(language)}"` : "";
+      return `<pre><code${className}>${escapeHtml(code.trimEnd())}</code></pre>`;
     }
     return renderBlocks(block);
   }).join("");

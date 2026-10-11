@@ -54,6 +54,7 @@
         android:localeConfig="@xml/tianyan_locales_config"
         android:networkSecurityConfig="@xml/tianyan_network_security_config"
         android:supportsRtl="true"
+        android:largeHeap="true"
         android:theme="@style/tianyan_theme">
         <activity
             android:name=".MainActivity"

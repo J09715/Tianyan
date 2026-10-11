@@ -6,8 +6,12 @@ import top.tianyan.app.ui.components.RuntimeAlertDialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.util.LruCache
+import android.webkit.MimeTypeMap
 import android.widget.Toast
+import androidx.core.content.FileProvider
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -22,6 +26,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.add
@@ -72,12 +77,15 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import top.tianyan.app.harness.AssistantText
 import top.tianyan.app.harness.CapabilityEvent
+import top.tianyan.app.harness.MessageAttachment
 import top.tianyan.app.harness.UserMessage
 import top.tianyan.app.harness.checkpoint.RewindScope
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 
 /**
  * 剥离历史消息里残留的附件挂载说明（≤0.18.17 会把整段拼进消息正文并落库）。
@@ -106,6 +114,7 @@ internal fun UserBubble(
     // 渲染层统一剥离：新消息本就不含该段，历史消息也能显示干净。
     val visibleText = remember(message.text) { stripAttachmentManifest(message.text) }
     var showMenu by remember { mutableStateOf(false) }
+    var previewImageUrl by rememberSaveable { mutableStateOf<String?>(null) }
     // 删除消息为破坏性操作，先经确认对话框
     var showDeleteConfirm by rememberSaveable { mutableStateOf(false) }
     // 撤回到此轮：先选择撤回范围（代码/对话/两者）
@@ -135,7 +144,7 @@ internal fun UserBubble(
                         ImageThumbnail(
                             imageUrl = imageUrl,
                             cacheKey = "chat-image-${message.id}-$index",
-                            onClick = { showMenu = true },
+                            onClick = { previewImageUrl = imageUrl },
                         )
                     }
                 }
@@ -158,7 +167,7 @@ internal fun UserBubble(
                     fileAttachments.forEach { attachment ->
                         AttachmentFileCard(
                             attachment = attachment,
-                            onClick = { showMenu = true },
+                            onClick = { openAttachment(context, attachment) },
                         )
                     }
                 }
@@ -255,6 +264,13 @@ internal fun UserBubble(
                 },
             )
         }
+    }
+
+    previewImageUrl?.let { imageUrl ->
+        ChatImagePreviewDialog(
+            imageUrl = imageUrl,
+            onDismiss = { previewImageUrl = null },
+        )
     }
 
     // 删除消息二次确认
@@ -403,6 +419,93 @@ internal fun ImageThumbnail(
             // 与文字气泡一致的点击语义：弹出操作菜单
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
     )
+}
+
+/**
+ * 把 [MessageAttachment] 还原成 Android 本地文件。guestPath 是 PRoot 沙箱内路径
+ * （/attachments/xxx），Android 侧真实文件保存在 filesDir/linux-runtime/attachments/xxx。
+ * 历史消息或已被清理的附件可能已不存在，此时返回 null，调用方走降级提示。
+ */
+private fun attachmentFile(context: Context, attachment: MessageAttachment): java.io.File? {
+    val name = attachment.guestPath.substringAfterLast('/').ifBlank { attachment.name }
+    if (name.isBlank()) return null
+    val candidate = java.io.File(context.filesDir, "linux-runtime/attachments/$name")
+    return candidate.takeIf { it.exists() && it.length() > 0L }
+}
+
+/**
+ * 点击文件附件：用系统查看器打开。URI 走 FileProvider 并附带只读授权，
+ * mimeType 优先用发送时保留的类型，缺失时按扩展名回退。
+ */
+private fun openAttachment(context: Context, attachment: MessageAttachment) {
+    val mimeType = attachment.mimeType
+        ?: MimeTypeMap.getSingleton().getMimeTypeFromExtension(
+            attachment.name.substringAfterLast('.', "").lowercase(),
+        )
+        ?: "*/*"
+    val file = attachmentFile(context, attachment)
+    val uri = file?.let { f ->
+        runCatching {
+            FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", f)
+        }.getOrNull()
+    }
+    if (uri == null) {
+        Toast.makeText(
+            context,
+            context.getString(R.string.chat_attachment_missing, attachment.name),
+            Toast.LENGTH_SHORT,
+        ).show()
+        return
+    }
+    val intent = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(uri, mimeType)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    runCatching {
+        context.startActivity(Intent.createChooser(intent, attachment.name))
+    }.onFailure {
+        Toast.makeText(
+            context,
+            context.getString(R.string.chat_attachment_missing, attachment.name),
+            Toast.LENGTH_SHORT,
+        ).show()
+    }
+}
+
+/** 全屏图片预览：点缩略图后弹出，点任意处关闭。支持 data URL 与本地文件路径。 */
+@Composable
+private fun ChatImagePreviewDialog(imageUrl: String, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val data = remember(imageUrl) {
+        when {
+            imageUrl.startsWith("file://") -> java.io.File(imageUrl.removePrefix("file://"))
+            imageUrl.startsWith("/attachments/") ->
+                java.io.File(context.filesDir, "linux-runtime/attachments/${imageUrl.substringAfterLast('/')}")
+            imageUrl.startsWith("/") -> java.io.File(imageUrl)
+            else -> imageUrl
+        }
+    }
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.94f))
+                .clickable(onClick = onDismiss),
+            contentAlignment = Alignment.Center,
+        ) {
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(data)
+                    .build(),
+                contentDescription = stringResource(R.string.chat_user_image),
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
 }
 
 @Composable

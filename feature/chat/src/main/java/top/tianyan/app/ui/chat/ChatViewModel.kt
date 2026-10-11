@@ -2083,7 +2083,11 @@ class ChatViewModel @Inject constructor(
                 isImage = att.isImage,
                 sizeBytes = att.sizeBytes,
                 guestPath = att.guestFilePath ?: "/attachments/${att.name}",
-                imageUrl = att.base64DataUrl?.takeIf { att.isImage },
+                // 图片的 base64 data URL 只走 UserMessage.imageUrls（渲染缩略图 + 发模型），
+                // 不再重复落进 attachment.imageUrl：否则每张图在 payloadJson 里序列化两份，
+                // 反序列化后也多出一份大 String，长会话 + 多图时会把 256MB 堆挤到 OOM。
+                imageUrl = null,
+                mimeType = att.mimeType,
             )
         }
         send(fullMessage, imageUrls, persistedAttachments)
