@@ -20,6 +20,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonPrimitive
+import top.tianyan.app.core.browser.BROWSER_HOME_URL
 import top.tianyan.app.core.browser.BrowserFamily
 import top.tianyan.app.runtime.browser.BrowserEvent
 import top.tianyan.app.runtime.browser.BrowserEventBus
@@ -115,7 +116,7 @@ class WebViewTabPool(
             tabId = "t:" + System.nanoTime().toString(36),
             family = BrowserFamily.IN_APP,
             title = "",
-            url = initialUrl ?: "about:blank",
+            url = initialUrl ?: BROWSER_HOME_URL,
         )
         // per-tab scope 与该 tab 唯一的 SnapshotBuilder 由池统一创建持有
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -128,9 +129,8 @@ class WebViewTabPool(
             hookInstaller?.onWebViewCreated(token.tabId, view)
             if (cdpManager != null) installTabMarker(token.tabId, view)
             byToken[token.tabId] = Slot(token, view, scope, builder)
-            initialUrl?.let {
-                view.loadUrl(it)
-            }
+            // 无初始 URL（agent 打开空 tab）时加载内置起始页，而非空白页
+            view.loadUrl(initialUrl ?: BROWSER_HOME_URL)
         }
         if (activate) {
             _activeTab.value = token

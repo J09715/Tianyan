@@ -25,8 +25,25 @@ class CdpFetchInterceptorTest {
 
     private class FakeCdpApi : CdpCommandApi {
         val sent = ArrayList<Pair<String, JsonObject>>()
+        var responseBody: String? = null
+        var responseBodyBase64 = false
+
         override suspend fun send(method: String, params: JsonObject, sessionId: String?, timeoutMs: Long): JsonObject {
             sent += method to params
+            if (method == "Fetch.getResponseBody" && responseBody != null) {
+                val raw = responseBody!!
+                val body = if (responseBodyBase64) {
+                    java.util.Base64.getEncoder().encodeToString(raw.toByteArray(Charsets.UTF_8))
+                } else {
+                    raw
+                }
+                return buildJsonObject {
+                    put("result", buildJsonObject {
+                        put("body", body)
+                        put("base64Encoded", responseBodyBase64)
+                    })
+                }
+            }
             return Json.parseToJsonElement("""{"result":{}}""").jsonObject
         }
     }
@@ -84,9 +101,11 @@ class CdpFetchInterceptorTest {
         val params = paramsOf("Fetch.enable")
         assertEquals(1, params.size)
         val patterns = params[0]["patterns"]!!.jsonArray
-        assertEquals(1, patterns.size) // *api* 去重
+        assertEquals(2, patterns.size) // *api* 去重后注册 Request + Response 两个 stage
         assertEquals("*api*", patterns[0].jsonObject["urlPattern"]!!.jsonPrimitive.content)
-        assertEquals("Request", patterns[0].jsonObject["requestStage"]!!.jsonPrimitive.content)
+        assertEquals("*api*", patterns[1].jsonObject["urlPattern"]!!.jsonPrimitive.content)
+        val stages = patterns.map { it.jsonObject["requestStage"]!!.jsonPrimitive.content }.toSet()
+        assertEquals(setOf("Request", "Response"), stages)
     }
 
     @Test
@@ -183,5 +202,78 @@ class CdpFetchInterceptorTest {
         val cont = paramsOf("Fetch.continueRequest")
         assertEquals(1, cont.size)
         assertEquals("cdp", eventBus.network.value.last().source)
+    }
+
+    // ===== 响应阶段（阶段 A：响应捕获补齐）=====
+
+    private fun responsePausedParams(
+        requestId: String = "req-1",
+        status: Int = 200,
+        headers: String = """[{"name":"Content-Type","value":"application/json"},{"name":"X-Test","value":"1"}]""",
+    ): String = """
+        {"requestId":"$requestId","resourceType":"XHR","responseStatusCode":$status,
+         "responseStatusText":"OK","responseHeaders":$headers}
+    """.trimIndent()
+
+    private suspend fun fireResponse(requestId: String = "req-1", status: Int = 200) {
+        interceptor.onRequestPaused(
+            Json.parseToJsonElement(responsePausedParams(requestId, status)).jsonObject,
+            sessionId = null,
+        )
+    }
+
+    @Test
+    fun `response stage backfills status headers and body`() = runBlocking {
+        installRule(HookAction.Log(), captureBody = true)
+        api.responseBody = """{"ok":true}"""
+        fire(method = "POST")
+        api.sent.clear()
+        fireResponse(status = 201)
+
+        assertEquals(1, paramsOf("Fetch.continueRequest").size)
+        assertEquals(1, paramsOf("Fetch.getResponseBody").size)
+        val net = eventBus.network.value.last()
+        assertEquals("req-1", net.id)
+        assertEquals(201, net.statusCode)
+        assertEquals("application/json", net.responseHeaders["Content-Type"])
+        assertEquals("1", net.responseHeaders["X-Test"])
+        assertEquals("POST", net.method) // 请求阶段字段保留
+        assertTrue(net.hasResponseBody)
+        assertEquals("""{"ok":true}""", bodies.get("req-1")?.responseBody)
+        assertEquals(1, eventBus.network.value.size) // upsert：单条记录，不重复
+    }
+
+    @Test
+    fun `response body base64 is decoded`() = runBlocking {
+        installRule(HookAction.Log(), captureBody = true)
+        api.responseBody = "你好"
+        api.responseBodyBase64 = true
+        fire()
+        api.sent.clear()
+        fireResponse()
+        assertEquals("你好", bodies.get("req-1")?.responseBody)
+    }
+
+    @Test
+    fun `response stage without captureBody skips body but fills status`() = runBlocking {
+        installRule(HookAction.Log(), captureBody = false)
+        fire()
+        api.sent.clear()
+        fireResponse(status = 404)
+        assertTrue(paramsOf("Fetch.getResponseBody").isEmpty())
+        val net = eventBus.network.value.last()
+        assertEquals(404, net.statusCode)
+        assertTrue(!net.hasResponseBody)
+    }
+
+    @Test
+    fun `response stage without prior request record just releases`() = runBlocking {
+        installRule(HookAction.Log())
+        fire(url = "https://x.test/other") // 不命中 → Pass，无网络记录
+        assertEquals(0, eventBus.network.value.size)
+        api.sent.clear()
+        fireResponse(requestId = "req-1")
+        assertEquals(1, paramsOf("Fetch.continueRequest").size)
+        assertEquals(0, eventBus.network.value.size) // 不新增空记录
     }
 }

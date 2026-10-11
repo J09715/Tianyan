@@ -1,5 +1,6 @@
 package top.tianyan.app.runtime.browser.cdp
 
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonArray
@@ -41,7 +42,17 @@ class CdpFetchInterceptor(
     private val eventBus: BrowserEventBus,
 ) {
 
-    /** 启用（或按当前规则重载）拦截；sessionId 非空时作用于 worker 子会话。 */
+    /** 请求阶段 captureBody=true 的 requestId，响应阶段据此决定是否 Fetch.getResponseBody。 */
+    private val pendingResponseBody = ConcurrentHashMap.newKeySet<String>()
+
+    /**
+     * 启用（或按当前规则重载）拦截；sessionId 非空时作用于 worker 子会话。
+     *
+     * 每个网络 pattern 同时注册 Request 与 Response 两个 stage：
+     * - Request 阶段承担改写动作（block/mock/redirect/modify_headers/log）；
+     * - Response 阶段只读回填（statusCode/responseHeaders/body），立即放行、绝不改写。
+     * 两者靠 CDP 的 requestId 关联（同一请求跨阶段 requestId 不变）。
+     */
     suspend fun enable(sessionId: String? = null) {
         val patterns = CdpFetchDecision.fetchPatterns(store.rulesFor(tabId))
         if (patterns.isEmpty()) {
@@ -62,6 +73,12 @@ class CdpFetchInterceptor(
                                     put("requestStage", "Request")
                                 }
                             )
+                            add(
+                                buildJsonObject {
+                                    put("urlPattern", p)
+                                    put("requestStage", "Response")
+                                }
+                            )
                         }
                     },
                 )
@@ -77,6 +94,11 @@ class CdpFetchInterceptor(
     /** Fetch.requestPaused 事件入口（CdpTabConnection 转发；sessionId 非空 = worker 会话）。 */
     suspend fun onRequestPaused(params: JsonObject, sessionId: String?) {
         val requestId = params["requestId"]?.jsonPrimitive?.contentOrNull ?: return
+        // 响应阶段：params 带 responseStatusCode（请求阶段无此字段）→ 只读回填后立即放行
+        if (params.containsKey("responseStatusCode")) {
+            onResponsePaused(requestId, params, sessionId)
+            return
+        }
         val request = params["request"] as? JsonObject ?: JsonObject(emptyMap())
         val url = request["url"]?.jsonPrimitive?.contentOrNull ?: ""
         val method = request["method"]?.jsonPrimitive?.contentOrNull ?: "GET"
@@ -94,14 +116,14 @@ class CdpFetchInterceptor(
                 val body = if (decision.captureBody) fetchPostData(requestId, sessionId) else null
                 store.recordHit(decision.ruleId)
                 publishHit(decision.ruleId, url, "cdp_request", "log $method $url")
-                publishCapture(requestId, url, method, headers, body, startedAt, decision.ruleId, "log")
+                publishCapture(requestId, url, method, headers, body, startedAt, decision.ruleId, "log", decision.captureBody)
                 continueRequest(requestId, sessionId)
             }
 
             is FetchDecision.Block -> {
                 store.recordHit(decision.ruleId)
                 publishHit(decision.ruleId, url, "cdp_request", "block $method $url")
-                publishCapture(requestId, url, method, headers, null, startedAt, decision.ruleId, "block")
+                publishCapture(requestId, url, method, headers, null, startedAt, decision.ruleId, "block", false)
                 session.send(
                     "Fetch.failRequest",
                     buildJsonObject {
@@ -115,14 +137,14 @@ class CdpFetchInterceptor(
             is FetchDecision.Redirect -> {
                 store.recordHit(decision.ruleId)
                 publishHit(decision.ruleId, url, "cdp_request", "redirect $method $url -> ${decision.url}")
-                publishCapture(requestId, url, method, headers, null, startedAt, decision.ruleId, "redirect")
+                publishCapture(requestId, url, method, headers, null, startedAt, decision.ruleId, "redirect", false)
                 continueRequest(requestId, sessionId, url = decision.url)
             }
 
             is FetchDecision.Mock -> {
                 store.recordHit(decision.ruleId)
                 publishHit(decision.ruleId, url, "cdp_request", "mock $method $url -> ${decision.status}")
-                publishCapture(requestId, url, method, headers, null, startedAt, decision.ruleId, "mock")
+                publishCapture(requestId, url, method, headers, null, startedAt, decision.ruleId, "mock", false)
                 val responseHeaders = decision.headers.toMutableMap()
                 responseHeaders.putIfAbsent("Content-Type", "text/plain; charset=utf-8")
                 session.send(
@@ -147,7 +169,7 @@ class CdpFetchInterceptor(
                 publishCapture(
                     requestId, url, method, merged,
                     if (decision.captureBody) fetchPostData(requestId, sessionId) else null,
-                    startedAt, decision.ruleId, "modify_headers",
+                    startedAt, decision.ruleId, "modify_headers", decision.captureBody,
                 )
                 continueRequest(requestId, sessionId, headers = merged)
             }
@@ -177,7 +199,7 @@ class CdpFetchInterceptor(
             buildJsonObject { put("requestId", requestId) },
             sessionId = sessionId,
         )
-        resp["postData"]?.jsonPrimitive?.contentOrNull
+        (resp["result"] as? JsonObject)?.get("postData")?.jsonPrimitive?.contentOrNull
     }.getOrNull()
 
     // ===== 事件发布 =====
@@ -191,6 +213,7 @@ class CdpFetchInterceptor(
         startedAt: Long,
         ruleId: String,
         actionTaken: String,
+        captureBody: Boolean,
     ) {
         val at = System.currentTimeMillis()
         eventBus.publish(
@@ -212,18 +235,87 @@ class CdpFetchInterceptor(
                 ),
             )
         )
-        if (body != null) {
+        if (captureBody) {
+            // 请求阶段先建 entry（请求体可能为空，如 GET），响应阶段回填 responseBody
+            pendingResponseBody.add(id)
             bodyStore.put(
                 NetworkBodyStore.NetworkBody(
                     id = id,
                     tabId = tabId,
-                    requestBody = body,
+                    requestBody = body ?: "",
                     responseBody = "",
                     at = at,
                 )
             )
         }
     }
+
+    /**
+     * 响应阶段回填：只读 statusCode / responseHeaders / body，更新同 id 的请求记录后立即放行。
+     * - 无请求阶段记录（Pass 且未发布）时仅放行，不产生空记录；
+     * - 响应体捕获只在请求阶段 captureBody=true 时进行（[pendingResponseBody]），避免全量抓 body 的开销。
+     */
+    private suspend fun onResponsePaused(requestId: String, params: JsonObject, sessionId: String?) {
+        val statusCode = params["responseStatusCode"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 0
+        val responseHeaders = parseResponseHeaders(params["responseHeaders"])
+        val shouldCapture = pendingResponseBody.remove(requestId)
+        val responseBody = if (shouldCapture) fetchResponseBody(requestId, sessionId) else null
+
+        if (shouldCapture) {
+            bodyStore.get(requestId)?.let { existing ->
+                bodyStore.put(existing.copy(responseBody = responseBody ?: ""))
+            }
+        }
+
+        val prev = eventBus.network.value.lastOrNull { it.id == requestId && it.tabId == tabId }
+        if (prev != null) {
+            val now = System.currentTimeMillis()
+            eventBus.publish(
+                BrowserEvent.NetworkCaptured(
+                    tabId,
+                    prev.copy(
+                        statusCode = statusCode,
+                        responseHeaders = responseHeaders,
+                        finishedAt = now,
+                        durationMs = if (prev.startedAt > 0) now - prev.startedAt else 0L,
+                        responseSize = responseBody?.length?.toLong() ?: 0L,
+                        hasResponseBody = responseBody != null,
+                    ),
+                )
+            )
+        }
+        // 响应阶段只读放行：不改请求头/URL，仅 requestId（continueRequest 在 Response stage 同样合法）
+        continueRequest(requestId, sessionId)
+    }
+
+    /** 读响应体（存在时）；无 body / base64 解码失败 / 读取失败均返回 null。 */
+    private suspend fun fetchResponseBody(requestId: String, sessionId: String?): String? = runCatching {
+        val resp = session.send(
+            "Fetch.getResponseBody",
+            buildJsonObject { put("requestId", requestId) },
+            sessionId = sessionId,
+        )
+        val result = resp["result"] as? JsonObject ?: return@runCatching null
+        val body = result["body"]?.jsonPrimitive?.contentOrNull ?: return@runCatching null
+        val base64Encoded = result["base64Encoded"]?.jsonPrimitive?.contentOrNull
+            ?.toBooleanStrictOrNull() ?: false
+        if (base64Encoded) {
+            runCatching {
+                java.util.Base64.getDecoder().decode(body).toString(Charsets.UTF_8)
+            }.getOrNull()
+        } else {
+            body
+        }
+    }.getOrNull()
+
+    /** 解析 CDP 响应头的 `HeaderEntry[]`（name/value）为有序 Map。 */
+    private fun parseResponseHeaders(node: kotlinx.serialization.json.JsonElement?): Map<String, String> =
+        (node as? JsonArray)?.mapNotNull { entry ->
+            val obj = entry as? JsonObject ?: return@mapNotNull null
+            val name = obj["name"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+            val value = obj["value"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+            name to value
+        }?.toMap() ?: emptyMap()
 
     private suspend fun publishHit(ruleId: String, url: String, phase: String, summary: String) {
         val rule = store.list().firstOrNull { it.id == ruleId }

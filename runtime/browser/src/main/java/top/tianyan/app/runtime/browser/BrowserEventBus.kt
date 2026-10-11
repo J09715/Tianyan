@@ -111,7 +111,16 @@ class BrowserEventBus(
             }
             is BrowserEvent.NetworkCaptured -> {
                 _network.update { prev ->
-                    val next = (prev + event.request)
+                    // upsert：同一请求（tabId + id）的响应阶段回填会覆盖请求阶段记录，
+                    // 避免 network_list 对同一条请求出现「请求阶段 + 响应阶段」两条重复条目。
+                    val idx = prev.indexOfLast {
+                        it.id == event.request.id && it.tabId == event.request.tabId
+                    }
+                    val next = if (idx >= 0) {
+                        prev.toMutableList().also { it[idx] = event.request }
+                    } else {
+                        prev + event.request
+                    }
                     if (next.size > networkCapacity) next.takeLast(networkCapacity) else next
                 }
             }

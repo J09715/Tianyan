@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import top.tianyan.app.core.browser.BROWSER_HOME_URL
 import top.tianyan.app.core.browser.BrowserDescriptor
 import top.tianyan.app.core.browser.BrowserFamily
 import top.tianyan.app.core.browser.PageSnapshot
@@ -214,7 +215,7 @@ class BrowserViewModel @Inject constructor(
         val raw = _urlInput.value.trim()
         if (raw.isBlank()) return
         val target = normalizeUrl(raw) ?: run {
-            _toolMessage.value = "不支持的链接：仅允许 http/https（或 about:blank）"
+            _toolMessage.value = "不支持的链接：仅允许 http/https（输入 home 可回到起始页）"
             return
         }
         viewModelScope.launch {
@@ -281,9 +282,9 @@ class BrowserViewModel @Inject constructor(
         val tab = runCatching { engine.listTabs() }.getOrDefault(emptyList())
             .firstOrNull { it.tabId == tabId } ?: return@launch
         runCatching { engine.closeTab(tab) }
-        // 关掉唯一 tab 后保留一个空白页，避免视图永久空白
+        // 关掉唯一 tab 后回落到起始页，避免视图永久空白
         if (engine.activeTab() == null) {
-            runCatching { engine.openTab("about:blank", activate = true) }
+            runCatching { engine.openTab(BROWSER_HOME_URL, activate = true) }
         }
         refreshNavState()
         syncTabs()
@@ -302,7 +303,7 @@ class BrowserViewModel @Inject constructor(
     private fun ensureActiveTab() = viewModelScope.launch {
         runCatching {
             val engine = registry.getDefault()
-            if (engine.activeTab() == null) engine.openTab("about:blank", activate = true)
+            if (engine.activeTab() == null) engine.openTab(BROWSER_HOME_URL, activate = true)
         }.onFailure { _toolMessage.value = it.message ?: "浏览器引擎尚未就绪" }
         syncTabs()
     }
@@ -311,7 +312,7 @@ class BrowserViewModel @Inject constructor(
     private suspend fun syncTabs() {
         val engine = runCatching { registry.getDefault() }.getOrNull() ?: return
         if (engine.activeTab() == null) {
-            runCatching { engine.openTab("about:blank", activate = true) }
+            runCatching { engine.openTab(BROWSER_HOME_URL, activate = true) }
         }
         val tokens = runCatching { engine.listTabs() }.getOrDefault(emptyList())
         _tabs.value = tokens.toTabUi(engine.activeTab()?.tabId)
@@ -331,9 +332,15 @@ class BrowserViewModel @Inject constructor(
         BrowserTabUi(tabId = token.tabId, title = liveTitle, url = liveUrl, active = token.tabId == activeId)
     }
 
-    /** URL 归一化：仅放行 http/https 与 about:blank；其余协议（javascript:/file:/intent: 等）拒绝。 */
+    /** URL 归一化：放行 http/https 与内置起始页；其余协议（javascript:/file:/intent: 等）拒绝。 */
     private fun normalizeUrl(value: String): String? {
-        if (value.equals("about:blank", ignoreCase = true)) return "about:blank"
+        if (value.equals("about:blank", ignoreCase = true)) return BROWSER_HOME_URL
+        if (value.equals("home", ignoreCase = true) ||
+            value.equals("about:home", ignoreCase = true) ||
+            value.equals(BROWSER_HOME_URL, ignoreCase = true)
+        ) {
+            return BROWSER_HOME_URL
+        }
         val schemeEnd = value.indexOf("://")
         if (schemeEnd <= 0) return "https://$value"
         val scheme = value.take(schemeEnd).lowercase()

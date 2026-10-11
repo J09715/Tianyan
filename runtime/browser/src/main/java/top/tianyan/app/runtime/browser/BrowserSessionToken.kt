@@ -1,6 +1,7 @@
 package top.tianyan.app.runtime.browser
 
 import kotlinx.serialization.Serializable
+import top.tianyan.app.core.browser.BROWSER_HOME_URL
 import top.tianyan.app.core.browser.BrowserFamily
 
 /**
@@ -12,7 +13,7 @@ data class BrowserSessionToken(
     val tabId: String,
     val family: BrowserFamily,
     val title: String = "",
-    val url: String = "about:blank",
+    val url: String = BROWSER_HOME_URL,
     val createdAt: Long = System.currentTimeMillis(),
 ) {
     companion object {
