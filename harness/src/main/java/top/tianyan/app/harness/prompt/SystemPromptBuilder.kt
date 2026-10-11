@@ -96,7 +96,7 @@ class SystemPromptBuilder @Inject constructor(
         val providerModelId = runCatching { settingsDataStore.providerModel.first() }.getOrDefault("")
 
         val allSkills = runCatching { skillRepository.allSkills.first() }.getOrDefault(emptyList())
-        val selectedSkills = selectSkills(allSkills, mentionedNames)
+        val selectedSkills = selectSkills(allSkills, mentionedNames, latestUserMessage)
 
         // 技能段：渐进式披露 —— 只注入「名称 + 摘要」，正文由 load_rule 按需取。
         //
@@ -421,22 +421,36 @@ class SystemPromptBuilder @Inject constructor(
     }
 
     /**
-     * 技能选择策略：默认不常驻注入任何技能（保持 Prompt 精简零污染）；
-     * 仅在会话显式钉选或当前轮次 @ 提及该专精技能时才注入生效。
+     * 技能选择策略：两层召回，按优先级合并。
+     *
+     * 1. 显式 @ 提及（name / id / triggerCommand 精确匹配）—— 最高优先级，
+     *    预算压力下先保住它们；
+     * 2. 场景自动匹配（[matchByScene]）—— 根据当轮用户消息与技能名的关键词
+     *    重叠度召回，让用户不必手动 @ 提及也能自动加载相关技能。
+     *
+     * 不 @ 提及不再直接返回空列表：场景匹配兜底。未命中任何信号时仍为空，
+     * 保持「默认不常驻注入、Prompt 零污染」的渐进式披露原则。
      */
     internal fun selectSkills(
         allSkills: List<AgentSkill>,
         mentionedNames: Set<String>,
+        latestUserMessage: String = "",
     ): List<AgentSkill> {
-        if (mentionedNames.isEmpty()) {
-            return emptyList()
+        val mentioned = if (mentionedNames.isNotEmpty()) {
+            allSkills.filter { skill ->
+                val nameLower = skill.name.lowercase()
+                val idLower = skill.id.lowercase()
+                val cmdLower = skill.triggerCommand?.removePrefix("/")?.lowercase().orEmpty()
+                nameLower in mentionedNames || idLower in mentionedNames ||
+                    (cmdLower.isNotEmpty() && cmdLower in mentionedNames)
+            }
+        } else {
+            emptyList()
         }
-        return allSkills.filter { skill ->
-            val nameLower = skill.name.lowercase()
-            val idLower = skill.id.lowercase()
-            val cmdLower = skill.triggerCommand?.removePrefix("/")?.lowercase().orEmpty()
-            nameLower in mentionedNames || idLower in mentionedNames || (cmdLower.isNotEmpty() && cmdLower in mentionedNames)
-        }
+        val mentionedIds = mentioned.mapTo(mutableSetOf()) { it.id }
+        // @提及的技能在前（保预算），场景匹配按相关度排序、去重后跟在后面。
+        val sceneMatched = matchByScene(allSkills, latestUserMessage)
+        return mentioned + sceneMatched.filter { it.id !in mentionedIds }
     }
 
     private suspend fun buildSubagentGuidance(toolCallMode: ToolCallMode): String {
@@ -549,6 +563,103 @@ class SystemPromptBuilder @Inject constructor(
         private const val MAX_SKILL_DESC_CHARS = 200
 
         /**
+         * 场景匹配的选中阈值。2-gram 命中、独特长词命中、中文 2 字片段命中，
+         * 或一个短缩写/中等词命中都 >= 此值；泛化词（android/security 等）单独命中
+         * 只给 1 分，低于阈值不触发，避免「用户说 security 就召回几十个技能」。
+         */
+        private const val SCENE_MATCH_THRESHOLD = 2
+
+        /**
+         * 英文技能名开头的动名词/修饰前缀（区分度低，场景匹配时循环跳过）。
+         * 只作用于「开头连续出现」的位置，中间位置的同形词（如 nginx-reverse-proxy
+         * 里的 reverse）是实义词，不会被误伤。
+         */
+        private val ACTION_PREFIXES = setOf(
+            "achieving", "acquiring", "analyzing", "assessing", "attacking", "auditing",
+            "automating", "awesome", "benchmarking", "building", "bypassing", "coercing",
+            "collecting", "conducting", "configuring", "containing", "continuous", "correlating",
+            "defending", "deobfuscating", "deploying", "designing", "detecting", "emulating",
+            "enumerating", "eradicating", "escaping", "evaluating", "executing", "exploiting",
+            "extracting", "generating", "hardening", "hunting", "implementing", "integrating",
+            "intercepting", "investigating", "managing", "mapping", "migrating", "modeling",
+            "monitoring", "moving", "operating", "operationalizing", "orchestrating", "parsing",
+            "performing", "post", "prioritizing", "processing", "profiling", "recovering",
+            "relaying", "remediating", "scanning", "securing", "self", "testing", "tracking",
+            "triaging", "validating", "verifying",
+        )
+
+        /** 英文技能名里的连接/虚词，任意位置都过滤。 */
+        private val CONNECTORS = setOf(
+            "a", "an", "and", "as", "at", "before", "by", "for", "from", "in", "into",
+            "of", "on", "or", "over", "per", "the", "to", "under", "using", "via", "with",
+            "across", "through", "between", "without", "within",
+        )
+
+        /**
+         * 泛化长词：在大量技能名里作为「动作对象类别」反复出现，单独命中不足以
+         * 定位具体技能，只能作为弱信号（配合 2-gram 或独特词才触发）。
+         */
+        private val GENERIC_WORDS = setOf(
+            "vulnerabilities", "vulnerability", "assessment", "attack", "attacks", "detection",
+            "artifacts", "artifact", "test", "tests", "testing", "management", "security",
+            "analysis", "investigation", "investigations", "techniques", "configuration",
+            "configurations", "persistence", "controls", "protection", "monitoring", "response",
+            "systems", "system", "pipeline", "indicators", "enumeration", "exploitation",
+            "automation", "reconnaissance", "credentials", "applications", "application",
+            "infrastructure", "authentication", "authorization", "android", "windows", "linux",
+            "network", "networks", "web", "mobile", "cloud", "malware", "memory", "data",
+            "tools", "tool", "framework", "methodology", "injection", "injections", "guide",
+            "checklist", "overview", "introduction", "best", "practices",
+        )
+
+        /**
+         * 中文技能名里的动作/修饰词：去掉后剩余的中文片段才是实义触发词。
+         * 保留「审计 / 签名 / 冲突 / 崩溃 / 逆向 / 沙箱 / 凭据 / 红队 / 附件 /
+         * 端点 / 主题 / 兼容」等有区分度的实义词。
+         */
+        private val CN_GENERIC_WORDS = setOf(
+            "定位", "修复", "排查", "诊断", "排障", "守卫", "处置", "发布", "构建", "安装",
+            "检测", "核验", "回验", "管理", "分析", "审查", "重构", "维护", "配置", "部署",
+            "助手", "专精", "敏捷", "在线", "原生", "开发", "跨平台", "页面", "跟随", "宿主",
+            "变色", "高危", "应用", "服务", "独立", "上下文", "任务", "规划", "知识", "图谱",
+            "环境", "状态", "查询", "消息", "输出", "快速", "只读", "推送", "设备", "安全",
+            "权限", "校验", "移动", "代码", "结论", "敏感", "双向", "捕获", "测试", "远程",
+            "项目", "与", "改走", "块", "端",
+        )
+
+        /**
+         * 常见中文触发词 → 英文技能名关键词映射：让英文技能名也能被纯中文消息召回
+         * （如「SQL 注入」命中 exploiting-sql-injection-*）。
+         */
+        private val CN_EN_ALIASES = mapOf(
+            "注入" to "injection",
+            "钓鱼" to "phishing",
+            "漏洞" to "vulnerability",
+            "恶意软件" to "malware",
+            "恶意" to "malware",
+            "勒索" to "ransomware",
+            "提权" to "privilege",
+            "渗透" to "penetration",
+            "取证" to "forensic",
+            "逆向" to "reverse",
+            "横向" to "lateral",
+            "抓包" to "packet",
+            "流量" to "traffic",
+            "密码" to "password",
+            "口令" to "credential",
+            "凭据" to "credential",
+            "密钥" to "key",
+            "后门" to "backdoor",
+            "木马" to "trojan",
+            "蠕虫" to "worm",
+            "挖矿" to "mining",
+            "僵尸网络" to "botnet",
+            "拒绝服务" to "ddos",
+            "令牌" to "token",
+            "容器" to "container",
+        )
+
+        /**
          * 技能发现块（渐进式披露 Tier 1）：只给名称 + 摘要，不注入正文。
          *
          * 正文用 `load_rule("skill:<id>")` 按需读取 —— 模型只在真正要用某个技能时
@@ -595,6 +706,91 @@ class SystemPromptBuilder @Inject constructor(
                 "不要在未读取正文的情况下凭摘要臆测它的具体流程。\n"
             val droppedNote = if (dropped > 0) "\n（另有 $dropped 项因预算未列出，可用 load_rule 指定 id 直接读取）" else ""
             return header + "\n" + lines.joinToString("\n") + droppedNote
+        }
+
+        /**
+         * 场景自动匹配：根据用户消息与技能名的关键词重叠度召回相关技能，按相关度降序。
+         * 用于替代「必须手动 @ 提及才能加载」的限制 —— 未命中任何信号时返回空列表。
+         */
+        internal fun matchByScene(
+            allSkills: List<AgentSkill>,
+            latestUserMessage: String,
+        ): List<AgentSkill> {
+            val raw = latestUserMessage.trim()
+            if (raw.isEmpty()) return emptyList()
+            val msg = applyCnEnAliases(raw.lowercase())
+            return allSkills
+                .mapNotNull { skill ->
+                    val score = sceneScore(extractSceneKeywords(skill.name), msg)
+                    if (score >= SCENE_MATCH_THRESHOLD) skill to score else null
+                }
+                .sortedByDescending { it.second }
+                .map { it.first }
+        }
+
+        /**
+         * 中文触发词 → 英文关键词的原地替换，让英文技能名也能被纯中文消息召回。
+         * 例如「SQL 注入」→ 注入替换为 injection，从而命中 exploiting-sql-injection-*。
+         */
+        internal fun applyCnEnAliases(msg: String): String {
+            var result = msg
+            for ((cn, en) in CN_EN_ALIASES) {
+                if (result.contains(cn)) result = result.replace(cn, " $en ")
+            }
+            return result
+        }
+
+        /** 技能名 → 场景关键词列表。中英文名走不同抽取路径。 */
+        internal fun extractSceneKeywords(name: String): List<String> {
+            val lower = name.lowercase()
+            val hasCjk = lower.any { it.code in 0x4E00..0x9FFF }
+            if (!hasCjk) {
+                val words = lower.split('-', '_', '.', '/', ' ').map { it.trim() }.filter { it.isNotEmpty() }
+                if (words.isEmpty()) return emptyList()
+                var start = 0
+                while (start < words.size && words[start] in ACTION_PREFIXES) start++
+                return words.drop(start).filter { it !in CONNECTORS }
+            }
+            // 中文名：英文缩写 + 去通用词后的中文 2 字 n-gram（高区分度触发词）。
+            val keywords = mutableListOf<String>()
+            Regex("[a-z0-9]{2,}").findAll(lower).mapTo(keywords) { it.value }
+            var cnText = lower
+            for (w in CN_GENERIC_WORDS) cnText = cnText.replace(w, " ")
+            val cnChars = cnText.filter { it.code in 0x4E00..0x9FFF }
+            for (i in 0 until cnChars.length - 1) {
+                keywords += cnChars.substring(i, i + 2)
+            }
+            return keywords.distinct()
+        }
+
+        /**
+         * 场景匹配打分：2-gram（相邻关键词都命中）与独特长词（工具/技术名）为强信号，
+         * 中文 2 字片段命中视为独特词级别；泛化词只能作弱信号，需组合才触发。
+         * 英文关键词用词边界匹配，避免短缩写（ci/adb/sql…）误伤包含它的普通单词。
+         */
+        internal fun sceneScore(keywords: List<String>, msg: String): Int {
+            if (keywords.isEmpty()) return 0
+            var score = 0
+            for (i in 0 until keywords.size - 1) {
+                if (containsWord(msg, keywords[i]) && containsWord(msg, keywords[i + 1])) score += 3
+            }
+            for (kw in keywords) {
+                if (!containsWord(msg, kw)) continue
+                val isCjk = kw.any { it.code in 0x4E00..0x9FFF }
+                score += when {
+                    isCjk -> 3
+                    kw.length >= 6 && kw !in GENERIC_WORDS -> 3
+                    kw in GENERIC_WORDS -> 1
+                    else -> 2
+                }
+            }
+            return score
+        }
+
+        /** 中文子串用包含匹配；英文词用前后非字母数字的边界匹配，防止短缩写误伤。 */
+        private fun containsWord(msg: String, kw: String): Boolean {
+            if (kw.any { it.code in 0x4E00..0x9FFF }) return msg.contains(kw)
+            return Regex("(?<![a-z0-9])${Regex.escape(kw)}(?![a-z0-9])").containsMatchIn(msg)
         }
 
         /**
