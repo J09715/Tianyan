@@ -60,6 +60,8 @@ class WebViewTabPool(
     hooksEnabled: Boolean = false,
     cdpEnabled: Boolean = false,
     maxCaptureBytes: Long = 6L * 1024 * 1024,
+    /** 起始页跟随软件主题：每次新建 tab 时读取当前深色态，注入 home.html。默认浅色。 */
+    private val themeDark: suspend () -> Boolean = { false },
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val mutex = Mutex()
@@ -87,6 +89,9 @@ class WebViewTabPool(
 
     /** __tianyanTabId marker 的 document-start 句柄（仅 cdpEnabled 时注册）。 */
     private val markerHandles = ConcurrentHashMap<String, ScriptHandler>()
+
+    /** __tianyanTheme 主题注入的 document-start 句柄（每个 tab 均注册，供起始页跟随软件主题）。 */
+    private val themeHandles = ConcurrentHashMap<String, ScriptHandler>()
 
     private data class Slot(
         val token: BrowserSessionToken,
@@ -122,12 +127,15 @@ class WebViewTabPool(
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         // isAlive：builder 扫描前确认 tab 仍在池中（closeTab / 崩溃 / shutdown 后变 false）
         val builder = SnapshotBuilder(token, eventBus, scope) { byToken[token.tabId] != null }
+        // 起始页主题：在切主线程前读取（themeDark 可能读 DataStore，挂起 IO，不阻塞主线程）
+        val dark = themeDark()
         withContext(Dispatchers.Main.immediate) {
             val view = AndroidWebViewFactory.create(context, desktopUserAgent)
             WebViewClients.attach(view, eventBus, token, this@WebViewTabPool, builder, scope, hookInstaller)
             // 桥与 document-start 脚本必须在首个 loadUrl 之前装好，最早的请求才不会漏
             hookInstaller?.onWebViewCreated(token.tabId, view)
             if (cdpManager != null) installTabMarker(token.tabId, view)
+            installThemeScript(token.tabId, view, dark)
             byToken[token.tabId] = Slot(token, view, scope, builder)
             // 无初始 URL（agent 打开空 tab）时加载内置起始页，而非空白页
             view.loadUrl(initialUrl ?: BROWSER_HOME_URL)
@@ -166,6 +174,7 @@ class WebViewTabPool(
             hookInstaller?.onWebViewDestroyed(token.tabId, s.view)
             hookPipeline?.clearForTab(token.tabId)
             removeTabMarker(token.tabId)
+            removeThemeScript(token.tabId)
         }
         cdpManager?.onTabClosed(token.tabId)
         if (_activeTab.value?.tabId == token.tabId) {
@@ -187,6 +196,7 @@ class WebViewTabPool(
             hookInstaller?.onWebViewDestroyed(token.tabId, s.view)
             hookPipeline?.clearForTab(token.tabId)
             removeTabMarker(token.tabId)
+            removeThemeScript(token.tabId)
         }
         cdpManager?.onTabClosed(token.tabId)
         if (_activeTab.value?.tabId == token.tabId) {
@@ -208,6 +218,7 @@ class WebViewTabPool(
             mainHandler.post {
                 hookInstaller?.onWebViewDestroyed(slot.token.tabId, slot.view)
                 removeTabMarker(slot.token.tabId)
+                removeThemeScript(slot.token.tabId)
                 AndroidWebViewFactory.destroy(slot.view)
             }
         }
@@ -246,6 +257,33 @@ class WebViewTabPool(
         } else {
             mainHandler.post {
                 markerHandles.remove(tabId)?.let { runCatching { it.remove() } }
+            }
+        }
+    }
+
+    /**
+     * 注入 `window.__tianyanTheme={dark:Boolean}`：起始页据此跟随软件深/浅主题。
+     * document-start 覆盖后续导航，即时求值覆盖当前文档（about:blank 不走 document-start）。
+     * 必须主线程调用。
+     */
+    private fun installThemeScript(tabId: String, view: WebView, dark: Boolean) {
+        val script = "window.__tianyanTheme={dark:${dark}};"
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            runCatching {
+                themeHandles[tabId] =
+                    WebViewCompat.addDocumentStartJavaScript(view, script, setOf("*"))
+            }
+        }
+        runCatching { view.evaluateJavascript(script, null) }
+    }
+
+    /** 移除主题注入句柄；任意线程可调（内部保证主线程执行）。 */
+    private fun removeThemeScript(tabId: String) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            themeHandles.remove(tabId)?.let { runCatching { it.remove() } }
+        } else {
+            mainHandler.post {
+                themeHandles.remove(tabId)?.let { runCatching { it.remove() } }
             }
         }
     }

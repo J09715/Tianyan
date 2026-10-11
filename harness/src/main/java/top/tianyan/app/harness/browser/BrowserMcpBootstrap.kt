@@ -33,6 +33,7 @@ class BrowserMcpBootstrap @Inject constructor(
     private val runtime: Lazy<McpServerRuntime>,
     private val registry: BrowserRegistry,
     private val browserPrefs: top.tianyan.app.core.datastore.BrowserPreferences,
+    private val appearancePrefs: top.tianyan.app.core.datastore.AppearancePreferences,
 ) {
     /** 注册引擎并启动 HTTP server；幂等。按用户偏好（#4）决定绑定面：allowRemote 时绑定 0.0.0.0。 */
     fun bootstrap(): Boolean {
@@ -48,6 +49,7 @@ class BrowserMcpBootstrap @Inject constructor(
                 hooksEnabled = prefs.allowHooks,
                 cdpEnabled = prefs.allowCdp,
                 maxCaptureBytes = prefs.maxCaptureBytes.toLong(),
+                themeDark = { readDarkTheme() },
             )
             val engine = AndroidInAppBrowserEngine(context, registry.eventBus, pool)
             regImpl.registerEngine(engine)
@@ -83,6 +85,19 @@ class BrowserMcpBootstrap @Inject constructor(
             )
         }
     }.getOrDefault(top.tianyan.app.core.browser.BrowserPreferences.DEFAULT)
+
+    /** 起始页跟随软件主题：themeMode（light/dark/system）结合系统深色态计算当前深色，口径与 MainActivity 一致。 */
+    private suspend fun readDarkTheme(): Boolean {
+        val mode = runCatching { appearancePrefs.themeMode.first() }.getOrDefault("system")
+        val systemDark = (context.resources.configuration.uiMode and
+            android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
+        return when (mode) {
+            "light" -> false
+            "dark" -> true
+            else -> systemDark
+        }
+    }
 
     private fun generateToken(): String = java.util.UUID.randomUUID().toString().replace("-", "")
 
