@@ -17,6 +17,19 @@ data class PendingMessage(
     val attachments: List<MessageAttachment> = emptyList(),
 )
 
+/**
+ * Durable tasks need a recoverable textual description even when the user sends image-only input.
+ * Keep image payloads out of the task row; the live run still receives [PendingMessage.imageUrls].
+ */
+internal fun durableTaskDescription(message: PendingMessage): String {
+    val text = message.text.trim()
+    if (text.isNotBlank()) return text
+    if (message.attachments.isNotEmpty()) {
+        return HarnessApiMapper.renderAttachmentManifest(message.attachments)
+    }
+    return "请分析附带的图片。"
+}
+
 /** Durable prompt plus its delivery semantics, exposed for queue-aware UI. */
 data class QueuedPrompt(
     val id: String,

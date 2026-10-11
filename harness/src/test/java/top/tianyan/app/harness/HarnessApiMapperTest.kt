@@ -117,4 +117,37 @@ class HarnessApiMapperTest {
         val second = HarnessApiMapper.renderUserContent("hi", "", attachments)
         assertEquals(first, second)
     }
+
+    @Test
+    fun `image-only pending message gets a durable prompt`() {
+        val description = durableTaskDescription(
+            PendingMessage(
+                text = "",
+                imageUrls = listOf("data:image/png;base64,abc"),
+            ),
+        )
+
+        assertTrue(description.isNotBlank())
+        assertEquals("请分析附带的图片。", description)
+    }
+
+    @Test
+    fun `attachment-only pending message keeps a recoverable manifest`() {
+        val description = durableTaskDescription(
+            PendingMessage(
+                text = " ",
+                attachments = listOf(
+                    MessageAttachment(
+                        name = "photo.jpg",
+                        isImage = true,
+                        sizeBytes = 12,
+                        guestPath = "/attachments/photo.jpg",
+                    ),
+                ),
+            ),
+        )
+
+        assertTrue(description.contains("photo.jpg"))
+        assertTrue(description.isNotBlank())
+    }
 }

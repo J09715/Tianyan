@@ -582,7 +582,13 @@ class HarnessLoop @Inject constructor(
                     val pending = PendingMessage(trimmed, imageUrls, taskId = newId(), attachments = attachments)
                     createDurableTask(sessId, pending)
                     launchSessionJobLocked(sessId, pending.taskId) {
-                        runLoop(sessId, pending.text, pending.imageUrls, pending.taskId)
+                        runLoop(
+                            sessId = sessId,
+                            userText = pending.text,
+                            imageUrls = pending.imageUrls,
+                            taskId = pending.taskId,
+                            attachments = pending.attachments,
+                        )
                     }
                 }
             }
@@ -836,7 +842,13 @@ class HarnessLoop @Inject constructor(
         val taskId = next.taskId ?: newId().also { generated ->
             createDurableTask(sessId, next.copy(taskId = generated))
         }
-        val userMessage = UserMessage(newId(), now(), next.text, next.imageUrls)
+        val userMessage = UserMessage(
+            id = newId(),
+            createdAt = now(),
+            text = next.text,
+            imageUrls = next.imageUrls,
+            attachments = next.attachments,
+        )
         val operationId = operationCoordinator.acceptQueuedRun(sessId, queueItemId, userMessage)
         messageProjector.publishPersisted(sessId, userMessage)
         launchSessionJobLocked(sessId, taskId, operationId = operationId) {
@@ -933,11 +945,12 @@ class HarnessLoop @Inject constructor(
 
     private suspend fun createDurableTask(sessId: String, pending: PendingMessage) {
         val taskId = pending.taskId ?: return
+        val description = durableTaskDescription(pending)
         agentTaskStateMachine.createQueued(
             id = taskId,
             sessionId = sessId,
-            title = pending.text.lineSequence().firstOrNull().orEmpty(),
-            description = pending.text,
+            title = description.lineSequence().firstOrNull().orEmpty(),
+            description = description,
             nowMs = pending.createdAt,
         )
         agentEventLogger.log(sessId, "DurableTaskQueued", "taskId=$taskId")
