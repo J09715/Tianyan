@@ -3,6 +3,7 @@ package top.tianyan.app.harness
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HarnessApiMapperTest {
@@ -61,5 +62,59 @@ class HarnessApiMapperTest {
         assertEquals(HarnessTool.BUILD_SCRIPT, HarnessApiMapper.toolByName("build_script"))
         assertEquals(HarnessTool.MCP, HarnessApiMapper.toolByName("mcp__sqlite__read_query"))
         assertEquals(HarnessTool.BASE, HarnessApiMapper.toolByName("unknown_tool"))
+    }
+
+    @Test
+    fun `user message with attachments renders mount manifest for the model`() {
+        val message = UserMessage(
+            id = "u",
+            createdAt = 1L,
+            text = "看看这个",
+            attachments = listOf(
+                MessageAttachment(
+                    name = "a.pdf",
+                    isImage = false,
+                    sizeBytes = 593 * 1024,
+                    guestPath = "/attachments/1_a.pdf",
+                ),
+                MessageAttachment(
+                    name = "b.jpg",
+                    isImage = true,
+                    sizeBytes = 900,
+                    guestPath = "/attachments/2_b.jpg",
+                ),
+            ),
+        )
+        val content = requireNotNull(HarnessApiMapper.toApiMessage(message).content)
+        assertTrue(content.startsWith("看看这个"))
+        assertTrue(content.contains("[附件：已复制并挂载到 Linux 沙箱]"))
+        assertTrue(content.contains("1. [文件] a.pdf (593 KB) -> Linux 沙箱绝对路径: /attachments/1_a.pdf"))
+        assertTrue(content.contains("2. [图片] b.jpg (900 B) -> Linux 沙箱绝对路径: /attachments/2_b.jpg"))
+        assertTrue(content.contains("请使用 base 在上述绝对路径读取"))
+    }
+
+    @Test
+    fun `attachment without guest path falls back to name based path`() {
+        val manifest = HarnessApiMapper.renderAttachmentManifest(
+            listOf(MessageAttachment(name = "x.zip", isImage = false, sizeBytes = 2_000_000)),
+        )
+        assertTrue(manifest.contains("/attachments/x.zip"))
+        assertTrue(manifest.contains("(1.9 MB)"))
+    }
+
+    @Test
+    fun `message without attachments keeps byte identical content`() {
+        assertEquals("hi", HarnessApiMapper.renderUserContent("hi", ""))
+        assertEquals("hi\n\ntail", HarnessApiMapper.renderUserContent("hi", "tail"))
+    }
+
+    @Test
+    fun `attachment manifest is byte stable across renders`() {
+        val attachments = listOf(
+            MessageAttachment(name = "a.pdf", isImage = false, sizeBytes = 1024, guestPath = "/attachments/a.pdf"),
+        )
+        val first = HarnessApiMapper.renderUserContent("hi", "", attachments)
+        val second = HarnessApiMapper.renderUserContent("hi", "", attachments)
+        assertEquals(first, second)
     }
 }

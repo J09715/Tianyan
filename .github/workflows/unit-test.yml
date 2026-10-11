@@ -28,11 +28,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up JDK 21
+      - name: Set up JDK 25
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "21"
+          java-version: "25"
 
       - name: Setup Gradle cache
         uses: gradle/actions/setup-gradle@v4
@@ -44,7 +44,7 @@ jobs:
       - name: Run unit tests
         run: |
           chmod +x gradlew
-          ./gradlew testDebugUnitTest --console=plain --no-daemon --continue
+          ./gradlew testDebugUnitTest test --console=plain --no-daemon --continue
 
       - name: Collect per-module test results
         if: always()
@@ -53,7 +53,7 @@ jobs:
           total=0; failed=0; skipped=0
           echo "| 模块 | 用例 | 失败 | 跳过 |" >> "$GITHUB_STEP_SUMMARY"
           echo "|---|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
-          for xml in $(find . -path "*/build/test-results/testDebugUnitTest/*.xml" | sort); do
+          for xml in $(find . \( -path "*/build/test-results/testDebugUnitTest/*.xml" -o -path "*/build/test-results/test/*.xml" \) | sort); do
             module=$(echo "$xml" | sed -E 's|^\./||; s|/build/.*||')
             read -r t f s < <(python3 - "$xml" <<'PY'
           import sys, xml.etree.ElementTree as ET

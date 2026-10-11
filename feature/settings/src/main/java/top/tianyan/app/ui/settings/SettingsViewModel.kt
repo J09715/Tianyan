@@ -17,6 +17,7 @@ import top.tianyan.app.core.tools.ToolManager
 import top.tianyan.app.core.tools.AiProfileWriter
 import top.tianyan.app.core.tools.AiProfileBackupCodec
 import top.tianyan.app.core.tools.AgentModelDiscovery
+import top.tianyan.app.core.tools.ModelDiscoveryResponseException
 import top.tianyan.app.core.tools.AgentProviderCatalog
 import top.tianyan.app.core.tools.AgentModelConnectionTester
 import top.tianyan.app.core.tools.ProviderEndpointPolicy

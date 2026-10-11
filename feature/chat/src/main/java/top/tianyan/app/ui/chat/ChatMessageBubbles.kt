@@ -79,6 +79,17 @@ import top.tianyan.app.ui.components.RuntimeIconName
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 
+/**
+ * 剥离历史消息里残留的附件挂载说明（≤0.18.17 会把整段拼进消息正文并落库）。
+ *
+ * 只切分隔符之后的全部内容：那段是程序生成的路径清单，不是用户写的字。
+ * 新消息正文里本就不含该段，对它们是恒等变换（前缀字节不受影响）。
+ */
+internal fun stripAttachmentManifest(text: String): String =
+    text.substringBefore("\n\n[附件：")
+        .substringBefore("\n\n[Attachment:")
+        .trimEnd()
+
 /** 消息气泡：用户/助手气泡、思考块、任务计划卡、能力事件卡。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -91,6 +102,9 @@ internal fun UserBubble(
     onRewind: (RewindScope) -> Unit = {},
 ) {
     val context = LocalContext.current
+    // 旧版本（≤0.18.17）把附件挂载说明拼进了消息正文并落库，气泡会显示一整段路径文字。
+    // 渲染层统一剥离：新消息本就不含该段，历史消息也能显示干净。
+    val visibleText = remember(message.text) { stripAttachmentManifest(message.text) }
     var showMenu by remember { mutableStateOf(false) }
     // 删除消息为破坏性操作，先经确认对话框
     var showDeleteConfirm by rememberSaveable { mutableStateOf(false) }
@@ -99,7 +113,7 @@ internal fun UserBubble(
 
     val copyText = {
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboard.setPrimaryClip(ClipData.newPlainText(context.getString(R.string.chat_user_request_clipboard), message.text))
+        clipboard.setPrimaryClip(ClipData.newPlainText(context.getString(R.string.chat_user_request_clipboard), visibleText))
         Toast.makeText(context, context.getString(R.string.chat_request_copied), Toast.LENGTH_SHORT).show()
     }
 
@@ -151,7 +165,7 @@ internal fun UserBubble(
             }
 
             // 🌟 2. 用户文字气泡
-            if (message.text.isNotBlank()) {
+            if (visibleText.isNotBlank()) {
                 Surface(
                     color = MaterialTheme.colorScheme.primaryContainer,
                     shape = RoundedCornerShape(16.dp, 4.dp, 16.dp, 16.dp),
@@ -161,8 +175,8 @@ internal fun UserBubble(
                 ) {
                     val mentionColor = MaterialTheme.colorScheme.primary
                     val mentionBg = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
-                    val annotatedText = remember(message.text, knownMentionNames, mentionColor, mentionBg) {
-                        formatMentionText(message.text, knownMentionNames, mentionColor, mentionBg)
+                    val annotatedText = remember(visibleText, knownMentionNames, mentionColor, mentionBg) {
+                        formatMentionText(visibleText, knownMentionNames, mentionColor, mentionBg)
                     }
                     Text(
                         text = annotatedText,
