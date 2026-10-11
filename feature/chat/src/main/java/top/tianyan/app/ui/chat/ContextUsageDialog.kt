@@ -49,11 +49,13 @@ fun ContextUsageDialog(
     val used = usage.usedTokens.coerceIn(0, limit)
     val pct = (used * 100f / limit).roundToInt().coerceIn(0, 100)
 
-    // 分段：确保 3 段相加 <= used，避免视觉溢出
-    val system = usage.systemTokens.coerceAtLeast(0)
-    val tool = usage.toolTokens.coerceAtLeast(0)
-    val conversation = max(used - system - tool, 0)
-    val sum = (system + tool + conversation).coerceAtLeast(1)
+    // 分段：system/tool 都是本次请求预算的一部分，先夹进 used 再补 conversation，
+    // 保证三段之和恒等于 used —— 估算漂移时也不会出现「系统提示 2.7M 却只用了 128k」的荒谬占比。
+    val segments = composeContextUsageSegments(used, usage.systemTokens, usage.toolTokens)
+    val system = segments.system
+    val tool = segments.tool
+    val conversation = segments.conversation
+    val sum = segments.total.coerceAtLeast(1)
 
     // 缓存计数来自 provider 累计值，可能超出 Int 范围；窄化前先夹紧，避免回绕成负数。
     val cached = usage.cachedTokens.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
@@ -193,4 +195,34 @@ private fun format(n: Int): String = when {
     n >= 1_000_000 -> "%.1fM".format(n / 1_000_000.0)
     n >= 1_000 -> "%.1fk".format(n / 1_000.0)
     else -> n.toString()
+}
+
+/**
+ * 上下文用量的三段构成：把 system / tool 夹进已用总量，差额归给对话历史。
+ *
+ * 三段之和恒等于 [usedTokens]，所以面板不会出现「系统提示比已用量还大」的荒谬占比。
+ * 之前直接拿原始 systemTokens 做分母，一旦系统提示估算跑飞（技能正文被误算成 2.7M），
+ * 分段条就会整条变蓝、对话历史被压成 0。
+ */
+internal data class ContextUsageSegments(
+    val system: Int,
+    val tool: Int,
+    val conversation: Int,
+) {
+    val total: Int get() = system + tool + conversation
+}
+
+internal fun composeContextUsageSegments(
+    usedTokens: Int,
+    systemTokens: Int,
+    toolTokens: Int,
+): ContextUsageSegments {
+    val used = usedTokens.coerceAtLeast(0)
+    val system = systemTokens.coerceIn(0, used)
+    val tool = toolTokens.coerceIn(0, used - system)
+    return ContextUsageSegments(
+        system = system,
+        tool = tool,
+        conversation = used - system - tool,
+    )
 }

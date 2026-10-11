@@ -16,6 +16,7 @@ import top.tianyan.app.core.model.AgentSkill
 import top.tianyan.app.core.model.BuiltinMcpPresets
 import top.tianyan.app.core.model.McpToolInfo
 import top.tianyan.app.core.tools.ToolRepository
+import top.tianyan.app.harness.ContextWindowPolicy
 import top.tianyan.app.harness.R
 import top.tianyan.app.harness.SubagentDepartmentIndexRenderer
 import top.tianyan.app.harness.ToolCallMode
@@ -595,6 +596,18 @@ class SystemPromptBuilder @Inject constructor(
             val droppedNote = if (dropped > 0) "\n（另有 $dropped 项因预算未列出，可用 load_rule 指定 id 直接读取）" else ""
             return header + "\n" + lines.joinToString("\n") + droppedNote
         }
+
+        /**
+         * UI 侧上下文用量估算入口：只按渐进式披露 Tier 1 **实际注入的摘要段**计费。
+         *
+         * 技能正文不进系统提示（由 `load_rule("skill:<id>")` 按需读取），所以这里绝不能
+         * 累加 SKILL.md 正文长度 —— 装了几百个技能时那样会算成几百万 token，让用量面板
+         * 永远显示 100%，并让压缩器误判「系统提示已吃掉全部预算」而把历史全部折叠。
+         *
+         * 与 [buildSkillDiscoverySection] 共用同一套常量与排序，因此估算值随真实注入同步变化。
+         */
+        fun estimateSkillDiscoveryTokens(skills: List<AgentSkill>): Int =
+            ContextWindowPolicy.estimateTokens(buildSkillDiscoverySection(skills, ""))
 
         private const val MAX_PROMPT_MEMORY_KEY_CHARS = 128
         private const val MAX_PROMPT_MEMORY_VALUE_CHARS = 512

@@ -8,7 +8,6 @@ import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
 import android.util.Base64
-import android.util.LruCache
 import android.widget.Toast
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
@@ -210,10 +209,32 @@ private fun isImageLikeUrl(url: String): Boolean {
     return imageFileExtensions.any { clean.endsWith(".$it") }
 }
 
-private val markdownBlockCache = LruCache<String, List<MdBlock>>(300)
+private val markdownBlockCache = SimpleLruCache<List<MdBlock>>(300)
 /** Generated image responses are expensive to parse, so retain a few by their short message ID. */
-private val largeMarkdownBlockCache = LruCache<String, List<MdBlock>>(4)
-private val inlineSpanCache = LruCache<String, AnnotatedString>(500)
+private val largeMarkdownBlockCache = SimpleLruCache<List<MdBlock>>(4)
+private val inlineSpanCache = SimpleLruCache<AnnotatedString>(500)
+
+/**
+ * 极简 LRU：只用 JDK 集合实现。
+ *
+ * 刻意不用 android.util.LruCache —— 它在纯 JVM 单元测试里是未实现的桩，会抛
+ * "Method ... not mocked"，把整块 Markdown 解析逻辑挡在测试之外。
+ * accessOrder = true 的 LinkedHashMap + removeEldestEntry 即可等价实现按访问淘汰。
+ */
+internal class SimpleLruCache<V>(maxSize: Int) {
+    private val max = maxSize.coerceAtLeast(1)
+    private val map = object : LinkedHashMap<String, V>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, V>): Boolean = size > max
+    }
+
+    @Synchronized
+    fun get(key: String): V? = map[key]
+
+    @Synchronized
+    fun put(key: String, value: V) {
+        map[key] = value
+    }
+}
 
 internal fun parseMarkdownBlocks(md: String): List<MdBlock> {
     val cacheable = md.length <= MARKDOWN_CACHE_MAX_CHARS

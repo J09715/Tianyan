@@ -29,6 +29,7 @@ import top.tianyan.app.harness.ToolResult
 import top.tianyan.app.harness.PendingMessage
 import top.tianyan.app.harness.QueuedPrompt
 import top.tianyan.app.harness.ContextWindowPolicy
+import top.tianyan.app.harness.prompt.SystemPromptBuilder
 import top.tianyan.app.harness.events.HarnessEvent
 import top.tianyan.app.harness.events.HarnessEventBus
 import top.tianyan.app.harness.mcp.McpManager
@@ -1722,11 +1723,17 @@ class ChatViewModel @Inject constructor(
         val systemTokens = if (activeModel?.pureChatMode == true) {
             0
         } else {
-            val skillTokens = inputs.skills.filter { it.isEnabled }.sumOf { ContextWindowPolicy.estimateTokens(it.systemPrompt) }
+            // 与 SystemPromptBuilder 的真实注入对齐：技能只进渐进式披露 Tier 1 的「名称 + 摘要」
+            // 段（总预算 1500 字符），正文按需用 load_rule("skill:<id>") 读取。
+            // 旧实现按 SKILL.md 正文长度累加 —— 装 818 个技能时会算成 2.7M token，
+            // 让用量面板永远 100%，还会让压缩器误判「预算已被系统提示吃光」。
+            val skillTokens = SystemPromptBuilder.estimateSkillDiscoveryTokens(
+                inputs.skills.filter { it.isEnabled },
+            )
             val mcpTokens = inputs.mcps.filter { it.isEnabled }.sumOf {
                 ContextWindowPolicy.estimateTokens("${it.name}\n${it.description}\n${it.command}\n${it.args.joinToString(" ")}")
             }
-            1_600 + skillTokens + mcpTokens
+            SYSTEM_PROMPT_BASE_TOKENS + skillTokens + mcpTokens
         }
         val effectiveUsage = ContextWindowPolicy.estimateEffectiveUsage(
             messages = inputs.currentMessages,
@@ -1741,7 +1748,9 @@ class ChatViewModel @Inject constructor(
         } else null
 
         ContextUsage(
-            usedTokens = effectiveUsage.conversationTokens + effectiveUsage.toolTokens,
+            // 三段自洽：已用 = 系统提示 + 对话历史 + 工具输出，与面板构成条的分母一致。
+            // systemTokens 修正为真实注入量后，这里不会再出现「新会话就 100%」。
+            usedTokens = effectiveUsage.totalTokens,
             limitTokens = (activeModel?.contextTokens ?: inputs.defaultBudget).coerceAtLeast(1),
             systemTokens = systemTokens,
             toolTokens = effectiveUsage.toolTokens,
@@ -3047,6 +3056,12 @@ enum class ComposerSendMode(val queue: PromptQueue) {
     STEER(PromptQueue.STEER),
     NEXT_RUN(PromptQueue.NEXT_RUN),
 }
+
+/**
+ * 系统提示固定骨架的保守 token 估算：环境段、工具调用规则、沙箱套件清单、MCP 引导等
+ * 与技能/会话无关的常量部分。技能摘要段与 MCP 描述另行按真实注入量累加。
+ */
+private const val SYSTEM_PROMPT_BASE_TOKENS = 1_600
 
 private data class ContextUsageInputs(
     val currentMessages: List<HarnessMessage>,
