@@ -1032,7 +1032,9 @@ class SettingsViewModel @Inject constructor(
                 }
                 .onFailure {
                     logger.w("Model discovery failed: ${it.message}", it)
-                    _modelDiscoveryError.value = "获取模型列表失败，请检查 Base URL、API Key 与网络后重试"
+                    val reason = if (it is ModelDiscoveryResponseException) it.message.orEmpty()
+                        else "获取模型列表失败，请检查 Base URL、API Key 与网络后重试"
+                    _modelDiscoveryError.value = reason
                 }
             _discoveringModels.value = false
         }

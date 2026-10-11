@@ -60,12 +60,14 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.res.stringResource
 import top.tianyan.app.feature.chat.R
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.LinkInteractionListener
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.TextLinkStyles
@@ -142,29 +144,31 @@ fun MarkdownText(
                 }
             }
     }
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        blocks.forEachIndexed { index, block ->
-            when (block) {
-                is MdParagraph -> InlineText(block.text, MaterialTheme.typography.bodyMedium)
-                is MdHeading -> InlineText(
-                    block.text,
-                    when (block.level) {
-                        1 -> MaterialTheme.typography.headlineSmall
-                        2 -> MaterialTheme.typography.titleLarge
-                        3 -> MaterialTheme.typography.titleMedium
-                        else -> MaterialTheme.typography.titleSmall
-                    },
-                    bold = true,
-                )
-                is MdCodeBlock -> CodeBlock(block)
-                is MdList -> ListBlock(block)
-                is MdQuote -> QuoteBlock(block)
-                is MdTable -> TableBlock(block)
-                is MdRemoteMedia -> RemoteMediaBlock(
-                    block = block,
-                    cacheKey = contentCacheKey?.let { "$it:media:$index" },
-                )
-                is MdHr -> HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    SelectionContainer {
+        Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            blocks.forEachIndexed { index, block ->
+                when (block) {
+                    is MdParagraph -> InlineText(block.text, MaterialTheme.typography.bodyMedium)
+                    is MdHeading -> InlineText(
+                        block.text,
+                        when (block.level) {
+                            1 -> MaterialTheme.typography.headlineSmall
+                            2 -> MaterialTheme.typography.titleLarge
+                            3 -> MaterialTheme.typography.titleMedium
+                            else -> MaterialTheme.typography.titleSmall
+                        },
+                        bold = true,
+                    )
+                    is MdCodeBlock -> CodeBlock(block)
+                    is MdList -> ListBlock(block)
+                    is MdQuote -> QuoteBlock(block)
+                    is MdTable -> TableBlock(block)
+                    is MdRemoteMedia -> RemoteMediaBlock(
+                        block = block,
+                        cacheKey = contentCacheKey?.let { "$it:media:$index" },
+                    )
+                    is MdHr -> HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                }
             }
         }
     }
@@ -172,16 +176,16 @@ fun MarkdownText(
 
 // ---------- 解析 ----------
 
-private sealed interface MdBlock
+internal sealed interface MdBlock
 
-private data class MdParagraph(val text: String) : MdBlock
-private data class MdHeading(val level: Int, val text: String) : MdBlock
-private data class MdCodeBlock(val language: String, val code: String) : MdBlock
-private data class MdList(val ordered: Boolean, val items: List<String>) : MdBlock
-private data class MdQuote(val lines: List<String>) : MdBlock
-private data class MdTable(val headers: List<String>, val rows: List<List<String>>) : MdBlock
-private data class MdRemoteMedia(val url: String, val description: String) : MdBlock
-private object MdHr : MdBlock
+internal data class MdParagraph(val text: String) : MdBlock
+internal data class MdHeading(val level: Int, val text: String) : MdBlock
+internal data class MdCodeBlock(val language: String, val code: String) : MdBlock
+internal data class MdList(val ordered: Boolean, val items: List<String>) : MdBlock
+internal data class MdQuote(val lines: List<String>) : MdBlock
+internal data class MdTable(val headers: List<String>, val rows: List<List<String>>) : MdBlock
+internal data class MdRemoteMedia(val url: String, val description: String) : MdBlock
+internal object MdHr : MdBlock
 
 private val headingRegex = Regex("^\\s*(#{1,6})\\s+(.+?)\\s*#*\\s*$")
 private val orderedListRegex = Regex("^\\s*\\d+\\.\\s+(.*)$")
@@ -201,12 +205,17 @@ private val inlineWebUrlRegex = Regex("https?://[^\\s<>\\[\\]{}\"']+", RegexOpti
 /** 视为图片的 URL 后缀（原始 URL 嵌在段落中时，匹配这些后缀则渲染为图片）。 */
 private val imageFileExtensions = setOf("jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "avif", "heic", "heif")
 
+private fun isImageLikeUrl(url: String): Boolean {
+    val clean = url.substringBefore('?').substringBefore('#').lowercase()
+    return imageFileExtensions.any { clean.endsWith(".$it") }
+}
+
 private val markdownBlockCache = LruCache<String, List<MdBlock>>(300)
 /** Generated image responses are expensive to parse, so retain a few by their short message ID. */
 private val largeMarkdownBlockCache = LruCache<String, List<MdBlock>>(4)
 private val inlineSpanCache = LruCache<String, AnnotatedString>(500)
 
-private fun parseMarkdownBlocks(md: String): List<MdBlock> {
+internal fun parseMarkdownBlocks(md: String): List<MdBlock> {
     val cacheable = md.length <= MARKDOWN_CACHE_MAX_CHARS
     if (cacheable) markdownBlockCache.get(md)?.let { return it }
     val raw = parseRawBlocks(md)
@@ -250,7 +259,8 @@ private fun parseRawBlocks(md: String): List<MdBlock> {
             }
             standaloneWebUrlRegex.matches(line.trim()) -> {
                 val url = trimUrlPunctuation(line.trim())
-                blocks.add(MdRemoteMedia(url = url, description = ""))
+                val looksLikeImage = isImageLikeUrl(url)
+                blocks.add(if (looksLikeImage) MdRemoteMedia(url = url, description = "") else MdParagraph(url))
                 i++
             }
             headingRegex.matches(line.trim()) -> {
@@ -348,10 +358,7 @@ private fun extractInlineMedia(text: String): List<MdBlock> {
         val isActualImage = when (earliest) {
             mdImg -> true
             htmlImg -> true
-            rawUrl -> {
-                val url = trimUrlPunctuation(earliest.value)
-                imageFileExtensions.any { ext -> url.lowercase().endsWith(".$ext") }
-            }
+            rawUrl -> isImageLikeUrl(trimUrlPunctuation(earliest.value))
             else -> false
         }
 
@@ -397,8 +404,21 @@ private fun InlineText(
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val inlineCodeBg = if (isDark) Color(0xFF21262D) else Color(0xFFEFF1F4)
     val inlineCodeColor = if (isDark) Color(0xFF79C0FF) else Color(0xFF0969DA)
-    val annotated = remember(text, bold, linkColor, isDark) {
-        buildInline(text, bold, linkColor, inlineCodeBg, inlineCodeColor)
+    val uriHandler = LocalUriHandler.current
+    val openLink = remember(uriHandler) {
+        { uri: String ->
+            runCatching { uriHandler.openUri(uri) }
+            Unit
+        }
+    }
+    val linkListener = remember(openLink) {
+        LinkInteractionListener { annotation ->
+            val url = (annotation as? LinkAnnotation.Url)?.url
+            if (url != null) openLink(url)
+        }
+    }
+    val annotated = remember(text, bold, linkColor, isDark, linkListener) {
+        buildInline(text, bold, linkColor, inlineCodeBg, inlineCodeColor, linkListener)
     }
     Text(annotated, style = style, color = color, modifier = modifier)
 }
@@ -409,8 +429,9 @@ private fun buildInline(
     linkColor: Color,
     inlineCodeBg: Color,
     inlineCodeColor: Color,
+    linkListener: LinkInteractionListener,
 ): AnnotatedString {
-    val cacheKey = "$forceBold|${linkColor.value}|${inlineCodeBg.value}|${inlineCodeColor.value}|$text"
+    val cacheKey = "${System.identityHashCode(linkListener)}|$forceBold|${linkColor.value}|${inlineCodeBg.value}|${inlineCodeColor.value}|$text"
     inlineSpanCache.get(cacheKey)?.let { return it }
 
     val built = buildAnnotatedString {
@@ -461,7 +482,7 @@ private fun buildInline(
                 text.startsWith("[", i) -> {
                     val link = inlineMarkdownLinkRegex.find(text, i)
                     if (link != null && link.range.first == i) {
-                        withLink(LinkAnnotation.Url(link.groupValues[2], linkStyles)) {
+                        withLink(LinkAnnotation.Url(link.groupValues[2], linkStyles, linkListener)) {
                             append(link.groupValues[1])
                         }
                         i = link.range.last + 1
@@ -472,7 +493,7 @@ private fun buildInline(
                     val match = inlineWebUrlRegex.find(text, i)
                     if (match != null && match.range.first == i) {
                         val url = trimUrlPunctuation(match.value)
-                        withLink(LinkAnnotation.Url(url, linkStyles)) { append(url) }
+                        withLink(LinkAnnotation.Url(url, linkStyles, linkListener)) { append(url) }
                         i += url.length
                     } else { append(text[i]); i++ }
                 }
@@ -494,7 +515,7 @@ private fun buildInline(
     return built
 }
 
-private fun trimUrlPunctuation(value: String): String {
+internal fun trimUrlPunctuation(value: String): String {
     var result = value.trimEnd('.', ',', ';', ':', '!', '?')
     while (result.endsWith(')') && result.count { it == ')' } > result.count { it == '(' }) {
         result = result.dropLast(1)

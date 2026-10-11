@@ -81,6 +81,51 @@ class AgentModelDiscoveryTest {
         assertEquals("2023-06-01", request.getHeader("anthropic-version"))
     }
 
+    @Test
+    fun `ollama api tags is parsed when OpenAI endpoints are unavailable`() = runBlocking {
+        // Ollama 风格：/v1/models、/models 都不存在，/api/tags 返回
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(404)
+                .setHeader("Content-Type", "application/json")
+                .setBody("{\"error\":\"not found\"}"),
+        )
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(404)
+                .setHeader("Content-Type", "application/json")
+                .setBody("{\"error\":\"not found\"}"),
+        )
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody("{\"models\":[{\"name\":\"llama3:latest\"},{\"name\":\"qwen2:7b\"}]}"),
+        )
+
+        val result = discovery().discover(provider(), server.url("").toString(), null)
+        assertEquals(listOf("llama3:latest", "qwen2:7b"), result)
+        // 按候选顺序：先 /v1/models → 失败，再 /models → 失败，再 /api/tags → 成功
+        assertEquals(3, server.requestCount)
+    }
+
+    @Test
+    fun `all endpoints failing aggregates all errors`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(500).setBody("{\"error\":\"boom\"}"))
+        server.enqueue(MockResponse().setResponseCode(500).setBody("{\"error\":\"boom\"}"))
+        server.enqueue(MockResponse().setResponseCode(500).setBody("{\"error\":\"boom\"}"))
+
+        val error = assertThrows(ModelDiscoveryResponseException::class.java) {
+            runBlocking { discovery().discover(provider(), server.url("").toString(), null) }
+        }
+        val msg = error.message.orEmpty()
+        assertTrue("应包含 /v1/models 端点", msg.contains("/v1/models"))
+        assertTrue("应包含 /models 端点", msg.contains("/models"))
+        assertTrue("应包含 /api/tags 端点", msg.contains("/api/tags"))
+        assertTrue("应包含 HTTP 500", msg.contains("HTTP 500"))
+        assertEquals(3, server.requestCount)
+    }
+
     private fun discovery() = AgentModelDiscovery(OkHttpClient())
 
     private fun provider() = AgentProviderDefinition(

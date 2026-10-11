@@ -485,12 +485,10 @@ internal fun AssistantBubble(
                             message.text.take(MAX_LIVE_TEXT_CHARS)
                         }
                     }
-                    SelectionContainer {
-                        MarkdownText(
-                            markdown = liveMarkdown,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
+                    MarkdownText(
+                        markdown = liveMarkdown,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             } else {
                 MarkdownText(

@@ -37,21 +37,35 @@ class AgentModelConnectionTester @Inject constructor(private val http: OkHttpCli
     }
 
     private fun testModelCatalog(baseUrl: String, apiKey: String?, isAnthropic: Boolean) {
-        val request = Request.Builder().url("${baseUrl.trimEnd('/')}/models")
-            .apply {
-                if (isAnthropic) {
-                    header("anthropic-version", "2023-06-01")
-                    if (!apiKey.isNullOrBlank()) header("x-api-key", apiKey)
-                } else if (!apiKey.isNullOrBlank()) {
-                    header("Authorization", "Bearer $apiKey")
+        val endpoints = AgentModelEndpoints.forBaseUrl(baseUrl)
+        var lastFailure: Throwable? = null
+        for (endpoint in endpoints) {
+            try {
+                val isOllama = endpoint.trimEnd('/').endsWith("/api/tags", ignoreCase = true)
+                val request = Request.Builder().url(endpoint)
+                    .apply {
+                        if (isAnthropic) {
+                            header("anthropic-version", "2023-06-01")
+                            if (!apiKey.isNullOrBlank()) header("x-api-key", apiKey)
+                        } else if (!apiKey.isNullOrBlank()) {
+                            header("Authorization", "Bearer $apiKey")
+                        }
+                    }
+                    .get()
+                    .build()
+                http.newCall(request).execute().use { response ->
+                    val text = response.body.string()
+                    check(response.isSuccessful) { "连接失败 HTTP ${response.code}：${text.take(240)}" }
+                    if (isOllama) {
+                        check(text.contains("\"models\"")) { "Ollama /api/tags 未返回 models 列表" }
+                    }
                 }
+                return
+            } catch (failure: Exception) {
+                lastFailure = failure
             }
-            .get()
-            .build()
-        http.newCall(request).execute().use { response ->
-            val text = response.body.string()
-            check(response.isSuccessful) { "连接失败 HTTP ${response.code}：${text.take(240)}" }
         }
+        throw IllegalStateException("连接失败，已尝试模型列表端点：${endpoints.joinToString()}。${lastFailure?.message.orEmpty()}", lastFailure)
     }
 
     private fun testOpenAi(baseUrl: String, model: String, apiKey: String?) {

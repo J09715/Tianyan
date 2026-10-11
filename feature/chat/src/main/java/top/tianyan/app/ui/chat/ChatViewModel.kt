@@ -1741,7 +1741,7 @@ class ChatViewModel @Inject constructor(
         } else null
 
         ContextUsage(
-            usedTokens = effectiveUsage.totalTokens,
+            usedTokens = effectiveUsage.conversationTokens + effectiveUsage.toolTokens,
             limitTokens = (activeModel?.contextTokens ?: inputs.defaultBudget).coerceAtLeast(1),
             systemTokens = systemTokens,
             toolTokens = effectiveUsage.toolTokens,
@@ -2064,37 +2064,10 @@ class ChatViewModel @Inject constructor(
         val attachments = _pendingAttachments.value
         if (trimmedInput.isBlank() && attachments.isEmpty()) return
         val imageUrls = attachments.mapNotNull { it.base64DataUrl }
-        val nonImageFiles = attachments.filter { !it.isImage }
-        val fullMessage = buildString {
-            if (trimmedInput.isNotBlank()) {
-                append(trimmedInput)
-            } else if (nonImageFiles.isNotEmpty()) {
-                append(context.getString(R.string.chat_attachment_files_prompt))
-            } else if (imageUrls.isNotEmpty()) {
-                append(context.getString(R.string.chat_attachment_images_prompt))
-            }
-            if (attachments.isNotEmpty()) {
-                append(context.getString(R.string.chat_attachment_mount_header))
-                val extractedMap = _extractedTexts.value
-                attachments.forEachIndexed { i, att ->
-                    val guestPath = att.guestFilePath ?: "/attachments/${att.name}"
-                    val kind = context.getString(if (att.isImage) R.string.chat_attachment_image else R.string.chat_attachment_file)
-                    append(context.getString(R.string.chat_attachment_line, i + 1, kind, att.name, AttachmentHelper.formatFileSize(att.sizeBytes), guestPath))
-                    // 附件文本抽取结果（PDF/DOCX/PPTX/EPUB/MD/HTML/TXT 会自动抽）：直接贴给 AI，比让 AI 再读文件快
-                    val text = extractedMap[att.id]
-                    if (!text.isNullOrBlank()) {
-                        append("\n   📄 **$guestPath 内容**（沙箱已抽取 ${text.length} 字符）：\n")
-                        append("```\n")
-                        append(text.take(20_000))
-                        append("\n```\n")
-                    }
-                }
-                append(context.getString(R.string.chat_attachment_access_hint))
-            }
-        }
+        // Use only the raw user input as message text; attachment info is not appended
+        val fullMessage = trimmedInput
         _pendingAttachments.value = emptyList()
         _extractedTexts.value = emptyMap()
-        // 附件元信息随消息持久化，气泡层据此渲染文件卡片（而不是把整段当正文文本）。
         val persistedAttachments = attachments.map { att ->
             top.tianyan.app.harness.MessageAttachment(
                 name = att.name,
