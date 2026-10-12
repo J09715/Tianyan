@@ -17,6 +17,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import top.tianyan.app.harness.session.LaneManager
 import top.tianyan.app.harness.subagent.SubagentLaneRunner
 import top.tianyan.app.harness.prompt.PromptAssetLoader
@@ -149,7 +150,14 @@ class SubagentOrchestrator @Inject constructor(
         laneManager.create(parentSessionId, laneName, parentLeaf)
         val prompt = buildSubagentPrompt(spec, profile, workspace, parentSessionId)
         val laneResult = withTimeoutOrNull(SUBAGENT_TIMEOUT_MS) {
-            laneRunner.run(parentSessionId, laneName, prompt, workspace, modelConfig = targetModel)
+            laneRunner.run(
+                parentSessionId,
+                laneName,
+                prompt,
+                workspace,
+                modelConfig = targetModel,
+                writePaths = spec.writePaths,
+            )
         }
 
         // 超时取消时 withTimeoutOrNull 返回 null，若直接 ?: 0 会把子智能体在超时窗口内
@@ -344,6 +352,52 @@ internal fun writePathsConflict(left: String, right: String): Boolean {
     if (isWholeWorkspacePath(a) || isWholeWorkspacePath(b)) return true
     return a == b || a.startsWith("$b/") || b.startsWith("$a/")
 }
+
+/**
+ * 代码级写租约校验：把 writePaths 从「提示词里的君子协定」变成实际闸门。
+ *
+ * 背景：writePaths 此前只渲染进子任务提示词，而 WRITE/EDIT 在工作区内本来
+ * 就免审批（ApprovalPolicyEngine 对 workspace 内的写直接放行）。于是声明
+ * `writePaths: []` 的只读子代理、以及限定路径的子代理，实际上仍可写工作区
+ * 内任意文件——写租约形同虚设，并行波次的隔离承诺也随之失真。
+ *
+ * 返回违规原因文本；null 表示该写入落在租约内，允许执行。
+ */
+internal fun writeLeaseViolation(writePaths: List<String>, targetPath: String): String? {
+    val target = normalizeWritePath(targetPath)
+    // 空路径先于任何放行规则判定：它是调用方传参错误，不该被 `["*"]` 之类的
+    // 宽松租约静默放行到下游才报错。
+    if (target.isEmpty()) return "写入路径为空"
+    val leases = writePaths.map(::normalizeWritePath).filter { it.isNotEmpty() }
+    if (leases.any(::isWholeWorkspacePath)) return null
+    if (leases.isEmpty()) {
+        return "本任务声明为只读（writePaths=[]），不允许写入文件：$targetPath"
+    }
+    if (leases.any { writePathsConflict(it, target) }) return null
+    return "写入目标超出本任务声明的写租约：$targetPath（允许范围：${leases.joinToString("、")}）"
+}
+
+/**
+ * 工具调用级写租约闸门：只有真正会落盘的工具才校验，
+ * 其余（base/process 只读命令、memory 等）不受影响。
+ */
+internal fun writeLeaseViolationForTool(
+    tool: HarnessTool,
+    args: JsonObject,
+    writePaths: List<String>,
+): String? = when (tool) {
+    HarnessTool.WRITE -> writeLeaseViolation(writePaths, args.pathOrEmpty())
+    HarnessTool.EDIT -> writeLeaseViolation(writePaths, args.pathOrEmpty())
+    HarnessTool.DOWNLOAD -> writeLeaseViolation(writePaths, args.destinationOrEmpty())
+    else -> null
+}
+
+private fun JsonObject.pathOrEmpty(): String = this.stringField("path")
+private fun JsonObject.destinationOrEmpty(): String = this.stringField("destination")
+
+/** 取顶层字符串字段；非字符串或缺失一律返回空串，绝不把 JSON 字面量当路径。 */
+private fun JsonObject.stringField(key: String): String =
+    runCatching { this[key]?.jsonPrimitive?.content }.getOrNull().orEmpty().trim()
 
 /**
  * 超时取消时 laneRunner 协程被中止，其内存中的工具调用统计随返回值一起丢失；

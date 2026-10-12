@@ -23,6 +23,7 @@ import top.tianyan.app.harness.ProviderClient
 import top.tianyan.app.harness.ToolCall
 import top.tianyan.app.harness.ToolExecutor
 import top.tianyan.app.harness.ToolResult
+import top.tianyan.app.harness.writeLeaseViolationForTool
 import top.tianyan.app.harness.TextToolCallCodec
 import top.tianyan.app.harness.effects.ToolReplayPolicy
 import top.tianyan.app.harness.operation.OperationCoordinator
@@ -62,6 +63,7 @@ class SubagentLaneRunner @Inject constructor(
         modelId: String? = null,
         modelVariant: String? = null,
         modelConfig: top.tianyan.app.harness.ModelConfig? = null,
+        writePaths: List<String> = emptyList(),
     ): SubagentLaneResult {
         val user = top.tianyan.app.harness.UserMessage(UUID.randomUUID().toString(), now(), prompt)
         val operationId = operations.acceptRun(sessionId, user, laneName)
@@ -171,6 +173,14 @@ class SubagentLaneRunner @Inject constructor(
                         continue
                     }
                     val call = ToolCall(spec.id, now(), tool, args, result.reasoningContent, rawName)
+                    // 写租约代码级闸门：writePaths 不再只是提示词里的约定，越界写入直接拦在执行前。
+                    val leaseViolation = writeLeaseViolationForTool(tool, args, writePaths)
+                    if (leaseViolation != null) {
+                        operations.toolIntent(operationId, call, spec.argumentsJson, ToolReplayPolicy.forTool(tool, rawName), round)
+                        val blockedByLease = ToolResult(UUID.randomUUID().toString(), now(), call.id, false, leaseViolation)
+                        operations.toolSettled(operationId, blockedByLease, round, toolName = rawName)
+                        continue
+                    }
                     val schemaProblems = ToolSchemaValidator.problemsFor(rawName, args, model.dynamicMcpTools)
                     if (schemaProblems.isNotEmpty()) {
                         operations.toolIntent(operationId, call, spec.argumentsJson, ToolReplayPolicy.forTool(tool, rawName), round)
