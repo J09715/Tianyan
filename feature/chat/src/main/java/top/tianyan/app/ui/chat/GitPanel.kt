@@ -1792,6 +1792,18 @@ private fun GraphCanvas(
     }
     // 主题色必须在组合期读取：DrawScope 里访问不到 MaterialTheme
     val headHaloColor = MaterialTheme.colorScheme.primary
+    // 跨泳道边的推导只在组合期做一次（键：边集 + 上侧活跃泳道集）。
+    //
+    // 原先这两个集合在 Canvas 的 draw lambda 内计算，而 draw lambda 在**每一次绘制**
+    // 时都会重跑——滚动、悬停动画、任何无效化都算，频率远高于重组。大型仓库的提交图
+    // 边集可达数百条，每帧两次全量 filter + 中间 List 分配会直接吃掉滚动帧率。
+    //
+    // DrawScope 里没有 remember 可用，所以计算必须在组合期完成后再传进去。
+    val (crossEdgeToLanes, curveBotLanes) = remember(edges, activeTopLanes) {
+        val cross = HashSet<Int>()
+        for (edge in edges) if (edge.fromLane != edge.toLane) cross.add(edge.toLane)
+        cross to cross.filterNotTo(HashSet()) { it in activeTopLanes }
+    }
     androidx.compose.foundation.Canvas(modifier = modifier) {
         val lanePx = laneWidth.toPx()
         val padPx = 4.dp.toPx()
@@ -1800,8 +1812,7 @@ private fun GraphCanvas(
         val stroke = 2.5.dp.toPx()
 
         val allLanes = (activeTopLanes + activeBottomLanes + lane).toSet()
-        val crossEdgeToLanes = edges.filter { it.fromLane != it.toLane }.map { it.toLane }.toSet()
-        val curveBotLanes = crossEdgeToLanes.filterNot { it in activeTopLanes }.toSet()
+        // crossEdgeToLanes / curveBotLanes 已在组合期算好并缓存，此处直接引用。
 
         for (l in allLanes) {
             val inTop = l in activeTopLanes

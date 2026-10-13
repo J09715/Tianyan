@@ -102,12 +102,20 @@ c.png
 r.png
 h.png
 # 手机测试截图*
-pg*.png
-pb*.png
-pr*.png
-we*.png
-ex*.png
-sw*.png
+#
+# 这些两字母前缀规则是给仓库根目录下随手丢的测试截图用的。原写法不带路径锚点，
+# 会连 project-template/.../preview.png 一起吞掉（pr*.png 命中 preview.png）——
+# 而那几个预览图是模板资产，必须随包分发。远端仓库里它们能存在，只是因为先于
+# 规则被 add 过；任何重新 clone 的人都会拿到一份缺图的模板。
+#
+# 因此规则改为只作用于仓库根目录，并显式放行模板预览图。
+/pg*.png
+/pb*.png
+/pr*.png
+/we*.png
+/ex*.png
+/sw*.png
+!project-template/**/preview.png
 *_ocr.txt
 *_tsv.tsv
 cd*.png

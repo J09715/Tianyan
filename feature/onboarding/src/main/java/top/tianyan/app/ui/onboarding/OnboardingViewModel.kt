@@ -42,6 +42,8 @@ class OnboardingViewModel @Inject constructor(
     private val providerCatalogRepository: AgentProviderCatalog,
     private val modelDiscovery: AgentModelDiscovery,
     private val toolManager: top.tianyan.app.core.tools.ToolManager,
+    private val toolRegistry: top.tianyan.app.core.tools.ToolRegistry,
+    private val logger: top.tianyan.app.core.common.logging.AppLogger,
     private val profileWriter: top.tianyan.app.core.tools.AiProfileWriter,
     private val profileBackupCodec: top.tianyan.app.core.tools.AiProfileBackupCodec,
 ) : ViewModel() {
@@ -111,7 +113,15 @@ class OnboardingViewModel @Inject constructor(
             _mirror.value = settings.mirrorPolicy.first()
             prefsLoaded.value = true
         }
+        // APK 自带的插件包先落盘，再恢复沙箱。
+        //
+        // 顺序有意义：seed 只是把 .txplugin 解到 filesDir/plugins/（纯 IO，不碰 PRoot），
+        // 而工具中心读 registry 时会把它并进来，因此用户打开设置页就能看到「可安装」，
+        // 不必先等沙箱 Ready。与 restoreInstalledState 并发执行也可以，但放在同一个
+        // 协程里串起来能让失败顺序可预期。
         viewModelScope.launch {
+            runCatching { toolRegistry.seedBundledPlugins() }
+                .onFailure { logger.w("内置插件落盘失败：${it.message}", it) }
             restoreInstalledState()
         }
     }
@@ -246,6 +256,19 @@ class OnboardingViewModel @Inject constructor(
             linuxRuntime.restoreInstalledState()
             if (!settings.onboardingCompleted.first() && linuxRuntime.state.value is RuntimeState.Ready) {
                 _page.value = 1
+            }
+            // 沙箱就绪后拉起勾了「自启动」的 web/service 插件。
+            //
+            // 必须等 restoreInstalledState 返回：那之前 PRoot 尚未 Ready，startGateway
+            // 会因端口探测超时而把刚起来的进程杀掉。放在这里而不是 LinuxRuntime 内部，
+            // 是因为 runtime 模块不允许反向依赖 tools（架构铁律：feature → core/runtime/
+            // harness/tools 单向），而本类已经持有 toolManager。
+            //
+            // 失败不阻断：单个插件的配置错误不该影响应用启动，异常在 ToolManager 内部
+            // 已按工具粒度吞掉并记日志。
+            if (linuxRuntime.state.value is RuntimeState.Ready) {
+                runCatching { toolManager.startAutoStartServices() }
+                    .onFailure { logger.w("开机自启流程异常：${it.message}", it) }
             }
         }
     }

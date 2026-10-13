@@ -91,6 +91,7 @@ class ToolManager @Inject constructor(
     private val flutterSdkDownloader: FlutterSdkDownloader,
     private val localPluginPayloadManager: LocalPluginPayloadManager,
     private val serviceController: ToolServiceController,
+    private val logger: top.tianyan.app.core.common.logging.AppLogger,
     installerAdapters: Set<@JvmSuppressWildcards ToolRuntimeAdapter>,
 ) {
     private val managerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -269,6 +270,64 @@ class ToolManager @Inject constructor(
     /** Observe real-time output logs for a tool's background service. */
     fun observeServiceLogs(toolId: String): Flow<List<String>> =
         serviceController.observeLogs(toolId)
+
+    /**
+     * 开机自启：把用户勾了「自启动」的 web/service 工具逐个拉起来。
+     *
+     * 为什么必须在这里补：`tool_settings.autoStart` 此前只有写入方（设置页开关）
+     * 和一个 UI 读取方（用于回显 Switch 状态），没有任何启动流程消费它——进程表
+     * `ProcessRegistry.processes` 是纯内存 LinkedHashMap，应用一退全部丢失。于是
+     * 用户看到的是「开关打开了，重启后服务还是没了」。
+     *
+     * 语义约束：
+     * - 只处理 launchType 为 web/service 的工具：其余类型（pty/one_shot/command）
+     *   是前台会话型，不该在后台常驻；
+     * - 已经跑着的实例直接跳过，重复调用幂等（冷启动与手动恢复都会走这里）；
+     * - 单个工具失败不影响其余工具，失败只记日志——一个插件的配置错误不该让
+     *   整个开机自启链断掉；
+     * - 需要服务端口就绪才算成功，由 `serviceController.start` 内部探测，因此这里
+     *   拿到返回值即代表端口已监听。
+     *
+     * @return 实际被拉起的工具 id，供调用方记录或断言。
+     */
+    suspend fun startAutoStartServices(distroId: String = currentDistroId()): List<String> {
+        val candidates = runCatching { toolSettingsRepository.listAutoStartToolIds(distroId) }
+            .getOrElse { throwable ->
+                logger.w("读取开机自启清单失败：${throwable.message}", throwable)
+                return emptyList()
+            }
+        if (candidates.isEmpty()) return emptyList()
+
+        val started = mutableListOf<String>()
+        for (toolId in candidates) {
+            val manifest = runCatching { toolRepository.manifest(toolId) }.getOrNull()
+            if (manifest == null) {
+                logger.w("开机自启跳过 $toolId：清单中已不存在")
+                continue
+            }
+            if (manifest.launchType != "web" && manifest.launchType != "service") continue
+            if (!manifest.enabled) {
+                logger.w("开机自启跳过 $toolId：该工具已被 Registry 暂停")
+                continue
+            }
+            val tool = runCatching { toolRepository.findById(distroId, toolId) }.getOrNull()
+            if (tool == null || (tool.state != ToolState.INSTALLED.name && tool.state != ToolState.UPDATE_AVAILABLE.name)) {
+                logger.w("开机自启跳过 $toolId：未安装（state=${tool?.state ?: "缺失"}）")
+                continue
+            }
+            if (isGatewayRunning(toolId)) continue
+
+            runCatching { startGateway(toolId) }
+                .onSuccess {
+                    started += toolId
+                    logger.i("开机自启已拉起：$toolId")
+                }
+                .onFailure { throwable ->
+                    logger.w("开机自启失败 $toolId：${throwable.message}", throwable)
+                }
+        }
+        return started
+    }
 
     /** Get snapshot of service logs for a tool. */
     fun getServiceLogs(toolId: String): List<String> =

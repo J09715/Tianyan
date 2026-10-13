@@ -608,10 +608,13 @@ private fun AssetGraphCard(state: RedTeamConsoleState) {
             state.graph.nodes.isEmpty() -> Text("暂无数据", style = MaterialTheme.typography.bodySmall)
             else -> {
                 val graph = state.graph
+                // segment 节点只在组合期筛一次：原先写在 Canvas 的 draw lambda 内，
+                // 而 draw lambda 每次绘制都会重跑（滚动、动画、无效化都算），
+                // 节点多时等于每帧对整个节点表做一次全量过滤并分配新 List。
+                val segments = remember(graph) { graph.nodes.filter { it.kind == "segment" } }
                 Canvas(modifier = Modifier.fillMaxWidth().height(300.dp)) {
                     val center = Offset(size.width / 2f, size.height / 2f)
                     val radius = min(size.width, size.height) / 2f - 18.dp.toPx()
-                    val segments = graph.nodes.filter { it.kind == "segment" }
                     val positions = mutableMapOf<String, Offset>()
 
                     segments.forEachIndexed { index, node ->

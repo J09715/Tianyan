@@ -330,6 +330,109 @@ class ToolRegistry @Inject constructor(
         .firstOrNull { it.id == toolId }
         ?.let { File(localRoot, "${it.id}/${it.version}/payload") }
 
+    /**
+     * 把 APK 内自带的插件包落盘到 [localRoot]，使「插件与工具中心」无需手动导入即可安装。
+     *
+     * 为什么需要：`assets/plugins/` 里的离线包此前只是**打包源**——CI 用它生成
+     * `.txplugin` 分发，用户得自己拿到 zip 再从工具中心选文件导入。把同一个包同时
+     * 放进 APK 的 `assets/bundled-plugins/`，这里在启动时解出来，它就走上了与手动
+     * 导入完全相同的通路（同一份 manifest 校验、同一个 localRoot 布局），因此
+     * `loadLocalManifests()` 会把它并进 registry，工具中心直接显示为可安装。
+     *
+     * 幂等与覆盖规则与 [importLocal] 保持一致：包内版本已存在时替换（离线包作者常
+     * 在不 bump 版本号的情况下重打包修脚本），版本目录做原子换名，失败则回滚。
+     *
+     * 与手动导入的差别只有一处：不写 `manifest.json` 之外的任何额外标记，也不改
+     * 用户已装实例——payload 在安装时才由 LocalPluginPayloadManager 复制进沙箱。
+     *
+     * @return 本次实际落盘（或覆盖）的插件 id；无内置包时为空。
+     */
+    suspend fun seedBundledPlugins(): List<String> = withContext(Dispatchers.IO) {
+        val bundled = runCatching { context.assets.list(BUNDLED_PLUGINS_ASSET)?.toList().orEmpty() }
+            .getOrDefault(emptyList())
+        if (bundled.isEmpty()) return@withContext emptyList()
+
+        val seeded = mutableListOf<String>()
+        for (fileName in bundled.sorted()) {
+            if (!fileName.endsWith(".txplugin")) continue
+            val staging = File(context.cacheDir, "bundled-plugin-${System.nanoTime()}").apply { mkdirs() }
+            var committed = false
+            try {
+                var manifestText: String? = null
+                context.assets.open("$BUNDLED_PLUGINS_ASSET/$fileName").use { input ->
+                    ZipInputStream(BufferedInputStream(input)).use { zip ->
+                        while (true) {
+                            val entry = zip.nextEntry ?: break
+                            val name = entry.name.replace('\\', '/')
+                            // 与 importLocal 同一套路径约束：只收 manifest.json 与 payload/，
+                            // 且禁止绝对路径与 .. —— 内置包同样是不可信输入，不能因为是
+                            // 自带的就放宽校验。
+                            require(name.isNotBlank() && !name.startsWith('/') && !name.split('/').contains("..")) {
+                                "内置插件包包含不安全路径：$name"
+                            }
+                            require(name == "manifest.json" || name.startsWith("payload/")) {
+                                "内置插件包只允许 manifest.json 与 payload/：$name"
+                            }
+                            if (entry.isDirectory) continue
+                            val target = File(staging, name)
+                            target.parentFile?.mkdirs()
+                            target.outputStream().use { output -> zip.copyTo(output) }
+                            if (name == "manifest.json") manifestText = target.readText()
+                        }
+                    }
+                }
+                val parsed = json.decodeFromString<ToolManifest>(
+                    manifestText ?: error("内置插件包缺少 manifest.json：$fileName"),
+                )
+                val manifest = parsed.copy(source = "LOCAL", offlineOnly = true, installMethod = "LOCAL_PACKAGE")
+                ToolManifestValidator.validateAll(listOf(manifest))
+
+                val versionDir = File(localRoot, "${manifest.id}/${manifest.version}")
+                versionDir.parentFile?.mkdirs()
+                if (versionDir.exists()) {
+                    // 已导入同版本：比对 payload 是否一致，一致就跳过，避免每次启动
+                    // 都做一次全量目录替换（这个包 5MB，冷启动路径上不该反复搬）。
+                    if (staging.contentEquivalentTo(versionDir)) {
+                        seeded += manifest.id
+                        continue
+                    }
+                    val legacy = File(versionDir.parentFile, ".legacy-${manifest.version}-${System.nanoTime()}")
+                    check(versionDir.renameTo(legacy)) { "无法替换已内置的插件：${manifest.id}" }
+                    if (!staging.renameTo(versionDir)) {
+                        legacy.renameTo(versionDir)
+                        error("无法提交内置插件包：${manifest.id}")
+                    }
+                    legacy.deleteRecursively()
+                } else {
+                    check(staging.renameTo(versionDir)) { "无法提交内置插件包：${manifest.id}" }
+                }
+                committed = true
+                seeded += manifest.id
+                logger.i("已内置插件：${manifest.id} ${manifest.version}")
+            } catch (throwable: Throwable) {
+                // 单个内置包失败不影响其余包，也不影响应用启动：内置资源损坏是
+                // 打包事故，用户仍可手动导入正确的包来修复。
+                logger.w("内置插件落盘失败 $fileName：${throwable.message}", throwable)
+            } finally {
+                if (!committed) staging.deleteRecursively()
+            }
+        }
+        seeded
+    }
+
+    /** 目录内容是否等价（文件名 + 大小 + 内容）。用于跳过重复的内置包搬运。 */
+    private fun File.contentEquivalentTo(other: File): Boolean {
+        val mine = walkTopDown().filter { it.isFile }.toList()
+        val theirs = other.walkTopDown().filter { it.isFile }.toList()
+        if (mine.size != theirs.size) return false
+        val theirsByPath = theirs.associateBy { it.relativeTo(other).invariantSeparatorsPath }
+        return mine.all { file ->
+            val relative = file.relativeTo(this).invariantSeparatorsPath
+            val counterpart = theirsByPath[relative] ?: return@all false
+            file.length() == counterpart.length() && file.readBytes().contentEquals(counterpart.readBytes())
+        }
+    }
+
     private fun isLocalVersionImported(toolId: String, version: String): Boolean =
         File(localRoot, "$toolId/$version/manifest.json").isFile
 
@@ -428,6 +531,16 @@ class ToolRegistry @Inject constructor(
 
     private companion object {
         const val REGISTRY_ASSET = "registry/tools.json"
+
+        /**
+         * APK 内自带插件包目录（`.txplugin` 原样存放）。
+         *
+         * 与 `assets/plugins/` 的区别：后者是**打包源**，只参与 CI 生成分发用的 zip，
+         * 不进 APK；这里的包随 APK 分发，启动时由 [seedBundledPlugins] 落到 localRoot，
+         * 使用户在「插件与工具中心」无需手动导入即可安装。
+         */
+        const val BUNDLED_PLUGINS_ASSET = "bundled-plugins"
+
         const val MAX_REGISTRY_BYTES = 1024 * 1024L
         // Android + ARM64 NDK + Flutter archives can exceed 4 GiB after extraction.
         const val MAX_PACKAGE_BYTES = 8L * 1024L * 1024L * 1024L

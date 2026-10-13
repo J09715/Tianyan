@@ -841,24 +841,24 @@ fun WorkspaceScreen(
                                 )
                             }
                             // 分类日志
-                            val logLines = progress.logOutput.lines()
-                            val depKeywords = listOf("downloading", "fetching", "kilobytes", "megabytes", "get")
-                            val compileKeywords = listOf("compile", "kotlin", "javac", "dex")
-                            val packageKeywords = listOf("package", "install", "apk")
-                            fun classifyLine(line: String): Int {
-                                val lower = line.lowercase()
-                                return when {
-                                    depKeywords.any { lower.contains(it) } -> 0
-                                    compileKeywords.any { lower.contains(it) } -> 1
-                                    packageKeywords.any { lower.contains(it) } -> 2
-                                    else -> 3
-                                }
+                            //
+                            // 构建日志在编译期持续增长：progress.logOutput 每个发布帧都是新字符串，
+                            // 而这段代码位于 composition 内。原实现每次重组都会
+                            //   1) 重建 3 个关键字列表，
+                            //   2) 对全部日志行做一次 map 分类（并分配一份 (Int, String) 配对列表），
+                            //   3) 再对分类结果做 4 次 filter + map。
+                            // 合计 6 趟遍历。上千行日志下，这些分配与遍历落在每一帧上，表现为
+                            // 滚动和流式追加时的持续掉帧——即使只是折叠状态变化触发的重组也要重算。
+                            //
+                            // 改为：关键字提升为文件级常量，分组结果用 remember 以日志原文为 key 缓存。
+                            // 日志未变化时完全跳过重算。
+                            val logsByCategory = remember(progress.logOutput) {
+                                classifyBuildLogLines(progress.logOutput)
                             }
-                            val categorized = logLines.map { line -> classifyLine(line) to line }
-                            val depsLogs = categorized.filter { it.first == 0 }.map { it.second }
-                            val compileLogs = categorized.filter { it.first == 1 }.map { it.second }
-                            val packageLogs = categorized.filter { it.first == 2 }.map { it.second }
-                            val otherLogs = categorized.filter { it.first == 3 }.map { it.second }
+                            val depsLogs = logsByCategory[0]
+                            val compileLogs = logsByCategory[1]
+                            val packageLogs = logsByCategory[2]
+                            val otherLogs = logsByCategory[3]
 
                             data class Category(val type: Int, val emoji: String, val name: String, val logs: List<String>)
                             val categories = listOf(
@@ -2474,4 +2474,37 @@ private fun AppPickerDialog(
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.workspace_cancel)) } },
     )
+}
+
+// ── 构建日志分类 ────────────────────────────────────────────────────────────
+//
+// 关键字提升为文件级常量：原实现把它们放在 composition 内，每次重组都重新分配
+// 三个 List。分类结果按 0..3 索引返回（依赖 / 编译 / 打包 / 其他）。
+private val BUILD_LOG_DEP_KEYWORDS = listOf("downloading", "fetching", "kilobytes", "megabytes", "get")
+private val BUILD_LOG_COMPILE_KEYWORDS = listOf("compile", "kotlin", "javac", "dex")
+private val BUILD_LOG_PACKAGE_KEYWORDS = listOf("package", "install", "apk")
+
+/**
+ * 单趟把构建日志按类别分组。
+ *
+ * 原实现走 6 趟（一次 map 分类 + 四次 filter/map），并分配一份中间配对列表；
+ * 构建日志上千行时这会落在每一帧上。这里改为一次遍历、四个桶直接追加。
+ *
+ * 语义与原实现完全一致：按「依赖 → 编译 → 打包 → 其他」的优先级取首个命中的类别
+ * （`when` 的分支顺序即优先级），空行归入「其他」——与原来 `lines()` 后逐行分类
+ * 的结果相同。
+ */
+private fun classifyBuildLogLines(raw: String): List<List<String>> {
+    val buckets = List(4) { mutableListOf<String>() }
+    for (line in raw.lineSequence()) {
+        val lower = line.lowercase()
+        val category = when {
+            BUILD_LOG_DEP_KEYWORDS.any { lower.contains(it) } -> 0
+            BUILD_LOG_COMPILE_KEYWORDS.any { lower.contains(it) } -> 1
+            BUILD_LOG_PACKAGE_KEYWORDS.any { lower.contains(it) } -> 2
+            else -> 3
+        }
+        buckets[category].add(line)
+    }
+    return buckets
 }

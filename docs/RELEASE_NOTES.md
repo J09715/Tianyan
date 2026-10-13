@@ -1,3 +1,92 @@
+# 天衍 · Tianyan v0.18.24 发布记录
+
+> **发布时间**：2026-10-13
+> **版本号**：v0.18.24（`appVersionName = 0.18.24`，`appVersionCode = 92`）
+> **支持范围**：Android 10+ · arm64-v8a（无 Root / PRoot 沙箱）
+
+---
+
+## 🆕 v0.18.24：性能审计与流畅度修复
+
+针对「界面卡顿」做了一轮系统审计，用静态扫描量化 Compose 反模式分布，再按影响面修复。结论与改动如下。
+
+### 审计结论：卡顿不在重组层，在绘制层与组合期重算
+
+先量化了 Compose 反模式密度（扫描全部 `@Composable` 文件）：
+
+| 反模式 | 命中 | 判断 |
+|---|---|---|
+| LazyList 缺 `key` | 8 处 / 6 文件 | 局部，非主因 |
+| composition 内集合运算 | 38 处 / 19 文件 | **主因之一** |
+| `collectAsState()`（非生命周期感知） | 1 处 | 可忽略 |
+| `derivedStateOf` 使用 | 5 处 | 偏少但非瓶颈 |
+| `runBlocking` | 1 处（冷启动读外观偏好） | 有意权衡，保留 |
+
+关键区分：**重组（recomposition）与绘制（draw）的频率差一个量级**。滚动、动画、任何无效化都会触发绘制，但不一定触发重组。因此写在 `Canvas` 的 draw lambda 里的计算，代价是写在组合期的好几倍——这一轮修的主要就是这类。
+
+### 修复（五处）
+
+- **`WorkspaceScreen` 构建日志分类：6 趟遍历 → 1 趟**。原实现在 composition 内每次重组都重建 3 个关键字列表、对全部日志行做一次 `map` 分类（并分配中间配对列表）、再 4 次 `filter+map`。构建日志上千行时，这些分配与遍历落在每一帧上。改为关键字提升为文件级常量 + 单趟分桶 + 以日志原文为 key 的 `remember` 缓存。语义完全一致（按「依赖→编译→打包→其他」优先级取首个命中，空行归「其他」）。
+
+- **`GitPanel` 提交图跨泳道边推导：移出 draw lambda**。原先在 `Canvas` 的 draw lambda 内对边集做 `filter + map + toSet` 两次。draw lambda 每次绘制都重跑，大型仓库边集可达数百条，等于每帧两次全量过滤加中间 List 分配。改为组合期 `remember(edges, activeTopLanes)` 预计算。注意 DrawScope 内没有 `remember` 可用，因此计算必须在组合期完成后传入。
+
+- **`RedTeamAssetsTab` 图谱 segment 筛选：移出 draw lambda**。同上模式，节点多时每帧全量过滤。
+
+- **`ChatWorkbenchPanels` 子智能体过程列表：过滤结果缓存**。原先把 `state.messages.filter { ... }` 直接写在 `items(items = ...)` 实参位置，该表达式每次重组求值；面板展开期间每个流式发布帧都带来新的 `state.messages`，于是每帧全量过滤整个会话。改为组合期 `remember(state.messages, finalResult?.id)` 缓存——**必须放在 `LazyColumn` 之外**，`LazyListScope` 不是 `@Composable` 上下文。
+
+- **`ChatWorkbenchPanels` 分支分组：两次 filter → 单趟**。子智能体运行期间分支列表持续增长，且该段在 composition 内，任何状态更新都会重跑两次全量过滤。
+
+### 新增守卫
+
+- `ChatProjectionPerfTest`（3 项）。`projectChatMessages` 在每次流式发布时都会被重跑，因此它的单次成本必须与消息数线性。这组测试不测墙钟（CI 抖动会让阈值变 flaky），而是锁算法不变量：投影条数随规模线性、reasoning 去重的作用域（同轮内已见即隐藏、跨轮重新可见）、以及 2400 条消息的投影必须在 10 秒上界内完成——阈值刻意放得很宽，只用于抓平方级退化（旧的向后回扫写法会立刻撞破）。
+
+### 说明
+
+- 实测数据：2400 条消息的投影耗时约 6ms（预热后），投影层不是瓶颈；`StreamBuffer` 已按时间间隔节流发布、`MarkdownText` 已有三层 LRU 缓存，这两处上游已优化，本轮未动。
+- `MainActivity` 的 `runBlocking` 保留：它只在冷启动同步读一次外观偏好，用于避免「首帧按默认值渲染、读完再重排」的三次跳变，是有意的取舍。
+
+---
+
+## 🆕 v0.18.24：插件开机自启
+
+修复「插件与工具中心」里「自启动」开关无效的问题。
+
+### 根因
+
+`tool_settings.autoStart` 此前只有写入方（设置页开关）和一个 UI 回显读取方，**没有任何启动流程消费它**；而进程表 `ProcessRegistry.processes` 是纯内存 `LinkedHashMap`，应用退出即丢失。两者叠加的结果就是用户看到的现象：开关打开了，重启后服务还是没了。
+
+### 修复
+
+- `ToolSettingsDao` 新增 `listAutoStartToolIds` 查询，`ToolSettingsRepository` 暴露对应方法；
+- `ToolManager.startAutoStartServices()` 为消费端：只处理 `launchType` 为 `web`/`service` 的工具（`pty`/`one_shot`/`command` 是前台会话型，不该后台常驻），已运行的跳过（幂等），单个工具失败不影响其余工具，端口就绪才算成功（由 `ToolServiceController.start` 内部探测）；
+- 挂在 `OnboardingViewModel` 的恢复流程内，在 `restoreInstalledState()` 返回、沙箱 Ready 之后调用。放在这里而非 `LinuxRuntimeImpl` 内部，是因为架构铁律规定 `runtime` 不得反向依赖 `tools`，而该 ViewModel 已持有 `ToolManager`。
+
+---
+
+## 🆕 v0.18.24：内置插件包
+
+「插件与工具中心」现在可以直接安装随 APK 分发的插件包，无需手动导入 zip。
+
+- 新增 `assets/bundled-plugins/` 目录与 `ToolRegistry.seedBundledPlugins()`：冷启动时把 APK 内的 `.txplugin` 解到 `filesDir/plugins/`，之后走**与手动导入完全相同的通路**（同一份 manifest 校验、同一个 `localRoot` 布局），因此 `loadLocalManifests()` 会自动把它并入 registry，工具中心直接显示为可安装。
+- 幂等：同版本已存在时先比对内容，一致则跳过，避免每次冷启动都搬运数 MB 的 payload。
+- 路径校验与手动导入同一套规则（只允许 `manifest.json` 与 `payload/`，禁止绝对路径与 `..`）——内置包同样按不可信输入处理。
+- 单个内置包失败不影响其余包，也不影响应用启动。
+
+首个内置包：**Our Free Model 免费模型网关**（`our-free-model` v2.1.0）。独立 Node 服务，提供 Web 管理后台与 OpenAI 兼容本地端点，安装后在工具详情页点启动，勾选自启动即可随天衍拉起。
+
+---
+
+## 🆕 v0.18.24：上游连通性修复
+
+`our-free-model` 的内置包带了一个 DNS 修复补丁，用于这台网络环境下到上游网关的**两个独立故障**：
+
+1. **IPv6 黑洞**：上游域名有 AAAA 记录但 v6 路由不可达，Node 的 happy-eyeballs 会耗满连接超时；
+2. **部分 A 记录不可用**：实测四个 IPv4 地址中只有一个能完成 TLS 握手，其余三个接受 TCP 后永不回应 ClientHello。`fetch()` 选定 socket 后不会换地址，因此同一请求会时好时坏。
+
+补丁在解析后并发探测各地址的 TLS 握手，只把健康的交给连接器，按 host 缓存 5 分钟。探测必须带 SNI——缺失时上游边缘会直接挂起握手，导致所有地址被误判为不可用。
+
+---
+
 # 天衍 · Tianyan v0.18.7 发布记录
 
 > **发布时间**：2026-10-08

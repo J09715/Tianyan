@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "id": "our-free-model",
+  "name": "Our Free Model 免费模型网关",
+  "description": "内置 Our Free Model 独立服务：无需 DSH、无需登录即可接入 OpenCode Zen 免费模型通道，并提供 Web 管理后台、13 个账号渠道、局域网 OpenAI 兼容端点与用量看板。安装后可在「插件与工具中心」一键启动，勾选自启动即可随天衍开机拉起。",
+  "dependencies": [],
+  "launchType": "web",
+  "servicePort": 18900,
+  "servicePath": "/",
+  "version": "2.1.0",
+  "latestVersion": "2.1.0",
+  "enabled": true,
+  "publisher": "Ebony-Vinyl / Tianyan",
+  "homepage": "https://github.com/Ebony-Vinyl/dsh-our-free-model",
+  "category": "AI_AGENT",
+  "architectures": [
+    "ARM64"
+  ],
+  "permissions": [
+    "NETWORK",
+    "LOCAL_WEB",
+    "WORKSPACE_READ",
+    "WORKSPACE_WRITE"
+  ],
+  "updateStrategy": "REINSTALL",
+  "source": "LOCAL",
+  "offlineOnly": true,
+  "installMethod": "LOCAL_PACKAGE",
+  "installSteps": [
+    "/bin/sh \"$TIANYAN_PLUGIN_PAYLOAD/scripts/install-our-free-model.sh\""
+  ],
+  "uninstallSteps": [
+    "/bin/sh \"$TIANYAN_PLUGIN_PAYLOAD/scripts/uninstall-our-free-model.sh\""
+  ],
+  "verifyCommand": "/bin/sh \"$TIANYAN_PLUGIN_PAYLOAD/scripts/verify-our-free-model.sh\"",
+  "launchCommand": "/opt/tianyan/our-free-model/start.sh",
+  "commandLinks": [
+    "ofm"
+  ],
+  "environment": {
+    "OFM_HOME": "/opt/tianyan/data/our-free-model",
+    "OFM_PORT": "18900",
+    "NODE_OPTIONS": "--import=/opt/tianyan/our-free-model/app/patches-ipv4-first.mjs"
+  }
+}

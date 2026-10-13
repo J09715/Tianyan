@@ -315,8 +315,17 @@ internal fun BranchBrowserSheet(
                     )
                 }
             } else {
-                val conversation = branches.filter { it.kind != ConversationBranchKind.SUBAGENT }
-                val subagents = branches.filter { it.kind == ConversationBranchKind.SUBAGENT }
+                // 单趟分组替代两次全量 filter：分支列表在子智能体运行期间会持续增长，
+                // 且这段位于 composition 内，任何状态更新都会重跑这两次过滤。
+                val (conversation, subagents) = remember(branches) {
+                    val conversation = ArrayList<ConversationBranch>(branches.size)
+                    val subagents = ArrayList<ConversationBranch>()
+                    for (branch in branches) {
+                        if (branch.kind == ConversationBranchKind.SUBAGENT) subagents.add(branch)
+                        else conversation.add(branch)
+                    }
+                    conversation to subagents
+                }
                 SectionLabel(stringResource(R.string.chat_conversation_paths), conversation.size)
                 conversation.forEach { branch ->
                     BranchCard(branch, enabled = !running && !branch.isBusy, onClick = { onSwitch(branch) })
@@ -415,6 +424,16 @@ internal fun SubagentResultSheet(
     val task = state.messages.filterIsInstance<UserMessage>().firstOrNull()
     val toolResults = remember(state.messages) {
         state.messages.filterIsInstance<ToolResult>().associateBy { it.toolCallId }
+    }
+    // 子智能体过程列表的过滤结果在组合期缓存。
+    //
+    // 原先直接写在 LazyListScope 的 items(items = ...) 实参位置：该表达式在每次重组时
+    // 求值，而面板展开期间每个流式发布帧都会带来新的 state.messages，于是每帧都要对整个
+    // 会话消息列表做一次全量过滤并分配新 List。长会话下这部分随消息数线性放大到每帧开销。
+    //
+    // 注意必须放在 LazyColumn 之外：LazyListScope 不是 @Composable 上下文，remember 在其中不可用。
+    val processMessages = remember(state.messages, finalResult?.id) {
+        state.messages.filter { it !is ToolResult && it.id != finalResult?.id }
     }
     var processExpanded by rememberSaveable(branch.id) { mutableStateOf(false) }
 
@@ -547,7 +566,7 @@ internal fun SubagentResultSheet(
 
                 if (processExpanded) {
                     items(
-                        items = state.messages.filter { it !is ToolResult && it.id != finalResult?.id },
+                        items = processMessages,
                         key = { it.id },
                     ) { message ->
                         when (message) {
