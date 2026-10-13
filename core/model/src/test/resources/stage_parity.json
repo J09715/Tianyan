@@ -1,0 +1,360 @@
+{
+ "stages": [
+  {
+   "code": "recon",
+   "name": "信息收集",
+   "subtitle": "RECON · 互联网侧",
+   "color": "#06b6d4",
+   "scored": 0,
+   "goal": "在互联网侧展开信息收集，确定值得打的资产面",
+   "transition": "确认互联网攻击面，转入利用",
+   "tools": "ARL / 灯塔、fscan、gogo、OneForAll、ENScan、Goby、Nmap、Burp、Nuclei",
+   "sectionLabels": [
+    "资产测绘",
+    "攻击面确认",
+    "攻击面排序"
+   ],
+   "sectionItems": [
+    [
+     "子域名 / C 段 / 端口指纹",
+     "FOFA、被动 DNS、证书透明、主动扫描"
+    ],
+    [
+     "Web 标题与指纹、暴露的服务与管理端口",
+     "归属、WAF / CDN 识别"
+    ],
+    [
+     "按易打性与预期得分排序",
+     "确定先打哪几台"
+    ]
+   ]
+  },
+  {
+   "code": "internet",
+   "name": "互联网资产权限",
+   "subtitle": "INTERNET-SIDE PRIVILEGE",
+   "color": "#ef4444",
+   "scored": 1,
+   "goal": "在互联网侧资产上拿到账号、权限等得分",
+   "transition": "用已控主机打通出网通道",
+   "tools": "sqlmap、Nuclei、冰蝎 / 哥斯拉 / 蚁剑、fscan、Burp、自定义 POC",
+   "sectionLabels": [
+    "拿账号",
+    "拿权限",
+    "拿数据"
+   ],
+   "sectionItems": [
+    [
+     "弱口令 / 越权 / 未授权 / 逻辑漏洞",
+     "后台管理员、普通账号"
+    ],
+    [
+     "Nday / 1day RCE、文件上传、反序列化",
+     "WebShell、命令执行、服务器权限"
+    ],
+    [
+     "数据库、配置泄露、批量敏感信息"
+    ]
+   ]
+  },
+  {
+   "code": "boundary",
+   "name": "边界突破",
+   "subtitle": "BOUNDARY BREACH · TUNNEL",
+   "color": "#f59e0b",
+   "scored": 1,
+   "goal": "成功搭建隧道，把控制能力延伸进内网",
+   "transition": "隧道就绪，转入内网",
+   "tools": "suo5、frp、Stowaway、Neo-reGeorg、GOST、proxychains、chisel",
+   "sectionLabels": [
+    "隧道",
+    "出网通道"
+   ],
+   "sectionItems": [
+    [
+     "suo5 / frp / Stowaway / Neo-reGeorg / Venom",
+     "socks5 落地、多级级联"
+    ],
+    [
+     "域名前置、CDN 隐藏、云函数转发",
+     "DNS / ICMP / 443 隐蔽信道"
+    ]
+   ]
+  },
+  {
+   "code": "internal",
+   "name": "内网资产权限",
+   "subtitle": "INTERNAL-SIDE PRIVILEGE",
+   "color": "#8b5cf6",
+   "scored": 1,
+   "goal": "通过隧道在内网资产上拿分",
+   "transition": "定位内网核心靶标",
+   "tools": "gogo / fscan（走隧道）、Impacket、Mimikatz / LaZagne、BloodHound、suo5",
+   "sectionLabels": [
+    "内网测绘",
+    "横向与提权",
+    "数据"
+   ],
+   "sectionItems": [
+    [
+     "存活 / 端口 / 服务 / 共享目录",
+     "数据库、中间件、备份系统"
+    ],
+    [
+     "凭据复用、Pass-the-Hash、票据",
+     "PsExec / WMIExec / SSH / RDP"
+    ],
+    [
+     "批量导出敏感信息，落 runs/ 并记引用"
+    ]
+   ]
+  },
+  {
+   "code": "target",
+   "name": "靶标权限",
+   "subtitle": "TARGET SYSTEM",
+   "color": "#10b981",
+   "scored": 1,
+   "goal": "获取内网重要资产（靶标）的权限",
+   "transition": "",
+   "tools": "凭据复用、内网横向工具、证据链归档与报告",
+   "sectionLabels": [
+    "靶标定位",
+    "拿靶标",
+    "成果固化"
+   ],
+   "sectionItems": [
+    [
+     "按演练规则确认靶标系统 / 服务器范围",
+     "明确得分判定口径"
+    ],
+    [
+     "root / SYSTEM / 管理员 / 云 AK",
+     "业务数据读写与配置变更能力"
+    ],
+    [
+     "证据链归档（配置 / 数据 / 主机信息 / 截图）",
+     "攻击时间线回顾"
+    ]
+   ]
+  }
+ ],
+ "stageOf": [
+  {
+   "hit": {
+    "stage_code": "internal",
+    "code": "mail-admin",
+    "target": "10.0.0.5"
+   },
+   "scope": "external",
+   "value": "internal"
+  },
+  {
+   "hit": {
+    "stage_code": "boundary"
+   },
+   "scope": "internal",
+   "value": "boundary"
+  },
+  {
+   "hit": {
+    "stage_code": ""
+   },
+   "scope": "internal",
+   "value": "internal"
+  },
+  {
+   "hit": {
+    "code": "mail-admin"
+   },
+   "scope": "external",
+   "value": "target"
+  },
+  {
+   "hit": {
+    "code": "central-system"
+   },
+   "scope": null,
+   "value": "target"
+  },
+  {
+   "hit": {
+    "code": "boundary-strong"
+   },
+   "scope": "external",
+   "value": "boundary"
+  },
+  {
+   "hit": {
+    "code": "core-system"
+   },
+   "scope": null,
+   "value": "target"
+  },
+  {
+   "hit": {
+    "code": "web-app"
+   },
+   "scope": null,
+   "value": "target"
+  },
+  {
+   "hit": {
+    "code": "unknown-code"
+   },
+   "scope": "internal",
+   "value": "internal"
+  },
+  {
+   "hit": {
+    "code": "weak-password"
+   },
+   "scope": "internal",
+   "value": "internal"
+  },
+  {
+   "hit": {
+    "code": "weak-password"
+   },
+   "scope": "external",
+   "value": "internet"
+  },
+  {
+   "hit": {
+    "target": "10.0.0.5"
+   },
+   "scope": null,
+   "value": "internal"
+  },
+  {
+   "hit": {
+    "target": "203.0.113.5"
+   },
+   "scope": null,
+   "value": "internet"
+  },
+  {
+   "hit": {
+    "target": "find at http://10.1.2.3:8080/x"
+   },
+   "scope": null,
+   "value": "internal"
+  },
+  {
+   "hit": {
+    "target": "find at http://203.0.113.9/x"
+   },
+   "scope": null,
+   "value": "internet"
+  },
+  {
+   "hit": {
+    "target": "example.com"
+   },
+   "scope": null,
+   "value": "internet"
+  },
+  {
+   "hit": {},
+   "scope": null,
+   "value": "internet"
+  }
+ ],
+ "chain": [
+  {
+   "stage_code": "target",
+   "stage": "other",
+   "code": "target",
+   "warning": null
+  },
+  {
+   "stage_code": "recon",
+   "stage": "pivot",
+   "code": "recon",
+   "warning": null
+  },
+  {
+   "stage_code": "bogus",
+   "stage": "pivot",
+   "code": "boundary",
+   "warning": "无效的 stage_code=\"bogus\"（已忽略）：只接受 recon/internet/boundary/internal/target；本步按 stage 兜底落到 boundary。"
+  },
+  {
+   "stage_code": "external",
+   "stage": "access",
+   "code": "internal",
+   "warning": "无效的 stage_code=\"external\"（已忽略）：只接受 recon/internet/boundary/internal/target；本步按 stage 兜底落到 internal。"
+  },
+  {
+   "stage_code": "",
+   "stage": "vuln",
+   "code": "internet",
+   "warning": null
+  },
+  {
+   "stage_code": null,
+   "stage": "data",
+   "code": "internal",
+   "warning": null
+  },
+  {
+   "stage_code": "foothold",
+   "stage": "other",
+   "code": "recon",
+   "warning": "无效的 stage_code=\"foothold\"（已忽略）：只接受 recon/internet/boundary/internal/target；本步按 stage 兜底落到 recon。"
+  },
+  {
+   "stage_code": "target",
+   "stage": "pivot",
+   "code": "target",
+   "warning": null
+  }
+ ],
+ "targetKey": [
+  {
+   "target": "http://a.com/x",
+   "fallbackIp": "1.1.1.1",
+   "value": "http://a.com"
+  },
+  {
+   "target": "https://a.com",
+   "fallbackIp": null,
+   "value": "https://a.com"
+  },
+  {
+   "target": "a.com/path?q=1",
+   "fallbackIp": null,
+   "value": "a.com"
+  },
+  {
+   "target": "10.0.0.5:8080",
+   "fallbackIp": null,
+   "value": "10.0.0.5:8080"
+  },
+  {
+   "target": "",
+   "fallbackIp": "10.0.0.5",
+   "value": "10.0.0.5"
+  },
+  {
+   "target": "",
+   "fallbackIp": null,
+   "value": "(未指定目标)"
+  },
+  {
+   "target": null,
+   "fallbackIp": "2.2.2.2",
+   "value": "2.2.2.2"
+  },
+  {
+   "target": "  a.com  ",
+   "fallbackIp": null,
+   "value": "a.com"
+  },
+  {
+   "target": "ftp://h/f",
+   "fallbackIp": null,
+   "value": "ftp://h"
+  }
+ ]
+}

@@ -1,0 +1,1047 @@
+package top.tianyan.app.ui.chat
+
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import top.tianyan.app.ui.components.RuntimeAlertDialog
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.util.LruCache
+import android.webkit.MimeTypeMap
+import android.widget.Toast
+import androidx.core.content.FileProvider
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.add
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
+import top.tianyan.app.ui.components.RuntimeButton as Button
+import androidx.compose.material3.ButtonDefaults
+import top.tianyan.app.ui.components.RuntimeCircularProgressIndicator as CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import top.tianyan.app.ui.components.RuntimeIconButton as IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import top.tianyan.app.ui.components.RuntimeTextButton as TextButton
+import top.tianyan.app.ui.components.RuntimeLinearProgressIndicator as LinearProgressIndicator
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import top.tianyan.app.feature.chat.R
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import top.tianyan.app.harness.AssistantText
+import top.tianyan.app.harness.CapabilityEvent
+import top.tianyan.app.harness.MessageAttachment
+import top.tianyan.app.harness.UserMessage
+import top.tianyan.app.harness.checkpoint.RewindScope
+import top.tianyan.app.ui.components.RuntimeIcon
+import top.tianyan.app.ui.components.RuntimeIconName
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+
+/**
+ * 剥离历史消息里残留的附件挂载说明（≤0.18.17 会把整段拼进消息正文并落库）。
+ *
+ * 只切分隔符之后的全部内容：那段是程序生成的路径清单，不是用户写的字。
+ * 新消息正文里本就不含该段，对它们是恒等变换（前缀字节不受影响）。
+ */
+internal fun stripAttachmentManifest(text: String): String =
+    text.substringBefore("\n\n[附件：")
+        .substringBefore("\n\n[Attachment:")
+        .trimEnd()
+
+/** 消息气泡：用户/助手气泡、思考块、任务计划卡、能力事件卡。 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun UserBubble(
+    message: UserMessage,
+    knownMentionNames: List<String> = emptyList(),
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onCreateBranch: () -> Unit,
+    onRewind: (RewindScope) -> Unit = {},
+) {
+    val context = LocalContext.current
+    // 旧版本（≤0.18.17）把附件挂载说明拼进了消息正文并落库，气泡会显示一整段路径文字。
+    // 渲染层统一剥离：新消息本就不含该段，历史消息也能显示干净。
+    val visibleText = remember(message.text) { stripAttachmentManifest(message.text) }
+    var showMenu by remember { mutableStateOf(false) }
+    var previewImageUrl by rememberSaveable { mutableStateOf<String?>(null) }
+    // 删除消息为破坏性操作，先经确认对话框
+    var showDeleteConfirm by rememberSaveable { mutableStateOf(false) }
+    // 撤回到此轮：先选择撤回范围（代码/对话/两者）
+    var showRewindScopeDialog by rememberSaveable { mutableStateOf(false) }
+
+    val copyText = {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText(context.getString(R.string.chat_user_request_clipboard), visibleText))
+        Toast.makeText(context, context.getString(R.string.chat_request_copied), Toast.LENGTH_SHORT).show()
+    }
+
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+        Column(
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            // 🌟 1. 多模态图片预览卡片
+            if (message.imageUrls.isNotEmpty()) {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.padding(bottom = 2.dp),
+                ) {
+                    itemsIndexed(
+                        items = message.imageUrls,
+                        key = { index, _ -> "${message.id}:$index" },
+                    ) { index, imageUrl ->
+                        ImageThumbnail(
+                            imageUrl = imageUrl,
+                            cacheKey = "chat-image-${message.id}-$index",
+                            onClick = { previewImageUrl = imageUrl },
+                        )
+                    }
+                }
+            }
+
+            // 🌟 1.5 文件附件卡片
+            //
+            // 为什么必须有这一块：附件此前只在发送时被拼进提示词文本，气泡层只渲染
+            // message.text，于是用户看到的就是一整段带路径的文字（"发文件变成文字"）。
+            // 现在附件元信息随消息持久化（UserMessage.attachments），这里渲染成卡片；
+            // 提示词那侧保留挂载说明是为了告诉模型去哪里读文件，两者职责不同、不冲突。
+            val fileAttachments = message.attachments.filter { !it.isImage }
+            if (fileAttachments.isNotEmpty()) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier
+                        .padding(bottom = 2.dp)
+                        .widthIn(max = 560.dp),
+                ) {
+                    fileAttachments.forEach { attachment ->
+                        AttachmentFileCard(
+                            attachment = attachment,
+                            onClick = { openAttachment(context, attachment) },
+                        )
+                    }
+                }
+            }
+
+            // 🌟 2. 用户文字气泡
+            if (visibleText.isNotBlank()) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shape = RoundedCornerShape(16.dp, 4.dp, 16.dp, 16.dp),
+                    modifier = Modifier
+                        .widthIn(max = 560.dp)
+                        .clickable { showMenu = true },
+                ) {
+                    val mentionColor = MaterialTheme.colorScheme.primary
+                    val mentionBg = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+                    val annotatedText = remember(visibleText, knownMentionNames, mentionColor, mentionBg) {
+                        formatMentionText(visibleText, knownMentionNames, mentionColor, mentionBg)
+                    }
+                    Text(
+                        text = annotatedText,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
+            } else if (message.imageUrls.isNotEmpty()) {
+                // 纯图片消息：显示小菜单按钮
+                Surface(
+                    onClick = { showMenu = true },
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    shape = CircleShape,
+                    modifier = Modifier.size(28.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        RuntimeIcon(
+                            RuntimeIconName.More,
+                            Modifier.size(15.dp),
+                            MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+
+        DropdownMenu(
+            expanded = showMenu,
+            onDismissRequest = { showMenu = false },
+        ) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.chat_copy)) },
+                leadingIcon = { RuntimeIcon(RuntimeIconName.Copy, Modifier.size(16.dp)) },
+                onClick = {
+                    showMenu = false
+                    copyText()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.chat_edit_resend)) },
+                leadingIcon = { RuntimeIcon(RuntimeIconName.Edit, Modifier.size(16.dp)) },
+                onClick = {
+                    showMenu = false
+                    onEdit()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.chat_create_branch)) },
+                leadingIcon = { RuntimeIcon(RuntimeIconName.Hub, Modifier.size(16.dp)) },
+                onClick = {
+                    showMenu = false
+                    onCreateBranch()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.chat_rewind)) },
+                leadingIcon = { RuntimeIcon(RuntimeIconName.Reverse, Modifier.size(16.dp)) },
+                onClick = {
+                    showMenu = false
+                    showRewindScopeDialog = true
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.chat_delete), color = MaterialTheme.colorScheme.error) },
+                leadingIcon = {
+                    RuntimeIcon(
+                        RuntimeIconName.Trash,
+                        Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                },
+                onClick = {
+                    showMenu = false
+                    showDeleteConfirm = true
+                },
+            )
+        }
+    }
+
+    previewImageUrl?.let { imageUrl ->
+        ChatImagePreviewDialog(
+            imageUrl = imageUrl,
+            onDismiss = { previewImageUrl = null },
+        )
+    }
+
+    // 删除消息二次确认
+    if (showDeleteConfirm) {
+        RuntimeAlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text(stringResource(R.string.chat_delete_message_title), fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    stringResource(R.string.chat_delete_message_message),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirm = false
+                        onDelete()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                ) {
+                    Text(stringResource(R.string.chat_confirm_delete), color = MaterialTheme.colorScheme.onError)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text(stringResource(R.string.chat_cancel)) }
+            },
+        )
+    }
+
+    // 撤回范围选择：仅代码 / 仅对话 / 两者
+    if (showRewindScopeDialog) {
+        RuntimeAlertDialog(
+            onDismissRequest = { showRewindScopeDialog = false },
+            title = { Text(stringResource(R.string.chat_rewind_title), fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        stringResource(R.string.chat_rewind_subtitle),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    RewindScopeOption(
+                        label = stringResource(R.string.chat_rewind_code),
+                        description = stringResource(R.string.chat_rewind_code_desc),
+                        icon = RuntimeIconName.Code,
+                        onClick = { showRewindScopeDialog = false; onRewind(RewindScope.CODE) },
+                    )
+                    RewindScopeOption(
+                        label = stringResource(R.string.chat_rewind_conversation),
+                        description = stringResource(R.string.chat_rewind_conversation_desc),
+                        icon = RuntimeIconName.Chat,
+                        onClick = { showRewindScopeDialog = false; onRewind(RewindScope.CONVERSATION) },
+                    )
+                    RewindScopeOption(
+                        label = stringResource(R.string.chat_rewind_both),
+                        description = stringResource(R.string.chat_rewind_both_desc),
+                        icon = RuntimeIconName.Reverse,
+                        onClick = { showRewindScopeDialog = false; onRewind(RewindScope.BOTH) },
+                    )
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showRewindScopeDialog = false }) { Text(stringResource(R.string.chat_cancel)) }
+            },
+        )
+    }
+}
+
+/** 撤回范围选择行：图标 + 标题 + 说明，整行可点。 */
+@Composable
+private fun RewindScopeOption(
+    label: String,
+    description: String,
+    icon: RuntimeIconName,
+    onClick: () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            RuntimeIcon(icon, Modifier.size(20.dp), MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                Text(
+                    description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 🌟 多模态图片优雅缩略图卡片（支持 Base64 Data URL 与本地文件路径）。
+ *
+ * Base64 解码不能放在 remember 里：remember 的计算发生在 Compose 主线程，历史大图会
+ * 直接阻塞切换智枢的首帧。交给 Coil 后，DataUriFetcher/图片解码在后台执行，并按缩略图
+ * 的实际尺寸采样；稳定的 cacheKey 也让 Navigation3 重组页面时直接命中内存缓存。
+ */
+@Composable
+internal fun ImageThumbnail(
+    imageUrl: String,
+    cacheKey: String,
+    onClick: (() -> Unit)? = null,
+) {
+    val context = LocalContext.current
+    val thumbnailPx = with(LocalDensity.current) { 130.dp.roundToPx() }
+    val request = remember(imageUrl, cacheKey, thumbnailPx) {
+        val data: Any = when {
+            imageUrl.startsWith("file://") -> java.io.File(imageUrl.removePrefix("file://"))
+            imageUrl.startsWith("/") -> java.io.File(imageUrl)
+            else -> imageUrl
+        }
+        ImageRequest.Builder(context)
+            .data(data)
+            .size(thumbnailPx, thumbnailPx)
+            .memoryCacheKey(cacheKey)
+            .diskCacheKey(cacheKey)
+            .build()
+    }
+
+    AsyncImage(
+        model = request,
+        contentDescription = stringResource(R.string.chat_user_image),
+        contentScale = ContentScale.Crop,
+        modifier = Modifier
+            .size(width = 130.dp, height = 130.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .border(
+                1.dp,
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                RoundedCornerShape(12.dp),
+            )
+            // 与文字气泡一致的点击语义：弹出操作菜单
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+    )
+}
+
+/**
+ * 把 [MessageAttachment] 还原成 Android 本地文件。guestPath 是 PRoot 沙箱内路径
+ * （/attachments/xxx），Android 侧真实文件保存在 filesDir/linux-runtime/attachments/xxx。
+ * 历史消息或已被清理的附件可能已不存在，此时返回 null，调用方走降级提示。
+ */
+private fun attachmentFile(context: Context, attachment: MessageAttachment): java.io.File? {
+    val name = attachment.guestPath.substringAfterLast('/').ifBlank { attachment.name }
+    if (name.isBlank()) return null
+    val candidate = java.io.File(context.filesDir, "linux-runtime/attachments/$name")
+    return candidate.takeIf { it.exists() && it.length() > 0L }
+}
+
+/**
+ * 点击文件附件：用系统查看器打开。URI 走 FileProvider 并附带只读授权，
+ * mimeType 优先用发送时保留的类型，缺失时按扩展名回退。
+ */
+private fun openAttachment(context: Context, attachment: MessageAttachment) {
+    val mimeType = attachment.mimeType
+        ?: MimeTypeMap.getSingleton().getMimeTypeFromExtension(
+            attachment.name.substringAfterLast('.', "").lowercase(),
+        )
+        ?: "*/*"
+    val file = attachmentFile(context, attachment)
+    val uri = file?.let { f ->
+        runCatching {
+            FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", f)
+        }.getOrNull()
+    }
+    if (uri == null) {
+        Toast.makeText(
+            context,
+            context.getString(R.string.chat_attachment_missing, attachment.name),
+            Toast.LENGTH_SHORT,
+        ).show()
+        return
+    }
+    val intent = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(uri, mimeType)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    runCatching {
+        context.startActivity(Intent.createChooser(intent, attachment.name))
+    }.onFailure {
+        Toast.makeText(
+            context,
+            context.getString(R.string.chat_attachment_missing, attachment.name),
+            Toast.LENGTH_SHORT,
+        ).show()
+    }
+}
+
+/** 全屏图片预览：点缩略图后弹出，点任意处关闭。支持 data URL 与本地文件路径。 */
+@Composable
+private fun ChatImagePreviewDialog(imageUrl: String, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val data = remember(imageUrl) {
+        when {
+            imageUrl.startsWith("file://") -> java.io.File(imageUrl.removePrefix("file://"))
+            imageUrl.startsWith("/attachments/") ->
+                java.io.File(context.filesDir, "linux-runtime/attachments/${imageUrl.substringAfterLast('/')}")
+            imageUrl.startsWith("/") -> java.io.File(imageUrl)
+            else -> imageUrl
+        }
+    }
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.94f))
+                .clickable(onClick = onDismiss),
+            contentAlignment = Alignment.Center,
+        ) {
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(data)
+                    .build(),
+                contentDescription = stringResource(R.string.chat_user_image),
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
+@Composable
+internal fun AssistantBubble(
+    message: AssistantText,
+    defaultExpanded: Boolean,
+    live: Boolean = false,
+    showRegenerate: Boolean = false,
+    onRegenerate: () -> Unit = {},
+    onCreateBranch: () -> Unit = {},
+) {
+    val reasoning = message.reasoning
+    val context = LocalContext.current
+    val generatedImagePayload = remember(message.id, message.text.length) {
+        val cacheKey = "${message.id}:${message.text.length}"
+        generatedImageFlagCache.get(cacheKey)
+            ?: message.text.contains("data:image/", ignoreCase = true).also { found ->
+                generatedImageFlagCache.put(cacheKey, found)
+            }
+    }
+
+    val copyAll = {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText(context.getString(R.string.chat_ai_response_clipboard), message.text))
+        Toast.makeText(context, context.getString(R.string.chat_response_copied), Toast.LENGTH_SHORT).show()
+    }
+
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        if (!reasoning.isNullOrBlank()) {
+            ThinkingBlock(
+                id = message.id,
+                reasoning = reasoning,
+                defaultExpanded = defaultExpanded,
+                live = live,
+            )
+        }
+
+        if (!live && !generatedImagePayload) {
+            val planSteps = remember(message.text) { extractTaskPlanSteps(message.text) }
+            if (planSteps.size >= 2) {
+                TaskPlanCard(steps = planSteps)
+            }
+        }
+
+        if (message.text.isNotBlank()) {
+            if (live) {
+                val liveImageDataStart = remember(message.text) {
+                    message.text.indexOf("data:image/", ignoreCase = true)
+                }
+                if (liveImageDataStart >= 0) {
+                    val humanPrefix = remember(message.text, liveImageDataStart) {
+                        val markdownStart = message.text.lastIndexOf("![", liveImageDataStart)
+                            .takeIf { it >= 0 } ?: liveImageDataStart
+                        message.text.substring(0, markdownStart).trim().take(8_000)
+                    }
+                    if (humanPrefix.isNotBlank()) {
+                        SelectionContainer {
+                            Text(
+                                text = humanPrefix,
+                                modifier = Modifier.fillMaxWidth(),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
+                    }
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.size(width = 260.dp, height = 180.dp),
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically),
+                        ) {
+                            CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 3.dp)
+                            Text(
+                                text = stringResource(R.string.chat_receiving_image),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                } else {
+                    // 流式期间也走 Markdown 渲染（此前是裸 Text，所以"输出完才排版"）。
+                    //
+                    // 掉帧风险用「尾部安全窗口」压住，而不是退回纯文本：窗口只在
+                    // 围栏/段落/换行边界处断开（见 truncateAtSafeMarkdownBoundary），
+                    // 保证解析结果始终是合法 Markdown —— 否则半个 ``` 会让整屏变成
+                    // 一个巨大代码块，比不排版更难看。
+                    val liveMarkdown = remember(message.text) {
+                        if (message.text.length > LIVE_PREVIEW_CHARS) {
+                            LIVE_PREVIEW_PREFIX + top.tianyan.app.harness.session
+                                .truncateAtSafeMarkdownBoundary(message.text, LIVE_PREVIEW_CHARS)
+                        } else {
+                            message.text.take(MAX_LIVE_TEXT_CHARS)
+                        }
+                    }
+                    MarkdownText(
+                        markdown = liveMarkdown,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            } else {
+                MarkdownText(
+                    markdown = message.text,
+                    modifier = Modifier.fillMaxWidth(),
+                    contentCacheKey = if (generatedImagePayload) {
+                        "assistant:${message.id}:${message.text.length}"
+                    } else {
+                        null
+                    },
+                )
+            }
+        }
+
+        // 底部动作栏：耗时信息 + 复制按钮
+        if (!live && message.text.isNotBlank()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                message.totalMs?.let {
+                    Text(
+                        stringResource(R.string.chat_elapsed, formatChatDuration(it)),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
+
+                // Provider 报告的本轮 token 用量明细（输入/输出/缓存命中与命中率）。
+                val tokenParts = buildList {
+                    message.promptTokens?.let { add("↑${formatTokenCount(it)}") }
+                    message.completionTokens?.let { add("↓${formatTokenCount(it)}") }
+                    message.cachedTokens?.takeIf { cached -> cached > 0 }?.let { cached ->
+                        val prompt = message.promptTokens ?: 0
+                        val pct = if (prompt > 0) ((cached.toLong() * 100L) / prompt.toLong()).toInt().coerceIn(1, 100) else null
+                        if (pct != null) {
+                            add("⚡${formatTokenCount(cached)} ($pct%)")
+                        } else {
+                            add("⚡${formatTokenCount(cached)}")
+                        }
+                    }
+                }
+
+                if (tokenParts.isNotEmpty()) {
+                    Text(
+                        tokenParts.joinToString(" "),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
+
+                Spacer(Modifier.weight(1f))
+
+                if (showRegenerate) {
+                    IconButton(onClick = onRegenerate, modifier = Modifier.size(26.dp), contentDescription = stringResource(R.string.chat_regenerate)) {
+                        RuntimeIcon(RuntimeIconName.Refresh, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
+
+                IconButton(onClick = onCreateBranch, modifier = Modifier.size(26.dp), contentDescription = stringResource(R.string.chat_branch_from_here)) {
+                    RuntimeIcon(RuntimeIconName.Hub, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+
+                // 复制按钮
+                IconButton(onClick = copyAll, modifier = Modifier.size(24.dp), contentDescription = stringResource(R.string.chat_copy)) {
+                    RuntimeIcon(
+                        RuntimeIconName.Copy,
+                        Modifier.size(13.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+}
+
+private const val MAX_LIVE_TEXT_CHARS = 64_000
+
+/**
+ * 流式期间正文/思考链只渲染尾部窗口的字符数：
+ * live 时每 100ms 分片到达，若对超长 Text 全量重排会持续掉帧；
+ * 完成后（非 live）恢复全文渲染，不影响最终展示与复制。
+ */
+private const val LIVE_PREVIEW_CHARS = 4_000
+
+/** 流式预览窗口的截断前缀，仅 live 且超窗时出现。 */
+private const val LIVE_PREVIEW_PREFIX = "…（流式预览）\n"
+/** Avoid rescanning a multi-megabyte Base64 response whenever its lazy-list item re-enters composition. */
+private val generatedImageFlagCache = LruCache<String, Boolean>(64)
+
+private data class TaskStepItem(
+    val index: Int,
+    val title: String,
+    val isCompleted: Boolean,
+)
+
+private val taskPlanCache = LruCache<String, List<TaskStepItem>>(200)
+
+private fun extractTaskPlanSteps(text: String): List<TaskStepItem> {
+    taskPlanCache.get(text)?.let { return it }
+    val lines = text.lines()
+    val steps = mutableListOf<TaskStepItem>()
+    val checkboxRegex = Regex("""^(\s*[-*]|\s*\d+[\.\)])?\s*\[([ xX])\]\s*(.+)""")
+    var idx = 1
+    for (line in lines) {
+        val match = checkboxRegex.find(line.trim())
+        if (match != null) {
+            val isChecked = match.groupValues[2].equals("x", ignoreCase = true)
+            val title = match.groupValues[3].trim()
+            if (title.isNotBlank()) {
+                steps.add(TaskStepItem(index = idx++, title = title, isCompleted = isChecked))
+            }
+        }
+    }
+    taskPlanCache.put(text, steps)
+    return steps
+}
+
+@Composable
+private fun TaskPlanCard(
+    steps: List<TaskStepItem>,
+    modifier: Modifier = Modifier,
+) {
+    var expanded by remember { mutableStateOf(true) }
+    val completedCount = steps.count { it.isCompleted }
+    val progress = if (steps.isNotEmpty()) completedCount.toFloat() / steps.size else 0f
+    val haptic = LocalHapticFeedback.current
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                expanded = !expanded
+            },
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+        ),
+        shape = RoundedCornerShape(12.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    RuntimeIcon(
+                        RuntimeIconName.Code,
+                        modifier = Modifier.size(13.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+
+                Text(
+                    text = stringResource(R.string.chat_plan),
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+
+                Spacer(Modifier.weight(1f))
+
+                Surface(
+                    color = if (completedCount == steps.size) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                    else MaterialTheme.colorScheme.surfaceContainerHigh,
+                    shape = RoundedCornerShape(6.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.chat_plan_completed, completedCount, steps.size),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                        ),
+                        color = if (completedCount == steps.size) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    )
+                }
+
+                RuntimeIcon(
+                    if (expanded) RuntimeIconName.ChevronDown else RuntimeIconName.ChevronRight,
+                    Modifier.size(14.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            // 进度条
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp)),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            )
+
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut(),
+            ) {
+                Column(
+                    modifier = Modifier.padding(top = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    steps.forEach { step ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (step.isCompleted) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    ),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                if (step.isCompleted) {
+                                    Text(
+                                        "✓",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                        ),
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                    )
+                                }
+                            }
+
+                            Text(
+                                text = step.title,
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontWeight = if (step.isCompleted) FontWeight.Normal else FontWeight.Medium,
+                                ),
+                                color = if (step.isCompleted) MaterialTheme.colorScheme.onSurfaceVariant
+                                else MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun ThinkingBlock(
+    id: String,
+    reasoning: String,
+    defaultExpanded: Boolean,
+    live: Boolean = false,
+) {
+    var expanded by rememberSaveable(id) { mutableStateOf(defaultExpanded) }
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+
+    val copyToClipboard = {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText(context.getString(R.string.chat_reasoning_clipboard), reasoning))
+        Toast.makeText(context, context.getString(R.string.chat_reasoning_copied), Toast.LENGTH_SHORT).show()
+    }
+
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clickable {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                expanded = !expanded
+            },
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 1.dp),
+        ) {
+            Box(
+                modifier = Modifier.size(16.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (live) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(12.dp),
+                        strokeWidth = 1.5.dp,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                } else {
+                    RuntimeIcon(
+                        RuntimeIconName.Brain,
+                        modifier = Modifier.size(13.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    )
+                }
+            }
+
+            Text(
+                stringResource(if (live) R.string.chat_deep_reasoning else R.string.chat_reasoning_process),
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Medium,
+                ),
+                color = if (live) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            Spacer(Modifier.weight(1f))
+
+            if (expanded) {
+                IconButton(
+                    onClick = copyToClipboard,
+                    modifier = Modifier.size(22.dp),
+                    contentDescription = stringResource(R.string.chat_copy_reasoning),
+                ) {
+                    RuntimeIcon(
+                        RuntimeIconName.Copy,
+                        Modifier.size(11.dp),
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    )
+                }
+            }
+
+            RuntimeIcon(
+                if (expanded) RuntimeIconName.ChevronDown else RuntimeIconName.ChevronRight,
+                Modifier.size(11.dp),
+                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            )
+        }
+
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut(),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .drawBehind {
+                        // 左侧极简灰色强调线，对齐上方 16dp 容器的水平中轴 (x = 8dp)
+                        val lineX = 8.dp.toPx()
+                        drawLine(
+                            color = Color(0xFF6B7280).copy(alpha = 0.35f),
+                            start = Offset(lineX, 0f),
+                            end = Offset(lineX, size.height),
+                            strokeWidth = 1.5.dp.toPx(),
+                        )
+                    }
+                    .padding(start = 22.dp, top = 1.dp, bottom = 2.dp),
+            ) {
+                if (live) {
+                    SelectionContainer {
+                        Text(
+                            // 思考链流式期间同样只渲染尾部窗口，避免超长 reasoning 每 100ms 全量重排
+                            text = if (reasoning.length > LIVE_PREVIEW_CHARS) {
+                                LIVE_PREVIEW_PREFIX + reasoning.takeLast(LIVE_PREVIEW_CHARS)
+                            } else {
+                                reasoning
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontSize = 12.sp,
+                                lineHeight = 17.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                            ),
+                        )
+                    }
+                } else {
+                    MarkdownText(
+                        reasoning,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun CapabilityEventCard(event: CapabilityEvent) {
+    val isSkill = event.kind == CapabilityEvent.Kind.SKILL
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 1.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(
+            modifier = Modifier.size(16.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            RuntimeIcon(
+                if (isSkill) RuntimeIconName.Brain else RuntimeIconName.Cpu,
+                Modifier.size(13.dp),
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+            )
+        }
+        Text(
+            stringResource(
+                if (isSkill) R.string.chat_capability_skill_fmt else R.string.chat_capability_mcp_fmt,
+                event.name,
+            ),
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.Medium,
+            ),
+            color = MaterialTheme.colorScheme.primary,
+        )
+        if (event.details.isNotBlank()) {
+            Text(
+                "· ${event.details}",
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}

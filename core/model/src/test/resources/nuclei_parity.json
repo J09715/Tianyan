@@ -1,0 +1,163 @@
+{
+ "stats": {
+  "dir": "/tmp/rt-nuclei-PNGnkE/toolkit/nuclei-templates",
+  "total": 5,
+  "cve": 2
+ },
+ "searches": [
+  {
+   "q": "cve-2021",
+   "dir": "/tmp/rt-nuclei-PNGnkE/toolkit/nuclei-templates",
+   "total": 5,
+   "items": [
+    {
+     "path": "http/cves/2021/CVE-2021-44228.yaml",
+     "name": "Apache Log4j RCE",
+     "severity": "critical",
+     "tags": "cve,log4j,rce"
+    }
+   ]
+  },
+  {
+   "q": "log4j",
+   "dir": "/tmp/rt-nuclei-PNGnkE/toolkit/nuclei-templates",
+   "total": 5,
+   "items": [
+    {
+     "path": "http/cves/2021/CVE-2021-44228.yaml",
+     "name": "Apache Log4j RCE",
+     "severity": "critical",
+     "tags": "cve,log4j,rce"
+    }
+   ]
+  },
+  {
+   "q": "redis",
+   "dir": "/tmp/rt-nuclei-PNGnkE/toolkit/nuclei-templates",
+   "total": 5,
+   "items": [
+    {
+     "path": "network/redis-unauth.yaml",
+     "name": "Redis Unauthenticated",
+     "severity": "high",
+     "tags": "redis,unauth"
+    }
+   ]
+  },
+  {
+   "q": "exposure",
+   "dir": "/tmp/rt-nuclei-PNGnkE/toolkit/nuclei-templates",
+   "total": 5,
+   "items": [
+    {
+     "path": "http/exposures/configs/git-config.yaml",
+     "name": "Git Config Exposure",
+     "severity": "medium",
+     "tags": "exposure,git"
+    }
+   ]
+  },
+  {
+   "q": "CVE",
+   "dir": "/tmp/rt-nuclei-PNGnkE/toolkit/nuclei-templates",
+   "total": 5,
+   "items": [
+    {
+     "path": "http/cves/2021/CVE-2021-44228.yaml",
+     "name": "Apache Log4j RCE",
+     "severity": "critical",
+     "tags": "cve,log4j,rce"
+    },
+    {
+     "path": "http/cves/2022/CVE-2022-22965.yaml",
+     "name": "Spring4Shell",
+     "severity": "critical",
+     "tags": "cve,spring"
+    }
+   ]
+  },
+  {
+   "q": "nonexistent-xyz",
+   "dir": "/tmp/rt-nuclei-PNGnkE/toolkit/nuclei-templates",
+   "total": 5,
+   "items": []
+  },
+  {
+   "q": "",
+   "dir": "/tmp/rt-nuclei-PNGnkE/toolkit/nuclei-templates",
+   "total": 5,
+   "items": []
+  },
+  {
+   "q": "quoted",
+   "dir": "/tmp/rt-nuclei-PNGnkE/toolkit/nuclei-templates",
+   "total": 5,
+   "items": [
+    {
+     "path": "http/quoted.yaml",
+     "name": "Quoted Name",
+     "severity": "low",
+     "tags": "a,b"
+    }
+   ]
+  },
+  {
+   "q": "spring",
+   "dir": "/tmp/rt-nuclei-PNGnkE/toolkit/nuclei-templates",
+   "total": 5,
+   "items": [
+    {
+     "path": "http/cves/2022/CVE-2022-22965.yaml",
+     "name": "Spring4Shell",
+     "severity": "critical",
+     "tags": "cve,spring"
+    }
+   ]
+  }
+ ],
+ "tree": [
+  {
+   "path": "http/cves/2021/CVE-2021-44228.yaml",
+   "content": "id: CVE-2021-44228\ninfo:\n  name: Apache Log4j RCE\n  severity: critical\n  tags: cve,log4j,rce\n"
+  },
+  {
+   "path": "http/cves/2022/CVE-2022-22965.yaml",
+   "content": "id: CVE-2022-22965\ninfo:\n  name: Spring4Shell\n  severity: critical\n  tags: cve,spring\n"
+  },
+  {
+   "path": "http/exposures/configs/git-config.yaml",
+   "content": "id: git-config\ninfo:\n  name: Git Config Exposure\n  severity: medium\n  tags: exposure,git\n"
+  },
+  {
+   "path": "http/ignored.txt",
+   "content": "not yaml"
+  },
+  {
+   "path": "http/quoted.yaml",
+   "content": "info:\n  name: \"Quoted Name\"\n  severity: 'low'\n  tags: \"a,b\"\n"
+  },
+  {
+   "path": "network/redis-unauth.yaml",
+   "content": "id: redis-unauth\ninfo:\n  name: Redis Unauthenticated\n  severity: high\n  tags: redis,unauth\n"
+  }
+ ],
+ "searchLimited": {
+  "dir": "/tmp/rt-nuclei-PNGnkE/toolkit/nuclei-templates",
+  "total": 5,
+  "items": [
+   {
+    "path": "http/cves/2021/CVE-2021-44228.yaml",
+    "name": "Apache Log4j RCE",
+    "severity": "critical",
+    "tags": "cve,log4j,rce"
+   }
+  ]
+ },
+ "cachePath": "/tmp/rt-nuclei-PNGnkE/pocs/.nuclei-index.json",
+ "cacheExists": true,
+ "cachedStats": {
+  "dir": "/tmp/rt-nuclei-PNGnkE/toolkit/nuclei-templates",
+  "total": 5,
+  "cve": 2
+ }
+}

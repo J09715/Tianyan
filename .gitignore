@@ -1,0 +1,130 @@
+# Gradle and Kotlin caches
+.gradle/
+.kotlin/
+**/build/
+!runtime/src/main/java/top/tianyan/app/runtime/build/
+!runtime/src/main/java/top/tianyan/app/runtime/build/*.kt
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+captures/
+
+# Android native build outputs
+.externalNativeBuild/
+.cxx/
+**/.externalNativeBuild/
+**/.cxx/
+
+# Machine-local Android configuration
+local.properties
+
+# Signing credentials and service configuration
+*.jks
+*.keystore
+keystore.properties
+google-services.json
+
+# Logs, diagnostics, and heap dumps
+*.log
+*.hprof
+
+# Operating system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Locally downloaded offline-plugin SDK archives (about 1.6 GiB).
+# Keep manifests, scripts, checksums and download instructions versioned.
+assets/plugins/android-suite-offline/payload/archives/
+
+# Locally downloaded QEMU x86_64 user-mode plugin archives (~47 MiB).
+# Keep manifests, scripts, checksums and download instructions versioned.
+assets/plugins/qemu-x86-64-compat/payload/archives/
+
+# Locally downloaded RTK offline plugin binary (~8.7 MiB) and dist artifacts.
+# Keep manifests, scripts, checksums, config and download instructions versioned.
+assets/plugins/rtk-suite-offline/payload/bin/
+dist/
+.workbuddy/
+.trae/
+.codegraph/
+.tmp_unusedscan/
+webchat/node_modules/
+__pycache__/
+*.pyc
+webchat/dist/
+
+# 运行时崩溃帧调试产物（不入库）
+.crash_frames/
+
+# 临时调试产物与脚本（不入库）
+*_tmp/
+_*.py
+build-output.txt
+scripts_patch/
+
+# 本机 OCR 调试产物（adb 截屏 + Tesseract 语言包，不入库）
+screen.png
+screen_ocr.txt
+screen_ocr.tsv
+screen_tsv.txt
+screen_tsv.tsv
+s.png
+s_ocr.txt
+s_ocr.tsv
+s_tsv.txt
+s_tsv.tsv
+out.txt
+out.tsv
+tessdata/
+
+
+
+t.png
+t_*.txt
+t_*.tsv
+q.png
+q_ocr.txt
+q_tsv.tsv
+# adb 截图调试临时文件
+q*.png
+q*.txt
+s*.pngs*_ocr.txts*_tsv.tsv
+f.png
+b.png
+c.png
+r.png
+h.png
+# 手机测试截图*
+pg*.png
+pb*.png
+pr*.png
+we*.png
+ex*.png
+sw*.png
+*_ocr.txt
+*_tsv.tsv
+cd*.png
+cf*.png
+*_ocr.txt
+*_tsv.tsv
+# 本机存证目录不入库。**必须锚定到仓库根**：原来的 `evidence/` 会匹配任意层级
+# 同名目录，把 harness 的 evidence 源码包（交付闸门/证据追踪）一起吞掉 ——
+# 表现为文件本地存在、编译通过、但推送时静默缺失。
+/evidence/
+# taixu 上游对比参考（不入库）
+taixu-src/
+# AndroidX Baseline Profile 生成物（含过期类名引用，不入库）
+app/src/*/generated/baselineProfiles/
+
+# libpty_native.so 由 CI 用 NDK 从 app/src/main/cpp/pty_native.c 重建后产出，不入库
+app/src/main/jniLibs/arm64-v8a/libpty_native.so
+
+# 本地 CI 产物下载目录（APK 等，不入库）
+ci-build/
