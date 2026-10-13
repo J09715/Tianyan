@@ -1,5 +1,6 @@
 package top.tianyan.app.ui.chat
 
+import top.tianyan.app.harness.AssistantText
 import top.tianyan.app.harness.HarnessMessage
 import top.tianyan.app.harness.ToolCall
 import top.tianyan.app.harness.ToolResult
@@ -62,6 +63,12 @@ fun projectChatMessages(
             }
             message is UserMessage -> {
                 shownReasoning.clear()
+                items.add(ChatRenderItem.MessageItem(message, true))
+            }
+            message is AssistantText -> {
+                // assistant 正文同气泡展示的 reasoning 也计入同轮已见集合：
+                // 其后的工具卡若重复相同 reasoning，应被前文去重隐藏（自身 showReasoning 恒 true）。
+                message.reasoning?.let { shownReasoning.add(it) }
                 items.add(ChatRenderItem.MessageItem(message, true))
             }
             else -> items.add(ChatRenderItem.MessageItem(message, true))

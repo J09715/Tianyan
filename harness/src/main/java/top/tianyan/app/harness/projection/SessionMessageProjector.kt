@@ -178,7 +178,22 @@ class SessionMessageProjector @Inject constructor(
         if (message is AssistantText) streamingSessions.remove(sessionId)
     }
 
-    override fun snapshot(sessionId: String): List<HarnessMessage> = messagesFlow(sessionId).value
+    override fun snapshot(sessionId: String): List<HarnessMessage> {
+        // 读取该会话时先把已登记未发射的流式增量立即落地：
+        // 节流窗口外的正常 chunk 仍合并等待 tick，但同步 snapshot 必须读到最新，
+        // 否则 streamReasoning→streamText 紧接的测试/断言会停在上一帧。
+        flushSession(sessionId)
+        return messagesFlow(sessionId).value
+    }
+
+    /** 立即发射某会话挂起的单次流式变换（与 [flushPendingStreams] 共享并发安全的 remove 语义）。 */
+    private fun flushSession(sessionId: String) {
+        val transform = pendingStreams.remove(sessionId) ?: return
+        val flow = liveFlows[sessionId] ?: return
+        flow.update { current -> boundLiveWindow(transform(current)) }
+        mirrorIfForeground(sessionId, flow.value)
+        lastStreamEmitAt[sessionId] = System.nanoTime()
+    }
 
     /** 移除一条仅存在于实时流中的消息（如出错后的空气泡）。 */
     fun remove(sessionId: String, messageId: String) {
