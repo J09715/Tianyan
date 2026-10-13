@@ -3,6 +3,7 @@ package top.tianyan.app.ui.chat
 import top.tianyan.app.harness.HarnessMessage
 import top.tianyan.app.harness.ToolCall
 import top.tianyan.app.harness.ToolResult
+import top.tianyan.app.harness.UserMessage
 
 /**
  * 聊天流投影渲染项：
@@ -46,16 +47,25 @@ fun projectChatMessages(
     if (messages.isEmpty()) return emptyList()
 
     // 过滤掉已被 ToolCard 内部独立消费渲染的 ToolResult，所有思考过程与工具调用按自然单行流呈现。
-    // 工具卡的思考链可见性（前文去重）在投影时一次性预计算进 MessageItem，
-    // 列表项重组时不再对整个 messages 做 indexOfFirst + 回扫两次 O(n)。
-    return messages
-        .mapIndexedNotNull { index, message ->
-            if (message is ToolResult) return@mapIndexedNotNull null
-            val showReasoning = if (message is ToolCall) {
-                message.reasoning != null && !reasoningAlreadyShown(messages, index, message.reasoning)
-            } else {
-                true
+    // 工具卡的思考链可见性（前文去重）单趟完成：向后回扫的写法在工具密集的一轮里是平方级，
+    // 而本函数每次流式增量都会重跑，长对话下正是卡顿来源。语义保持一致——
+    // 只在同一轮（遇 UserMessage 截断）内出现过相同 reasoning 才判为已展示。
+    val shownReasoning = HashSet<String>()
+    val items = ArrayList<ChatRenderItem>(messages.size)
+    for (message in messages) {
+        when {
+            message is ToolResult -> Unit
+            message is ToolCall -> {
+                val reasoning = message.reasoning
+                val show = reasoning != null && shownReasoning.add(reasoning)
+                items.add(ChatRenderItem.MessageItem(message, show))
             }
-            ChatRenderItem.MessageItem(message, showReasoning)
+            message is UserMessage -> {
+                shownReasoning.clear()
+                items.add(ChatRenderItem.MessageItem(message, true))
+            }
+            else -> items.add(ChatRenderItem.MessageItem(message, true))
         }
+    }
+    return items
 }

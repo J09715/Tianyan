@@ -170,7 +170,13 @@ internal fun ChatMessageList(
                     )
                 }
             }
-            itemsIndexed(renderItems, key = { _, item -> item.stableKey }) { index, item ->
+            // contentType 让 LazyColumn 能跳过与可见项无关的重组：消息多时同一帧内的无效重组
+            // 会被放大成整页掉帧。key 已能定位，contentType 决定能否跳过。
+            itemsIndexed(
+                items = renderItems,
+                key = { _, item -> item.stableKey },
+                contentType = { _, item -> chatItemContentType(item) },
+            ) { index, item ->
                 val top = when {
                     item is ChatRenderItem.MessageItem && item.message is UserMessage -> 12.dp
                     // 思考过程、工具调用卡片、能力事件之间的垂直外边距压至紧凑的 2.5dp
@@ -257,6 +263,19 @@ internal fun ChatMessageList(
             Spacer(Modifier.height(4.dp))
         }
     }
+}
+
+/** LazyColumn contentType：结构相同的渲染项共用一个类型号，异构项互不复用组合缓存。 */
+private fun chatItemContentType(item: ChatRenderItem): Int = when {
+    item is ChatRenderItem.CollapseButtonItem -> 0
+    item is ChatRenderItem.MessageItem && item.message is UserMessage -> 1
+    item is ChatRenderItem.MessageItem && item.message is AssistantText -> 2
+    item is ChatRenderItem.MessageItem &&
+        item.message is ToolCall &&
+        item.message.tool == HarnessTool.SUBAGENT -> 3
+    item is ChatRenderItem.MessageItem && item.message is ToolCall -> 4
+    item is ChatRenderItem.MessageItem && item.message is CapabilityEvent -> 5
+    else -> 6
 }
 
 /** Visible while a non-streaming model (notably image generators) is still preparing its result. */

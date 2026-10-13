@@ -14,10 +14,13 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import android.content.Context
 import top.tianyan.app.feature.workspace.R
 import javax.inject.Inject
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
@@ -231,6 +234,8 @@ class WorkspaceViewModel @Inject constructor(
     val loadingProjects: StateFlow<Boolean> = _loadingProjects.asStateFlow()
 
     val projects: StateFlow<List<WorkspaceProject>> = workspaceManager.observeProjects()
+        // conflate：索引写入触发的多轮过期全量投影，只保留最后一次重算结果。
+        .conflate()
         .onEach { if (_loadingProjects.value) _loadingProjects.value = false }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -336,8 +341,17 @@ class WorkspaceViewModel @Inject constructor(
         buildCoordinator.dismiss()
     }
 
+    /**
+     * 索引同步：listProjects 会做全量目录扫描与项目投影，没有 debounce 时连续事件
+     * （进页 + 数据写入 + 生命周期回根）会把同一轮扫描并发叠开，IO 线程池被打满、
+     * 内存峰值抬高，是项目变多后加载缓慢与闪退的直接放大器。
+     */
+    private var indexSyncJob: Job? = null
+
     fun refresh() {
-        viewModelScope.launch {
+        indexSyncJob?.cancel()
+        indexSyncJob = viewModelScope.launch {
+            delay(250)
             workspaceManager.listProjects()
         }
     }
