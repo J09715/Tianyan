@@ -42,7 +42,7 @@ import top.tianyan.app.core.database.task.AgentTaskDao
         WorkflowExecutionLogEntity::class,
         RedTeamFactEntity::class,
     ],
-    version = 49,
+    version = 50,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {

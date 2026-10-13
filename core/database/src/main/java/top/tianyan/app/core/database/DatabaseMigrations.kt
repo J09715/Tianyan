@@ -382,6 +382,20 @@ val MIGRATION_48_49 = object : Migration(48, 49) {
     }
 }
 
+/**
+ * 远程 HTTP MCP 服务的自定义认证头持久化。
+ *
+ * 此前导入 mcpServers 配置时 `headers.Authorization` 被解析器丢弃（模型里的
+ * authToken 是 @Transient 且 entity 无对应列），带 Bearer 认证的远程服务
+ * （如 ProxyPin 的 /mcp 端点）接入后握手一律 401。此迁移补上加密存储列，
+ * 与 args/env 同待遇走 SecretManager。
+ */
+val MIGRATION_49_50 = object : Migration(49, 50) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE mcp_servers ADD COLUMN authTokenCiphertext TEXT NOT NULL DEFAULT ''")
+    }
+}
+
 val MIGRATION_47_48 = object : Migration(47, 48) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE harness_sessions ADD COLUMN redTeamMode TEXT NOT NULL DEFAULT 'off'")

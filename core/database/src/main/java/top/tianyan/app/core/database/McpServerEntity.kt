@@ -29,6 +29,8 @@ data class McpServerEntity(
     val serverUrl: String,
     val isEnabled: Boolean,
     val isBuiltin: Boolean,
+    /** 远程 HTTP MCP 的自定义认证头密文（如 Bearer token）；空串 = 无认证。 */
+    val authTokenCiphertext: String = "",
     /** 用户是否手动切换过启停：false = 跟随内置预设默认值，true = 尊重用户当前选择。 */
     val userToggled: Boolean = false,
 )
@@ -142,6 +144,7 @@ private fun McpServerEntity.toModel(json: Json, secretManager: SecretManager): M
         ?.let { plaintext -> runCatching { json.decodeFromString<Map<String, String>>(plaintext) }.getOrDefault(emptyMap()) }
         .orEmpty(),
     serverUrl = serverUrl,
+    authToken = secretManager.decrypt(authTokenCiphertext).orEmpty(),
     isEnabled = isEnabled,
     isBuiltin = isBuiltin,
 )
@@ -155,6 +158,7 @@ private fun McpServerConfig.toEntity(json: Json, secretManager: SecretManager): 
     argsCiphertext = secretManager.encrypt(json.encodeToString(args)),
     envCiphertext = secretManager.encrypt(json.encodeToString(env)),
     serverUrl = serverUrl,
+    authTokenCiphertext = secretManager.encrypt(authToken),
     isEnabled = isEnabled,
     isBuiltin = isBuiltin,
 )

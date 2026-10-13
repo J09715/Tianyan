@@ -53,6 +53,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -868,6 +869,9 @@ private fun AddMcpServerDialog(
     var command by remember { mutableStateOf("npx") }
     var argsStr by remember { mutableStateOf("") }
     var serverUrl by remember { mutableStateOf("http://127.0.0.1:8000/sse") }
+    // 远程 HTTP 服务的认证 token（如 ProxyPin 等带 Bearer 的端点）；
+    // 落库走 SecretManager 加密，导出时不含此字段。
+    var authToken by remember { mutableStateOf("") }
 
     // JSON 模式状态
     var jsonText by remember {
@@ -1030,6 +1034,15 @@ private fun AddMcpServerDialog(
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                         )
+                        OutlinedTextField(
+                            value = authToken,
+                            onValueChange = { authToken = it },
+                            label = { Text("认证 Token（可选）") },
+                            placeholder = { Text("Bearer token 或自定义凭据，如 8769c029…") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            visualTransformation = PasswordVisualTransformation(),
+                        )
                     }
                 } else {
                     // 📋 JSON 模式
@@ -1091,6 +1104,7 @@ private fun AddMcpServerDialog(
                                 command = command.trim(),
                                 args = argsList,
                                 serverUrl = serverUrl.trim(),
+                                authToken = authToken.trim(),
                                 isEnabled = true,
                                 isBuiltin = false,
                             )
@@ -1121,12 +1135,49 @@ private fun AddMcpServerDialog(
 }
 
 /** 解析用户粘贴的各类 MCP JSON 格式 */
-private fun parseMcpJson(rawJson: String): Result<List<McpServerConfig>> = runCatching {
+internal fun parseMcpJson(rawJson: String): Result<List<McpServerConfig>> = runCatching {
     val trimmed = rawJson.trim()
     if (trimmed.isBlank()) error("请输入 JSON 内容")
     val element = Json.parseToJsonElement(trimmed)
     val list = mutableListOf<McpServerConfig>()
     val rootObj = element.jsonObject
+
+    /**
+     * 从配置对象提取认证 token。
+     *
+     * 两类来源，按优先级：
+     *   1. `headers.Authorization`：形如 "Bearer xxx" 时取后半段，裸串整体视为 token
+     *      （外部工具导出的 mcpServers 配置几乎都走这一形，如 ProxyPin）；
+     *   2. `authToken` / `apiKey` 字段兜底（部分导出器用这些名字）。
+     *
+     * 这些字段随 `authToken` 一起走 SecretManager 加密落库，不参与 toExportJsonConfig
+     * 明文导出。
+     */
+    fun extractAuthToken(sObj: kotlinx.serialization.json.JsonObject): String {
+        val headers = sObj["headers"]?.jsonObject
+        // JSON 的 key 区分大小写：外部导出器写过 authorization / Authorization /
+        // Authorization 头等多种拼写，这里大小写不敏感地找第一个非空值。
+        val authHeader = headers?.entries
+            ?.firstOrNull { it.key.equals("Authorization", ignoreCase = true) }
+            ?.value?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+        if (authHeader.isNotEmpty()) {
+            val bearerPrefix = "bearer "
+            return if (authHeader.lowercase().startsWith(bearerPrefix)) authHeader.substring(bearerPrefix.length).trim()
+                else authHeader
+        }
+        sObj["authToken"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+        sObj["apiKey"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+        return ""
+    }
+
+    /** `type: "http"` 是部分导出器的写法，映射到天衍的 SSE 类型（客户端会自动协商 Streamable HTTP）。 */
+    fun transportOf(sObj: kotlinx.serialization.json.JsonObject, url: String, command: String): McpTransportType {
+        val declared = sObj["type"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+        if (declared.equals("http", ignoreCase = true) || declared.equals("sse", ignoreCase = true)) {
+            return if (url.isNotBlank()) McpTransportType.SSE else McpTransportType.STDIO
+        }
+        return if (url.isNotBlank()) McpTransportType.SSE else McpTransportType.STDIO
+    }
 
     if (rootObj.containsKey("mcpServers")) {
         val serversObj = rootObj["mcpServers"]?.jsonObject ?: error("mcpServers 不是有效的 JSON 对象")
@@ -1144,11 +1195,12 @@ private fun parseMcpJson(rawJson: String): Result<List<McpServerConfig>> = runCa
                     id = "custom_${serverName.lowercase().replace(Regex("[^a-z0-9_]"), "_")}_${System.currentTimeMillis()}",
                     name = serverName,
                     description = desc.ifBlank { if (isSse) "远程 HTTP 服务: $url" else "本地 Stdio: $command ${args.joinToString(" ")}" },
-                    transportType = if (isSse) McpTransportType.SSE else McpTransportType.STDIO,
+                    transportType = transportOf(sObj, url, command),
                     command = command,
                     args = args,
                     env = env,
                     serverUrl = url,
+                    authToken = extractAuthToken(sObj),
                     isEnabled = true,
                     isBuiltin = false,
                 )
@@ -1170,11 +1222,12 @@ private fun parseMcpJson(rawJson: String): Result<List<McpServerConfig>> = runCa
                 id = "custom_${name.lowercase().replace(Regex("[^a-z0-9_]"), "_")}_${System.currentTimeMillis()}",
                 name = name,
                 description = desc.ifBlank { if (isSse) "远程 HTTP 服务: $url" else "本地 Stdio: $command ${args.joinToString(" ")}" },
-                transportType = if (isSse) McpTransportType.SSE else McpTransportType.STDIO,
+                transportType = transportOf(rootObj, url, command),
                 command = command,
                 args = args,
                 env = env,
                 serverUrl = url,
+                authToken = extractAuthToken(rootObj),
                 isEnabled = true,
                 isBuiltin = false,
             )
