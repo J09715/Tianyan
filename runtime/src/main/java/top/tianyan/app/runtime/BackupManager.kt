@@ -16,6 +16,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import top.tianyan.app.core.common.result.AppError
@@ -338,16 +339,20 @@ class BackupManager @Inject constructor(
             put("appVersion", JsonPrimitive(appVersionName()))
             put("createdAt", JsonPrimitive(stagedAt()))
             put("databaseSchema", JsonPrimitive(SCHEMA_HINT))
-            stats.forEach { section ->
-                add(
-                    "sections",
-                    buildJsonObject {
-                        put("name", JsonPrimitive(section.section))
-                        put("entries", JsonPrimitive(section.entries))
-                        put("bytes", JsonPrimitive(section.bytes))
-                    },
-                )
-            }
+            put(
+                "sections",
+                buildJsonArray {
+                    stats.forEach { section ->
+                        add(
+                            buildJsonObject {
+                                put("name", JsonPrimitive(section.section))
+                                put("entries", JsonPrimitive(section.entries))
+                                put("bytes", JsonPrimitive(section.bytes))
+                            },
+                        )
+                    }
+                },
+            )
         }
         return Json.encodeToString(JsonObject.serializer(), json)
     }
