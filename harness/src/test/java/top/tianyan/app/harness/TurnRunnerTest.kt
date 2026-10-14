@@ -94,7 +94,13 @@ class TurnRunnerTest {
             executeTools = { _, _ -> error("must not execute") },
         )
 
-        assertEquals(TurnOutcome.Failed("模型返回了空响应；本轮未收到可展示的答复或工具调用"), outcome)
+        assertEquals(
+            TurnOutcome.Failed(
+                "执行失败：模型未产出任何可展示内容（上游未返回输出 token）；如持续出现，请检查模型端点是否正常、切换模型或稍后重试",
+                retryable = true,
+            ),
+            outcome,
+        )
         assertEquals(listOf("persisted"), events)
     }
 
@@ -138,7 +144,13 @@ class TurnRunnerTest {
             executeTools = { _, _ -> error("must not execute") },
         )
 
-        assertEquals(TurnOutcome.Failed("模型返回了空响应；本轮未收到可展示的答复或工具调用"), outcome)
+        assertEquals(
+            TurnOutcome.Failed(
+                "执行失败：模型未产出任何可展示内容（上游未返回输出 token）；如持续出现，请检查模型端点是否正常、切换模型或稍后重试",
+                retryable = true,
+            ),
+            outcome,
+        )
     }
 
     /** 空字符串的 reasoning 不算内容，不能拿它绕过失败关闭。 */
@@ -155,7 +167,13 @@ class TurnRunnerTest {
             executeTools = { _, _ -> error("must not execute") },
         )
 
-        assertEquals(TurnOutcome.Failed("模型返回了空响应；本轮未收到可展示的答复或工具调用"), outcome)
+        assertEquals(
+            TurnOutcome.Failed(
+                "执行失败：模型未产出任何可展示内容（上游未返回输出 token）；如持续出现，请检查模型端点是否正常、切换模型或稍后重试",
+                retryable = true,
+            ),
+            outcome,
+        )
     }
 
     @Test
