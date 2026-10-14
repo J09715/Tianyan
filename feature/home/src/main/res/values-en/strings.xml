@@ -10,7 +10,7 @@
     <string name="home_storage_total">Total %1$s GB</string>
     <string name="home_storage_used">Used %1$d%%</string>
     <string name="home_rootfs_healthy">RootFS is healthy</string>
-    <string name="home_doctor_title">Environment diagnostics &amp; repair</string>
+    <string name="home_doctor_title">Environment diagnostics &amp; AI repair</string>
     <string name="home_doctor_repairing">Repairing and optimizing the environment…</string>
     <string name="home_doctor_checking">Running full sandbox diagnostics…</string>
     <string name="home_doctor_ready">Sandbox ready · Tap to diagnose</string>
@@ -24,7 +24,7 @@
     <string name="home_cancel_repair">Cancel repair</string>
     <string name="home_hide_details">Hide diagnostic details</string>
     <string name="home_view_checks">View all %1$d diagnostic checks</string>
-    <string name="home_repair">Repair automatically</string>
+    <string name="home_repair">AI auto-repair</string>
     <string name="home_environment_ready_description">The environment is ready for AI tools such as Claude Code and OpenClaw</string>
     <string name="home_initialize_description">Initialize the sandbox first. Tianyan will then check DNS, mirrors, and the core development toolchain.</string>
     <string name="home_runtime_ready">Linux sandbox · Ready</string>

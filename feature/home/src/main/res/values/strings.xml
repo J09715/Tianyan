@@ -10,7 +10,7 @@
     <string name="home_storage_total">总空间 %1$s GB</string>
     <string name="home_storage_used">已使用 %1$d%%</string>
     <string name="home_rootfs_healthy">RootFS 状态正常</string>
-    <string name="home_doctor_title">环境体检与自愈中心</string>
+    <string name="home_doctor_title">环境体检与 AI 自愈中心</string>
     <string name="home_doctor_repairing">正在执行环境自愈与加速…</string>
     <string name="home_doctor_checking">正在全面体检沙箱环境…</string>
     <string name="home_doctor_ready">沙箱就绪 · 点击体检</string>
@@ -24,7 +24,7 @@
     <string name="home_cancel_repair">取消修复</string>
     <string name="home_hide_details">收起体检详情</string>
     <string name="home_view_checks">查看全部 %1$d 项体检指标</string>
-    <string name="home_repair">一键自愈修复</string>
+    <string name="home_repair">一键 AI 自愈修复</string>
     <string name="home_environment_ready_description">环境配置完善，已满足 Claude Code / OpenClaw 等 AI 工具运行要求</string>
     <string name="home_initialize_description">请先初始化并启动沙箱，天衍将自动体检 DNS、国内镜像加速源与核心开发工具链。</string>
     <string name="home_runtime_ready">Linux 沙箱引擎 · 已就绪</string>
