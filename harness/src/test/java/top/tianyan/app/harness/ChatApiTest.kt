@@ -144,11 +144,15 @@ class ChatApiTest {
     }
 
     @Test
-    fun `openai official disables reasoning with effort none`() = runBlocking {
+    fun `openai official disables reasoning by omitting the field entirely`() = runBlocking {
         server.enqueue(MockResponse().setBody("""{"choices":[]}"""))
         api.chat(model().copy(reasoningMode = ReasoningMode.DISABLED), emptyList())
         val body = server.takeRequest().body.readUtf8()
-        assertTrue(body.contains("\"reasoning_effort\":\"none\""))
+        // 关闭思考的正确语义是不注入推理字段，而不是发 reasoning_effort:"none"。
+        // 大量中转站/自定义网关（以及只跑普通 chat 模型的端点）不认 reasoning_effort
+        // 字段——哪怕取值 none 也直接 400（reasoning_effort is not enabled for this model）。
+        // AUTO 不发字段反而正常。因此 DISABLED 与 AUTO 在 OpenAI 兼容协议上统一为不注入。
+        assertTrue("关闭思考时不应注入 reasoning_effort，实际 body=$body", !body.contains("reasoning_effort"))
     }
 
     @Test

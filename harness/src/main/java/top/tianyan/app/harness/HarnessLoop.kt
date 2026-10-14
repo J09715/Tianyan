@@ -1177,6 +1177,9 @@ class HarnessLoop @Inject constructor(
         val maxConsecutiveFailures = runCatching { settingsDataStore.maxConsecutiveFailures.first() }.getOrDefault(8)
         val retryPolicy = RetryPolicy.NETWORK_DEFAULT
         var consecutiveFailures = 0
+        // 空响应自动重试只补一次：上游零输出的瞬时故障重发一次大概率恢复，
+        // 但连续两轮都零输出说明不是抖动，直接按失败上报。
+        var emptyResponseRetried = false
 
         var round = 0
         while (round < maxRounds) {
@@ -1283,7 +1286,20 @@ class HarnessLoop @Inject constructor(
                 gateBeforeComplete = { displayText -> evaluateDeliveryGate(sessId, displayText) },
             )
             when (turn) {
-                is TurnOutcome.Failed -> return RunResult.Failed(turn.message)
+                is TurnOutcome.Failed -> {
+                    // 上游零输出且本会话还没补过：不落失败，原样再走一轮。
+                    // persistAssistant 已把空 assistant 消息落库，重试前的占位由
+                    // 下一轮的 persistAssistantOutput 按同一 assistantId 覆盖语义处理；
+                    // 若项目语义不允许覆盖，这里退回直接失败。
+                    if (turn.retryable && !emptyResponseRetried && round + 1 < maxRounds) {
+                        emptyResponseRetried = true
+                        metrics.steeringInjected(0)
+                        logger.w("会话 $sessId 第 ${round + 1} 轮收到零输出，自动重试一次")
+                        round++
+                        continue
+                    }
+                    return RunResult.Failed(turn.message)
+                }
                 TurnOutcome.Complete -> return RunResult.Completed
                 is TurnOutcome.Continue -> {
                     // 闸门否决收尾：本轮没有工具调用，继续的唯一理由是让模型补做验证/纠正确认。

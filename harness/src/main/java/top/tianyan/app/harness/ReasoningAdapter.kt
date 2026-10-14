@@ -173,7 +173,17 @@ object ReasoningAdapter {
 
     private fun openAiOfficialFields(model: ModelConfig): Map<String, JsonElement> =
         if (model.reasoningMode == ReasoningMode.DISABLED) {
-            mapOf("reasoning_effort" to JsonPrimitive("none"))
+            // 关闭思考的正确语义是「不注入任何推理字段」，而不是发 reasoning_effort:"none"。
+            //
+            // "none" 是 OpenAI 官方 Chat Completions 的合法取值，但大量中转站/自定义网关
+            // （OneAPI/NewAPI/自建反代，以及很多只跑普通 chat 模型的端点）根本不认这个
+            // 字段——哪怕取值为 none 也直接 400（invalid_request_invalid_args: reasoning_effort
+            // is not enabled for this model）。而 AUTO（不发字段）反而正常，因为服务端默认
+            // 就是不思考。
+            //
+            // 因此 DISABLED 与 AUTO 在 OpenAI 兼容协议上统一为「不注入」：不支持的模型
+            // 不会被打到；支持的模型（OpenAI 官方）默认也是 no reasoning，语义一致。
+            emptyMap()
         } else {
             model.reasoningEffort?.let { mapOf("reasoning_effort" to JsonPrimitive(it.openAiName())) }.orEmpty()
         }

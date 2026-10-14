@@ -21,7 +21,18 @@ sealed interface TurnOutcome {
          */
         val gateHint: String? = null,
     ) : TurnOutcome
-    data class Failed(val message: String) : TurnOutcome
+    data class Failed(
+        val message: String,
+        /**
+         * 是否值得自动重试一轮。
+         *
+         * 上游零输出（completionTokens==0 且无工具调用/无正文/无 reasoning）通常是
+         * 网关瞬时断流或服务端抽风——同一个请求再发一次大概率就有内容。这类失败
+         * 标记为可重试，由 HarnessLoop 决定是否补发（每会话限一次，避免死循环）。
+         * 其他失败（无法解析的工具调用、真实空响应且上游确实回了 token）不重试。
+         */
+        val retryable: Boolean = false,
+    ) : TurnOutcome
 }
 
 /**
@@ -68,7 +79,20 @@ class TurnRunner @Inject constructor(
         // 用户看到的是自己明明有回复却报执行失败。
         val hasReasoningOnly = provider.result.reasoningContent?.isNotBlank() == true
         if (normalized.toolCalls.isEmpty() && normalized.displayText.isBlank() && !hasReasoningOnly) {
-            return TurnOutcome.Failed("模型返回了空响应；本轮未收到可展示的答复或工具调用")
+            // 诊断信息帮助区分两种截然不同的故障：
+            //   · 上游零输出（completionTokens==0 且流首帧即结束）：网关断流/服务端瞬时故障，
+            //     报「未收到任何输出 token」，用户能直接判断是上游问题而非自己配置错；
+            //   · 上游回了很多 token 但都在我们拿不到的分片里（罕见协议错位）：报原始文案。
+            val usage = provider.result.usage
+            val completionTokens = usage.outputTokens
+            val zeroOutput = completionTokens <= 0L
+            val failure = if (zeroOutput) {
+                "执行失败：模型未产出任何可展示内容（上游未返回输出 token）；" +
+                    "如持续出现，请检查模型端点是否正常、切换模型或稍后重试"
+            } else {
+                "模型返回了空响应；本轮未收到可展示的答复或工具调用"
+            }
+            return TurnOutcome.Failed(failure, retryable = zeroOutput)
         }
         if (normalized.toolCalls.isEmpty()) {
             val followUpCount = consumeFollowUps()
