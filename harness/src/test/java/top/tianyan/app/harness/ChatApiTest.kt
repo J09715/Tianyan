@@ -196,7 +196,10 @@ class ChatApiTest {
             emptyList(),
         )
         val body = server.takeRequest().body.readUtf8()
-        assertTrue(body.contains("reasoning_effort"))
+        // 未知厂商（自定义 baseURL）无法确定其模型是否认 reasoning_effort 字段，
+        // 保守不注入任何推理字段。曾经乐观注入导致「只跑普通 chat 模型的中转站」在
+        // 手动调思考强度后服务端直接 400（reasoning_effort is not enabled for this model）。
+        assertFalse("未知厂商不应注入 reasoning_effort，实际 body=$body", body.contains("reasoning_effort"))
         assertFalse(body.contains("thinking_config"))
         assertFalse(body.contains("\"reasoning\":{"))
     }

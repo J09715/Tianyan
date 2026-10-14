@@ -48,9 +48,15 @@ object ReasoningAdapter {
             isDoubao(host, provider, modelName) -> thinkingTypeFields(model)
             isOpenRouter(host, provider) -> openRouterFields(model)
             isOpenAiOfficial(host, provider) -> openAiOfficialFields(model)
-            // 中转站/自定义网关（OneAPI / NewAPI / 自建反代等）：
-            // 绝大多数走 OpenAI 兼容协议，注入行业标准的 reasoning_effort（已被 DeepSeek、Qwen、Kimi、OpenAI 等官方及中转网关广泛支持）。
-            else -> openAiOfficialFields(model)
+            // 中转站/自定义网关：无法确定其模型是否认 reasoning_effort 字段。
+            //
+            // 曾有乐观假设「都走 OpenAI 兼容就发」，结果用户接一个只跑普通 chat 模型的
+            // 中转站、手动调一下思考强度，服务端直接 400（reasoning_effort is not enabled
+            // for this model）。AUTO 不发字段反而正常。
+            //
+            // 因此未知厂商一律不注入推理字段，跟随服务端默认；需要调节的模型应走官方
+            // 预设（或在 capabilities 已判明的已知厂商之列），而不是靠乐观注入赌它支持。
+            else -> emptyMap()
         }
     }
 
@@ -106,13 +112,17 @@ object ReasoningAdapter {
         val known = isGemini(host, provider, modelName) || isZhipu(host, provider, modelName) || isDoubao(host, provider, modelName) ||
             isOpenRouter(host, provider) || isOpenAiOfficial(host, provider)
         if (!known) {
-            // 未知厂商（自定义 baseURL）：OpenAI 兼容协议按 OpenAI 官方字段注入 reasoning_effort；
-            // Anthropic 协议无专有强度字段，保守视为不支持。
-            return if (model.protocol == ApiProtocol.OPENAI) {
-                ReasoningCapabilities(supportsDisable = true, supportsEffort = true)
-            } else {
-                ReasoningCapabilities(supportsDisable = false, supportsEffort = false)
-            }
+            // 未知厂商（自定义 baseURL）：无法确定是否支持 reasoning_effort 字段。
+            //
+            // 曾经的「乐观假设支持」在这里造成过真实事故：用户接一个只跑普通 chat 模型的
+            // 中转站，在对话里调一下思考强度，客户端注入 reasoning_effort 后服务端直接
+            // 400（reasoning_effort is not enabled for this model）。而 AUTO 不发字段
+            // 反而正常——因为服务端默认就是不思考。
+            //
+            // 因此未知厂商保守视为「不支持调节强度、也无需显式关闭」：不发任何推理字段，
+            // 跟随服务端默认。需要调节的模型（真支持 reasoning_effort 的中转站）应走
+            // 官方预设或显式声明，而不是靠乐观注入赌它支持。
+            return ReasoningCapabilities(supportsDisable = false, supportsEffort = false)
         }
         // 豆包：只有开关，无强度档位
         val supportsEffort = !isDoubao(host, provider, modelName)
@@ -137,7 +147,7 @@ object ReasoningAdapter {
         host.contains("openrouter.ai") || provider.contains("openrouter")
 
     private fun isOpenAiOfficial(host: String, provider: String) =
-        host == "api.openai.com" || provider.contains("openai")
+        host == "api.openai.com" || provider.trim().equals("openai", ignoreCase = true)
 
     // ---------- 各厂商字段 ----------
 
