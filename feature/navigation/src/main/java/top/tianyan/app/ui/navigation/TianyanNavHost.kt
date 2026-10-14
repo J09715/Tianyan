@@ -68,6 +68,7 @@ sealed interface AppDestination : NavKey
 @Serializable data object LinuxEnvSettingsDestination : AppDestination
 @Serializable data object AppearanceSettingsDestination : AppDestination
 @Serializable data object SystemDevSettingsDestination : AppDestination
+@Serializable data object BackupSettingsDestination : AppDestination
 @Serializable data object AboutTianyanDestination : AppDestination
 @Serializable data object AgentSettingsDestination : AppDestination
 @Serializable data object AgentSubagentSettingsDestination : AppDestination
@@ -385,7 +386,15 @@ fun TianyanNavHost(
                         onOpenAdbLogcat = { settingsStack.push(SystemDevSettingsDestination, AdbLogcatDestination) },
                         onOpenCustomIteration = { settingsStack.push(SystemDevSettingsDestination, CustomIterationDestination) },
                         onOpenPermissionGuide = { settingsStack.push(SystemDevSettingsDestination, PermissionGuideDestination) },
+                        onOpenBackup = { settingsStack.push(SystemDevSettingsDestination, BackupSettingsDestination) },
                         viewModel = settingsViewModel,
+                    )
+                }
+            }
+            entry<BackupSettingsDestination> {
+                GuardedEntry(BackupSettingsDestination) {
+                    top.tianyan.app.ui.settings.BackupSettingsScreen(
+                        onBack = ::popBack,
                     )
                 }
             }

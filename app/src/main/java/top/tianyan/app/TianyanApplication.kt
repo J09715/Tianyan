@@ -25,6 +25,9 @@ import top.tianyan.app.core.network.TianyanCloudClient
 @HiltAndroidApp
 class TianyanApplication : Application() {
     @Inject lateinit var crashReporter: CrashReporter
+    // Lazy 是必须的：BackupManager 依赖 AppDatabase，eager 注入会在 onCreate 之前
+    // 把 Room 对象构造出来，从而挤掉下面那次「先落盘再开库」的时机。
+    @Inject lateinit var backupManagerLazy: Lazy<top.tianyan.app.runtime.BackupManager>
 
     // 启动性能：HarnessLoop / Room 仓储的构造图很重（DAO、DataStore、Agent 引擎全家桶），
     // eager 注入会拖慢第一帧。改为 dagger.Lazy，把实际构建推迟到首个 IO 协程内。
@@ -45,6 +48,16 @@ class TianyanApplication : Application() {
         super.onCreate()
         configureCursorWindowSize()
         crashReporter.install()
+        // 待恢复的备份必须在任何 DAO / Room / DataStore 打开真实文件之前落盘：
+        // 运行中直接覆盖会让 SQLite 与 DataStore 继续写进已被替换的旧 inode，
+        // 用户看到的是「恢复成功但重启后又变回去」。
+        when (val outcome = backupManagerLazy.get().applyPendingRestore()) {
+            is top.tianyan.app.runtime.PendingRestoreOutcome.Applied ->
+                android.util.Log.i("TianyanApp", "已恢复备份分区：${outcome.sections.joinToString(", ")}")
+            is top.tianyan.app.runtime.PendingRestoreOutcome.Failed ->
+                android.util.Log.e("TianyanApp", "备份恢复失败：${outcome.reason}")
+            top.tianyan.app.runtime.PendingRestoreOutcome.None -> Unit
+        }
         appScope.launch(Dispatchers.IO) {
             // 并发执行互不依赖的启动任务（crash 导出 / 特权恢复 / 浏览器 MCP bootstrap /
             // 技能入库 / MCP 预设入库），单任务失败不拖垮其他任务。

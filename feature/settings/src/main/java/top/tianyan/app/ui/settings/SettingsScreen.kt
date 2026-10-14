@@ -870,6 +870,7 @@ fun SystemDevSettingsScreen(
     onOpenAdbLogcat: () -> Unit = {},
     onOpenCustomIteration: () -> Unit = {},
     onOpenPermissionGuide: () -> Unit = {},
+    onOpenBackup: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val developer by viewModel.developerMode.collectAsStateWithLifecycle()
@@ -990,6 +991,23 @@ fun SystemDevSettingsScreen(
                         subtitle = "mDNS 自动配对发现、免配对自动重连与 Logcat 实时工作台",
                         value = "进入工作台",
                         onClick = onOpenAdbLogcat,
+                    )
+                }
+            }
+
+            item {
+                Text(
+                    text = "数据与备份",
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+                )
+                SettingsGroup {
+                    SettingsRow(
+                        icon = RuntimeIconName.Save,
+                        title = "数据备份与恢复",
+                        subtitle = "导出数据库、偏好、附件与工作区为 ZIP，或从备份恢复",
+                        onClick = onOpenBackup,
                     )
                 }
             }
