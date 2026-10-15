@@ -70,10 +70,20 @@ jobs:
           TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64"
           CC="$TOOLCHAIN/bin/aarch64-linux-android30-clang"
           [ -x "$CC" ] || { echo "::error::NDK clang missing: $CC"; exit 1; }
+          OUT="app/src/main/jniLibs/arm64-v8a/libpty_native.so"
           "$CC" -shared -fPIC -O2 -Wall -Werror=implicit-function-declaration \
-            -o app/src/main/jniLibs/arm64-v8a/libpty_native.so app/src/main/cpp/pty_native.c
-          nm -D --defined-only app/src/main/jniLibs/arm64-v8a/libpty_native.so | \
-            grep -q 'Java_top_tianyan_app_runtime_pty_NativePty_openAndExec'
+            -o "$OUT" app/src/main/cpp/pty_native.c
+          # 与 android-apk.yml 同理：符号读取优先用 NDK 自带 llvm-nm，
+          # runner 上 binutils nm 的版本漂移会让这一步在符号本身没问题时红掉。
+          NM="$TOOLCHAIN/bin/llvm-nm"
+          [ -x "$NM" ] || NM="$(command -v llvm-nm || command -v nm)"
+          "$NM" -D --defined-only "$OUT" > /tmp/pty_syms.txt 2>/tmp/pty_nm_err.txt || {
+            echo "::error::符号读取失败（$NM）"; cat /tmp/pty_nm_err.txt; exit 1
+          }
+          grep -q 'Java_top_tianyan_app_runtime_pty_NativePty_openAndExec' /tmp/pty_syms.txt || {
+            echo "::error::libpty_native.so 未导出 top_tianyan JNI 符号"; head -20 /tmp/pty_syms.txt; exit 1
+          }
+          echo "JNI 符号校验通过（$(wc -l < /tmp/pty_syms.txt) 个导出符号）"
 
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew

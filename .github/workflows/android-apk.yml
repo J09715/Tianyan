@@ -33,10 +33,16 @@ jobs:
 
       - name: Install NDK 30.0.15729638 & CMake 3.22.1
         run: |
+          set -euo pipefail
           SDKMGR="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           [ -x "$SDKMGR" ] || SDKMGR="$ANDROID_HOME/tools/bin/sdkmanager"
           yes | "$SDKMGR" --licenses >/dev/null 2>&1 || true
-          "$SDKMGR" --install "ndk;30.0.15729638" "cmake;3.22.1" "platforms;android-37" "build-tools;37.0.0" | tail -1
+          # 不接 `| tail -1`：管道会把退出码换成 tail 的 0，sdkmanager 装失败时
+          # 这一步照样绿，问题被推迟到下一步、且现场什么都没留下。这里保留全量输出。
+          "$SDKMGR" --install "ndk;30.0.15729638" "cmake;3.22.1" "platforms;android-37" "build-tools;37.0.0"
+          ls -d "$ANDROID_HOME/ndk/30.0.15729638" || {
+            echo "::error::NDK 30.0.15729638 安装后目录不存在"; exit 1
+          }
 
       - name: Prepare PRoot ARM64 runtime
         run: |
@@ -48,13 +54,7 @@ jobs:
           set -euo pipefail
           NDK_VER="30.0.15729638"
           NDK="$ANDROID_HOME/ndk/$NDK_VER"
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          [ -x "$SDKMANAGER" ] || SDKMANAGER="$ANDROID_HOME/tools/bin/sdkmanager"
-          if [ ! -x "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang" ]; then
-            echo "NDK $NDK_VER 不存在，先安装…"
-            yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
-            "$SDKMANAGER" --install "ndk;$NDK_VER" 2>&1 | tail -3
-          fi
+          # NDK 由上一节 Install 步骤负责安装并在缺失时直接失败，这里只做存在性断言。
           HOST_TAG="$(ls "$NDK/toolchains/llvm/prebuilt" 2>/dev/null | head -1)"
           [ -n "$HOST_TAG" ] || { echo "!! NDK 目录为空: $NDK/toolchains/llvm/prebuilt"; exit 1; }
           TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/$HOST_TAG"
@@ -63,13 +63,27 @@ jobs:
           SRC="app/src/main/cpp/pty_native.c"
           OUT="app/src/main/jniLibs/arm64-v8a/libpty_native.so"
           echo "  CC  : $CC"
+          echo "  SRC : $(wc -c < "$SRC") bytes"
           "$CC" -shared -fPIC -O2 -Wall -Werror=implicit-function-declaration -o "$OUT" "$SRC"
           ls -la "$OUT"
+
+          # 符号读取优先用 NDK 自带的 llvm-nm：runner 上 binutils 的 nm 版本漂移过，
+          # 对 LLVM 产出的 .so 偶发 "file format not recognized"，直接让这一步红掉，
+          # 而真正的问题（符号不对）反而看不到。先把输出落文件再判定，
+          # 这样 pipeline 不会因为 grep -q 提前退出把 nm 的错误吞掉。
+          NM="$TOOLCHAIN/bin/llvm-nm"
+          [ -x "$NM" ] || NM="$(command -v llvm-nm || command -v nm)"
+          echo "  NM  : $NM"
+          "$NM" -D --defined-only "$OUT" > /tmp/pty_syms.txt 2>/tmp/pty_nm_err.txt || {
+            echo "!! 符号读取失败（$NM）"; cat /tmp/pty_nm_err.txt; exit 1
+          }
+          echo "  导出符号数: $(wc -l < /tmp/pty_syms.txt)"
+
           # JNI 符号必须与当前包名一致，否则运行时 UnsatisfiedLinkError
-          if ! nm -D --defined-only "$OUT" | grep -q "Java_top_tianyan_app_runtime_pty_NativePty_openAndExec"; then
-            echo "!! 重建后的 .so 未导出 top_tianyan JNI 符号"; nm -D --defined-only "$OUT" | head -20; exit 1
+          if ! grep -q "Java_top_tianyan_app_runtime_pty_NativePty_openAndExec" /tmp/pty_syms.txt; then
+            echo "!! 重建后的 .so 未导出 top_tianyan JNI 符号"; head -20 /tmp/pty_syms.txt; exit 1
           fi
-          if nm -D --defined-only "$OUT" | grep -q "top_wanxiang"; then
+          if grep -q "top_wanxiang" /tmp/pty_syms.txt; then
             echo "!! 重建后的 .so 仍含旧包名符号"; exit 1
           fi
           if strings "$OUT" | grep -qi "wanxiang"; then
