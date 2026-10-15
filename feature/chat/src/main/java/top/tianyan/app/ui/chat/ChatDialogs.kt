@@ -180,11 +180,11 @@ internal fun SessionsDialog(
                         val runState = sessionRunStates[session.id] ?: SessionRunState.IDLE
 
                         val (dotColor, stateLabel) = when (runState) {
-                            SessionRunState.RUNNING -> Color(0xFFF59E0B) to stringResource(R.string.chat_state_running)
-                            SessionRunState.WAITING_APPROVAL -> Color(0xFF8B5CF6) to stringResource(R.string.chat_state_approval)
-                            SessionRunState.FAILED -> Color(0xFFEF4444) to stringResource(R.string.chat_state_failed)
-                            SessionRunState.COMPLETED -> Color(0xFF10B981) to stringResource(R.string.chat_state_completed)
-                            SessionRunState.IDLE -> Color(0xFF10B981) to stringResource(R.string.chat_state_ready)
+                            SessionRunState.RUNNING -> StatusRunning to stringResource(R.string.chat_state_running)
+                            SessionRunState.WAITING_APPROVAL -> StatusApproval to stringResource(R.string.chat_state_approval)
+                            SessionRunState.FAILED -> StatusFailed to stringResource(R.string.chat_state_failed)
+                            SessionRunState.COMPLETED -> StatusReady to stringResource(R.string.chat_state_completed)
+                            SessionRunState.IDLE -> StatusReady to stringResource(R.string.chat_state_ready)
                         }
 
                         Surface(
@@ -193,8 +193,8 @@ internal fun SessionsDialog(
                                 else MaterialTheme.colorScheme.surfaceContainerLow,
                             border = androidx.compose.foundation.BorderStroke(
                                 if (isCurrent) 1.5.dp else 1.dp,
-                                if (isCurrent) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                                if (isCurrent) LinearAccent
+                                else LinearBorder,
                             ),
                             modifier = Modifier.fillMaxWidth(),
                         ) {
@@ -277,7 +277,7 @@ internal fun SessionsDialog(
                                             Text(
                                                 stringResource(R.string.chat_isolated_sandbox),
                                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                color = LinearSecondary,
                                             )
                                         }
                                     }
@@ -854,7 +854,6 @@ internal fun NewSessionDialog(
     // 智能体绑定：空串表示沿用默认天衍本体；记住的是 agent id，不是索引，
     // 这样列表在对话框打开期间变化（设置页增删）也不会错绑。
     var selectedAgentId by rememberSaveable { mutableStateOf("") }
-    var agentMenuExpanded by rememberSaveable { mutableStateOf(false) }
     val quickTags = listOf(
         defaultTitle,
         stringResource(R.string.chat_quick_bug),
@@ -878,7 +877,7 @@ internal fun NewSessionDialog(
                 Text(
                     "会话建立后工程类型与智能体固定，用于确定工具集与提示词分层",
                     style = MaterialTheme.typography.labelSmall,
-                    color = LinearMuted,
+                    color = LinearSecondary,
                 )
             }
         },
@@ -955,7 +954,7 @@ internal fun NewSessionDialog(
                             stringResource(R.string.chat_project_type_detected)
                         },
                         style = MaterialTheme.typography.labelSmall,
-                        color = LinearMuted,
+                        color = LinearSecondary,
                     )
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -967,9 +966,16 @@ internal fun NewSessionDialog(
                             rowTypes.forEach { option ->
                                 val active = selectedType == option.type
                                 Surface(
-                                    color = if (active) option.accent.copy(alpha = 0.14f) else LinearSurface,
-                                    shape = RoundedCornerShape(8.dp),
-                                    border = BorderStroke(1.dp, if (active) option.accent.copy(alpha = 0.6f) else LinearBorder),
+                                    color = if (active) option.accent.copy(alpha = 0.16f)
+                                    else option.accent.copy(alpha = 0.07f),
+                                    shape = RoundedCornerShape(10.dp),
+                                    border = BorderStroke(
+                                        // 选中态实线加粗，未选中态也留一道极淡的品牌色描边——
+                                        // 五种类型各有主色，卡片本身就在"报自己的身份"。
+                                        if (active) 1.5.dp else 1.dp,
+                                        if (active) option.accent.copy(alpha = 0.75f)
+                                        else option.accent.copy(alpha = 0.22f),
+                                    ),
                                     modifier = Modifier
                                         .weight(1f)
                                         .clickable {
@@ -978,21 +984,31 @@ internal fun NewSessionDialog(
                                         },
                                 ) {
                                     Row(
-                                        Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 9.dp),
+                                        Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 10.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     ) {
-                                        RuntimeIcon(
-                                            option.icon,
-                                            Modifier.size(18.dp),
-                                            tint = if (active) option.accent else LinearMuted,
-                                        )
+                                        // 图标带自己的色底，不再是灰图标
+                                        Box(
+                                            Modifier
+                                                .size(28.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(option.accent.copy(alpha = if (active) 0.26f else 0.16f)),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            RuntimeIcon(
+                                                option.icon,
+                                                Modifier.size(16.dp),
+                                                tint = if (active) option.accent else option.accent.copy(alpha = 0.78f),
+                                            )
+                                        }
                                         Column(Modifier.weight(1f)) {
                                             Text(
                                                 option.title,
                                                 style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.Medium,
-                                                color = if (active) MaterialTheme.colorScheme.onSurface else LinearSecondary,
+                                                fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
+                                                color = if (active) MaterialTheme.colorScheme.onSurface
+                                                else LinearSecondary,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis,
                                             )
@@ -1005,7 +1021,7 @@ internal fun NewSessionDialog(
                                             )
                                         }
                                         if (active) {
-                                            RuntimeIcon(RuntimeIconName.Check, Modifier.size(14.dp), tint = option.accent)
+                                            RuntimeIcon(RuntimeIconName.Check, Modifier.size(15.dp), tint = option.accent)
                                         }
                                     }
                                 }
@@ -1042,12 +1058,7 @@ internal fun NewSessionDialog(
                     agents = agents,
                     engines = engines,
                     selectedAgentId = selectedAgentId,
-                    expanded = agentMenuExpanded,
-                    onExpandedChange = { agentMenuExpanded = it },
-                    onSelect = { id ->
-                        selectedAgentId = id
-                        agentMenuExpanded = false
-                    },
+                    onSelect = { id -> selectedAgentId = id },
                 )
             }
         },
@@ -1080,7 +1091,17 @@ private val LinearDanger = Color(0xFFB3261E)
 private val LinearBorder = Color(0x14FFFFFF)
 private val LinearSurface = Color(0x0AFFFFFF)
 private val LinearSecondary = Color(0xFFD0D6E0)
-private val LinearMuted = Color(0xFF8A8F98)
+// 说明/副文案色：原 #8A8F98 在玻璃背板上对比度偏低、正文发灰易读不清，
+// 提到 #9AA3B0（保留次要层级、但能看清）。
+private val LinearMuted = Color(0xFF9AA3B0)
+
+// ── 会话状态色板 ───────────────────────────────────────────────────────────────
+// 与会话管理列表（SessionsDialog）同一套色，跨弹窗保持一致：
+// 进行中=橙、失败=红、就绪/完成=绿、待审批=紫。状态即颜色，一眼可辨。
+private val StatusRunning = Color(0xFFF59E0B)
+private val StatusFailed = Color(0xFFEF4444)
+private val StatusReady = Color(0xFF10B981)
+private val StatusApproval = Color(0xFF8B5CF6)
 
 @Composable
 private fun LinearFieldLabel(text: String) {
@@ -1129,13 +1150,9 @@ private fun AgentPicker(
     agents: List<top.tianyan.app.core.model.AgentSubagent>,
     engines: List<top.tianyan.app.harness.acp.AgentEngineProfile>,
     selectedAgentId: String,
-    expanded: Boolean,
-    onExpandedChange: (Boolean) -> Unit,
     onSelect: (String) -> Unit,
 ) {
     val enabled = remember(agents) { agents.filter { it.isEnabled } }
-    val selectedEngine = remember(engines, selectedAgentId) { engines.firstOrNull { it.id == selectedAgentId } }
-    val selected = remember(enabled, selectedAgentId) { enabled.firstOrNull { it.id == selectedAgentId } }
     val ordered = remember(enabled) {
         enabled.sortedWith(
             compareBy(
@@ -1159,170 +1176,176 @@ private fun AgentPicker(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Box {
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.fillMaxWidth().clickable { onExpandedChange(true) },
-            ) {
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    RuntimeIcon(
-                        RuntimeIconName.Bot,
-                        Modifier.size(18.dp),
-                        tint = if (selected != null || selectedEngine != null) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
+        // 卡片组：默认 + 引擎一行、人格一行，各自横向滚动。
+        // 分两行横滑而不是单条长横滑——启用项可达数十个，单行会挤成无法定位的长条；
+        // 按类型分行后，每行长度可控，且"换引擎"和"换人格"在视觉上就分开了。
+        AgentCardRow(
+            cards = buildList {
+                add(
+                    AgentCard(
+                        id = "",
+                        title = "默认（天衍本体）",
+                        badge = "本体",
+                        badgeColor = LinearAccent,
+                        icon = RuntimeIconName.Bot,
+                        accent = LinearAccent,
+                        subtitle = "不绑定智能体，使用天衍默认提示词与执行循环",
                     )
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            selectedEngine?.name ?: selected?.name ?: "默认（天衍本体）",
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        val sub = when {
-                            selectedEngine != null -> "引擎 · ${selectedEngine.description}"
-                            selected != null ->
-                                "人格 · ${top.tianyan.app.core.model.AgentDepartments.find(selected.departmentId).localizedName} · ${selected.description}"
-                            else -> "不绑定智能体，使用天衍默认提示词与执行循环"
-                        }
-                        Text(
-                            sub,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    Text(
-                        stringResource(R.string.chat_select),
-                        color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.labelMedium,
-                    )
-                }
-            }
-            DropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { onExpandedChange(false) },
-                modifier = Modifier.heightIn(max = 420.dp),
-            ) {
-                DropdownMenuItem(
-                    text = {
-                        Column {
-                            Text("默认（天衍本体）", fontWeight = FontWeight.SemiBold)
-                            Text(
-                                "不绑定智能体，使用天衍默认提示词",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    },
-                    onClick = { onSelect("") },
                 )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                if (engines.isNotEmpty()) {
-                    PickerSectionLabel("引擎（真实进程，接管执行）")
-                    engines.forEach { engine ->
-                        DropdownMenuItem(
-                            text = {
-                                Column {
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        Text(
-                                            engine.name,
-                                            fontWeight = if (engine.id == selectedAgentId) FontWeight.SemiBold else FontWeight.Normal,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                        Text(
-                                            "引擎",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.tertiary,
-                                        )
-                                    }
-                                    Text(
-                                        engine.description,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
-                            },
-                            onClick = { onSelect(engine.id) },
+                engines.forEach { engine ->
+                    add(
+                        AgentCard(
+                            id = engine.id,
+                            title = engine.name,
+                            badge = "引擎",
+                            badgeColor = StatusApproval,
+                            icon = RuntimeIconName.Cpu,
+                            accent = StatusApproval,
+                            subtitle = engine.description.ifBlank { "真实进程，接管执行" },
                         )
-                    }
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                }
-                if (ordered.isEmpty()) {
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                "暂无已启用的人格智能体（到设置 → 智能体目录开启）",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        },
-                        onClick = { onExpandedChange(false) },
                     )
                 }
-                if (ordered.isNotEmpty()) {
-                    PickerSectionLabel("人格（只改提示词，执行仍是天衍本体）")
-                }
-                ordered.forEach { agent ->
-                    DropdownMenuItem(
-                        text = {
-                            Column {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    Text(
-                                        agent.name,
-                                        fontWeight = if (agent.id == selectedAgentId) FontWeight.SemiBold else FontWeight.Normal,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                    Text(
-                                        top.tianyan.app.core.model.AgentDepartments.find(agent.departmentId).localizedName,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.primary,
-                                    )
-                                }
-                                Text(
-                                    agent.description,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        },
-                        onClick = { onSelect(agent.id) },
+            },
+            selectedId = selectedAgentId,
+            onSelect = { id -> onSelect(id) },
+        )
+
+        if (ordered.isEmpty()) {
+            Text(
+                "暂无已启用的人格智能体（到设置 → 智能体目录开启）",
+                style = MaterialTheme.typography.labelSmall,
+                color = LinearMuted,
+            )
+        } else {
+            AgentCardRow(
+                cards = ordered.map { agent ->
+                    val dept = top.tianyan.app.core.model.AgentDepartments.find(agent.departmentId)
+                    // colorArgb 是 0xAARRGGBB 打包的 Long，Compose 的 Color(Long) 直接按这个格式解析，
+                    // 部门各自的主色（工程蓝/测试橙/安全红/游戏紫…）因此天然带进来。
+                    val deptColor = Color(dept.colorArgb)
+                    AgentCard(
+                        id = agent.id,
+                        title = agent.name,
+                        badge = dept.localizedName,
+                        badgeColor = deptColor,
+                        icon = RuntimeIconName.Bot,
+                        accent = deptColor,
+                        subtitle = agent.description,
                     )
-                }
-            }
+                },
+                selectedId = selectedAgentId,
+                onSelect = { id -> onSelect(id) },
+            )
         }
     }
 }
 
+/** 智能体卡片：图标色底 + 名称 + 类型徽章 + 副说明，选中态加粗描边。 */
+private data class AgentCard(
+    val id: String,
+    val title: String,
+    val badge: String,
+    val badgeColor: Color,
+    val icon: RuntimeIconName,
+    val accent: Color,
+    val subtitle: String,
+)
+
 /**
- * 下拉菜单里的分组小标题。
+ * 智能体卡片行：横向滚动的卡片组。
  *
- * 用非交互行而非 DropdownMenuItem：分组标题不该可点击（点它没有语义），
- * 也不该抢走菜单的键盘焦点。
+ * 每张卡 = 彩色图标底 + 名称 + 类型徽章 + 副说明，选中态加粗描边 + 对勾。
+ * 分组纵向堆叠、组内横向滚动：类型边界直接落在行与行之间，
+ * 不用把「引擎」和「人格」塞进一个混合下拉里让人自己分辨。
  */
 @Composable
-private fun PickerSectionLabel(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.labelSmall,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = 12.dp, top = 8.dp, end = 12.dp, bottom = 2.dp),
-    )
+private fun AgentCardRow(
+    cards: List<AgentCard>,
+    selectedId: String,
+    onSelect: (String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            cards.forEach { card ->
+                val active = card.id == selectedId
+                Surface(
+                    color = if (active) card.accent.copy(alpha = 0.15f) else card.accent.copy(alpha = 0.06f),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(
+                        if (active) 1.5.dp else 1.dp,
+                        if (active) card.accent.copy(alpha = 0.7f) else card.accent.copy(alpha = 0.20f),
+                    ),
+                    modifier = Modifier
+                        .width(140.dp)
+                        .clickable { onSelect(card.id) },
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Box(
+                            Modifier
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(card.accent.copy(alpha = if (active) 0.26f else 0.15f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            RuntimeIcon(
+                                card.icon,
+                                Modifier.size(15.dp),
+                                tint = card.accent.copy(alpha = if (active) 1f else 0.8f),
+                            )
+                        }
+                        Column(Modifier.weight(1f)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Text(
+                                    card.title,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
+                                    color = if (active) MaterialTheme.colorScheme.onSurface else LinearSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false),
+                                )
+                                if (active) {
+                                    RuntimeIcon(RuntimeIconName.Check, Modifier.size(13.dp), tint = card.accent)
+                                }
+                            }
+                            Surface(
+                                color = card.badgeColor.copy(alpha = 0.16f),
+                                shape = RoundedCornerShape(3.dp),
+                            ) {
+                                Text(
+                                    card.badge,
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                    color = card.badgeColor,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                )
+                            }
+                            Text(
+                                card.subtitle,
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                color = LinearMuted,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
