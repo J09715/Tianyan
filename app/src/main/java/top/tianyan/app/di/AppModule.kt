@@ -25,6 +25,7 @@ import top.tianyan.app.core.database.MIGRATION_46_47
 import top.tianyan.app.core.database.MIGRATION_47_48
 import top.tianyan.app.core.database.MIGRATION_48_49
 import top.tianyan.app.core.database.MIGRATION_49_50
+import top.tianyan.app.core.database.MIGRATION_50_51
 import top.tianyan.app.core.database.BuildScriptDao
 import top.tianyan.app.core.database.task.AgentTaskDao
 import top.tianyan.app.core.database.ToolDao
