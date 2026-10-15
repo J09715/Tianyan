@@ -78,6 +78,10 @@ class PromptAssetLoaderTest {
             "TASK_PROMPT" to "run tests",
             "WRITE_LINE" to "限定写入范围：app/src/ui",
             "FACTS_PACK" to "## 父级上下文事实包\n- 测试事实",
+            "AGENT_NAME" to "Backend Architect",
+            "AGENT_ID" to "engineering-backend-architect",
+            "AGENT_DEPARTMENT" to "工程研发 / Engineering",
+            "AGENT_PERSONA" to "You design service boundaries before writing code.",
         )
         listMarkdowns("prompts").forEach { path ->
             val rendered = loader.render(path, variables)

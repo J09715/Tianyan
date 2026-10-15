@@ -280,7 +280,13 @@ class HarnessLoop @Inject constructor(
             stateMirrors.isWaitingApproval(sessId)
 
     /** 新建会话。workspace 为关联的工作区 Linux 路径（如 /workspace/proj），空串表示不关联。 */
-    suspend fun newSession(title: String, workspace: String = "", projectType: String = "", redTeamMode: String = "off"): String {
+    suspend fun newSession(
+        title: String,
+        workspace: String = "",
+        projectType: String = "",
+        redTeamMode: String = "off",
+        agentId: String? = null,
+    ): String {
         val id = UUID.randomUUID().toString()
         val defaultModel = modelRepository.activeModel()
         foregroundLoadGeneration.incrementAndGet()
@@ -296,6 +302,7 @@ class HarnessLoop @Inject constructor(
                 updatedAt = System.currentTimeMillis(),
                 modelId = defaultModel?.id,
                 modelVariant = defaultModel?.model?.substringBefore(',')?.trim()?.takeIf { it.isNotBlank() },
+                agentId = agentId?.trim()?.takeIf { it.isNotBlank() },
                 workspace = workspace,
                 projectType = projectType,
                 approvalMode = approvalRepository.currentMode().id,
@@ -1381,6 +1388,7 @@ class HarnessLoop @Inject constructor(
             workspacePath = sessionWorkspace,
             projectTypeOverride = sessionEntity?.projectType.orEmpty(),
             thinkingMode = stateMirrors.requestThinkingMode(sessId),
+            agentId = sessionEntity?.agentId.orEmpty(),
         )
         fun estimateTokens(messages: List<ApiMessage>) = messages.sumOf { message ->
             ContextWindowPolicy.estimateTokens(message.content.orEmpty()) +

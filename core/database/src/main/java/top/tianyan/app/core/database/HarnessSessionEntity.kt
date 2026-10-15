@@ -23,6 +23,14 @@ data class HarnessSessionEntity(
     val modelId: String?,
     /** Concrete provider model id selected inside [modelId]'s profile. */
     val modelVariant: String? = null,
+    /**
+     * 会话级智能体绑定：指向 `agent_subagents.id`。
+     *
+     * 与 modelId 同级——会话一旦建立，智能体身份在该会话内固定（可缓存前缀的一部分），
+     * 换智能体等于换 persona，用新会话承载而不是就地改写历史上下文。
+     * null 表示沿用默认的天衍本体提示词。
+     */
+    val agentId: String? = null,
     val workspace: String = "",
     /** Explicit type selected for empty/imported workspaces; blank means auto-detect. */
     val projectType: String = "",
@@ -69,6 +77,9 @@ interface HarnessSessionDao {
 
     @Query("UPDATE harness_sessions SET modelId = :modelId, modelVariant = :modelVariant, updatedAt = :updatedAt WHERE id = :id")
     suspend fun setModelSelection(id: String, modelId: String?, modelVariant: String?, updatedAt: Long)
+
+    @Query("UPDATE harness_sessions SET agentId = :agentId, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun setAgentBinding(id: String, agentId: String?, updatedAt: Long)
 
     @Query("DELETE FROM harness_sessions WHERE id = :id")
     suspend fun deleteSession(id: String)

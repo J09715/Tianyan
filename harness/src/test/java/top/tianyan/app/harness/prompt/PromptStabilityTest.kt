@@ -67,12 +67,20 @@ class PromptStabilityTest {
     fun sessionConstantsStayInTheFrozenGroup() {
         val text = builderSource.readText()
         val frozenGroup = extractGroup(text, "frozen")
-        listOf("basePrompt", "toolsSection", "prootSection", "pinnedSection").forEach { name ->
+        val dynamicGroup = extractGroup(text, "dynamic")
+        // agentPersonaSection 由会话建立时固定的 agentId 决定，属会话常量：
+        // 放进 dynamic 会让身份逐轮出现在消息尾部，既污染前缀缓存，
+        // 又让模型把「我是谁」当成当轮提示。
+        listOf("basePrompt", "agentPersonaSection", "toolsSection", "prootSection", "pinnedSection").forEach { name ->
             assertTrue(
                 "$name 是会话常量，应留在 frozen 组以命中前缀缓存",
                 frozenGroup.contains(name),
             )
         }
+        assertFalse(
+            "agentPersonaSection 不得出现在 dynamic 组里——会话身份逐轮变化会破坏前缀缓存",
+            dynamicGroup.contains("agentPersonaSection"),
+        )
     }
 
     /**

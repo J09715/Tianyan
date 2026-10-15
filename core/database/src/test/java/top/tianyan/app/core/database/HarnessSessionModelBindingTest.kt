@@ -49,6 +49,34 @@ class HarnessSessionModelBindingTest {
         assertEquals(20L, second.updatedAt)
     }
 
+    /**
+     * 会话级智能体绑定：与 modelSelection 同级，只改目标会话，
+     * 且 null / 空串都要落回「不绑定」（沿用天衍本体提示词）。
+     */
+    @Test
+    fun agentBindingOnlyUpdatesTargetSessionAndSupportsUnbinding() = runBlocking {
+        repository.upsert(session("session-a", "profile-a", "model-a"))
+        repository.upsert(session("session-b", "profile-b", "model-b"))
+
+        repository.setAgentBinding("session-a", "engineering-backend-architect", updatedAt = 40L)
+
+        val bound = requireNotNull(repository.findById("session-a"))
+        assertEquals("engineering-backend-architect", bound.agentId)
+        assertEquals(40L, bound.updatedAt)
+        assertEquals(null, requireNotNull(repository.findById("session-b")).agentId)
+
+        repository.setAgentBinding("session-a", null, updatedAt = 50L)
+        assertEquals(null, requireNotNull(repository.findById("session-a")).agentId)
+    }
+
+    /** 会话创建时写入的绑定值必须原样读回（HarnessLoop.newSession 的落库路径）。 */
+    @Test
+    fun agentIdPersistsThroughUpsert() = runBlocking {
+        repository.upsert(session("session-c", "profile-c", "model-c").copy(agentId = "design-ui-designer"))
+
+        assertEquals("design-ui-designer", requireNotNull(repository.findById("session-c")).agentId)
+    }
+
     private fun session(id: String, modelId: String, modelVariant: String) = HarnessSessionEntity(
         id = id,
         title = id,

@@ -128,6 +128,7 @@ class ChatViewModel @Inject constructor(
     private val fullSettingsStore: top.tianyan.app.core.datastore.SettingsDataStore,
     private val skillDistillationManager: top.tianyan.app.harness.skill.SkillDistillationManager,
     private val questionBroker: top.tianyan.app.harness.question.AgentQuestionBroker,
+    private val subagentRepository: top.tianyan.app.core.database.AgentSubagentRepository,
 ) : ViewModel() {
 
     /**
@@ -1628,6 +1629,36 @@ class ChatViewModel @Inject constructor(
     val sessions: StateFlow<List<HarnessSessionEntity>> = sessionDao.observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /**
+     * 新建会话时可选的全部智能体（含禁用项，UI 侧置灰并说明），按部门与排序号排列。
+     *
+     * 用 observeAll 而非 enabledProfiles：设置页改了开关或新增自定义智能体后，
+     * 选择器要立刻反映，不能等下一次进入对话框。
+     */
+    val availableAgents: StateFlow<List<top.tianyan.app.core.model.AgentSubagent>> =
+        subagentRepository.profiles
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** 当前会话绑定的智能体 id；空串表示沿用默认天衍本体。 */
+    val currentAgentId: StateFlow<String> = currentSessionId.flatMapLatest { id ->
+        if (id.isBlank()) flow { emit("") } else flow {
+            emit(sessionDao.findById(id)?.agentId.orEmpty())
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
+    /** 切换会话的智能体绑定；绑定影响可缓存前缀，仅允许在会话尚未产出消息时改写。 */
+    fun bindSessionAgent(agentId: String?) {
+        val sessionId = currentSessionId.value
+        if (sessionId.isBlank()) return
+        viewModelScope.launch {
+            sessionDao.setAgentBinding(
+                sessionId,
+                agentId?.trim()?.takeIf { it.isNotBlank() },
+                System.currentTimeMillis(),
+            )
+        }
+    }
+
     fun setCurrentSessionApprovalMode(mode: ApprovalMode) {
         val sessionId = currentSessionId.value
         if (sessionId.isBlank()) return
@@ -2249,9 +2280,21 @@ class ChatViewModel @Inject constructor(
     fun clearError() = harnessLoop.clearError()
 
     /** 新建会话（支持自定义标题并关联工作区）。 */
-    fun createSession(title: String = "", workspace: String = "", projectType: String = "", redTeamMode: String = "off") {
+    fun createSession(
+        title: String = "",
+        workspace: String = "",
+        projectType: String = "",
+        redTeamMode: String = "off",
+        agentId: String? = null,
+    ) {
         viewModelScope.launch {
-            harnessLoop.newSession(title.trim().ifBlank { context.getString(R.string.chat_new_session) }, workspace, projectType, redTeamMode)
+            harnessLoop.newSession(
+                title.trim().ifBlank { context.getString(R.string.chat_new_session) },
+                workspace,
+                projectType,
+                redTeamMode,
+                agentId,
+            )
         }
     }
 

@@ -34,6 +34,8 @@ interface HarnessSessionRepository {
     suspend fun setApprovalMode(id: String, approvalMode: String, updatedAt: Long)
     suspend fun setApprovalModeForAll(approvalMode: String, updatedAt: Long)
     suspend fun setModelSelection(id: String, modelId: String?, modelVariant: String?, updatedAt: Long)
+    /** 会话级智能体绑定；legacy 测试替身可忽略（Room 实现持久化）。 */
+    suspend fun setAgentBinding(id: String, agentId: String?, updatedAt: Long) = Unit
     suspend fun deleteSession(id: String)
     suspend fun countInRange(start: Long?, end: Long?): Int
     suspend fun listAll(): List<HarnessSessionEntity>
@@ -205,6 +207,8 @@ class RoomHarnessSessionRepository @Inject constructor(private val dao: HarnessS
     override suspend fun setApprovalModeForAll(approvalMode: String, updatedAt: Long) = dao.setApprovalModeForAll(approvalMode, updatedAt)
     override suspend fun setModelSelection(id: String, modelId: String?, modelVariant: String?, updatedAt: Long) =
         dao.setModelSelection(id, modelId, modelVariant, updatedAt)
+    override suspend fun setAgentBinding(id: String, agentId: String?, updatedAt: Long) =
+        dao.setAgentBinding(id, agentId, updatedAt)
     override suspend fun deleteSession(id: String) = dao.deleteSession(id)
     override suspend fun countInRange(start: Long?, end: Long?) = dao.countInRange(start, end)
     override suspend fun listAll() = dao.listAll()

@@ -12,6 +12,7 @@ import top.tianyan.app.core.database.AgentSkillRepository
 import top.tianyan.app.core.database.AgentSubagentRepository
 import top.tianyan.app.core.database.McpServerRepository
 import top.tianyan.app.core.datastore.AgentPreferences
+import top.tianyan.app.core.model.AgentDepartments
 import top.tianyan.app.core.model.AgentSkill
 import top.tianyan.app.core.model.BuiltinMcpPresets
 import top.tianyan.app.core.model.McpToolInfo
@@ -87,6 +88,7 @@ class SystemPromptBuilder @Inject constructor(
         projectTypeOverride: String = "",
         latestUserMessage: String = "",
         mcpTools: List<McpToolInfo> = emptyList(),
+        agentId: String = "",
     ): PromptParts {
         val distroId = runCatching { settingsDataStore.selectedDistribution.first() }.getOrDefault("debian")
         val distroName = DistroCatalog.displayName(distroId)
@@ -188,6 +190,9 @@ class SystemPromptBuilder @Inject constructor(
 
         val subagentSection = buildSubagentGuidance(toolCallMode)
 
+        // 会话级智能体人格：agentId 在会话建立时固定，属会话常量，可安全进可缓存前缀。
+        val agentPersonaSection = buildAgentPersonaSection(agentId)
+
         val hasWorkspace = workspacePath.isNotBlank()
         val workspaceParts = if (hasWorkspace) {
             workspacePromptParts(workspacePath, projectTypeOverride, distroName)
@@ -279,6 +284,7 @@ class SystemPromptBuilder @Inject constructor(
         return PromptParts(
             frozen = listOf(
                 basePrompt,
+                agentPersonaSection,
                 toolsSection,
                 prootSection,
                 privilegeSection,
@@ -451,6 +457,36 @@ class SystemPromptBuilder @Inject constructor(
         // @提及的技能在前（保预算），场景匹配按相关度排序、去重后跟在后面。
         val sceneMatched = matchByScene(allSkills, latestUserMessage)
         return mentioned + sceneMatched.filter { it.id !in mentionedIds }
+    }
+
+    /**
+     * 会话级智能体人格段。
+     *
+     * 取会话绑定的 [agentId] 对应的已启用智能体，把其 systemPrompt 作为该会话的
+     * 身份叠加层注入 —— 位置紧随基础本体之后，权威高于普通规则块，但低于
+     * 环境/权限等硬约束（那些仍在本体后半段）。
+     *
+     * 为什么落进 frozen 而不是 dynamic：绑定值在会话建立后不再变化，
+     * 属会话内常量；放进 dynamic 反而会让它逐轮出现在 user 尾部，
+     * 既污染前缀缓存语义，又让模型把身份当成"当轮提示"而非"我就是谁"。
+     *
+     * agentId 为空或指向已删除/被禁用的智能体时返回空串，退回天衍本体，不报错。
+     */
+    private suspend fun buildAgentPersonaSection(agentId: String): String {
+        val id = agentId.trim()
+        if (id.isEmpty()) return ""
+        val profile = runCatching { subagentRepository.findEnabledProfile(id) }.getOrNull() ?: return ""
+        val persona = profile.systemPrompt.trim()
+        if (persona.isEmpty()) return ""
+        return promptAssets.render(
+            "prompts/agent_persona.md",
+            mapOf(
+                "AGENT_NAME" to profile.name,
+                "AGENT_ID" to profile.id,
+                "AGENT_DEPARTMENT" to AgentDepartments.find(profile.departmentId).localizedName,
+                "AGENT_PERSONA" to persona,
+            ),
+        )
     }
 
     private suspend fun buildSubagentGuidance(toolCallMode: ToolCallMode): String {

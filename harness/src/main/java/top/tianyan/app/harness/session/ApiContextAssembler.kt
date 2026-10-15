@@ -40,6 +40,7 @@ class ApiContextAssembler @Inject constructor(
         workspacePath: String,
         projectTypeOverride: String = "",
         thinkingMode: Boolean = false,
+        agentId: String = "",
     ): List<ApiMessage> {
         val compactionEnabled = runCatching { settingsDataStore.contextCompactionEnabled.first() }.getOrDefault(true)
         val budgetTokens = model.contextTokens
@@ -64,6 +65,7 @@ class ApiContextAssembler @Inject constructor(
                 projectTypeOverride = projectTypeOverride,
                 latestUserMessage = latestUserText,
                 mcpTools = model.dynamicMcpTools,
+                agentId = agentId,
             )
         } else {
             null

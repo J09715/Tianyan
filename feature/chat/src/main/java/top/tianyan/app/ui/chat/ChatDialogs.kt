@@ -836,7 +836,8 @@ internal fun AddModelDialog(
 internal fun NewSessionDialog(
     workspaces: List<WorkspaceProject>,
     onDismiss: () -> Unit,
-    onCreate: (title: String, workspace: String, projectType: ProjectType, redTeamMode: String) -> Unit,
+    onCreate: (title: String, workspace: String, projectType: ProjectType, redTeamMode: String, agentId: String?) -> Unit,
+    agents: List<top.tianyan.app.core.model.AgentSubagent> = emptyList(),
 ) {
     val defaultTitle = stringResource(R.string.chat_new_session)
     // 表单状态旋转后保留；枚举以 name 字符串保存
@@ -846,6 +847,10 @@ internal fun NewSessionDialog(
     val selectedType = ProjectType.valueOf(selectedTypeName)
     var typeMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var redTeamMode by rememberSaveable { mutableStateOf(false) }
+    // 智能体绑定：空串表示沿用默认天衍本体；记住的是 agent id，不是索引，
+    // 这样列表在对话框打开期间变化（设置页增删）也不会错绑。
+    var selectedAgentId by rememberSaveable { mutableStateOf("") }
+    var agentMenuExpanded by rememberSaveable { mutableStateOf(false) }
     val quickTags = listOf(
         defaultTitle,
         stringResource(R.string.chat_quick_bug),
@@ -990,11 +995,32 @@ internal fun NewSessionDialog(
                         androidx.compose.material3.Switch(checked = redTeamMode, onCheckedChange = { redTeamMode = it })
                     }
                 }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                AgentPicker(
+                    agents = agents,
+                    selectedAgentId = selectedAgentId,
+                    expanded = agentMenuExpanded,
+                    onExpandedChange = { agentMenuExpanded = it },
+                    onSelect = { id ->
+                        selectedAgentId = id
+                        agentMenuExpanded = false
+                    },
+                )
             }
         },
         confirmButton = {
             Button(
-                onClick = { onCreate(title.ifBlank { defaultTitle }, selected, selectedType, if (redTeamMode) "red_team" else "off") },
+                onClick = {
+                    onCreate(
+                        title.ifBlank { defaultTitle },
+                        selected,
+                        selectedType,
+                        if (redTeamMode) "red_team" else "off",
+                        selectedAgentId.takeIf { it.isNotBlank() },
+                    )
+                },
                 shape = RoundedCornerShape(8.dp),
             ) {
                 Text(stringResource(R.string.chat_create_session))
@@ -1004,6 +1030,155 @@ internal fun NewSessionDialog(
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.chat_cancel)) }
         },
     )
+}
+
+/**
+ * 新建会话的智能体选择器。
+ *
+ * 交互取舍：用下拉而非横向 chip 列表——Agency 目录启用项可达数十个，
+ * 横向 chip 会挤成一条无法定位的长条；下拉里按部门分组展示名称 + 描述，
+ * 并保留「默认（天衍本体）」作为首项，保证不选智能体时行为与旧版一致。
+ *
+ * 被禁用的智能体仍然列出但置灰：用户能看见「我有这个角色，只是关了」，
+ * 而不是以为它消失了。
+ */
+@Composable
+private fun AgentPicker(
+    agents: List<top.tianyan.app.core.model.AgentSubagent>,
+    selectedAgentId: String,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    onSelect: (String) -> Unit,
+) {
+    val enabled = remember(agents) { agents.filter { it.isEnabled } }
+    val selected = remember(enabled, selectedAgentId) { enabled.firstOrNull { it.id == selectedAgentId } }
+    val ordered = remember(enabled) {
+        enabled.sortedWith(
+            compareBy(
+                { top.tianyan.app.core.model.AgentDepartments.find(it.departmentId).sortOrder },
+                { it.sortOrder },
+                { it.name },
+            ),
+        )
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                "智能体",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                "（会话身份，建立后固定）",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Box {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth().clickable { onExpandedChange(true) },
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    RuntimeIcon(
+                        RuntimeIconName.Bot,
+                        Modifier.size(18.dp),
+                        tint = if (selected != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            selected?.name ?: "默认（天衍本体）",
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        val sub = selected?.let {
+                            "${top.tianyan.app.core.model.AgentDepartments.find(it.departmentId).localizedName} · ${it.description}"
+                        } ?: "不绑定智能体，使用天衍默认提示词"
+                        Text(
+                            sub,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Text(
+                        stringResource(R.string.chat_select),
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                }
+            }
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { onExpandedChange(false) },
+                modifier = Modifier.heightIn(max = 320.dp),
+            ) {
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text("默认（天衍本体）", fontWeight = FontWeight.SemiBold)
+                            Text(
+                                "不绑定智能体，使用天衍默认提示词",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    },
+                    onClick = { onSelect("") },
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                if (ordered.isEmpty()) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                "暂无已启用的智能体（到设置 → 智能体目录开启）",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        },
+                        onClick = { onExpandedChange(false) },
+                    )
+                }
+                ordered.forEach { agent ->
+                    DropdownMenuItem(
+                        text = {
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text(
+                                        agent.name,
+                                        fontWeight = if (agent.id == selectedAgentId) FontWeight.SemiBold else FontWeight.Normal,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        top.tianyan.app.core.model.AgentDepartments.find(agent.departmentId).localizedName,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                                Text(
+                                    agent.description,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        },
+                        onClick = { onSelect(agent.id) },
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable

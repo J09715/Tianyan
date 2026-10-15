@@ -383,6 +383,19 @@ val MIGRATION_48_49 = object : Migration(48, 49) {
 }
 
 /**
+ * 会话级智能体绑定列。
+ *
+ * 新建会话时可选一个已启用的智能体（agent_subagents.id）作为该会话的
+ * persona；绑定值进入系统提示词的可缓存前缀，因此会话内不可就地改写——
+ * 换智能体走新会话。null 表示沿用默认的天衍本体提示词，与旧数据一致。
+ */
+val MIGRATION_50_51 = object : Migration(50, 51) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE harness_sessions ADD COLUMN agentId TEXT")
+    }
+}
+
+/**
  * 远程 HTTP MCP 服务的自定义认证头持久化。
  *
  * 此前导入 mcpServers 配置时 `headers.Authorization` 被解析器丢弃（模型里的
