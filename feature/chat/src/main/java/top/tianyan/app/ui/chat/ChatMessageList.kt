@@ -333,6 +333,7 @@ internal fun EmptyChatGuidance(
                 ProjectType.ANDROID -> active.filter { it.targetProjectType == "ANDROID" || it.targetProjectType == null }
                 ProjectType.FLUTTER -> active.filter { it.targetProjectType == "FLUTTER" || it.targetProjectType == null }
                 ProjectType.REVERSE -> active.filter { it.targetProjectType == "REVERSE" || it.targetProjectType == null }
+                ProjectType.RED_TEAM -> active.filter { it.targetProjectType == "RED_TEAM" || it.targetProjectType == null }
                 else -> active.filter { it.targetProjectType == null }
             }
             if (matched.isNotEmpty()) matched else active.take(4)
@@ -354,6 +355,11 @@ internal fun EmptyChatGuidance(
             ProjectType.REVERSE -> listOf(
                 SlashCommandItem("/reverse-analyze", context.getString(R.string.chat_reverse_analyze), context.getString(R.string.chat_reverse_analyze_description), context.getString(R.string.chat_reverse_analyze_prompt), RuntimeIconName.Search),
                 SlashCommandItem("/reverse-decode", context.getString(R.string.chat_reverse_decode), context.getString(R.string.chat_reverse_decode_description), context.getString(R.string.chat_reverse_decode_prompt), RuntimeIconName.Code),
+            )
+            ProjectType.RED_TEAM -> listOf(
+                SlashCommandItem("/redteam-preflight", "红队体检", "检查工具箱与技能就绪度", "跑 redteam 工具的 preflight，列出缺失项与修复命令，不要跳过体检直接开扫。", RuntimeIconName.Shield),
+                SlashCommandItem("/redteam-bind", "绑定目标", "绑定授权目标与范围", "先确认授权范围，再用 redteam 工具的 session_info 确认当前绑定；目标用 asset_add 落成事实。", RuntimeIconName.Shield),
+                SlashCommandItem("/redteam-report", "演练报告", "汇总事实生成报告", "用 redteam 工具的 report 生成当前演练报告，结论必须来自会话事实，不要写事实里没有的推断。", RuntimeIconName.Document),
             )
             else -> SlashCommands.presetCommands(context).take(4)
         }

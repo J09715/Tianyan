@@ -1811,6 +1811,7 @@ fun WorkspaceScreen(
                             ProjectType.ANDROID to ("Android" to RuntimeIconName.Android),
                             ProjectType.FLUTTER to ("Flutter" to RuntimeIconName.Flutter),
                             ProjectType.REVERSE to (stringResource(R.string.workspace_template_reverse) to RuntimeIconName.Reverse),
+                            ProjectType.RED_TEAM to ("红队演练" to RuntimeIconName.Shield),
                             ProjectType.GENERAL to (stringResource(R.string.workspace_template_empty) to RuntimeIconName.Code),
                         ).forEach { (type, pair) ->
                             FilterChip(
@@ -2196,6 +2197,7 @@ private fun ProjectCard(
         ProjectType.ANDROID -> androidx.compose.ui.graphics.Color(0xFF2E7D32)
         ProjectType.FLUTTER -> androidx.compose.ui.graphics.Color(0xFF0288D1)
         ProjectType.REVERSE -> androidx.compose.ui.graphics.Color(0xFF6A1B9A)
+        ProjectType.RED_TEAM -> androidx.compose.ui.graphics.Color(0xFFB3261E)
         ProjectType.GENERAL -> MaterialTheme.colorScheme.primary
     }
 
@@ -2203,6 +2205,7 @@ private fun ProjectCard(
         ProjectType.ANDROID -> RuntimeIconName.Android
         ProjectType.FLUTTER -> RuntimeIconName.Flutter
         ProjectType.REVERSE -> RuntimeIconName.Reverse
+        ProjectType.RED_TEAM -> RuntimeIconName.Shield
         ProjectType.GENERAL -> RuntimeIconName.Code
     }
 

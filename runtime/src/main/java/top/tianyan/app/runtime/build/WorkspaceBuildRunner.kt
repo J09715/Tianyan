@@ -890,6 +890,18 @@ class WorkspaceBuildRunner @Inject constructor(
                     )
                 )
             }
+            ProjectType.RED_TEAM -> {
+                log("[Tianyan Build] 红队演练工程，无编译流程；目标绑定与作战状态在会话内维护")
+                send(
+                    BuildRunProgress(
+                        step = "红队演练工程",
+                        isRunning = false,
+                        isSuccess = true,
+                        message = "红队演练工程无需编译。打开会话内的红队控制台绑定目标与范围，主动探测通过终端与对话 Agent 完成",
+                        logOutput = snapshotLogs(),
+                    )
+                )
+            }
             ProjectType.GENERAL -> {
                 log("[Tianyan Build] 通用工程，无默认 APK 打包流程")
                 send(

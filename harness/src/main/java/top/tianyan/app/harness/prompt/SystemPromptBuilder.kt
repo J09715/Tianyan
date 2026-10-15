@@ -201,9 +201,20 @@ class SystemPromptBuilder @Inject constructor(
             "ANDROID" -> "Android"
             "FLUTTER" -> "Flutter"
             "REVERSE" -> "Android APK 逆向"
+            "RED_TEAM" -> "红队演练"
             else -> "通用工程"
         }
-        val workspaceGuidance = workspaceParts?.guidance.orEmpty()
+        val workspaceGuidance = workspaceParts?.guidance
+            ?: if (projectType == "红队演练") {
+                // 红队演练的规约不依赖目录：目标绑定、事实写回、角色派活都是会话级动作，
+                // 未关联工作区时同样要注入，否则会话里没有工具用法与范围约束。
+                promptAssets.render(
+                    "prompts/workspace_redteam.md",
+                    mapOf("MARKER_TEXT" to "（未关联工作区）", "WORKSPACE_PATH" to "/root"),
+                )
+            } else {
+                ""
+            }
 
         val toolCallSection = when (toolCallMode) {
             ToolCallMode.JSON_TEXT -> promptAssets.render("prompts/tool_call_json.md")
@@ -551,6 +562,7 @@ class SystemPromptBuilder @Inject constructor(
             "Android" -> "prompts/workspace_android.md"
             "Flutter" -> "prompts/workspace_flutter.md"
             "Android APK 逆向" -> "prompts/workspace_reverse.md"
+            "红队演练" -> "prompts/workspace_redteam.md"
             else -> "prompts/workspace_general.md"
         }
         val typeGuidance = promptAssets.render(
@@ -580,6 +592,7 @@ class SystemPromptBuilder @Inject constructor(
             "ANDROID" -> "Android"
             "FLUTTER" -> "Flutter"
             "REVERSE" -> "Android APK 逆向"
+            "RED_TEAM" -> "红队演练"
             "GENERAL" -> "通用工程"
             else -> detected
         }

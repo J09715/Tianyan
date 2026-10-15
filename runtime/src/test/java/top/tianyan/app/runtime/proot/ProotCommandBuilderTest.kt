@@ -144,6 +144,42 @@ class ProotCommandBuilderTest {
         assertBinding(args, "$l2sBackingStore:$l2sBackingStore")
     }
 
+    @Test
+    fun rawTerminalSessionDisablesEchoInTheScriptFallback() {
+        val args = ProotCommandBuilder(EnvironmentResolver()).buildInteractive(
+            prootBinary = File("/p"),
+            rootfsDir = File("/r"),
+            workspaceDir = File("/w"),
+            config = SessionConfig(
+                commandLine = "exec /opt/tianyan/bin/claude-agent-acp",
+                allowSttyResize = false,
+                rawTerminal = true,
+            ),
+            ptyMarker = "/opt/tianyan/.pty-12345678",
+        )
+
+        // script 创建的 PTY 默认开 ECHO，协议会话必须显式关掉，否则宿主写出的
+        // JSON 帧被回显读回，握手会被自己的回显打成 -32601。
+        assert(args.last().contains("stty -echo -icanon -opost"))
+    }
+
+    @Test
+    fun interactiveTerminalKeepsEchoSoTypedInputIsVisible() {
+        val args = ProotCommandBuilder(EnvironmentResolver()).buildInteractive(
+            prootBinary = File("/p"),
+            rootfsDir = File("/r"),
+            workspaceDir = File("/w"),
+            config = SessionConfig(
+                commandLine = "/bin/bash -i",
+                allowSttyResize = false,
+                rawTerminal = false,
+            ),
+            ptyMarker = "/opt/tianyan/.pty-12345678",
+        )
+
+        assert(!args.last().contains("stty -echo"))
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun rejectsUnsafePtyMarker() {
         ProotCommandBuilder(EnvironmentResolver()).buildInteractive(

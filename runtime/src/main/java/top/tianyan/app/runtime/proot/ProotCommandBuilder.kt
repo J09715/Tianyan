@@ -150,6 +150,9 @@ class ProotCommandBuilder private constructor(
                 require(PTY_MARKER.matches(it)) { "PTY marker path is invalid" }
             }
             val markerPrelude = marker?.let { "tty > $it; " }.orEmpty()
+            // raw 协议会话：script 创建的 PTY 同样默认开 ECHO，不关掉就会回显
+            // 宿主写出的 JSON 帧，读循环把回显当成引擎反向请求（握手 -32601）。
+            val echoPrelude = if (config.rawTerminal) "stty -echo -icanon -opost; " else ""
             // fallback：整条命令会被塞进 script -qfec '...' 的单引号里，再由 script 内层
             // shell 解析，需要 '\'' 双层转义。
             val scriptEmbed = config.commandLine.replace("'", "'\\''")
@@ -158,7 +161,8 @@ class ProotCommandBuilder private constructor(
                     commandLine =
                         bannerPrelude +
                             "if command -v script >/dev/null 2>&1; then " +
-                            "exec script -qfec '$markerPrelude stty cols $columns rows $rows; " +
+                            "exec script -qfec '$markerPrelude $echoPrelude" +
+                            "stty cols $columns rows $rows; " +
                             "$scriptEmbed' /dev/null; " +
                             "else ${config.commandLine}; fi",
                     environment = environment,

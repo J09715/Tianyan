@@ -14,9 +14,37 @@
 #include <string.h>
 #include <signal.h>
 #include <errno.h>
+#include <termios.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+
+/*
+ * openpty() 的 termios 参数传 NULL 会走系统默认行规程——ECHO 打开。
+ * 对交互终端这是对的（用户要看见自己敲的字），但对 ACP / MCP STDIO 这类
+ * 「按行分帧的 JSON 协议」是致命的：宿主写进 master 的请求帧会被 slave
+ * 原样回显读回，读循环把它误判成引擎主动发起的反向请求，于是回一条
+ * -32601，那条错误响应再被回显、id 命中挂起的请求，握手直接抛异常。
+ *
+ * 因此协议会话必须把 line discipline 关成 raw：宿主与引擎之间只有字节流，
+ * 不允许内核替任何一方做加工。
+ */
+static int configure_termios(int fd, jboolean raw_mode) {
+    if (!raw_mode) return 0;
+    struct termios tio;
+    if (tcgetattr(fd, &tio) == -1) return -1;
+    /* ECHO 系列回显 → 自己写的帧被读回；ICANON 行缓冲 → 不足一行的输出被拖住；
+       ISIG 把帧里的 0x03 当 SIGINT；IEXTEN 处理 Ctrl+V 等扩展序列。 */
+    tio.c_lflag &= ~(tcflag_t)(ECHO | ECHOE | ECHOK | ECHONL | ICANON | ISIG | IEXTEN);
+    /* IXON/IXOFF 软件流控会吞掉 0x11/0x13；ICRNL/INLCR/IGNCR 改写换行，
+       ISTRIP 砍掉第 8 位（UTF-8 直接废掉）；BRKINT 把 break 转成信号。 */
+    tio.c_iflag &= ~(tcflag_t)(IXON | IXOFF | ICRNL | INLCR | IGNCR | ISTRIP | BRKINT | INPCK);
+    /* OPOST 关掉，避免 \n 被改写成 \r\n —— 分帧按 \n 切，多一个 \r 会污染 JSON。 */
+    tio.c_oflag &= ~(tcflag_t)OPOST;
+    tio.c_cc[VMIN] = 1;
+    tio.c_cc[VTIME] = 0;
+    return tcsetattr(fd, TCSANOW, &tio);
+}
 
 static char **strings_array(JNIEnv *env, jobjectArray array) {
     if (array == NULL) return NULL;
@@ -46,19 +74,23 @@ static void throw_io(JNIEnv *env, const char *what) {
 }
 
 /*
- * argv/envp/cwd/columns/rows -> int[]{masterFd, childPid}
+ * argv/envp/cwd/columns/rows/rawMode -> int[]{masterFd, childPid}
  * The child becomes a session leader with the slave as controlling terminal.
+ * rawMode=true strips line discipline (ECHO/ICANON/ISIG...) for protocol
+ * sessions; interactive terminals keep the kernel default so typed input echoes.
  */
 JNIEXPORT jintArray JNICALL
 Java_top_tianyan_app_runtime_pty_NativePty_openAndExec(
     JNIEnv *env, jclass clazz,
     jobjectArray argv, jobjectArray envp, jstring cwd,
-    jint columns, jint rows) {
+    jint columns, jint rows, jboolean rawMode) {
     int master = -1, slave = -1;
     if (openpty(&master, &slave, NULL, NULL, NULL) == -1) {
         throw_io(env, "openpty failed");
         return NULL;
     }
+    /* 在 fork 之前配好，子进程继承；失败不致命，退回默认行规程。 */
+    configure_termios(slave, rawMode);
     struct winsize ws;
     memset(&ws, 0, sizeof(ws));
     ws.ws_col = (unsigned short)(columns > 0 ? columns : 80);

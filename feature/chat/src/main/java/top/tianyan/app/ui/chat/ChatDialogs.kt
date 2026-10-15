@@ -837,7 +837,7 @@ internal fun AddModelDialog(
 internal fun NewSessionDialog(
     workspaces: List<WorkspaceProject>,
     onDismiss: () -> Unit,
-    onCreate: (title: String, workspace: String, projectType: ProjectType, redTeamMode: String, agentId: String?) -> Unit,
+    onCreate: (title: String, workspace: String, projectType: ProjectType, agentId: String?) -> Unit,
     agents: List<top.tianyan.app.core.model.AgentSubagent> = emptyList(),
     engines: List<top.tianyan.app.harness.acp.AgentEngineProfile> = emptyList(),
 ) {
@@ -847,8 +847,10 @@ internal fun NewSessionDialog(
     var selected by rememberSaveable { mutableStateOf("") }
     var selectedTypeName by rememberSaveable { mutableStateOf(ProjectType.GENERAL.name) }
     val selectedType = ProjectType.valueOf(selectedTypeName)
-    var typeMenuExpanded by rememberSaveable { mutableStateOf(false) }
-    var redTeamMode by rememberSaveable { mutableStateOf(false) }
+    // 用户是否亲手点过工程类型。点过之后不再被工作区自动识别覆盖 ——
+    // 否则「先选红队演练、再关联一个 Android 工程」会把类型悄悄换回 Android，
+    // 建出来的会话与用户看到的不一致。
+    var typeExplicit by rememberSaveable { mutableStateOf(false) }
     // 智能体绑定：空串表示沿用默认天衍本体；记住的是 agent id，不是索引，
     // 这样列表在对话框打开期间变化（设置页增删）也不会错绑。
     var selectedAgentId by rememberSaveable { mutableStateOf("") }
@@ -864,30 +866,41 @@ internal fun NewSessionDialog(
     RuntimeAlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                RuntimeIcon(RuntimeIconName.Plus, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
-                Text(stringResource(R.string.chat_new_agent_session), fontWeight = FontWeight.Bold)
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    RuntimeIcon(RuntimeIconName.Plus, Modifier.size(18.dp), tint = LinearAccent)
+                    Text(
+                        stringResource(R.string.chat_new_agent_session),
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                }
+                Text(
+                    "会话建立后工程类型与智能体固定，用于确定工具集与提示词分层",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = LinearMuted,
+                )
             }
         },
         text = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 460.dp)
+                    .heightIn(max = 470.dp)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                Text(stringResource(R.string.chat_session_title), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                LinearFieldLabel(stringResource(R.string.chat_session_title))
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
                     placeholder = { Text(stringResource(R.string.chat_session_name_hint)) },
                     singleLine = true,
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(6.dp),
                     modifier = Modifier.fillMaxWidth(),
                 )
 
-                // 快捷预设标题标签
+                // 快捷预设标题标签：Linear 的 Pill —— 透明底 + 细边框，选中才上色。
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -895,111 +908,135 @@ internal fun NewSessionDialog(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     quickTags.forEach { tag ->
+                        val active = title == tag
                         Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = if (title == tag) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceContainerHigh,
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                if (title == tag) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f) else Color.Transparent,
-                            ),
+                            shape = RoundedCornerShape(999.dp),
+                            color = if (active) LinearAccent.copy(alpha = 0.16f) else Color.Transparent,
+                            border = BorderStroke(1.dp, if (active) LinearAccent.copy(alpha = 0.55f) else LinearBorder),
                             modifier = Modifier.clickable { title = tag },
                         ) {
                             Text(
                                 tag,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = if (title == tag) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                color = if (active) LinearAccent else LinearSecondary,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                             )
                         }
                     }
                 }
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                HorizontalDivider(color = LinearBorder)
 
-                Text(
-                    stringResource(R.string.chat_link_workspace),
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 180.dp)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
+                LinearFieldLabel(stringResource(R.string.chat_link_workspace))
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     WorkspaceOption(stringResource(R.string.chat_no_workspace), "/root", selected == "", onSelect = {
                         selected = ""
-                        selectedTypeName = ProjectType.GENERAL.name
+                        if (!typeExplicit) selectedTypeName = ProjectType.GENERAL.name
                     })
                     workspaces.forEach { ws ->
                         WorkspaceOption(ws.name, ws.linuxPath, selected == ws.linuxPath) {
                             selected = ws.linuxPath
-                            selectedTypeName = ws.projectType.name
+                            if (!typeExplicit) selectedTypeName = ws.projectType.name
                         }
                     }
                 }
 
+                HorizontalDivider(color = LinearBorder)
+
+                // 工程类型即模式：红队演练是列表里的一项，而不是另挂一个开关。
+                // 一个会话只能有一种类型，界面上不可能选出「红队 + 通用」这种矛盾组合。
                 val selectedProject = workspaces.firstOrNull { it.linuxPath == selected }
-                // Keep the detected type as the default, but allow an imported
-                // repository to be assigned to a different specialist Agent.
-                Text(
-                    if (selectedProject == null || selectedProject.projectType == ProjectType.GENERAL) {
-                        stringResource(R.string.chat_project_type_manual)
-                    } else {
-                        stringResource(R.string.chat_project_type_detected)
-                    },
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Box {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    LinearFieldLabel(stringResource(R.string.chat_agent_project_type))
+                    Text(
+                        if (selectedProject == null || selectedProject.projectType == ProjectType.GENERAL) {
+                            stringResource(R.string.chat_project_type_manual)
+                        } else {
+                            stringResource(R.string.chat_project_type_detected)
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = LinearMuted,
+                    )
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    ProjectTypeOptions.chunked(2).forEach { rowTypes ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            rowTypes.forEach { option ->
+                                val active = selectedType == option.type
+                                Surface(
+                                    color = if (active) option.accent.copy(alpha = 0.14f) else LinearSurface,
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = BorderStroke(1.dp, if (active) option.accent.copy(alpha = 0.6f) else LinearBorder),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable {
+                                            selectedTypeName = option.type.name
+                                            typeExplicit = true
+                                        },
+                                ) {
+                                    Row(
+                                        Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 9.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        RuntimeIcon(
+                                            option.icon,
+                                            Modifier.size(18.dp),
+                                            tint = if (active) option.accent else LinearMuted,
+                                        )
+                                        Column(Modifier.weight(1f)) {
+                                            Text(
+                                                option.title,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.Medium,
+                                                color = if (active) MaterialTheme.colorScheme.onSurface else LinearSecondary,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                            Text(
+                                                option.hint,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = LinearMuted,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        }
+                                        if (active) {
+                                            RuntimeIcon(RuntimeIconName.Check, Modifier.size(14.dp), tint = option.accent)
+                                        }
+                                    }
+                                }
+                            }
+                            repeat(2 - rowTypes.size) { Spacer(Modifier.weight(1f)) }
+                        }
+                    }
+                }
+                if (selectedType == ProjectType.RED_TEAM) {
                     Surface(
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        color = LinearDanger.copy(alpha = 0.10f),
                         shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.fillMaxWidth().clickable { typeMenuExpanded = true },
+                        border = BorderStroke(1.dp, LinearDanger.copy(alpha = 0.35f)),
                     ) {
                         Row(
-                            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 9.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.Top,
                         ) {
+                            RuntimeIcon(RuntimeIconName.Shield, Modifier.size(16.dp), tint = LinearDanger)
                             Text(
-                                selectedType.displayName,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                            Text(stringResource(R.string.chat_select), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
-                        }
-                    }
-                    DropdownMenu(expanded = typeMenuExpanded, onDismissRequest = { typeMenuExpanded = false }) {
-                        ProjectType.entries.forEach { type ->
-                            DropdownMenuItem(
-                                text = { Text(type.displayName) },
-                                onClick = {
-                                    selectedTypeName = type.name
-                                    typeMenuExpanded = false
-                                },
+                                "红队演练会话：建立后需在会话内绑定目标与授权范围，所有探测动作受该范围约束；" +
+                                    "目标与事实只属于本会话，其他会话不可见。",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = LinearSecondary,
                             )
                         }
                     }
                 }
 
-                Surface(
-                    color = if (redTeamMode) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f) else MaterialTheme.colorScheme.surfaceContainerHigh,
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.fillMaxWidth().clickable { redTeamMode = !redTeamMode },
-                ) {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        RuntimeIcon(RuntimeIconName.Shield, Modifier.size(20.dp), tint = if (redTeamMode) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
-                        Column(Modifier.weight(1f)) {
-                            Text("红队模式", fontWeight = FontWeight.SemiBold)
-                            Text("在当前会话内绑定目标并同步作战状态", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        androidx.compose.material3.Switch(checked = redTeamMode, onCheckedChange = { redTeamMode = it })
-                    }
-                }
-
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                HorizontalDivider(color = LinearBorder)
 
                 AgentPicker(
                     agents = agents,
@@ -1021,11 +1058,10 @@ internal fun NewSessionDialog(
                         title.ifBlank { defaultTitle },
                         selected,
                         selectedType,
-                        if (redTeamMode) "red_team" else "off",
                         selectedAgentId.takeIf { it.isNotBlank() },
                     )
                 },
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(6.dp),
             ) {
                 Text(stringResource(R.string.chat_create_session))
             }
@@ -1035,6 +1071,43 @@ internal fun NewSessionDialog(
         },
     )
 }
+
+// ── Linear 设计令牌 ───────────────────────────────────────────────────────────
+// 深色原生：面板 #0f1011、抬升表面 #191a1b、半透明细边框，唯一彩色是靛紫强调。
+// 这里不引 MaterialTheme 的容器色，因为对话框自带玻璃背板，语义色叠上去会发灰。
+private val LinearAccent = Color(0xFF7170FF)
+private val LinearDanger = Color(0xFFB3261E)
+private val LinearBorder = Color(0x14FFFFFF)
+private val LinearSurface = Color(0x0AFFFFFF)
+private val LinearSecondary = Color(0xFFD0D6E0)
+private val LinearMuted = Color(0xFF8A8F98)
+
+@Composable
+private fun LinearFieldLabel(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.Medium,
+        color = LinearSecondary,
+    )
+}
+
+private data class ProjectTypeOption(
+    val type: ProjectType,
+    val title: String,
+    val hint: String,
+    val icon: RuntimeIconName,
+    val accent: Color,
+)
+
+/** 工程类型清单：红队演练与 Android / Flutter / 逆向并列，是同一层的选择。 */
+private val ProjectTypeOptions = listOf(
+    ProjectTypeOption(ProjectType.ANDROID, "Android", "Gradle 构建与安装", RuntimeIconName.Android, Color(0xFF2E7D32)),
+    ProjectTypeOption(ProjectType.FLUTTER, "Flutter", "Flutter 构建与安装", RuntimeIconName.Flutter, Color(0xFF0288D1)),
+    ProjectTypeOption(ProjectType.REVERSE, "APK 逆向", "jadx / apktool 分析", RuntimeIconName.Reverse, Color(0xFF6A1B9A)),
+    ProjectTypeOption(ProjectType.RED_TEAM, "红队演练", "绑定目标与作战状态", RuntimeIconName.Shield, Color(0xFFB3261E)),
+    ProjectTypeOption(ProjectType.GENERAL, "通用", "自定义命令与脚本", RuntimeIconName.Code, Color(0xFF7170FF)),
+)
 
 /**
  * 新建会话的智能体选择器。
@@ -1259,12 +1332,12 @@ internal fun WorkspaceOption(name: String, path: String, selected: Boolean, onSe
             .fillMaxWidth()
             .clickable(onClick = onSelect)
             .background(
-                if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceContainerLow,
+                if (selected) LinearAccent.copy(alpha = 0.10f) else LinearSurface,
                 RoundedCornerShape(8.dp),
             )
             .border(
                 1.dp,
-                if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outlineVariant,
+                if (selected) LinearAccent.copy(alpha = 0.55f) else LinearBorder,
                 RoundedCornerShape(8.dp),
             )
             .padding(10.dp),
@@ -1273,13 +1346,18 @@ internal fun WorkspaceOption(name: String, path: String, selected: Boolean, onSe
     ) {
         Box(
             Modifier.size(12.dp).clip(CircleShape).background(
-                if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                if (selected) LinearAccent else LinearMuted,
             ),
         )
         Column {
-            Text(name.ifBlank { path }, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal))
+            Text(
+                name.ifBlank { path },
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+                color = if (selected) MaterialTheme.colorScheme.onSurface else LinearSecondary,
+            )
             if (path.isNotBlank()) {
-                Text(path, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(path, style = MaterialTheme.typography.labelSmall, color = LinearMuted)
             }
         }
     }

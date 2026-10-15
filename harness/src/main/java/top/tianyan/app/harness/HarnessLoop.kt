@@ -5,7 +5,9 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import top.tianyan.app.core.common.logging.AppLogger
 import top.tianyan.app.core.database.HarnessSessionRepository
 import top.tianyan.app.core.database.HarnessSessionEntity
+import top.tianyan.app.core.model.RedTeamMode
 import top.tianyan.app.core.model.SessionRunState
+import top.tianyan.app.runtime.ProjectType
 import top.tianyan.app.harness.mcp.McpToolApiName
 import java.io.IOException
 import java.util.UUID
@@ -283,16 +285,22 @@ class HarnessLoop @Inject constructor(
             cancellingSessions.contains(sessId) ||
             stateMirrors.isWaitingApproval(sessId)
 
-    /** 新建会话。workspace 为关联的工作区 Linux 路径（如 /workspace/proj），空串表示不关联。 */
+    /**
+     * 新建会话。workspace 为关联的工作区 Linux 路径（如 /workspace/proj），空串表示不关联。
+     *
+     * 红队模式不再由独立参数传入：工程类型 [projectType] 就是模式的唯一来源，
+     * 传 `RED_TEAM` 即落库为红队会话（redTeamMode = "red_team"）。
+     * 两条路径并存时会出现「类型说通用、开关说红队」的自相矛盾会话，这里从根上排除。
+     */
     suspend fun newSession(
         title: String,
         workspace: String = "",
         projectType: String = "",
-        redTeamMode: String = "off",
         agentId: String? = null,
     ): String {
         val id = UUID.randomUUID().toString()
         val defaultModel = modelRepository.activeModel()
+        val isRedTeam = projectType.trim().equals(ProjectType.RED_TEAM.name, ignoreCase = true)
         foregroundLoadGeneration.incrementAndGet()
         tombstonedSessions.remove(id)
         sessionTracker.setCurrent(id)
@@ -310,7 +318,7 @@ class HarnessLoop @Inject constructor(
                 workspace = workspace,
                 projectType = projectType,
                 approvalMode = approvalRepository.currentMode().id,
-                redTeamMode = redTeamMode,
+                redTeamMode = if (isRedTeam) RedTeamMode.RED_TEAM.id else RedTeamMode.OFF.id,
             ),
         )
         messageProjector.seedEmpty(id)

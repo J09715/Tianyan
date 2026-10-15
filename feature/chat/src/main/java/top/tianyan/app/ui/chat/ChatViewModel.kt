@@ -2291,12 +2291,11 @@ class ChatViewModel @Inject constructor(
 
     fun clearError() = harnessLoop.clearError()
 
-    /** 新建会话（支持自定义标题并关联工作区）。 */
+    /** 新建会话（支持自定义标题并关联工作区）。红队会话由 projectType = RED_TEAM 决定。 */
     fun createSession(
         title: String = "",
         workspace: String = "",
         projectType: String = "",
-        redTeamMode: String = "off",
         agentId: String? = null,
     ) {
         viewModelScope.launch {
@@ -2304,7 +2303,6 @@ class ChatViewModel @Inject constructor(
                 title.trim().ifBlank { context.getString(R.string.chat_new_session) },
                 workspace,
                 projectType,
-                redTeamMode,
                 agentId,
             )
         }

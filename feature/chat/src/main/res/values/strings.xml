@@ -130,8 +130,9 @@
     <string name="chat_session_name_hint">输入会话名称…</string>
     <string name="chat_link_workspace">关联工作区工程（Agent 工具将默认在该目录执行）：</string>
     <string name="chat_no_workspace">不关联工作区（纯对话与全局 Linux）</string>
-    <string name="chat_project_type_manual">Agent 工程类型（需要手动选择）</string>
-    <string name="chat_project_type_detected">Agent 工程类型（已自动识别，可修改）</string>
+    <string name="chat_project_type_manual">需要手动选择</string>
+    <string name="chat_project_type_detected">已自动识别，可修改</string>
+    <string name="chat_agent_project_type">Agent 工程类型</string>
     <string name="chat_select">选择</string>
     <string name="chat_create_session">创建并开启会话</string>
     <string name="chat_no_arguments">(无参数)</string>

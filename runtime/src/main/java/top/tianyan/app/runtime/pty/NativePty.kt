@@ -21,6 +21,7 @@ internal object NativePty {
         cwd: String,
         columns: Int,
         rows: Int,
+        rawMode: Boolean,
     ): IntArray
 
     external fun readFd(fd: Int, buffer: ByteArray): Int

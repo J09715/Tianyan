@@ -100,6 +100,9 @@ class AcpEngineConnection(
     private val writeMutex = Mutex()
     private val inboundQueue: Channel<JsonObject> = Channel(capacity = FRAME_BUFFER)
 
+    /** 回显防线：识别「自己写出去又被 PTY 回显读回」的帧，见 [FrameEchoGuard]。 */
+    private val echoGuard = top.tianyan.app.runtime.pty.FrameEchoGuard()
+
     @Volatile
     private var closed = false
 
@@ -126,7 +129,9 @@ class AcpEngineConnection(
                     if (newline < 0) break
                     val line = buffer.toString().trim()
                     buffer.setLength(0)
-                    if (line.isNotEmpty()) dispatchFrame(line)
+                    // 行规程回显防线：PTY 若没关成 raw，这里读到的是我们自己刚写出的帧。
+                    // 不吞掉就会把宿主请求误判成引擎反向请求，回 -32601 打穿握手。
+                    if (line.isNotEmpty() && !echoGuard.isEcho(line)) dispatchFrame(line)
                     start = newline + 1
                 }
                 if (buffer.length > maxFrameChars) {
@@ -314,6 +319,7 @@ class AcpEngineConnection(
 
     private suspend fun writeFrame(payload: String) = writeMutex.withLock {
         if (!isAlive) error("ACP 引擎进程不可用（$engineId）")
+        echoGuard.record(payload)
         session.write((payload + "\n").toByteArray(Charsets.UTF_8))
     }
 
@@ -364,6 +370,9 @@ class AcpEngineConnectionFactory @Inject constructor(
                 commandLine = AcpCommandBuilder.commandLine(profile),
                 allowSttyResize = false,
                 showBanner = false,
+                // 按行分帧的 JSON-RPC：PTY 行规程的回显会把宿主请求帧读回来，
+                // 读循环误判成引擎反向请求，initialize 直接回 -32601。必须 raw。
+                rawTerminal = true,
             ),
         )
         return AcpEngineConnection(

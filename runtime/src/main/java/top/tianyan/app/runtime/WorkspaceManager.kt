@@ -37,6 +37,7 @@ enum class ProjectType {
     ANDROID,
     FLUTTER,
     REVERSE,
+    RED_TEAM,
     GENERAL;
 
     val displayName: String
@@ -44,8 +45,18 @@ enum class ProjectType {
             ANDROID -> "Android"
             FLUTTER -> "Flutter"
             REVERSE -> "APK 逆向"
+            RED_TEAM -> "红队演练"
             GENERAL -> "通用"
         }
+
+    /**
+     * 会话是否需要红队工作区（目标绑定、事实图谱、作战面板）。
+     *
+     * 这是红队模式唯一的事实来源：工程类型即模式。过去它由一个独立的
+     * 布尔开关承载，同一个会话存在两条互相矛盾的路径（类型说通用、开关说红队），
+     * 现在只剩一个字段，界面上也就不可能选出「红队 + 通用工程」这种组合。
+     */
+    val isRedTeam: Boolean get() = this == RED_TEAM
 }
 
 enum class ProjectImportSource {
@@ -586,6 +597,7 @@ class WorkspaceManager @Inject constructor(
                     val info = File(directory, "apk-info.properties").takeIf { it.exists() }?.readText().orEmpty()
                     APK_PACKAGE_REGEX.find(info)?.groupValues?.get(1)?.trim() ?: ""
                 }
+                ProjectType.RED_TEAM -> ""
                 ProjectType.GENERAL -> ""
             }
         }.getOrDefault("")

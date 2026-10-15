@@ -1232,6 +1232,29 @@ class RedTeamCoordinatorTest {
         pairs.forEach { (key, value) -> put(key, value) }
     }
 
+    /**
+     * 红队模式唯一来源是工程类型：`ProjectType.RED_TEAM` 与 `redTeamMode = "red_team"` 必须同步，
+     * 否则界面按类型显示红队、工具层按模式判定未启用，会话会陷入「看着是红队但派不动活」。
+     */
+    @Test
+    fun redTeamProjectTypeIsTheSingleSourceOfMode() {
+        assertEquals("red_team", top.tianyan.app.runtime.ProjectType.RED_TEAM.name.lowercase())
+        assertTrue(top.tianyan.app.runtime.ProjectType.RED_TEAM.isRedTeam)
+        assertFalse(top.tianyan.app.runtime.ProjectType.GENERAL.isRedTeam)
+        assertFalse(top.tianyan.app.runtime.ProjectType.ANDROID.isRedTeam)
+        assertFalse(top.tianyan.app.runtime.ProjectType.FLUTTER.isRedTeam)
+        assertFalse(top.tianyan.app.runtime.ProjectType.REVERSE.isRedTeam)
+    }
+
+    /** 每个工程类型都要有展示名：漏一个会在工作区卡片上显示成枚举常量。 */
+    @Test
+    fun everyProjectTypeHasDisplayName() {
+        top.tianyan.app.runtime.ProjectType.entries.forEach { type ->
+            assertTrue("blank display name for $type", type.displayName.isNotBlank())
+        }
+        assertEquals(5, top.tianyan.app.runtime.ProjectType.entries.size)
+    }
+
     private fun session(id: String, redTeam: Boolean, target: String? = null, scope: String = "") = HarnessSessionEntity(
         id = id,
         title = id,

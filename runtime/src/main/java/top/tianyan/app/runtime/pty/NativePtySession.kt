@@ -36,6 +36,7 @@ class NativePtySession(
         "/",
         config.columns,
         config.rows,
+        config.rawTerminal,
     )
     private val masterFd: Int = pair[0]
     private val childPid: Int = pair[1]

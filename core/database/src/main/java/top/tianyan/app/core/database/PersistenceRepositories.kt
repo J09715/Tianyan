@@ -305,6 +305,16 @@ class RoomQuickPhraseRepository @Inject constructor(
     override suspend fun ensureInitialized() {
         if (dao.count() == 0) {
             dao.upsertAll(defaultQuickPhrases.map { QuickPhraseEntity.fromDomain(it) })
+            return
+        }
+        // 老库升级路径：count() != 0 时上面这条分支永远不会走，于是新增的内置短语
+        // （如红队演练那几条）对已装用户永久缺席——用户在设置页看得到分类却一条都没有。
+        // 这里只补插「缺失的内置 id」，已存在的行一律不碰：用户可能改过内容或禁用过，
+        // 用 upsert 全量刷会把他们的改动冲掉。
+        val existing = dao.getAll().mapTo(mutableSetOf()) { it.id }
+        val missing = defaultQuickPhrases.filter { it.id !in existing }
+        if (missing.isNotEmpty()) {
+            dao.upsertAll(missing.map { QuickPhraseEntity.fromDomain(it) })
         }
     }
 
@@ -462,6 +472,50 @@ class RoomQuickPhraseRepository @Inject constructor(
                 targetProjectType = "REVERSE",
                 isEnabled = true,
                 sortOrder = 31,
+                isBuiltin = true,
+            ),
+            QuickPhrase(
+                id = "builtin_redteam_preflight",
+                title = "红队环境体检",
+                content = "请调用 redteam 工具的 preflight，列出工具箱与技能的缺失项和对应修复命令；体检通过前不要开始任何主动探测。",
+                description = "检查工具箱与技能就绪度，给出修复指引",
+                iconName = "Shield",
+                targetProjectType = "RED_TEAM",
+                isEnabled = true,
+                sortOrder = 40,
+                isBuiltin = true,
+            ),
+            QuickPhrase(
+                id = "builtin_redteam_recon",
+                title = "信息收集",
+                content = "请先 session_info 确认当前绑定的目标与授权范围，再用 base 做被动与轻量主动信息收集，把发现的资产与指纹用 redteam 工具的 asset_add 写回当前会话。",
+                description = "确认范围后收集资产并写回会话事实",
+                iconName = "Search",
+                targetProjectType = "RED_TEAM",
+                isEnabled = true,
+                sortOrder = 41,
+                isBuiltin = true,
+            ),
+            QuickPhrase(
+                id = "builtin_redteam_dispatch",
+                title = "派发角色作业",
+                content = "请用 redteam 工具的 role_dispatch 取角色任务书，再通过 invoke_subagent 派发（department 选 security 或 specialized）；返回后记得 agent_slot release，产出必须落成会话事实。",
+                description = "按角色并行派活，产出写回事实",
+                iconName = "Sponsor",
+                targetProjectType = "RED_TEAM",
+                isEnabled = true,
+                sortOrder = 42,
+                isBuiltin = true,
+            ),
+            QuickPhrase(
+                id = "builtin_redteam_report",
+                title = "生成演练报告",
+                content = "请用 redteam 工具的 report 汇总当前会话事实生成演练报告，结论必须来自事实库，未验证的项要标注为待验证而不是结论。",
+                description = "汇总会话事实生成报告",
+                iconName = "Document",
+                targetProjectType = "RED_TEAM",
+                isEnabled = true,
+                sortOrder = 43,
                 isBuiltin = true,
             ),
         )

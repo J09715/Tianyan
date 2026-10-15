@@ -115,8 +115,9 @@
     <string name="chat_session_name_hint">Enter a session name…</string>
     <string name="chat_link_workspace">Linked workspace (agent tools run here by default):</string>
     <string name="chat_no_workspace">No workspace (chat and global Linux only)</string>
-    <string name="chat_project_type_manual">Agent project type (select manually)</string>
-    <string name="chat_project_type_detected">Agent project type (detected automatically; editable)</string>
+    <string name="chat_project_type_manual">Select manually</string>
+    <string name="chat_project_type_detected">Detected automatically; editable</string>
+    <string name="chat_agent_project_type">Agent project type</string>
     <string name="chat_select">Select</string>
     <string name="chat_create_session">Create session</string>
     <string name="chat_no_arguments">(no arguments)</string>

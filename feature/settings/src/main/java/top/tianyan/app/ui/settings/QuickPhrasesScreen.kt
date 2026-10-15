@@ -87,6 +87,7 @@ fun QuickPhrasesScreen(
         "ANDROID" to "Android",
         "FLUTTER" to "Flutter",
         "REVERSE" to "逆向分析",
+        "RED_TEAM" to "红队演练",
     )
 
     val filteredPhrases = remember(phrases, selectedFilter) {
@@ -96,6 +97,7 @@ fun QuickPhrasesScreen(
             "ANDROID" -> phrases.filter { it.targetProjectType == "ANDROID" }
             "FLUTTER" -> phrases.filter { it.targetProjectType == "FLUTTER" }
             "REVERSE" -> phrases.filter { it.targetProjectType == "REVERSE" }
+            "RED_TEAM" -> phrases.filter { it.targetProjectType == "RED_TEAM" }
             else -> phrases
         }
     }
@@ -343,6 +345,7 @@ private fun QuickPhraseCard(
                             "ANDROID" -> "Android"
                             "FLUTTER" -> "Flutter"
                             "REVERSE" -> "逆向分析"
+                            "RED_TEAM" -> "红队演练"
                             else -> "通用"
                         }
                         Surface(
@@ -492,6 +495,10 @@ private fun QuickPhraseEditorDialog(
         "Refresh" to RuntimeIconName.Refresh,
         "Terminal" to RuntimeIconName.Terminal,
         "Tool" to RuntimeIconName.Wrench,
+        // 红队演练预设用到的三个图标，不在列表里的话用户改完就选不回来。
+        "Shield" to RuntimeIconName.Shield,
+        "Document" to RuntimeIconName.Document,
+        "Sponsor" to RuntimeIconName.Sponsor,
     )
 
     val projectTypeOptions = listOf(
@@ -499,6 +506,7 @@ private fun QuickPhraseEditorDialog(
         "ANDROID" to "Android 工程专属",
         "FLUTTER" to "Flutter 工程专属",
         "REVERSE" to "逆向分析专属",
+        "RED_TEAM" to "红队演练专属",
     )
 
     RuntimeAlertDialog(

@@ -284,6 +284,7 @@ fun ChatScreen(
             "ANDROID" -> ProjectType.ANDROID
             "FLUTTER" -> ProjectType.FLUTTER
             "REVERSE" -> ProjectType.REVERSE
+            "RED_TEAM" -> ProjectType.RED_TEAM
             "GENERAL" -> ProjectType.GENERAL
             else -> null
         }
@@ -494,7 +495,10 @@ fun ChatScreen(
                     onOpenGit = { viewModel.refreshGitStatus(); showGitPanel = true },
                     gitUncommittedCount = gitUncommittedCount,
                     onOpenLogs = onOpenLogs,
-                    onOpenRedTeam = if (currentSession?.redTeamMode == top.tianyan.app.core.model.RedTeamMode.RED_TEAM.id) {
+                    onOpenRedTeam = if (
+                        currentSession?.redTeamMode == top.tianyan.app.core.model.RedTeamMode.RED_TEAM.id ||
+                        currentSession?.projectType.equals("RED_TEAM", ignoreCase = true)
+                    ) {
                         { viewModel.openRedTeamConsole(); showRedTeamConsole = true }
                     } else {
                         null
@@ -935,13 +939,12 @@ fun ChatScreen(
             agents = availableAgents,
             engines = availableEngines,
             onDismiss = { showNewSession = false },
-            onCreate = { title, selected, selectedType, redTeamMode, agentId ->
+            onCreate = { title, selected, selectedType, agentId ->
                 showNewSession = false
                 viewModel.createSession(
                     title = title,
                     workspace = selected,
                     projectType = selectedType.name,
-                    redTeamMode = redTeamMode,
                     agentId = agentId,
                 )
             },

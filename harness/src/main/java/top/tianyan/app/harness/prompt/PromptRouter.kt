@@ -40,7 +40,7 @@ class PromptRouter @Inject constructor(
      * 根据当前任务上下文选择本轮需要注入的 L2 规则块（不含常驻块）。
      *
      * @param latestUserMessage 最新一条用户消息文本（用于启发式判断）
-     * @param projectType 检测到的项目类型（Android / Flutter / Android APK 逆向 / 通用工程）
+     * @param projectType 检测到的项目类型（Android / Flutter / Android APK 逆向 / 红队演练 / 通用工程）
      * @param hasWorkspace 是否关联了工作区
      * @param activePlanExists 当前是否已有进行中的 plan
      */
@@ -57,6 +57,12 @@ class PromptRouter @Inject constructor(
         val codeProject = projectType == "Android" || projectType == "Flutter" || projectType == "Android APK 逆向"
         if (codeProject || (hasWorkspace && CODE_SIGNALS.any { it in text })) {
             blocks.add(RuleBlock.CODE_NAVIGATION)
+        }
+
+        // 红队演练常驻注入风险操作确认：演练里不可逆动作密度最高，
+        // 不能指望用户消息里恰好出现「删除」这类信号词才把规则挂上。
+        if (projectType == "红队演练") {
+            blocks.add(RuleBlock.SECURITY)
         }
 
         // 复杂任务信号或已有活动 plan 时注入工作流规则。

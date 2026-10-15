@@ -35,6 +35,8 @@ class LinuxMcpStdioChannelFactory @Inject constructor(
                 environment = server.env,
                 commandLine = commandBuilder.commandLine(server),
                 allowSttyResize = false,
+                // 同 ACP：MCP STDIO 也是按行分帧的 JSON 协议，PTY 回显会污染读流。
+                rawTerminal = true,
             ),
         )
         return LinuxMcpStdioChannel(server.id, session)
@@ -55,6 +57,9 @@ class LinuxMcpStdioChannel(
     override val incoming: ReceiveChannel<String> = lines
     override val isAlive: Boolean get() = session.isAlive
 
+    /** 回显防线：PTY 未关成 raw 时，宿主写出的请求帧会被行规程回显读回。 */
+    private val echoGuard = top.tianyan.app.runtime.pty.FrameEchoGuard()
+
     init {
         scope.launch {
             val buf = StringBuilder()
@@ -73,7 +78,9 @@ class LinuxMcpStdioChannel(
                         if (newline < 0) break
                         val line = buf.toString().trim()
                         buf.clear()
-                        if (line.startsWith("{")) lines.send(line)
+                        // 只把引擎的响应帧交给上层；自己的回显必须丢掉，否则 MCP 客户端
+                        // 会把自己发出的请求当成服务端回包解析。
+                        if (line.startsWith("{") && !echoGuard.isEcho(line)) lines.send(line)
                         start = newline + 1
                     }
                 }
@@ -85,7 +92,10 @@ class LinuxMcpStdioChannel(
         }
     }
 
-    override suspend fun writeLine(line: String) = session.write((line + "\n").toByteArray(Charsets.UTF_8))
+    override suspend fun writeLine(line: String) {
+        echoGuard.record(line)
+        session.write((line + "\n").toByteArray(Charsets.UTF_8))
+    }
 
     override suspend fun close() {
         runCatching { session.close() }
