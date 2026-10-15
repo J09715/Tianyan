@@ -33,16 +33,46 @@ jobs:
 
       - name: Install NDK 30.0.15729638 & CMake 3.22.1
         run: |
-          set -euo pipefail
+          set -uo pipefail
           SDKMGR="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SDKMGR" ] || SDKMGR="$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager"
           [ -x "$SDKMGR" ] || SDKMGR="$ANDROID_HOME/tools/bin/sdkmanager"
+          [ -x "$SDKMGR" ] || { echo "::error::找不到 sdkmanager"; ls "$ANDROID_HOME"; exit 1; }
+          echo "sdkmanager: $SDKMGR"
           yes | "$SDKMGR" --licenses >/dev/null 2>&1 || true
-          # 不接 `| tail -1`：管道会把退出码换成 tail 的 0，sdkmanager 装失败时
-          # 这一步照样绿，问题被推迟到下一步、且现场什么都没留下。这里保留全量输出。
-          "$SDKMGR" --install "ndk;30.0.15729638" "cmake;3.22.1" "platforms;android-37" "build-tools;37.0.0"
-          ls -d "$ANDROID_HOME/ndk/30.0.15729638" || {
-            echo "::error::NDK 30.0.15729638 安装后目录不存在"; exit 1
+
+          # 逐个安装，而不是一条命令塞四个包：
+          #  · 一条命令里任意一个包找不到，sdkmanager 整体返回 1，日志里却分不清是哪个；
+          #  · 管道 `| tail -1` 还会把退出码换成 tail 的 0，失败彻底静默——
+          #    上一轮 tag 构建就是这样：这一步「绿」了，NDK 其实没装上，
+          #    问题被推迟到重建 .so 时才以「clang 不存在」的形式炸出来。
+          # 这里把必需项与可选（runner 镜像通常预装）分开，失败一律留下原始输出。
+          install_pkg() {
+            local pkg="$1" required="$2" log
+            log="$(mktemp)"
+            if "$SDKMGR" --install "$pkg" >"$log" 2>&1; then
+              echo "OK   $pkg"
+            else
+              echo "---- $pkg 安装失败 ----"
+              tail -20 "$log"
+              if [ "$required" = "required" ]; then
+                echo "::error::$pkg 安装失败"; return 1
+              fi
+              echo "::warning::$pkg 安装失败（可能已由 runner 镜像预装，交由 Gradle 处理）"
+            fi
           }
+          install_pkg "ndk;30.0.15729638" required || exit 1
+          install_pkg "cmake;3.22.1" optional
+          install_pkg "platforms;android-37" optional
+          install_pkg "build-tools;37.0.0" optional
+
+          NDK="$ANDROID_HOME/ndk/30.0.15729638"
+          if [ ! -x "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang" ]; then
+            echo "::error::NDK 30.0.15729638 不可用"
+            ls "$ANDROID_HOME/ndk" 2>/dev/null || true
+            exit 1
+          fi
+          echo "NDK 就绪: $NDK"
 
       - name: Prepare PRoot ARM64 runtime
         run: |
