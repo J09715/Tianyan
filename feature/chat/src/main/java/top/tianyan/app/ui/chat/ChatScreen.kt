@@ -174,6 +174,7 @@ fun ChatScreen(
     val thinkingExpanded by viewModel.thinkingExpanded.collectAsStateWithLifecycle()
     val sessions by viewModel.sessions.collectAsStateWithLifecycle()
     val availableAgents by viewModel.availableAgents.collectAsStateWithLifecycle()
+    val availableEngines by viewModel.availableEngines.collectAsStateWithLifecycle()
     val workspaces by viewModel.workspaces.collectAsStateWithLifecycle()
     val models by viewModel.models.collectAsStateWithLifecycle()
     val providerModelIds by viewModel.providerModelIds.collectAsStateWithLifecycle()
@@ -932,6 +933,7 @@ fun ChatScreen(
         NewSessionDialog(
             workspaces = workspaces,
             agents = availableAgents,
+            engines = availableEngines,
             onDismiss = { showNewSession = false },
             onCreate = { title, selected, selectedType, redTeamMode, agentId ->
                 showNewSession = false

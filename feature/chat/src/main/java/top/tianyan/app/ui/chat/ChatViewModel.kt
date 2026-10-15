@@ -129,6 +129,7 @@ class ChatViewModel @Inject constructor(
     private val skillDistillationManager: top.tianyan.app.harness.skill.SkillDistillationManager,
     private val questionBroker: top.tianyan.app.harness.question.AgentQuestionBroker,
     private val subagentRepository: top.tianyan.app.core.database.AgentSubagentRepository,
+    private val agentEngineCatalog: top.tianyan.app.harness.acp.AgentEngineCatalog,
 ) : ViewModel() {
 
     /**
@@ -1637,6 +1638,17 @@ class ChatViewModel @Inject constructor(
      */
     val availableAgents: StateFlow<List<top.tianyan.app.core.model.AgentSubagent>> =
         subagentRepository.profiles
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * 可绑定的智能体引擎（Claude Code / Codex / DSH 等）。
+     *
+     * 与 [availableAgents]（天衍本体的人格档案）是两类东西：人格决定「用什么口吻与视角」，
+     * 引擎决定「由谁来执行」——引擎是真实进程，自带工具循环。两者共用会话的 agentId
+     * 字段，选择器按类型分组展示，避免把「换个说法」和「换套引擎」混为一谈。
+     */
+    val availableEngines: StateFlow<List<top.tianyan.app.harness.acp.AgentEngineProfile>> =
+        flow { emit(agentEngineCatalog.all()) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** 当前会话绑定的智能体 id；空串表示沿用默认天衍本体。 */

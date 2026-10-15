@@ -3,7 +3,7 @@
     "schemaVersion": 1,
     "id": "claude-code",
     "name": "Claude Code",
-    "description": "Anthropic 官方 Agent 编程助手 CLI，支持沙箱内代码全自动探索与工程演进。",
+    "description": "Anthropic 官方 Agent 编程助手 CLI，支持沙箱内代码全自动探索与工程演进；并安装 ACP 适配器供天衍会话直接绑定为智能体引擎。",
     "dependencies": [
       "node>=20.0.0",
       "curl",
@@ -22,14 +22,17 @@
     "installSteps": [
       "if ! command -v npm >/dev/null 2>&1; then DEBIAN_FRONTEND=noninteractive apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs npm || true; fi",
       "npm_config_prefix=\"$TIANYAN_TOOL_DIR\" npm install -g --ignore-scripts @anthropic-ai/claude-code --registry=https://registry.npmmirror.com || npm_config_prefix=\"$TIANYAN_TOOL_DIR\" npm install -g --ignore-scripts @anthropic-ai/claude-code",
+      "npm_config_prefix=\"$TIANYAN_TOOL_DIR\" npm install -g --ignore-scripts @agentclientprotocol/claude-agent-acp --registry=https://registry.npmmirror.com || npm_config_prefix=\"$TIANYAN_TOOL_DIR\" npm install -g --ignore-scripts @agentclientprotocol/claude-agent-acp || true",
       "mkdir -p \"$TIANYAN_TOOL_DIR/bin\"",
       "printf '#!/usr/bin/env sh\\nMODULE_DIR=\"$(cd \"$(dirname \"$0\")/../lib/node_modules/@anthropic-ai/claude-code\" && pwd)\"\\nif [ -f \"$MODULE_DIR/cli-wrapper.cjs\" ]; then\\n    exec node \"$MODULE_DIR/cli-wrapper.cjs\" \"$@\"\\nelif [ -f \"$MODULE_DIR/cli.js\" ]; then\\n    exec node \"$MODULE_DIR/cli.js\" \"$@\"\\nelse\\n    exec node \"$MODULE_DIR/index.js\" \"$@\"\\nfi\\n' > \"$TIANYAN_TOOL_DIR/bin/claude\"",
-      "chmod +x \"$TIANYAN_TOOL_DIR/bin/claude\" 2>/dev/null || true"
+      "chmod +x \"$TIANYAN_TOOL_DIR/bin/claude\" 2>/dev/null || true",
+      "if [ -f \"$TIANYAN_TOOL_DIR/bin/claude-agent-acp\" ]; then chmod +x \"$TIANYAN_TOOL_DIR/bin/claude-agent-acp\"; fi"
     ],
     "launchCommand": "claude",
     "verifyCommand": "claude --version",
     "commandLinks": [
-      "claude"
+      "claude",
+      "claude-agent-acp"
     ],
     "environment": {
       "CLAUDE_CONFIG_DIR": "/opt/tianyan/data/claude-code"
@@ -264,5 +267,162 @@
       "TIANYAN_QEMU_COMPAT_QEMU": "/opt/tianyan/compat/x86_64/qemu-x86_64",
       "TIANYAN_QEMU_COMPAT_ROOTFS": "/opt/tianyan/compat/x86_64/rootfs"
     }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "codex",
+    "name": "Codex",
+    "description": "OpenAI Codex CLI，经 ACP 适配器接入天衍会话，可作为会话级智能体引擎绑定。",
+    "dependencies": [
+      "node>=20.0.0",
+      "curl",
+      "ca-certificates",
+      "git"
+    ],
+    "launchType": "command",
+    "version": "1.0.0",
+    "latestVersion": "1.0.0",
+    "publisher": "",
+    "category": "AI_AGENT",
+    "architectures": [
+      "ARM64"
+    ],
+    "permissions": [
+      "NETWORK",
+      "WORKSPACE_READ",
+      "WORKSPACE_WRITE"
+    ],
+    "installMethod": "SCRIPT",
+    "installSteps": [
+      "if ! command -v npm >/dev/null 2>&1; then DEBIAN_FRONTEND=noninteractive apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs npm || true; fi",
+      "mkdir -p \"$TIANYAN_TOOL_DIR/bin\"",
+      "npm_config_prefix=\"$TIANYAN_TOOL_DIR\" npm install -g --ignore-scripts @openai/codex --registry=https://registry.npmmirror.com || npm_config_prefix=\"$TIANYAN_TOOL_DIR\" npm install -g --ignore-scripts @openai/codex || true",
+      "npm_config_prefix=\"$TIANYAN_TOOL_DIR\" npm install -g --ignore-scripts @agentclientprotocol/codex-acp --registry=https://registry.npmmirror.com || npm_config_prefix=\"$TIANYAN_TOOL_DIR\" npm install -g --ignore-scripts @agentclientprotocol/codex-acp || true",
+      "if [ -f \"$TIANYAN_TOOL_DIR/bin/codex\" ]; then chmod +x \"$TIANYAN_TOOL_DIR/bin/codex\"; fi",
+      "if [ -f \"$TIANYAN_TOOL_DIR/bin/codex-acp\" ]; then chmod +x \"$TIANYAN_TOOL_DIR/bin/codex-acp\"; fi"
+    ],
+    "launchCommand": "codex",
+    "verifyCommand": "test -f \"$TIANYAN_TOOL_DIR/bin/codex\"",
+    "commandLinks": [
+      "codex",
+      "codex-acp"
+    ],
+    "environment": {
+      "CODEX_HOME": "/opt/tianyan/data/codex"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "deepseek-harness",
+    "name": "DeepSeek Harness",
+    "description": "DeepSeek Harness 官方 ACP profile，插件、技能与子智能体能力随会话注入，可作为会话级智能体引擎绑定。",
+    "dependencies": [
+      "node>=20.0.0",
+      "curl",
+      "ca-certificates",
+      "git"
+    ],
+    "launchType": "command",
+    "version": "1.0.0",
+    "latestVersion": "1.0.0",
+    "publisher": "",
+    "category": "AI_AGENT",
+    "architectures": [
+      "ARM64"
+    ],
+    "permissions": [
+      "NETWORK",
+      "WORKSPACE_READ",
+      "WORKSPACE_WRITE"
+    ],
+    "installMethod": "SCRIPT",
+    "installSteps": [
+      "if ! command -v npm >/dev/null 2>&1; then DEBIAN_FRONTEND=noninteractive apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs npm || true; fi",
+      "mkdir -p \"$TIANYAN_TOOL_DIR/bin\"",
+      "npm_config_prefix=\"$TIANYAN_TOOL_DIR\" npm install -g --ignore-scripts @deepseek-ai/dsh --registry=https://registry.npmmirror.com || npm_config_prefix=\"$TIANYAN_TOOL_DIR\" npm install -g --ignore-scripts @deepseek-ai/dsh || true",
+      "if [ -f \"$TIANYAN_TOOL_DIR/bin/dsh\" ]; then chmod +x \"$TIANYAN_TOOL_DIR/bin/dsh\"; fi"
+    ],
+    "launchCommand": "dsh",
+    "verifyCommand": "test -f \"$TIANYAN_TOOL_DIR/bin/dsh\"",
+    "commandLinks": [
+      "dsh"
+    ],
+    "environment": {
+      "DSH_HOME": "/opt/tianyan/data/deepseek-harness"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "id": "opencode",
+    "name": "OpenCode",
+    "description": "OpenCode ACP server，开源多模型编程智能体，可作为会话级智能体引擎绑定。",
+    "dependencies": [
+      "node>=20.0.0",
+      "curl",
+      "ca-certificates",
+      "git"
+    ],
+    "launchType": "command",
+    "version": "1.0.0",
+    "latestVersion": "1.0.0",
+    "publisher": "",
+    "category": "AI_AGENT",
+    "architectures": [
+      "ARM64"
+    ],
+    "permissions": [
+      "NETWORK",
+      "WORKSPACE_READ",
+      "WORKSPACE_WRITE"
+    ],
+    "installMethod": "SCRIPT",
+    "installSteps": [
+      "if ! command -v npm >/dev/null 2>&1; then DEBIAN_FRONTEND=noninteractive apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs npm || true; fi",
+      "mkdir -p \"$TIANYAN_TOOL_DIR/bin\"",
+      "npm_config_prefix=\"$TIANYAN_TOOL_DIR\" npm install -g --ignore-scripts opencode-ai --registry=https://registry.npmmirror.com || npm_config_prefix=\"$TIANYAN_TOOL_DIR\" npm install -g --ignore-scripts opencode-ai || true",
+      "if [ -f \"$TIANYAN_TOOL_DIR/bin/opencode\" ]; then chmod +x \"$TIANYAN_TOOL_DIR/bin/opencode\"; fi"
+    ],
+    "launchCommand": "opencode",
+    "verifyCommand": "test -f \"$TIANYAN_TOOL_DIR/bin/opencode\"",
+    "commandLinks": [
+      "opencode"
+    ]
+  },
+  {
+    "schemaVersion": 1,
+    "id": "kimi-code",
+    "name": "Kimi Code",
+    "description": "Moonshot Kimi Code 官方 ACP 接口，可作为会话级智能体引擎绑定。",
+    "dependencies": [
+      "node>=22.19.0",
+      "curl",
+      "ca-certificates",
+      "git"
+    ],
+    "launchType": "command",
+    "version": "1.0.0",
+    "latestVersion": "1.0.0",
+    "publisher": "",
+    "category": "AI_AGENT",
+    "architectures": [
+      "ARM64"
+    ],
+    "permissions": [
+      "NETWORK",
+      "WORKSPACE_READ",
+      "WORKSPACE_WRITE"
+    ],
+    "installMethod": "SCRIPT",
+    "installSteps": [
+      "if ! command -v npm >/dev/null 2>&1; then DEBIAN_FRONTEND=noninteractive apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs npm || true; fi",
+      "mkdir -p \"$TIANYAN_TOOL_DIR/bin\"",
+      "npm_config_prefix=\"$TIANYAN_TOOL_DIR\" npm install -g --ignore-scripts @moonshot-ai/kimi-code --registry=https://registry.npmmirror.com || npm_config_prefix=\"$TIANYAN_TOOL_DIR\" npm install -g --ignore-scripts @moonshot-ai/kimi-code || true",
+      "if [ -f \"$TIANYAN_TOOL_DIR/bin/kimi\" ]; then chmod +x \"$TIANYAN_TOOL_DIR/bin/kimi\"; fi"
+    ],
+    "launchCommand": "kimi",
+    "verifyCommand": "test -f \"$TIANYAN_TOOL_DIR/bin/kimi\"",
+    "commandLinks": [
+      "kimi"
+    ]
   }
 ]

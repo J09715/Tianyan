@@ -121,6 +121,10 @@ class HarnessLoop @Inject constructor(
     private val evidenceTracker: top.tianyan.app.harness.evidence.EvidenceTracker,
     /** 闸门义务账本：保证闸门每个回合最多把交付延长一轮，不会变成死循环。 */
     private val gateObligationTracker: top.tianyan.app.harness.evidence.GateObligationTracker,
+    /** 引擎型智能体的会话执行器：会话绑定引擎时执行权交给引擎进程，天衍退回宿主。 */
+    private val acpSessionRunner: top.tianyan.app.harness.acp.AcpSessionRunner,
+    /** 引擎目录：判定会话绑定的 agentId 是「引擎」还是天衍本体的人格档案。 */
+    private val agentEngineCatalog: top.tianyan.app.harness.acp.AgentEngineCatalog,
 ) {
     private val loopScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -510,6 +514,8 @@ class HarnessLoop @Inject constructor(
         messageStore.deleteSession(id)
         approvalRepository.deleteForSession(id)
         agentTaskStateMachine.deleteForSession(id)
+        // 引擎进程必须随会话一起释放：PTY 会话是常驻的，不关就是孤儿进程常吃内存。
+        acpSessionRunner.release(id)
         sessionDao.deleteSession(id)
         rewindController.dropSession(id)
         sessionLoopDetectors.remove(id)
@@ -1102,6 +1108,13 @@ class HarnessLoop @Inject constructor(
         attachments: List<MessageAttachment> = emptyList(),
     ): RunResult {
         sessionLoopDetectors.getOrPut(sessId) { ToolCallLoopDetector() }.reset()
+        // 引擎型智能体会话：执行权在引擎进程手里，天衍退回宿主位置。
+        // 必须在「本体」的开账逻辑之前分流——否则会把用户消息记两次、
+        // 并让本体的证据账本为一个它根本没参与的回合作证。
+        val boundEngineId = sessionDao.findById(sessId)?.agentId
+        if (boundEngineId != null && agentEngineCatalog.isEngine(boundEngineId)) {
+            return runEngineTurn(sessId, boundEngineId, userText, imageUrls)
+        }
         // 新用户回合开账/清账：上个回合的绿不能替本回合作证；
         // 闸门的一次性义务也在此重新武装，否则第二个回合闸门将永久失去否决权。
         evidenceTracker.reset(sessId)
@@ -1129,6 +1142,30 @@ class HarnessLoop @Inject constructor(
         taskId?.let { agentTaskStateMachine.checkpoint(it, operationId, 0, 0, "任务已受理") }
         messageProjector.publishPersisted(sessId, userMessage)
         return runLoopInternal(sessId, startedAt = now(), operationId = operationId, taskId = taskId)
+    }
+
+    /**
+     * 把一轮对话交给引擎进程执行，并把结果映射回本体的 RunResult。
+     *
+     * 为什么不复用 runLoopRounds：那是「天衍本体」的工具循环——它自己发 provider
+     * 请求、自己调度工具、自己跑证据闸门。引擎会话里这些全部由引擎负责，套用本体
+     * 循环只会让两个执行体同时说话。这里只做状态收尾与结果翻译。
+     */
+    private suspend fun runEngineTurn(
+        sessId: String,
+        engineId: String,
+        userText: String,
+        imageUrls: List<String>,
+    ): RunResult {
+        val workspace = sessionDao.findById(sessId)?.workspace.orEmpty()
+        agentEventLogger.log(sessId, "EngineTurn", "engine=$engineId workspace=$workspace")
+        return when (acpSessionRunner.runTurn(sessId, engineId, workspace, userText, imageUrls)) {
+            top.tianyan.app.harness.acp.AcpTurnOutcome.COMPLETED -> RunResult.Completed
+            top.tianyan.app.harness.acp.AcpTurnOutcome.WAITING_APPROVAL -> RunResult.WaitingApproval
+            top.tianyan.app.harness.acp.AcpTurnOutcome.CANCELLED -> RunResult.Cancelled
+            top.tianyan.app.harness.acp.AcpTurnOutcome.FAILED ->
+                RunResult.Failed(stateMirrors.errorOf(sessId) ?: "引擎执行失败")
+        }
     }
 
     private suspend fun runLoopInternal(
@@ -2039,6 +2076,29 @@ class HarnessLoop @Inject constructor(
             val sessId = request.sessionId
             if (request.status != top.tianyan.app.core.database.AgentApprovalRequestEntity.STATUS_PENDING) {
                 logger.w("resolveApproval: request not pending (status=${request.status}), ignoring: $requestId")
+                return@launch
+            }
+            // 引擎型会话的权限请求不是本体的工具调用——它必须回包给引擎进程，
+            // 而不是走 ToolExecutor（那会拿引擎的 toolCall 载荷去查天衍的工具表，
+            // 必然查不到，表现为「批准了却什么都没发生」）。
+            if (acpSessionRunner.isEngineSession(sessId)) {
+                if (!approvalRepository.claimPending(request.id, if (approved) {
+                        top.tianyan.app.core.database.AgentApprovalRequestEntity.STATUS_APPROVED
+                    } else {
+                        top.tianyan.app.core.database.AgentApprovalRequestEntity.STATUS_REJECTED
+                    })
+                ) {
+                    return@launch
+                }
+                val delivered = acpSessionRunner.resolvePermission(sessId, approved)
+                if (!delivered) {
+                    stateMirrors.setError(sessId, "引擎已不再等待该审批（进程可能已退出）")
+                }
+                stateMirrors.setRunState(
+                    sessId,
+                    if (approved) SessionRunState.RUNNING else SessionRunState.IDLE,
+                )
+                stateMirrors.setStatus(sessId, null)
                 return@launch
             }
             logger.i("resolveApproval: waiting for prior session job, sessId=$sessId")

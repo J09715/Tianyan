@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
@@ -838,6 +839,7 @@ internal fun NewSessionDialog(
     onDismiss: () -> Unit,
     onCreate: (title: String, workspace: String, projectType: ProjectType, redTeamMode: String, agentId: String?) -> Unit,
     agents: List<top.tianyan.app.core.model.AgentSubagent> = emptyList(),
+    engines: List<top.tianyan.app.harness.acp.AgentEngineProfile> = emptyList(),
 ) {
     val defaultTitle = stringResource(R.string.chat_new_session)
     // 表单状态旋转后保留；枚举以 name 字符串保存
@@ -871,7 +873,8 @@ internal fun NewSessionDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 420.dp),
+                    .heightIn(max = 460.dp)
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text(stringResource(R.string.chat_session_title), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
@@ -919,18 +922,18 @@ internal fun NewSessionDialog(
                     fontWeight = FontWeight.SemiBold,
                 )
 
-                LazyColumn(
-                    modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 180.dp)
+                        .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    item {
-                        WorkspaceOption(stringResource(R.string.chat_no_workspace), "/root", selected == "", onSelect = {
-                            selected = ""
-                            selectedTypeName = ProjectType.GENERAL.name
-                        })
-                    }
-                    items(workspaces.size, key = { workspaces[it].linuxPath }) { index ->
-                        val ws = workspaces[index]
+                    WorkspaceOption(stringResource(R.string.chat_no_workspace), "/root", selected == "", onSelect = {
+                        selected = ""
+                        selectedTypeName = ProjectType.GENERAL.name
+                    })
+                    workspaces.forEach { ws ->
                         WorkspaceOption(ws.name, ws.linuxPath, selected == ws.linuxPath) {
                             selected = ws.linuxPath
                             selectedTypeName = ws.projectType.name
@@ -1000,6 +1003,7 @@ internal fun NewSessionDialog(
 
                 AgentPicker(
                     agents = agents,
+                    engines = engines,
                     selectedAgentId = selectedAgentId,
                     expanded = agentMenuExpanded,
                     onExpandedChange = { agentMenuExpanded = it },
@@ -1035,9 +1039,14 @@ internal fun NewSessionDialog(
 /**
  * 新建会话的智能体选择器。
  *
- * 交互取舍：用下拉而非横向 chip 列表——Agency 目录启用项可达数十个，
- * 横向 chip 会挤成一条无法定位的长条；下拉里按部门分组展示名称 + 描述，
- * 并保留「默认（天衍本体）」作为首项，保证不选智能体时行为与旧版一致。
+ * 两类绑定，共用同一个 agentId：
+ * - **引擎**（Claude Code / Codex / DSH 等）：真实进程，自带工具循环，天衍退回宿主；
+ * - **人格**（Agency 目录）：只改天衍本体的系统提示词，执行仍由天衍自己做。
+ * 分组展示是为了不让用户把「换个说法」和「换套引擎」当成同一件事。
+ *
+ * 交互取舍：用下拉而非横向 chip 列表——启用项可达数十个，横向 chip 会挤成
+ * 一条无法定位的长条。菜单用带权重的 LazyColumn 并给整列留出滚动余量，
+ * 否则项目一多菜单会顶出对话框边缘，用户看到的就是「只能看到一半字体」。
  *
  * 被禁用的智能体仍然列出但置灰：用户能看见「我有这个角色，只是关了」，
  * 而不是以为它消失了。
@@ -1045,12 +1054,14 @@ internal fun NewSessionDialog(
 @Composable
 private fun AgentPicker(
     agents: List<top.tianyan.app.core.model.AgentSubagent>,
+    engines: List<top.tianyan.app.harness.acp.AgentEngineProfile>,
     selectedAgentId: String,
     expanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
     onSelect: (String) -> Unit,
 ) {
     val enabled = remember(agents) { agents.filter { it.isEnabled } }
+    val selectedEngine = remember(engines, selectedAgentId) { engines.firstOrNull { it.id == selectedAgentId } }
     val selected = remember(enabled, selectedAgentId) { enabled.firstOrNull { it.id == selectedAgentId } }
     val ordered = remember(enabled) {
         enabled.sortedWith(
@@ -1089,23 +1100,30 @@ private fun AgentPicker(
                     RuntimeIcon(
                         RuntimeIconName.Bot,
                         Modifier.size(18.dp),
-                        tint = if (selected != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = if (selected != null || selectedEngine != null) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                     )
                     Column(Modifier.weight(1f)) {
                         Text(
-                            selected?.name ?: "默认（天衍本体）",
+                            selectedEngine?.name ?: selected?.name ?: "默认（天衍本体）",
                             color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        val sub = selected?.let {
-                            "${top.tianyan.app.core.model.AgentDepartments.find(it.departmentId).localizedName} · ${it.description}"
-                        } ?: "不绑定智能体，使用天衍默认提示词"
+                        val sub = when {
+                            selectedEngine != null -> "引擎 · ${selectedEngine.description}"
+                            selected != null ->
+                                "人格 · ${top.tianyan.app.core.model.AgentDepartments.find(selected.departmentId).localizedName} · ${selected.description}"
+                            else -> "不绑定智能体，使用天衍默认提示词与执行循环"
+                        }
                         Text(
                             sub,
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
+                            maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
@@ -1119,7 +1137,7 @@ private fun AgentPicker(
             DropdownMenu(
                 expanded = expanded,
                 onDismissRequest = { onExpandedChange(false) },
-                modifier = Modifier.heightIn(max = 320.dp),
+                modifier = Modifier.heightIn(max = 420.dp),
             ) {
                 DropdownMenuItem(
                     text = {
@@ -1135,17 +1153,53 @@ private fun AgentPicker(
                     onClick = { onSelect("") },
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                if (engines.isNotEmpty()) {
+                    PickerSectionLabel("引擎（真实进程，接管执行）")
+                    engines.forEach { engine ->
+                        DropdownMenuItem(
+                            text = {
+                                Column {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Text(
+                                            engine.name,
+                                            fontWeight = if (engine.id == selectedAgentId) FontWeight.SemiBold else FontWeight.Normal,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        Text(
+                                            "引擎",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.tertiary,
+                                        )
+                                    }
+                                    Text(
+                                        engine.description,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            },
+                            onClick = { onSelect(engine.id) },
+                        )
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                }
                 if (ordered.isEmpty()) {
                     DropdownMenuItem(
                         text = {
                             Text(
-                                "暂无已启用的智能体（到设置 → 智能体目录开启）",
+                                "暂无已启用的人格智能体（到设置 → 智能体目录开启）",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         },
                         onClick = { onExpandedChange(false) },
                     )
+                }
+                if (ordered.isNotEmpty()) {
+                    PickerSectionLabel("人格（只改提示词，执行仍是天衍本体）")
                 }
                 ordered.forEach { agent ->
                     DropdownMenuItem(
@@ -1179,6 +1233,23 @@ private fun AgentPicker(
             }
         }
     }
+}
+
+/**
+ * 下拉菜单里的分组小标题。
+ *
+ * 用非交互行而非 DropdownMenuItem：分组标题不该可点击（点它没有语义），
+ * 也不该抢走菜单的键盘焦点。
+ */
+@Composable
+private fun PickerSectionLabel(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 12.dp, top = 8.dp, end = 12.dp, bottom = 2.dp),
+    )
 }
 
 @Composable

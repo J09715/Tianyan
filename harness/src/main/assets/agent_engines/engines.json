@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "retiredEngineIds": [],
+  "engines": [
+    {
+      "id": "claude-code",
+      "name": "Claude Code",
+      "description": "Anthropic 官方编程智能体，经 ACP 适配器接入天衍会话。",
+      "toolId": "claude-code",
+      "command": "claude-agent-acp",
+      "discoveryCommand": "claude",
+      "arguments": [],
+      "publisher": "Anthropic",
+      "acpPackage": "@agentclientprotocol/claude-agent-acp",
+      "declaredCapabilities": {
+        "tools": { "fileRead": true, "fileWrite": true, "shell": true, "plan": true },
+        "mcp": { "sessionServers": true }
+      }
+    },
+    {
+      "id": "codex",
+      "name": "Codex",
+      "description": "OpenAI Codex CLI，经 ACP 适配器接入天衍会话。",
+      "toolId": "codex",
+      "command": "codex-acp",
+      "discoveryCommand": "codex",
+      "arguments": [],
+      "publisher": "OpenAI",
+      "acpPackage": "@agentclientprotocol/codex-acp",
+      "declaredCapabilities": {
+        "tools": { "fileRead": true, "fileWrite": true, "shell": true, "plan": true },
+        "mcp": { "sessionServers": true }
+      }
+    },
+    {
+      "id": "deepseek-harness",
+      "name": "DeepSeek Harness",
+      "description": "DeepSeek Harness 官方 ACP profile，插件与子智能体能力随会话注入。",
+      "toolId": "deepseek-harness",
+      "command": "dsh",
+      "discoveryCommand": "dsh",
+      "arguments": ["--profile", "acp"],
+      "publisher": "DeepSeek",
+      "acpPackage": "@deepseek-ai/dsh",
+      "requiresNativeBuildTools": true,
+      "declaredCapabilities": {
+        "plugin": { "supported": true, "installViaHarness": true },
+        "tools": { "fileRead": true, "fileWrite": true, "shell": true, "plan": true, "subagents": true, "skills": true },
+        "mcp": { "sessionServers": true }
+      }
+    },
+    {
+      "id": "opencode",
+      "name": "OpenCode",
+      "description": "OpenCode ACP server，开源多模型编程智能体。",
+      "toolId": "opencode",
+      "command": "opencode",
+      "discoveryCommand": "opencode",
+      "arguments": ["acp"],
+      "publisher": "OpenCode",
+      "acpPackage": "opencode-ai",
+      "declaredCapabilities": {
+        "tools": { "fileRead": true, "fileWrite": true, "shell": true, "plan": true },
+        "mcp": { "sessionServers": true }
+      }
+    },
+    {
+      "id": "kimi-code",
+      "name": "Kimi Code",
+      "description": "Moonshot Kimi Code 官方 ACP 接口。",
+      "toolId": "kimi-code",
+      "command": "kimi",
+      "discoveryCommand": "kimi",
+      "arguments": ["acp"],
+      "publisher": "Moonshot AI",
+      "acpPackage": "@moonshot-ai/kimi-code",
+      "requiresNode": ">=22.19.0",
+      "declaredCapabilities": {
+        "tools": { "fileRead": true, "fileWrite": true, "shell": true },
+        "mcp": { "sessionServers": true }
+      }
+    }
+  ]
+}
