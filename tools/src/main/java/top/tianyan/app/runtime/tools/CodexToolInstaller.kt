@@ -65,7 +65,7 @@ class CodexToolInstaller @Inject constructor(
                 val npmInstall = executeAndReport(
                     linuxRuntime.execute(
                         ShellCommand(
-                            "npm install -g @openai/codex",
+                            "npm install -g @openai/codex --registry=https://registry.npmmirror.com || npm install -g @openai/codex",
                             environment = npmEnvironment,
                             timeoutMs = 10 * 60 * 1000L, // 10 分钟超时，npm 安装需要更长时间
                         ),
