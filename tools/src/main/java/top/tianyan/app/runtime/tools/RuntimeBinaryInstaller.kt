@@ -42,6 +42,7 @@ class RuntimeBinaryInstaller @Inject constructor(
                         destination = archive,
                         partialFile = File("${archive.absolutePath}.part"),
                         sha256 = NODE_SHA256,
+                        timeoutMs = 10 * 60 * 1000L, // 10 分钟超时，Node.js ~30MB
                     ),
                 ).collect { }
             }

@@ -67,7 +67,7 @@ class CodexToolInstaller @Inject constructor(
                         ShellCommand(
                             "npm install -g @openai/codex",
                             environment = npmEnvironment,
-                            timeoutMs = 5 * 60 * 1000L, // 5 分钟超时，npm 安装需要更长时间
+                            timeoutMs = 10 * 60 * 1000L, // 10 分钟超时，npm 安装需要更长时间
                         ),
                     ),
                 )
@@ -85,7 +85,15 @@ class CodexToolInstaller @Inject constructor(
             )
             if (!link.isSuccess) error(link.stderr.ifBlank { "无法创建 codex 命令入口" })
             emit(InstallEvent.Progress(toolId, "验证 codex 命令", 0.85f, InstallEvent.Phase.VERIFYING_INSTALLATION))
-            val version = executeAndReport("codex --version")
+            val version = executeAndReport(
+                linuxRuntime.execute(
+                    ShellCommand(
+                        "codex --version",
+                        environment = providerManager.environment(),
+                        timeoutMs = 60_000L, // 1 分钟超时，首次启动可能需要初始化
+                    ),
+                ),
+            )
             if (!version.isSuccess) error(version.stderr.ifBlank { "找不到 codex 命令" })
             emit(InstallEvent.Completed(toolId, version.stdout.trim().lineSequence().firstOrNull()))
         } catch (cancellation: CancellationException) {

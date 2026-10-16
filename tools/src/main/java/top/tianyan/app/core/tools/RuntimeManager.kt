@@ -95,14 +95,14 @@ class RuntimeManagerImpl @Inject constructor(
                 )
             }
             var executable = executablePath(requirement.name)
-            var versionResult = linuxRuntime.execute(ShellCommand("$executable --version"))
+            var versionResult = linuxRuntime.execute(ShellCommand("$executable --version", timeoutMs = 60_000L))
             var version = versionResult.stdout.trim().lineSequence().firstOrNull()
             if ((!install.isSuccess || !versionResult.isSuccess || !versionSatisfies(version, requirement.constraint)) &&
                 requirement.name == RuntimeName.NODE
             ) {
                 runtimeBinaryInstaller.installNode()
                 executable = executablePath(RuntimeName.NODE, official = true)
-                versionResult = linuxRuntime.execute(ShellCommand("$executable --version"))
+                versionResult = linuxRuntime.execute(ShellCommand("$executable --version", timeoutMs = 60_000L))
                 version = versionResult.stdout.trim().lineSequence().firstOrNull()
             }
             if (!versionResult.isSuccess) {

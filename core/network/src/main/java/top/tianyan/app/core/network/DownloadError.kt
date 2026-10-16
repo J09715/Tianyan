@@ -14,5 +14,6 @@ sealed class DownloadError(
         val actual: String,
     ) : DownloadError("SHA-256 校验失败：expected=$expected actual=$actual")
     class Storage(message: String, cause: Throwable? = null) : DownloadError(message, cause)
+    class Network(message: String, cause: Throwable? = null) : DownloadError(message, cause)
     class RetryExhausted(message: String, cause: Throwable? = null) : DownloadError(message, cause)
 }
