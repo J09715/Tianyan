@@ -38,6 +38,11 @@ data class AgentEngineProfile(
     val requiresNativeBuildTools: Boolean = false,
     /** 最低 Node 版本约束，空表示不校验。 */
     val requiresNode: String = "",
+    /**
+     * 引擎凭据来源的 provider id（对应 agent_providers.json 的 id，如 deepseek/moonshot）。
+     * 为空表示该引擎不绑定单一 provider（如 OpenCode 多模型），沿用全局单 key 注入。
+     */
+    val credentialProvider: String = "",
     val declaredCapabilities: JsonObject = JsonObject(emptyMap()),
 )
 

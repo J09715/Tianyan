@@ -12,6 +12,7 @@
       "arguments": [],
       "publisher": "Anthropic",
       "acpPackage": "@agentclientprotocol/claude-agent-acp",
+      "credentialProvider": "anthropic",
       "declaredCapabilities": {
         "tools": { "fileRead": true, "fileWrite": true, "shell": true, "plan": true },
         "mcp": { "sessionServers": true }
@@ -27,6 +28,7 @@
       "arguments": [],
       "publisher": "OpenAI",
       "acpPackage": "@agentclientprotocol/codex-acp",
+      "credentialProvider": "openai",
       "declaredCapabilities": {
         "tools": { "fileRead": true, "fileWrite": true, "shell": true, "plan": true },
         "mcp": { "sessionServers": true }
@@ -43,6 +45,7 @@
       "publisher": "DeepSeek",
       "acpPackage": "@deepseek-ai/dsh",
       "requiresNativeBuildTools": true,
+      "credentialProvider": "deepseek",
       "declaredCapabilities": {
         "plugin": { "supported": true, "installViaHarness": true },
         "tools": { "fileRead": true, "fileWrite": true, "shell": true, "plan": true, "subagents": true, "skills": true },
@@ -75,6 +78,7 @@
       "publisher": "Moonshot AI",
       "acpPackage": "@moonshot-ai/kimi-code",
       "requiresNode": ">=22.19.0",
+      "credentialProvider": "moonshot",
       "declaredCapabilities": {
         "tools": { "fileRead": true, "fileWrite": true, "shell": true },
         "mcp": { "sessionServers": true }

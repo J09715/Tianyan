@@ -47,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import top.tianyan.app.feature.chat.R
@@ -277,7 +278,7 @@ internal fun SessionsDialog(
                                             Text(
                                                 stringResource(R.string.chat_isolated_sandbox),
                                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                                color = LinearSecondary,
+                                                color = linearSecondary(),
                                             )
                                         }
                                     }
@@ -877,7 +878,7 @@ internal fun NewSessionDialog(
                 Text(
                     "会话建立后工程类型与智能体固定，用于确定工具集与提示词分层",
                     style = MaterialTheme.typography.labelSmall,
-                    color = LinearSecondary,
+                    color = linearSecondary(),
                 )
             }
         },
@@ -917,7 +918,7 @@ internal fun NewSessionDialog(
                             Text(
                                 tag,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = if (active) LinearAccent else LinearSecondary,
+                                color = if (active) LinearAccent else linearSecondary(),
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                             )
                         }
@@ -954,7 +955,7 @@ internal fun NewSessionDialog(
                             stringResource(R.string.chat_project_type_detected)
                         },
                         style = MaterialTheme.typography.labelSmall,
-                        color = LinearSecondary,
+                        color = linearSecondary(),
                     )
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1008,14 +1009,14 @@ internal fun NewSessionDialog(
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
                                                 color = if (active) MaterialTheme.colorScheme.onSurface
-                                                else LinearSecondary,
+                                                else linearSecondary(),
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis,
                                             )
                                             Text(
                                                 option.hint,
                                                 style = MaterialTheme.typography.labelSmall,
-                                                color = LinearMuted,
+                                                color = linearMuted(),
                                                 maxLines = 2,
                                                 overflow = TextOverflow.Ellipsis,
                                             )
@@ -1046,7 +1047,7 @@ internal fun NewSessionDialog(
                                 "红队演练会话：建立后需在会话内绑定目标与授权范围，所有探测动作受该范围约束；" +
                                     "目标与事实只属于本会话，其他会话不可见。",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = LinearSecondary,
+                                color = linearSecondary(),
                             )
                         }
                     }
@@ -1090,10 +1091,19 @@ private val LinearAccent = Color(0xFF7170FF)
 private val LinearDanger = Color(0xFFB3261E)
 private val LinearBorder = Color(0x14FFFFFF)
 private val LinearSurface = Color(0x0AFFFFFF)
-private val LinearSecondary = Color(0xFFD0D6E0)
-// 说明/副文案色：原 #8A8F98 在玻璃背板上对比度偏低、正文发灰易读不清，
-// 提到 #9AA3B0（保留次要层级、但能看清）。
-private val LinearMuted = Color(0xFF9AA3B0)
+
+// Linear 文字令牌跟随主题切色：这套色板原本为深色玻璃背板设计（#0f1011 面板 + 浅灰字），
+// 但 RuntimeAlertDialog 背景跟 Material 主题走——亮主题白底下浅灰字对比度塌掉、发灰看不清。
+// 彩色令牌（Accent/Danger/Border/Surface/Status*）两种背景都够醒目，保持写死；
+// 只有两档中性文字（字段标签 / 副文案）在亮底上需要换成深灰，暗底保留原浅灰。
+// 判断范式与 RuntimeComponents 的 RuntimeAlertDialog 一致：onSurface.luminance() < 0.5 → 亮。
+@Composable
+private fun linearSecondary(): Color =
+    if (MaterialTheme.colorScheme.onSurface.luminance() < 0.5f) Color(0xFF44494F) else Color(0xFFD0D6E0)
+
+@Composable
+private fun linearMuted(): Color =
+    if (MaterialTheme.colorScheme.onSurface.luminance() < 0.5f) Color(0xFF5F6368) else Color(0xFF9AA3B0)
 
 // ── 会话状态色板 ───────────────────────────────────────────────────────────────
 // 与会话管理列表（SessionsDialog）同一套色，跨弹窗保持一致：
@@ -1109,7 +1119,7 @@ private fun LinearFieldLabel(text: String) {
         text,
         style = MaterialTheme.typography.labelMedium,
         fontWeight = FontWeight.Medium,
-        color = LinearSecondary,
+        color = linearSecondary(),
     )
 }
 
@@ -1214,7 +1224,7 @@ private fun AgentPicker(
             Text(
                 "暂无已启用的人格智能体（到设置 → 智能体目录开启）",
                 style = MaterialTheme.typography.labelSmall,
-                color = LinearMuted,
+                color = linearMuted(),
             )
         } else {
             AgentCardRow(
@@ -1311,7 +1321,7 @@ private fun AgentCardRow(
                                     card.title,
                                     style = MaterialTheme.typography.bodySmall,
                                     fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
-                                    color = if (active) MaterialTheme.colorScheme.onSurface else LinearSecondary,
+                                    color = if (active) MaterialTheme.colorScheme.onSurface else linearSecondary(),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f, fill = false),
@@ -1336,7 +1346,7 @@ private fun AgentCardRow(
                             Text(
                                 card.subtitle,
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                color = LinearMuted,
+                                color = linearMuted(),
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -1369,7 +1379,7 @@ internal fun WorkspaceOption(name: String, path: String, selected: Boolean, onSe
     ) {
         Box(
             Modifier.size(12.dp).clip(CircleShape).background(
-                if (selected) LinearAccent else LinearMuted,
+                if (selected) LinearAccent else linearMuted(),
             ),
         )
         Column {
@@ -1377,10 +1387,10 @@ internal fun WorkspaceOption(name: String, path: String, selected: Boolean, onSe
                 name.ifBlank { path },
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
-                color = if (selected) MaterialTheme.colorScheme.onSurface else LinearSecondary,
+                color = if (selected) MaterialTheme.colorScheme.onSurface else linearSecondary(),
             )
             if (path.isNotBlank()) {
-                Text(path, style = MaterialTheme.typography.labelSmall, color = LinearMuted)
+                Text(path, style = MaterialTheme.typography.labelSmall, color = linearMuted())
             }
         }
     }
