@@ -50,6 +50,15 @@ class EngineLaunchEnvironmentTest {
     }
 
     @Test
+    fun `kimi code declares anthropic provider type for third party relays`() {
+        // 回归：缺 KIMI_MODEL_PROVIDER_TYPE 时引擎按缺省 "kimi" 回退官方
+        // api.moonshot.ai，第三方 key 会被 Cloudflare 拦截
+        // （真机报 "Authentication required: Attention Required! | Cloudflare"）。
+        val env = EngineLaunchEnvironment.build("kimi-code", creds)
+        assertEquals("anthropic", env["KIMI_MODEL_PROVIDER_TYPE"])
+    }
+
+    @Test
     fun `codex gets openai key and normalized base url`() {
         val env = EngineLaunchEnvironment.build("codex", creds)
 

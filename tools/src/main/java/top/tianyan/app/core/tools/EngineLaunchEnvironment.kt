@@ -119,6 +119,11 @@ object EngineLaunchEnvironment {
             putAnthropicBase(this, baseUrl)
             if (baseUrl.isNotBlank() && ProviderEndpointPolicy.isSafeBaseUrl(baseUrl)) {
                 put("KIMI_MODEL_BASE_URL", EngineEndpointPolicy.normalizeAnthropic(baseUrl))
+                // 必须显式声明 provider type：KIMI_MODEL_PROVIDER_TYPE 缺省为 "kimi"，
+                // 引擎会回退到官方 https://api.moonshot.ai/v1，拿用户的第三方 key 去打
+                // Moonshot，被 Cloudflare 拦截 → "Authentication required: Cloudflare"。
+                // 实测：只给 KIMI_MODEL_BASE_URL 仍然失败，补上本变量即成功。
+                put("KIMI_MODEL_PROVIDER_TYPE", KIMI_PROVIDER_TYPE_ANTHROPIC)
             }
             if (model.isNotBlank()) {
                 put("ANTHROPIC_MODEL", model)
@@ -140,4 +145,10 @@ object EngineLaunchEnvironment {
             target["ANTHROPIC_BASE_URL"] = EngineEndpointPolicy.normalizeAnthropic(baseUrl)
         }
     }
+
+    /**
+     * Kimi Code 的 provider type 取值之一：Anthropic Messages 兼容端点。
+     * 引擎支持的完整集合为 kimi / anthropic / openai；第三方中转站走 anthropic。
+     */
+    private const val KIMI_PROVIDER_TYPE_ANTHROPIC = "anthropic"
 }
