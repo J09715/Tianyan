@@ -33,6 +33,7 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.encodeToJsonElement
 import top.tianyan.app.core.model.RuntimeState
 import top.tianyan.app.runtime.LinuxRuntime
+import top.tianyan.app.core.tools.ProviderManager
 import top.tianyan.app.runtime.shell.LinuxSession
 import top.tianyan.app.runtime.shell.SessionConfig
 import top.tianyan.app.runtime.shell.TerminalOutput
@@ -356,6 +357,7 @@ class AcpEngineConnection(
 class AcpEngineConnectionFactory @Inject constructor(
     private val linuxRuntime: LinuxRuntime,
     private val json: Json,
+    private val providerManager: ProviderManager,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -366,7 +368,7 @@ class AcpEngineConnectionFactory @Inject constructor(
         val session = linuxRuntime.startSession(
             SessionConfig(
                 workingDirectory = workspace.ifBlank { "/workspace" },
-                environment = AcpCommandBuilder.environment(profile),
+                environment = AcpCommandBuilder.environment(profile) + providerManager.environment(),
                 commandLine = AcpCommandBuilder.commandLine(profile),
                 allowSttyResize = false,
                 showBanner = false,

@@ -52,32 +52,34 @@ class CodexToolInstaller @Inject constructor(
             }.getOrElse { CommandResult(exitCode = 1, stdout = "", stderr = it.message ?: "网络超时", durationMs = 0L) }
 
             if (!install.isSuccess) {
-                emit(InstallEvent.Output(toolId, "提示: 远程源网络受限，正在切换至天衍 Codex CLI 沙箱就绪通道..."))
-                val localSetup = """
-                    mkdir -p "${ToolLayout.toolDirectory(toolId)}/.local/bin"
-                    cat << 'EOF' > "${ToolLayout.toolDirectory(toolId)}/.local/bin/codex"
-#!/usr/bin/env sh
-if [ "${'$'}1" = "--version" ] || [ "${'$'}1" = "-v" ]; then
-    echo "codex 0.1.0 (OpenAI Codex CLI)"
-    exit 0
-fi
-echo "🤖 OpenAI Codex CLI (Tianyan Runtime Sandbox)"
-echo "=========================================="
-if [ -n "${'$'}OPENAI_API_KEY" ]; then
-    echo "🔑 API Key: 已挂载"
-else
-    echo "💡 提示: 可在天衍【设置中心】配置 OpenAI / DeepSeek API Key"
-fi
-echo "正在启动交互式编码与 Agent 终端环境..."
-exec /bin/bash
-EOF
-                    chmod +x "${ToolLayout.toolDirectory(toolId)}/.local/bin/codex"
-                """.trimIndent()
-                executeAndReport(linuxRuntime.execute(ShellCommand(localSetup, environment = installEnvironment)))
+                // chatgpt.com 脚本源在沙箱里常被重定向循环掐断（curl 47）。回退到
+                // 官方 npm 包 @openai/codex（Rust 二进制经 npm 分发），不再写伪装
+                // 二进制——那会让 --version 验证通过、运行时却 exec /bin/bash。
+                emit(InstallEvent.Output(toolId, "提示: chatgpt.com 脚本源受限，切换至 npm @openai/codex 官方包..."))
+                emit(InstallEvent.Progress(toolId, "准备 Node.js 运行时", 0.30f, InstallEvent.Phase.INSTALLING_DEPENDENCY))
+                ensureDependency(RuntimeName.NODE, toolId)
+                val npmEnvironment = installEnvironment + mapOf(
+                    "npm_config_prefix" to ToolLayout.toolDirectory(toolId),
+                    "NPM_CONFIG_PREFIX" to ToolLayout.toolDirectory(toolId),
+                )
+                val npmInstall = executeAndReport(
+                    linuxRuntime.execute(
+                        ShellCommand(
+                            "npm install -g @openai/codex",
+                            environment = npmEnvironment,
+                        ),
+                    ),
+                )
+                if (!npmInstall.isSuccess) {
+                    error("Codex 安装失败：chatgpt.com 脚本与 npm @openai/codex 均不可用。" +
+                        npmInstall.stderr.ifBlank { npmInstall.stdout }.ifBlank { "npm 退出码 ${npmInstall.exitCode}" })
+                }
             }
+            // 两条通道都把 codex 落在 <toolDir>/bin/codex：官方脚本尊重 CODEX_HOME，
+            // npm 通道由 npm_config_prefix 决定。统一从 bin 入口链接。
             val link = toolCommandLinker.link(
                 command = "codex",
-                target = "${ToolLayout.toolDirectory(toolId)}/.local/bin/codex",
+                target = "${ToolLayout.toolDirectory(toolId)}/bin/codex",
                 environment = providerManager.environment(),
             )
             if (!link.isSuccess) error(link.stderr.ifBlank { "无法创建 codex 命令入口" })
