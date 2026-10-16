@@ -46,6 +46,50 @@ object EngineLaunchEnvironment {
         }
     }
 
+    /**
+     * 生成 dsh ACP 的 cordis dispatch patch，覆盖硬编码在 dsh acp profile 里的
+     * `provider: deepseek-official / model: deepseek-v4-flash`，让引擎走用户活跃档案的
+     * 模型与端点。dsh 的 `llm-pi-ai` 是通用多 provider 适配器（默认零路由），
+     * 这里提供一个 `tianyan-dispatch` 路由承载凭据，再把 `acp.provider/model` 指过去。
+     *
+     * 对齐 OmniBot 的 `buildDeepSeekProviderPatch`：同一套 provider route + api + baseURL + models。
+     *
+     * @return patch 文件内容；engineId 非 deepseek-harness 或凭据缺失时返回 null。
+     */
+    fun dispatchPatchFor(engineId: String, credentials: Credentials): String? {
+        if (engineId != "deepseek-harness") return null
+        val apiKey = credentials.apiKey.trim()
+        val baseUrl = credentials.baseUrl.trim()
+        val model = credentials.model.trim()
+        if (apiKey.isEmpty() || baseUrl.isEmpty() || model.isEmpty()) return null
+
+        val api = EngineEndpointPolicy.inferPiAiApi(baseUrl)
+        val route = "tianyan-dispatch"
+        val normalizedBase = when (api) {
+            "anthropic-messages" -> EngineEndpointPolicy.normalizeAnthropic(baseUrl)
+            else -> EngineEndpointPolicy.normalizeOpenAi(baseUrl)
+        }
+        return buildString {
+            appendLine("# 由天衍生成的 dsh ACP dispatch 配置：把引擎路由到用户活跃模型档案。")
+            appendLine("- id: llm-pi-ai")
+            appendLine("  config:")
+            appendLine("    providers:")
+            appendLine("      $route:")
+            appendLine("        displayName: Tianyan Dispatch")
+            appendLine("        api: $api")
+            appendLine("        baseURL: $normalizedBase")
+            appendLine("        apiKeyEnv: DEEPSEEK_API_KEY")
+            appendLine("        models:")
+            appendLine("          - id: $model")
+            appendLine("            name: $model")
+            appendLine("- id: acp")
+            appendLine("  config:")
+            appendLine("    provider: $route")
+            appendLine("    model: $model")
+        }
+    }
+
+
     private fun anthropicEnvironment(apiKey: String, baseUrl: String, model: String): Map<String, String> =
         buildMap {
             put("ANTHROPIC_API_KEY", apiKey)

@@ -147,7 +147,7 @@ class AcpSessionRunner @Inject constructor(
         return try {
             // 先等订阅真正挂上再发 prompt：SharedFlow 无 replay，抢跑会吞掉引擎最早的输出。
             binding.connection.awaitSubscriber()
-            val result = binding.connection.prompt(binding.engineSessionId, userText)
+            val result = binding.connection.prompt(binding.engineSessionId, translateTianyanSlash(userText))
             eventJob.cancel()
             projector.endStreaming(sessionId)
             if (textBuffer.isNotEmpty()) {
@@ -280,6 +280,9 @@ class AcpSessionRunner @Inject constructor(
             }.orEmpty()
 
     private suspend fun fail(sessionId: String, message: String): AcpTurnOutcome {
+        // 引擎失败落盘（runtime.log），脱敏由 AppLogger 的 SensitiveDataRedactor 统一处理；
+        // 这样用户遇到「执行失败」后，能从日志里拿到 stderr / 协议错误的完整上下文。
+        logger.e("ACP[session:$sessionId] $message")
         stateMirrors.setError(sessionId, message)
         stateMirrors.setRunState(sessionId, SessionRunState.FAILED)
         stateMirrors.setStatus(sessionId, null)
@@ -314,4 +317,32 @@ class AcpSessionRunner @Inject constructor(
         const val PERMISSION_TTL_MS = 10 * 60 * 1000L
         const val STOP_REASON_CANCELLED = "cancelled"
     }
+}
+
+/**
+ * 把天衍本体的 slash 快捷命令翻译成引擎能理解的纯文本任务描述。
+ *
+ * 天衍的 `/run`、`/install`、`/git` 等是给天衍本体 LLM 的提示词约定（通过系统提示词
+ * 解释），但绑定引擎会话时用户输入会被原样交给引擎进程。dsh / Claude Code 等引擎
+ * 有各自的 slash 命令集，收到 `/run` 会报 `Unknown ACP command: /run`。
+ * 因此引擎会话发送前必须把天衍自己的命令翻译成一句明确的自然语言任务。
+ */
+internal fun translateTianyanSlash(text: String): String {
+    val trimmed = text.trimStart()
+    if (!trimmed.startsWith("/")) return text
+    val (command, rest) = trimmed.split(' ', limit = 2).let { parts ->
+        parts[0] to parts.getOrElse(1) { "" }
+    }
+    val tail = rest.trim()
+    val translated = when (command) {
+        "/run" -> if (tail.isBlank()) "运行当前工作区的入口代码" else "运行：$tail"
+        "/install" -> if (tail.isBlank()) "安装当前项目所需的依赖" else "安装依赖：$tail"
+        "/init" -> if (tail.isBlank()) "初始化当前项目" else "初始化项目：$tail"
+        "/git" -> if (tail.isBlank()) "查看 git 状态" else "执行 git 操作：$tail"
+        "/test" -> if (tail.isBlank()) "运行当前项目的测试" else "运行测试：$tail"
+        "/wf" -> if (tail.isBlank()) "执行工作流" else "执行工作流：$tail"
+        "/help", "/clear" -> return text
+        else -> return text
+    }
+    return translated
 }

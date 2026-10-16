@@ -33,9 +33,12 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.encodeToJsonElement
 import top.tianyan.app.core.model.RuntimeState
 import top.tianyan.app.runtime.LinuxRuntime
+import top.tianyan.app.core.common.logging.AppLogger
+import top.tianyan.app.core.tools.EngineLaunchEnvironment
 import top.tianyan.app.core.tools.ProviderManager
 import top.tianyan.app.runtime.shell.LinuxSession
 import top.tianyan.app.runtime.shell.SessionConfig
+import top.tianyan.app.runtime.shell.ShellCommand
 import top.tianyan.app.runtime.shell.TerminalOutput
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -80,6 +83,7 @@ class AcpEngineConnection(
     private val session: LinuxSession,
     private val json: Json,
     private val scope: CoroutineScope,
+    private val logger: AppLogger,
     private val maxFrameChars: Int = MAX_FRAME_CHARS,
 ) {
     private val pending = ConcurrentHashMap<String, kotlinx.coroutines.CompletableDeferred<AcpResponse>>()
@@ -120,7 +124,12 @@ class AcpEngineConnection(
         val buffer = StringBuilder()
         try {
             session.output.collect { output: TerminalOutput ->
-                if (output.stream == top.tianyan.app.runtime.shell.TerminalStream.STDERR) return@collect
+                if (output.stream == top.tianyan.app.runtime.shell.TerminalStream.STDERR) {
+                    // 引擎的真实报错（npm 缺失依赖、DeepSeek Messages transport failed 等）
+                    // 大多打在 stderr，此前被直接丢弃导致「日志看不到报错原因」。落盘以便诊断。
+                    logStderr(output.text)
+                    return@collect
+                }
                 val chunk = output.text
                 var start = 0
                 while (start < chunk.length) {
@@ -143,6 +152,7 @@ class AcpEngineConnection(
         } catch (_: CancellationException) {
             throw CancellationException()
         } catch (t: Throwable) {
+            logger.w("ACP[$engineId] 读循环异常", t)
             emitSystem("ACP 读循环异常：${t.message ?: t::class.simpleName}")
         } finally {
             failAllPending("ACP 引擎进程已退出")
@@ -152,8 +162,18 @@ class AcpEngineConnection(
         }
     }
 
+    private fun logStderr(text: String) {
+        val trimmed = text.trim()
+        if (trimmed.isBlank()) return
+        // stderr 逐行/逐块都可能携带密钥类敏感内容；AppLogger 内部有 SensitiveDataRedactor 统一脱敏。
+        logger.w("ACP[$engineId] stderr: $trimmed")
+    }
+
     private suspend fun dispatchFrame(line: String) {
         val element = runCatching { json.parseToJsonElement(line) }.getOrNull() ?: run {
+            // 非 JSON 行：可能是引擎启动 banner、skipping-bundle 日志，也可能是协议故障前兆。
+            // 落盘而非只上屏，诊断时能看到完整上下文。
+            logger.w("ACP[$engineId] 非 JSON 输出: $line")
             emitSystem("ACP 输出了非 JSON 行，已忽略")
             return
         }
@@ -175,7 +195,10 @@ class AcpEngineConnection(
                 pending.remove(id)?.complete(parsed)
             }
 
-            else -> emitSystem("ACP 输出了无 method 也无 id 的帧，已忽略")
+            else -> {
+                logger.w("ACP[$engineId] 无 method 也无 id 的帧: $line")
+                emitSystem("ACP 输出了无 method 也无 id 的帧，已忽略")
+            }
         }
     }
 
@@ -314,7 +337,11 @@ class AcpEngineConnection(
             pending.remove(id)
             throw t
         }.also { response ->
-            response.error?.let { error("ACP JSON-RPC ${it.code}：${it.message}") }
+            response.error?.let {
+                // 协议错误（-32000 auth、-32603 internal 等）是引擎失败的直接原因，落盘后再抛。
+                logger.e("ACP[$engineId] JSON-RPC ${it.code}：${it.message}")
+                error("ACP JSON-RPC ${it.code}：${it.message}")
+            }
         }
     }
 
@@ -358,6 +385,7 @@ class AcpEngineConnectionFactory @Inject constructor(
     private val linuxRuntime: LinuxRuntime,
     private val json: Json,
     private val providerManager: ProviderManager,
+    private val logger: AppLogger,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -365,11 +393,16 @@ class AcpEngineConnectionFactory @Inject constructor(
         check(linuxRuntime.state.value is RuntimeState.Ready) {
             "Linux 沙箱尚未就绪，无法拉起智能体引擎 ${profile.name}"
         }
+        // DeepSeek Harness 的 acp profile 把 provider/model 硬编码为
+        // deepseek-official / deepseek-v4-flash；必须写一份 dispatch patch 覆盖成
+        // 用户活跃档案的模型与端点，否则引擎用错模型/端点报 Messages transport failed。
+        // 对齐 OmniBot 的 buildDeepSeekProviderPatch + `dsh ... --patch ...` 启动参数。
+        val patchArgs = prepareDispatchPatch(profile)
         val session = linuxRuntime.startSession(
             SessionConfig(
                 workingDirectory = workspace.ifBlank { "/workspace" },
                 environment = AcpCommandBuilder.environment(profile) + providerManager.engineLaunchEnvironment(profile.id),
-                commandLine = AcpCommandBuilder.commandLine(profile),
+                commandLine = AcpCommandBuilder.commandLine(profile, patchArgs),
                 allowSttyResize = false,
                 showBanner = false,
                 // 按行分帧的 JSON-RPC：PTY 行规程的回显会把宿主请求帧读回来，
@@ -382,7 +415,33 @@ class AcpEngineConnectionFactory @Inject constructor(
             session = session,
             json = json,
             scope = scope,
+            logger = logger,
         )
+    }
+
+    /**
+     * deepseek-harness：把活跃档案凭据写成 dsh 的 cordis dispatch patch，并返回
+     * 追加到启动命令后的 `--patch <path>` 参数。其余引擎返回空列表。
+     */
+    private suspend fun prepareDispatchPatch(profile: AgentEngineProfile): List<String> {
+        if (profile.id != "deepseek-harness") return emptyList()
+        val credentials = providerManager.engineLaunchCredentials(profile.id) ?: return emptyList()
+        val patch = EngineLaunchEnvironment.dispatchPatchFor(profile.id, credentials) ?: return emptyList()
+        return runCatching {
+            linuxRuntime.execute(
+                ShellCommand(
+                    commandLine = "mkdir -p ${DSH_DISPATCH_DIR} && cat > ${DSH_DISPATCH_PATCH} << 'TIANYAN_EOF'\n$patch\nTIANYAN_EOF",
+                    timeoutMs = 10_000L,
+                ),
+            ).let { result ->
+                if (result.isSuccess) listOf("--patch", DSH_DISPATCH_PATCH) else emptyList()
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    private companion object {
+        const val DSH_DISPATCH_DIR = "/opt/tianyan/data/deepseek-harness"
+        const val DSH_DISPATCH_PATCH = "$DSH_DISPATCH_DIR/tianyan-dispatch.patch.yml"
     }
 }
 
@@ -394,9 +453,10 @@ object AcpCommandBuilder {
     /**
      * 命令入口优先用 /opt/tianyan/bin 下的 shim（插件中心安装时创建），
      * 回落到 PATH 里的原始命令名，与工具安装链路保持一致。
+     * [extraArgs] 追加在目录声明的 arguments 之后（如 deepseek-harness 的 --patch）。
      */
-    fun commandLine(profile: AgentEngineProfile): String {
-        val args = profile.arguments.joinToString(" ") { shellQuote(it) }
+    fun commandLine(profile: AgentEngineProfile, extraArgs: List<String> = emptyList()): String {
+        val args = (profile.arguments + extraArgs).joinToString(" ") { shellQuote(it) }
         val command = shellQuote(profile.command)
         val suffix = if (args.isBlank()) "" else " $args"
         return "if [ -x /opt/tianyan/bin/${profile.command} ]; then " +

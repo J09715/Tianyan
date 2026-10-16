@@ -77,6 +77,21 @@ object EngineEndpointPolicy {
      */
     fun normalizeDeepSeek(baseUrl: String): String = normalizeAnthropic(baseUrl)
 
+    /**
+     * dsh `llm-pi-ai` 通用 provider 的 wire 协议判定。对齐 OmniBot 的
+     * `resolveDeepSeekHarnessApi`：Anthropic Messages 官方端点走 anthropic-messages，
+     * DeepSeek 官方主机也走 anthropic-messages（DeepSeek 对外暴露 Messages 兼容端点），
+     * 其余一律按 OpenAI Chat Completions 兼容处理。
+     */
+    fun inferPiAiApi(baseUrl: String): String {
+        val host = hostOf(baseUrl)
+        return when (host) {
+            "api.anthropic.com" -> "anthropic-messages"
+            "api.deepseek.com" -> "anthropic-messages"
+            else -> "openai-completions"
+        }
+    }
+
     private fun anthropicAuthorityRoot(url: String): String {
         val uri = runCatching { java.net.URI(url) }.getOrNull()
         return if (uri != null && !uri.scheme.isNullOrBlank() && !uri.rawAuthority.isNullOrBlank()) {

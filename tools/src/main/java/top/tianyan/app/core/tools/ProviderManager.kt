@@ -64,6 +64,12 @@ open class ProviderManager {
         return EngineLaunchEnvironment.build(engineId, credentials)
     }
 
+    /** 引擎启动的完整凭据 + dsh dispatch patch（deepseek-harness 需要写 patch 覆盖 provider/model）。 */
+    suspend fun engineLaunchCredentials(engineId: String): EngineLaunchEnvironment.Credentials? {
+        val repo = providerRepository ?: return null
+        return activeModelCredentials(repo) ?: fallbackCredentials(repo)
+    }
+
     /** 活跃模型档案 → 凭据三要素；无活跃档案或 key 为空时返回 null。 */
     private suspend fun activeModelCredentials(
         repo: ProviderRepository,
