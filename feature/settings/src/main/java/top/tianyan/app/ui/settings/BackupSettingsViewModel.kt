@@ -21,6 +21,7 @@ import top.tianyan.app.core.common.result.AppResult
 import top.tianyan.app.core.common.result.ErrorCode
 import top.tianyan.app.runtime.BackupExportResult
 import top.tianyan.app.runtime.BackupManager
+import top.tianyan.app.runtime.BackupSectionSelection
 
 data class BackupUiState(
     val busy: Boolean = false,
@@ -31,6 +32,7 @@ data class BackupUiState(
     val localBackupTime: Long = 0L,
     val pendingSections: List<String> = emptyList(),
     val pendingAt: Long = 0L,
+    val selection: BackupSectionSelection = BackupSectionSelection(),
 )
 
 /**
@@ -80,8 +82,20 @@ class BackupSettingsViewModel @Inject constructor(
         return "tianyan-backup-$stamp.zip"
     }
 
+    /** 切换单个分类勾选；空选时禁止导出（按钮置灰，这里不做静默全量兜底）。 */
+    fun setSectionSelected(section: String, selected: Boolean) {
+        _state.value = _state.value.copy(selection = _state.value.selection.with(section, selected))
+    }
+
+    fun toggleAllSections() {
+        val current = _state.value.selection
+        val target = if (current.allSelected()) BackupSectionSelection(db = false, prefs = false, blobs = false, files = false, checkpoints = false) else BackupSectionSelection()
+        _state.value = _state.value.copy(selection = target)
+    }
+
     fun export(target: Uri) {
         val context = application.applicationContext
+        val selection = _state.value.selection
         viewModelScope.launch {
             _state.value = _state.value.copy(busy = true, message = null)
             val archiveName = suggestedArchiveName()
@@ -90,8 +104,9 @@ class BackupSettingsViewModel @Inject constructor(
                     ?: return@withContext AppResult.Failure(
                         AppError(ErrorCode.IO, "无法写入所选位置"),
                     )
-                // BackupManager 负责冲刷但也会在失败时关闭流，故不再 use 包一层。
-                backupManager.export(stream, archiveName)
+                // 导出成功路径这里必须自己关流：BackupManager 只冲刷不关闭
+                //（流归 SAF URI 持有方管理），否则文件描述符泄漏到 GC 才回收。
+                stream.use { backupManager.export(it, archiveName, selection) }
             }
             when (result) {
                 is AppResult.Success -> {
@@ -150,7 +165,17 @@ class BackupSettingsViewModel @Inject constructor(
         BackupManager.SECTION_PREFS -> "偏好设置"
         BackupManager.SECTION_BLOBS -> "会话大载荷"
         BackupManager.SECTION_FILES -> "附件与工作区"
+        BackupManager.SECTION_CHECKPOINTS -> "对话回滚快照"
         else -> section
+    }
+
+    fun sectionSubtitle(section: String): String = when (section) {
+        BackupManager.SECTION_DB -> "会话、模型档案、项目索引、红队事实等全部数据表"
+        BackupManager.SECTION_PREFS -> "主题、端点、工具参数与已加密的密钥密文"
+        BackupManager.SECTION_BLOBS -> "会话里超出 SQLite 行上限的外置载荷文件"
+        BackupManager.SECTION_FILES -> "附件目录与工作区（技能包、上传文件、用户项目）"
+        BackupManager.SECTION_CHECKPOINTS -> "每轮写文件前的回滚快照（撤销/回退依赖）"
+        else -> ""
     }
 
     fun formatSize(bytes: Long): String = when {

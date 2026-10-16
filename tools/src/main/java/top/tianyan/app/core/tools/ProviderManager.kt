@@ -10,23 +10,19 @@ import top.tianyan.app.core.database.AiModelRepository
 open class ProviderManager {
     private val providerRepository: ProviderRepository?
     private val aiModelRepository: AiModelRepository?
-    private val providerCatalog: AgentProviderCatalog?
 
     @Inject
     constructor(
         providerRepository: ProviderRepository,
         aiModelRepository: AiModelRepository,
-        providerCatalog: AgentProviderCatalog,
     ) {
         this.providerRepository = providerRepository
         this.aiModelRepository = aiModelRepository
-        this.providerCatalog = providerCatalog
     }
 
     constructor() {
         this.providerRepository = null
         this.aiModelRepository = null
-        this.providerCatalog = null
     }
 
     open suspend fun environment(): Map<String, String> {
@@ -50,35 +46,51 @@ open class ProviderManager {
     }
 
     /**
-     * 按引擎声明的 provider 注入凭据，与 [environment] 的区别是：不看「当前选中 provider」，
-     * 而是按 credentialProvider（agent_providers.json 里的 id）定位对应模型档案的 key，
-     * 让 DeepSeek Harness、Kimi Code 等引擎各自拿各自的 key，互不覆盖。
-     * credentialProvider 为空（如 OpenCode 多模型引擎）时回落到 [environment]。
+     * 引擎进程启动环境：统一用**当前活跃模型档案**（用户在天衍「设置 → 模型」里
+     * 配置并激活的那份）作为凭据来源，按引擎协议翻译成对应环境变量。
+     *
+     * 为什么不用「按引擎 id 反查 provider 名再匹配档案」的方案：天衍的模型档案是唯一
+     * 事实来源，用户常把一个 DeepSeek / 自定义中转档案同时用于 Claude Code、Codex、DSH
+     * 多个引擎；按引擎 id 反查 provider 名去匹配档案，一旦档案 provider 是显示名
+     * （"Anthropic Claude"）或自定义项就匹配落空，最终连 key 都没注入——这正是上游
+     * v0.18.32 修完仍报 `Authentication required` / `no API key` 的原因。
+     *
+     * 活跃档案拿不到 key 时，回落到全局 provider key（老式「当前 provider」配置），
+     * 与 [ProviderClient] 的 [top.tianyan.app.harness.ModelConfig] 解析保持一致。
      */
-    suspend fun environmentFor(credentialProvider: String): Map<String, String> {
+    suspend fun engineLaunchEnvironment(engineId: String): Map<String, String> {
         val repo = providerRepository ?: return emptyMap()
-        val providerId = credentialProvider.trim()
-        if (providerId.isBlank()) return environment()
-
-        val apiKey = readProviderApiKey(providerId) ?: repo.readApiKey()
-        val variable = keyVariableFor(providerId.lowercase())
-        val result = linkedMapOf<String, String>()
-        if (!apiKey.isNullOrBlank() && variable != null) result[variable] = apiKey
-        return result
+        val credentials = activeModelCredentials(repo) ?: fallbackCredentials(repo) ?: return emptyMap()
+        return EngineLaunchEnvironment.build(engineId, credentials)
     }
 
-    /** 从 provider 匹配的模型档案读 key（档案 provider 字段存 name 或 id 均可命中）。 */
-    private suspend fun readProviderApiKey(providerId: String): String? {
-        val repo = providerRepository ?: return null
+    /** 活跃模型档案 → 凭据三要素；无活跃档案或 key 为空时返回 null。 */
+    private suspend fun activeModelCredentials(
+        repo: ProviderRepository,
+    ): EngineLaunchEnvironment.Credentials? {
         val dao = aiModelRepository ?: return null
-        val catalog = providerCatalog ?: return null
-        val providerName = catalog.providers.firstOrNull { it.id == providerId }?.name ?: return null
-        val profile = dao.observeAll().first().firstOrNull { entity ->
-            entity.provider.equals(providerName, ignoreCase = true) ||
-                entity.provider.equals(providerId, ignoreCase = true)
-        } ?: return null
-        val secretRef = profile.secretRef.takeIf { it.isNotBlank() } ?: return null
-        return repo.readModelApiKey(secretRef)?.takeIf { it.isNotBlank() }
+        val active = dao.activeModel() ?: return null
+        val keys = repo.readModelApiKeys(active.secretRef)
+        val apiKey = keys.firstOrNull() ?: repo.readApiKey().orEmpty()
+        if (apiKey.isBlank()) return null
+        return EngineLaunchEnvironment.Credentials(
+            apiKey = apiKey,
+            baseUrl = active.baseUrl.ifBlank { repo.baseUrl.first() },
+            model = active.model.split(',').firstOrNull()?.trim().orEmpty(),
+        )
+    }
+
+    /** 全局「当前 provider」兜底（未建立模型档案时的老配置路径）。 */
+    private suspend fun fallbackCredentials(
+        repo: ProviderRepository,
+    ): EngineLaunchEnvironment.Credentials? {
+        val apiKey = repo.readApiKey().orEmpty()
+        if (apiKey.isBlank()) return null
+        return EngineLaunchEnvironment.Credentials(
+            apiKey = apiKey,
+            baseUrl = repo.baseUrl.first(),
+            model = repo.model.first(),
+        )
     }
 
     /** provider id → 引擎进程认的环境变量名。Kimi Code 是 Claude Code fork，认 ANTHROPIC_API_KEY。 */

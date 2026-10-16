@@ -36,9 +36,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import top.tianyan.app.runtime.BackupManager
 import top.tianyan.app.ui.components.RuntimeAlertDialog
 import top.tianyan.app.ui.components.RuntimeButton as Button
 import top.tianyan.app.ui.components.RuntimeCard
+import top.tianyan.app.ui.components.RuntimeCheckbox
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeOutlinedButton as OutlinedButton
@@ -122,27 +124,50 @@ fun BackupSettingsScreen(
         ) {
             SettingsSection("备份范围") {
                 BackupSettingsRow(
+                    icon = RuntimeIconName.Check,
+                    title = if (state.selection.allSelected()) "取消全选" else "全选",
+                    subtitle = "默认备份整个软件数据；取消勾选可只备份部分分类",
+                    onClick = viewModel::toggleAllSections,
+                )
+                Divider()
+                SelectableBackupRow(
                     icon = RuntimeIconName.Storage,
                     title = "应用数据库",
-                    subtitle = "会话、模型档案、项目索引、红队事实等全部数据表",
+                    subtitle = viewModel.sectionSubtitle(BackupManager.SECTION_DB),
+                    checked = state.selection.db,
+                    onCheckedChange = { viewModel.setSectionSelected(BackupManager.SECTION_DB, it) },
                 )
                 Divider()
-                BackupSettingsRow(
+                SelectableBackupRow(
                     icon = RuntimeIconName.Tune,
                     title = "偏好设置",
-                    subtitle = "主题、端点、工具参数与已加密的密钥密文",
+                    subtitle = viewModel.sectionSubtitle(BackupManager.SECTION_PREFS),
+                    checked = state.selection.prefs,
+                    onCheckedChange = { viewModel.setSectionSelected(BackupManager.SECTION_PREFS, it) },
                 )
                 Divider()
-                BackupSettingsRow(
+                SelectableBackupRow(
                     icon = RuntimeIconName.Document,
                     title = "会话大载荷",
-                    subtitle = "会话里超出 SQLite 行上限的外置载荷文件",
+                    subtitle = viewModel.sectionSubtitle(BackupManager.SECTION_BLOBS),
+                    checked = state.selection.blobs,
+                    onCheckedChange = { viewModel.setSectionSelected(BackupManager.SECTION_BLOBS, it) },
                 )
                 Divider()
-                BackupSettingsRow(
+                SelectableBackupRow(
                     icon = RuntimeIconName.Folder,
                     title = "附件与工作区",
-                    subtitle = "附件目录与工作区（技能包、上传文件、用户项目）",
+                    subtitle = viewModel.sectionSubtitle(BackupManager.SECTION_FILES),
+                    checked = state.selection.files,
+                    onCheckedChange = { viewModel.setSectionSelected(BackupManager.SECTION_FILES, it) },
+                )
+                Divider()
+                SelectableBackupRow(
+                    icon = RuntimeIconName.Update,
+                    title = "对话回滚快照",
+                    subtitle = viewModel.sectionSubtitle(BackupManager.SECTION_CHECKPOINTS),
+                    checked = state.selection.checkpoints,
+                    onCheckedChange = { viewModel.setSectionSelected(BackupManager.SECTION_CHECKPOINTS, it) },
                 )
             }
 
@@ -195,7 +220,7 @@ fun BackupSettingsScreen(
                 ) {
                     Button(
                         onClick = { exportLauncher.launch(viewModel.suggestedArchiveName()) },
-                        enabled = !state.busy,
+                        enabled = !state.busy && !state.selection.isEmpty(),
                         modifier = Modifier.weight(1f),
                     ) { Text(if (state.busy) "处理中…" else "导出备份") }
                     OutlinedButton(
@@ -314,5 +339,51 @@ private fun BackupSettingsRow(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
             )
         }
+    }
+}
+
+/** 带勾选框的备份分类行：整行可点，右侧 RuntimeCheckbox 反映并切换选中态。 */
+@Composable
+private fun SelectableBackupRow(
+    icon: RuntimeIconName,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) }
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .clip(RoundedCornerShape(9.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), RoundedCornerShape(9.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            RuntimeIcon(icon, Modifier.size(17.dp), tint = MaterialTheme.colorScheme.primary)
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        RuntimeCheckbox(checked = checked, onCheckedChange = onCheckedChange)
     }
 }

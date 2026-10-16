@@ -32,6 +32,39 @@ data class BackupSectionStat(
     val bytes: Long,
 )
 
+/**
+ * 备份分类勾选。默认全选 = 整个软件数据；用户可取消任一分类做部分备份。
+ * 恢复时若包内不含某分类，该分类自然跳过，与全量包共用同一条恢复路径。
+ */
+data class BackupSectionSelection(
+    val db: Boolean = true,
+    val prefs: Boolean = true,
+    val blobs: Boolean = true,
+    val files: Boolean = true,
+    val checkpoints: Boolean = true,
+) {
+    fun selected(section: String): Boolean = when (section) {
+        BackupManager.SECTION_DB -> db
+        BackupManager.SECTION_PREFS -> prefs
+        BackupManager.SECTION_BLOBS -> blobs
+        BackupManager.SECTION_FILES -> files
+        BackupManager.SECTION_CHECKPOINTS -> checkpoints
+        else -> false
+    }
+
+    fun with(section: String, value: Boolean): BackupSectionSelection = when (section) {
+        BackupManager.SECTION_DB -> copy(db = value)
+        BackupManager.SECTION_PREFS -> copy(prefs = value)
+        BackupManager.SECTION_BLOBS -> copy(blobs = value)
+        BackupManager.SECTION_FILES -> copy(files = value)
+        BackupManager.SECTION_CHECKPOINTS -> copy(checkpoints = value)
+        else -> this
+    }
+
+    fun isEmpty(): Boolean = !db && !prefs && !blobs && !files && !checkpoints
+    fun allSelected(): Boolean = db && prefs && blobs && files && checkpoints
+}
+
 /** 导出结果：包名 + 各分区统计。 */
 data class BackupExportResult(
     val archiveName: String,
@@ -97,10 +130,16 @@ class BackupManager @Inject constructor(
     }
 
     /**
-     * 把全量数据写入 [output]（调用方负责 URI/流生命周期）。
+     * 把选定分类的数据写入 [output]（调用方负责 URI/流生命周期）。
      * 归档同时写入本地 [backupRoot]，返回的包名即两侧同名文件。
+     *
+     * @param selection 分类勾选；全选时与旧全量备份完全一致。
      */
-    suspend fun export(output: OutputStream, archiveName: String): AppResult<BackupExportResult> =
+    suspend fun export(
+        output: OutputStream,
+        archiveName: String,
+        selection: BackupSectionSelection = BackupSectionSelection(),
+    ): AppResult<BackupExportResult> =
         withContext(Dispatchers.IO) {
             try {
                 val name = normalizeArchiveName(archiveName)
@@ -112,10 +151,11 @@ class BackupManager @Inject constructor(
 
                 val temp = File(backupRoot, "$name.tmp")
                 ZipOutputStream(temp.outputStream().buffered()).use { zip ->
-                    writeSection(zip, SECTION_DB, listOfNotNull(databaseFile()), stats)
-                    writeSection(zip, SECTION_PREFS, listOfNotNull(preferencesFile()), stats)
-                    writeSection(zip, SECTION_BLOBS, listOfNotNull(blobDir()), stats)
-                    writeSection(zip, SECTION_FILES, listOfNotNull(attachmentsDirIfPresent(), workspaceDirIfPresent()), stats)
+                    writeSectionIf(zip, SECTION_DB, listOfNotNull(databaseFile()), selection.db, stats)
+                    writeSectionIf(zip, SECTION_PREFS, listOfNotNull(preferencesFile()), selection.prefs, stats)
+                    writeSectionIf(zip, SECTION_BLOBS, listOfNotNull(blobDir()), selection.blobs, stats)
+                    writeSectionIf(zip, SECTION_FILES, listOfNotNull(attachmentsDirIfPresent(), workspaceDirIfPresent()), selection.files, stats)
+                    writeSectionIf(zip, SECTION_CHECKPOINTS, listOfNotNull(checkpointsDirIfPresent()), selection.checkpoints, stats)
 
                     zip.putNextEntry(ZipEntry(MANIFEST_ENTRY))
                     zip.write(buildManifest(name, stats).toByteArray(Charsets.UTF_8))
@@ -257,7 +297,12 @@ class BackupManager @Inject constructor(
                 }
             }
             if (pending.sourceDir.resolve(SECTION_BLOBS).isDirectory) {
-                replaceTree(File(pending.sourceDir, SECTION_BLOBS), blobTarget()) {
+                // 归档内 blobs 分区布局是 `blobs/harness_blobs/<session>/<entry>.json`，
+                // 恢复目标必须是 files/harness_blobs，不能把外层 blobs 目录整个拷过去——
+                // 否则 DB 里的 `@@TIANYAN_BLOB@@:harness_blobs/...` 引用会多一层 `harness_blobs`。
+                val staged = File(pending.sourceDir, SECTION_BLOBS)
+                val inner = File(staged, BLOB_DIR_NAME).takeIf { it.isDirectory } ?: staged
+                replaceTree(inner, blobTarget()) {
                     applied += SECTION_BLOBS
                 }
             }
@@ -271,6 +316,13 @@ class BackupManager @Inject constructor(
                         else -> null
                     } ?: return@forEach
                     replaceTree(child, target) { applied += "$SECTION_FILES/$name" }
+                }
+            }
+            if (pending.sourceDir.resolve(SECTION_CHECKPOINTS).isDirectory) {
+                val staged = File(pending.sourceDir, SECTION_CHECKPOINTS)
+                val inner = File(staged, CHECKPOINTS_DIR_NAME).takeIf { it.isDirectory } ?: staged
+                replaceTree(inner, checkpointsTarget()) {
+                    applied += SECTION_CHECKPOINTS
                 }
             }
             SafeFileTree.delete(pending.sourceDir)
@@ -288,6 +340,16 @@ class BackupManager @Inject constructor(
             val db = database.openHelper.writableDatabase
             db.query("PRAGMA wal_checkpoint(TRUNCATE)").use { it.moveToFirst() }
         }
+    }
+
+    private fun writeSectionIf(
+        zip: ZipOutputStream,
+        section: String,
+        roots: List<File>,
+        enabled: Boolean,
+        stats: MutableList<BackupSectionStat>,
+    ) {
+        if (enabled) writeSection(zip, section, roots, stats)
     }
 
     private fun writeSection(
@@ -435,6 +497,12 @@ class BackupManager @Inject constructor(
 
     private fun blobTarget(): File = File(context.filesDir, BLOB_DIR_NAME)
 
+    private fun checkpointsDirIfPresent(): File? =
+        checkpointsTarget().takeIf { it.isDirectory }
+
+    /** checkpoint 快照落盘目录，与 AppModule 的 FileCheckpointPersistence 保持一致。 */
+    private fun checkpointsTarget(): File = File(pathManager.baseDir, CHECKPOINTS_DIR_NAME)
+
     private fun attachmentsDirIfPresent(): File? =
         pathManager.attachmentsDir.takeIf { it.isDirectory }
 
@@ -467,6 +535,7 @@ class BackupManager @Inject constructor(
         const val SECTION_PREFS = "prefs"
         const val SECTION_BLOBS = "blobs"
         const val SECTION_FILES = "files"
+        const val SECTION_CHECKPOINTS = "checkpoints"
         const val BACKUP_ATTACHMENTS_NAME = "attachments"
         const val BACKUP_WORKSPACE_NAME = "workspace"
         const val MANIFEST_ENTRY = "manifest.json"
@@ -480,6 +549,7 @@ class BackupManager @Inject constructor(
         private const val DATASTORE_DIR = "datastore"
         private const val PREFERENCES_FILE_NAME = "settings.preferences_pb"
         private const val BLOB_DIR_NAME = "harness_blobs"
+        private const val CHECKPOINTS_DIR_NAME = "checkpoints"
         private const val MAX_LOCAL_BACKUPS = 5
         private const val FILE_BACKUP_SUFFIX = ".restore.bak"
         private const val MAX_ARCHIVE_ENTRIES = 200_000

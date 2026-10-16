@@ -368,7 +368,7 @@ class AcpEngineConnectionFactory @Inject constructor(
         val session = linuxRuntime.startSession(
             SessionConfig(
                 workingDirectory = workspace.ifBlank { "/workspace" },
-                environment = AcpCommandBuilder.environment(profile) + providerManager.environmentFor(profile.credentialProvider),
+                environment = AcpCommandBuilder.environment(profile) + providerManager.engineLaunchEnvironment(profile.id),
                 commandLine = AcpCommandBuilder.commandLine(profile),
                 allowSttyResize = false,
                 showBanner = false,
