@@ -23,6 +23,8 @@ import top.tianyan.app.core.database.AgentApprovalRepository
 import top.tianyan.app.core.database.AgentApprovalRequestEntity
 import top.tianyan.app.core.model.ApprovalMode
 import top.tianyan.app.core.model.SessionRunState
+import top.tianyan.app.core.tools.EngineEndpointPolicy
+import top.tianyan.app.core.tools.ProviderManager
 import top.tianyan.app.harness.AssistantText
 import top.tianyan.app.harness.UserMessage
 import top.tianyan.app.harness.projection.SessionMessageProjector
@@ -58,6 +60,7 @@ class AcpSessionRunner @Inject constructor(
     private val projector: SessionMessageProjector,
     private val stateMirrors: SessionStateMirrors,
     private val approvalRepository: AgentApprovalRepository,
+    private val providerManager: ProviderManager,
     private val logger: AppLogger,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -214,6 +217,7 @@ class AcpSessionRunner @Inject constructor(
         val connection = connectionFactory.open(profile, workspace)
         try {
             connection.initialize()
+            applyProviderRouting(profile, connection)
             val engineSessionId = connection.newSession(
                 tianyanSessionId = sessionId,
                 cwd = workspace.ifBlank { "/workspace" },
@@ -226,6 +230,36 @@ class AcpSessionRunner @Inject constructor(
         } catch (t: Throwable) {
             runCatching { connection.close() }
             throw t
+        }
+    }
+
+    /**
+     * 对「客户端托管 LLM 路由」型引擎（当前为 Claude Code）用 ACP `providers/set`
+     * 把端点与密钥交给引擎进程。
+     *
+     * 这一步不能省：claude-agent-acp 不读 ANTHROPIC_BASE_URL / ANTHROPIC_API_KEY，
+     * 未配置时会主动清空这些变量并回退官方 native 端点（表现为
+     * `apiType=native baseUrl=native` + `Authentication required`）。小万（OmniBot）
+     * 同样走 providers/set，因此同一个中转站端点能喂通它的全部引擎。
+     *
+     * 仅对 anthropic 协议引擎生效；失败只记录不阻断，让引擎按自身配置降级。
+     */
+    private suspend fun applyProviderRouting(
+        profile: AgentEngineProfile,
+        connection: AcpEngineConnection,
+    ) {
+        if (profile.id !in PROVIDER_ROUTED_ENGINES) return
+        val credentials = providerManager.engineLaunchCredentials(profile.id) ?: run {
+            logger.w("ACP[${profile.id}] 无可用模型档案凭据，跳过 providers/set")
+            return
+        }
+        // providers/set 的 baseUrl 是 Messages 根：引擎自行追加 /v1/messages，
+        // 因此这里去掉 OpenAI 风格的 /v1 后缀。
+        val baseUrl = EngineEndpointPolicy.normalizeAnthropic(credentials.baseUrl)
+        if (baseUrl.isBlank()) return
+        val applied = connection.setProvider(baseUrl = baseUrl, apiKey = credentials.apiKey)
+        if (!applied) {
+            logger.w("ACP[${profile.id}] providers/set 未生效，引擎可能回退官方端点")
         }
     }
 
@@ -316,6 +350,13 @@ class AcpSessionRunner @Inject constructor(
     private companion object {
         const val PERMISSION_TTL_MS = 10 * 60 * 1000L
         const val STOP_REASON_CANCELLED = "cancelled"
+
+        /**
+         * 需要 ACP `providers/set` 才能改端点的引擎。Claude Code 的 ACP 适配器
+         * 明确忽略 ANTHROPIC_* 环境变量（见 AcpProtocol.METHOD_PROVIDERS_SET 注释），
+         * 只能走协议层配置。
+         */
+        val PROVIDER_ROUTED_ENGINES = setOf("claude-code")
     }
 }
 

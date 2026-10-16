@@ -258,6 +258,34 @@ class AcpEngineConnection(
         return json.decodeFromJsonElement(AcpInitializeResult.serializer(), result)
     }
 
+    /**
+     * 用 ACP `providers/set` 扩展把引擎的 LLM 路由指向用户活跃模型档案。
+     *
+     * 只对支持该扩展的引擎（当前为 claude-agent-acp）有意义；调用方需先确认
+     * initialize 回复里声明了 `agentCapabilities.providers`。失败不致命——
+     * 引擎仍可回退到自身配置，但会表现为官方端点，因此调用方应记录失败原因。
+     *
+     * @param baseUrl Anthropic Messages 根（不含 /v1，引擎自行追加 /v1/messages）
+     * @param apiKey 真实密钥，通过 headers 传递：引擎会把 ANTHROPIC_AUTH_TOKEN 置为
+     *   占位符以跳过本地登录检查，因此密钥不能走该变量。
+     */
+    suspend fun setProvider(
+        baseUrl: String,
+        apiKey: String,
+        headers: Map<String, String> = emptyMap(),
+    ): Boolean {
+        val params = acpSetProviderParams(baseUrl = baseUrl, apiKey = apiKey, extraHeaders = headers)
+        val response = runCatching {
+            request(AcpProtocol.METHOD_PROVIDERS_SET, params, PROVIDER_SET_TIMEOUT_MS)
+        }.getOrElse { throwable ->
+            logger.w("ACP[$engineId] providers/set 失败", throwable)
+            return false
+        }
+        if (response.error != null) return false
+        logger.i("ACP[$engineId] providers/set 已应用：baseUrl=$baseUrl")
+        return true
+    }
+
     /** 建立引擎侧会话并登记反查表。 */
     suspend fun newSession(
         tianyanSessionId: String,
@@ -364,6 +392,7 @@ class AcpEngineConnection(
     private companion object {
         const val INIT_TIMEOUT_MS = 60_000L
         const val SESSION_TIMEOUT_MS = 60_000L
+        const val PROVIDER_SET_TIMEOUT_MS = 30_000L
         const val PROMPT_TIMEOUT_MS = 30L * 60L * 1000L
         const val FRAME_BUFFER = 64
         const val EVENT_BUFFER = 256

@@ -39,6 +39,20 @@ public object AcpProtocol {
     const val METHOD_SESSION_UPDATE = "session/update"
     const val METHOD_REQUEST_PERMISSION = "session/request_permission"
 
+    /**
+     * Claude Agent ACP 的「客户端托管 LLM 路由」扩展（UNSTABLE）。
+     *
+     * 为什么必须用它而不是环境变量：claude-agent-acp 的 `resolveProviderConfig()`
+     * 只认 `providers/set`（或 `authenticate`）设置的进程级配置，**完全不读**
+     * `ANTHROPIC_BASE_URL` / `ANTHROPIC_API_KEY`；更糟的是它在未配置时会主动把这些
+     * 变量重置为空串（见其 `createEnvForProvider` 的 `resetRouting`）。因此只注入
+     * 环境变量的引擎永远回退到官方 native 端点（日志表现为 `apiType=native baseUrl=native`）。
+     */
+    const val METHOD_PROVIDERS_SET = "providers/set"
+
+    /** 该扩展要求的 provider id（claude-agent-acp 固定为 "main"）。 */
+    const val CLAUDE_PROVIDER_ID = "main"
+
     /** ACP 保留扩展命名空间：以下划线开头的自定义方法原样转发。 */
     const val EXTENSION_PREFIX = "_"
 
@@ -296,3 +310,30 @@ public fun acpCancelNotification(sessionId: String): JsonObject =
         put("method", AcpProtocol.METHOD_SESSION_CANCEL)
         put("params", buildJsonObject { put("sessionId", sessionId) })
     }
+
+/**
+ * 构造 `providers/set` 请求参数（纯函数，便于单测）。
+ *
+ * 密钥走 `headers` 而非环境变量：claude-agent-acp 会把 ANTHROPIC_AUTH_TOKEN 置为
+ * 占位符 "acp-proxy" 以跳过本地登录检查，真正生效的是这里传入的 header。
+ * 同时给出 `x-api-key` 与 `Authorization: Bearer`，兼容只认其中一种的中转站。
+ */
+public fun acpSetProviderParams(
+    baseUrl: String,
+    apiKey: String,
+    providerId: String = AcpProtocol.CLAUDE_PROVIDER_ID,
+    apiType: String = "anthropic",
+    extraHeaders: Map<String, String> = emptyMap(),
+): JsonObject = buildJsonObject {
+    put("providerId", providerId)
+    put("apiType", apiType)
+    put("baseUrl", baseUrl)
+    put(
+        "headers",
+        buildJsonObject {
+            extraHeaders.forEach { (name, value) -> put(name, value) }
+            put("x-api-key", apiKey)
+            put("Authorization", "Bearer $apiKey")
+        },
+    )
+}
