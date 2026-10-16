@@ -67,6 +67,7 @@ class CodexToolInstaller @Inject constructor(
                         ShellCommand(
                             "npm install -g @openai/codex",
                             environment = npmEnvironment,
+                            timeoutMs = 5 * 60 * 1000L, // 5 分钟超时，npm 安装需要更长时间
                         ),
                     ),
                 )

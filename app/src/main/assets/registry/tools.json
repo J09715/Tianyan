@@ -379,7 +379,7 @@
     "installSteps": [
       "if ! command -v npm >/dev/null 2>&1; then DEBIAN_FRONTEND=noninteractive apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs npm || true; fi",
       "mkdir -p \"$TIANYAN_TOOL_DIR/bin\"",
-      "npm_config_prefix=\"$TIANYAN_TOOL_DIR\" npm install -g --ignore-scripts opencode-ai --registry=https://registry.npmmirror.com || npm_config_prefix=\"$TIANYAN_TOOL_DIR\" npm install -g --ignore-scripts opencode-ai || true",
+      "npm_config_prefix=\"$TIANYAN_TOOL_DIR\" npm install -g opencode-ai --registry=https://registry.npmmirror.com || npm_config_prefix=\"$TIANYAN_TOOL_DIR\" npm install -g opencode-ai || true",
       "if [ -f \"$TIANYAN_TOOL_DIR/bin/opencode\" ]; then chmod +x \"$TIANYAN_TOOL_DIR/bin/opencode\"; fi"
     ],
     "launchCommand": "opencode",
