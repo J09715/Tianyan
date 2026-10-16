@@ -21,6 +21,7 @@ import kotlinx.serialization.json.JsonObject
 import top.tianyan.app.core.common.logging.AppLogger
 import top.tianyan.app.core.database.AgentApprovalRepository
 import top.tianyan.app.core.database.AgentApprovalRequestEntity
+import top.tianyan.app.core.database.HarnessSessionRepository
 import top.tianyan.app.core.model.ApprovalMode
 import top.tianyan.app.core.model.SessionRunState
 import top.tianyan.app.core.tools.EngineEndpointPolicy
@@ -60,6 +61,7 @@ class AcpSessionRunner @Inject constructor(
     private val projector: SessionMessageProjector,
     private val stateMirrors: SessionStateMirrors,
     private val approvalRepository: AgentApprovalRepository,
+    private val sessionRepository: HarnessSessionRepository,
     private val providerManager: ProviderManager,
     private val logger: AppLogger,
 ) {
@@ -271,7 +273,12 @@ class AcpSessionRunner @Inject constructor(
         binding.pendingPermission = request
         val summary = toolCallTitle(request.toolCall ?: JsonObject(emptyMap()))
             .ifBlank { "引擎请求执行一个操作" }
-        val mode = approvalRepository.currentMode()
+        // 授权闸门必须按**会话级**模式判定：用户在会话里点「完整访问权限」写的是
+        // harness_sessions.approvalMode，而全局 currentMode() 是设置页的默认值。
+        // 只读全局会忽略会话授权，表现为「已授权仍反复弹窗」。与 ToolExecutor 同口径：
+        // 会话级优先，其次全局，最后按 FULL_ACCESS 兜底。
+        val mode = sessionRepository.findById(sessionId)?.approvalMode?.let(ApprovalMode::fromId)
+            ?: approvalRepository.currentMode()
         // FULL_ACCESS：用户已明确把该会话的工具闸门交给智能体，不再逐次打断引擎。
         if (mode == ApprovalMode.FULL_ACCESS) {
             runCatching { binding.connection.respondToPermission(request, allow = true) }
