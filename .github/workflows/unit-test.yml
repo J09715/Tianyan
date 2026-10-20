@@ -75,16 +75,22 @@ jobs:
             exit 1
           fi
 
+      # ref_name 在特性分支上形如 feat/xxx，含斜杠；upload-artifact@v4 的 artifact
+      # 名不允许 `/`（run 39433689262 实测报 "The artifact name is not valid ...
+      # Forward slash /"），整步失败会把整个 job 标红——尽管 BUILD SUCCESSFUL、
+      # 测试全绿。GitHub Actions 表达式里没有 replace 函数（只有 contains /
+      # startsWith / endsWith / format / join / toJSON / fromJSON / hashFiles），
+      # 所以用 shell 的参数替换算出安全名，再交给 upload 步骤。
+      - name: Compute artifact name
+        if: always()
+        id: artifact
+        run: echo "name=unit-test-reports-${GITHUB_REF_NAME//\//-}" >> "$GITHUB_OUTPUT"
+
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          # ref_name 在特性分支上形如 feat/xxx，含斜杠；upload-artifact@v4 的
-          # artifact 名不允许 `/`（CI run 39433689262 实测报
-          # "The artifact name is not valid ... Forward slash /"），
-          # 于是整步失败、整个 job 被标红——尽管 BUILD SUCCESSFUL、测试全绿。
-          # 斜杠替换为 `-`，其余字符保持原样以便追溯分支。
-          name: unit-test-reports-${{ replace(github.ref_name, '/', '-') }}
+          name: ${{ steps.artifact.outputs.name }}
           path: "**/build/reports/tests/testDebugUnitTest/**"
           if-no-files-found: warn
           retention-days: 14
