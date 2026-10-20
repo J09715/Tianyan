@@ -10,6 +10,30 @@ plugins {
     alias(libs.plugins.androidx.baselineprofile) apply false
 }
 
+// Robolectric 4.17 在 JDK >= 17 上必须显式开放 OpenJDK 内部包，否则 sandbox 的
+// AndroidInterceptors 反射注入时抛 IllegalAccessException（CI 实测：
+// EnvironmentDoctorTest 整组 6 个用例全红，栈顶 AndroidInterceptors.java:88）。
+// 4.16.1 不需要；4.17 的 release note 原文是「you may need to add jvmFlags
+// configuration when using JDKs >= 17」，列表取自 robolectric.org/getting-started。
+//
+// 放在根 subprojects 而不是各模块 testOptions：所有单测任务（含将来新增模块）
+// 一次覆盖，避免「新模块忘了加」这种复发。对非 Robolectric 测试无副作用。
+subprojects {
+    tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+        jvmArgs(
+            "--add-opens=java.base/java.lang=ALL-UNNAMED",
+            "--add-opens=java.base/java.util=ALL-UNNAMED",
+            "--add-opens=java.base/java.io=ALL-UNNAMED",
+            "--add-opens=java.base/java.net=ALL-UNNAMED",
+            "--add-opens=java.base/java.security=ALL-UNNAMED",
+            "--add-opens=java.base/java.text=ALL-UNNAMED",
+            "--add-opens=java.base/jdk.internal.access=ALL-UNNAMED",
+            "--add-opens=java.desktop/java.awt.font=ALL-UNNAMED",
+            "--add-opens=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED",
+        )
+    }
+}
+
 tasks.register("architectureCheck") {
     group = "verification"
     description = "Checks module direction and persistence boundaries."
