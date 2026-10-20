@@ -8,6 +8,24 @@ import androidx.compose.ui.unit.sp
 private val AppSans = FontFamily.SansSerif
 
 val AppTypography = Typography(
+    // displayLarge / displayMedium 此前未覆盖，沿用 Material 默认（57/45sp）。
+    // 默认值与本仓库已定制的标题阶梯不同源：displaySmall 被收紧到 38sp 且
+    // letterSpacing -1.1，若上两档仍是 57sp 且字距宽松，同一页里出现两套性格。
+    // 这里按「字号每增大一档，字距再收紧约 0.2sp」的既有规律补齐。
+    displayLarge = Typography().displayLarge.copy(
+        fontFamily = AppSans,
+        fontSize = 52.sp,
+        lineHeight = 60.sp,
+        fontWeight = FontWeight.Bold,
+        letterSpacing = (-1.5).sp,
+    ),
+    displayMedium = Typography().displayMedium.copy(
+        fontFamily = AppSans,
+        fontSize = 45.sp,
+        lineHeight = 52.sp,
+        fontWeight = FontWeight.Bold,
+        letterSpacing = (-1.3).sp,
+    ),
     displaySmall = Typography().displaySmall.copy(
         fontFamily = AppSans,
         fontSize = 38.sp,

@@ -7,7 +7,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
@@ -26,7 +25,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
@@ -200,13 +198,15 @@ private val ChengmingDarkColors = darkColorScheme(
 
 /**
  * Material 3 Expressive 形状体系 (Generous, Organic, Bolder)
+ *
+ * 数值与 [Radius] 令牌同源（xs/sm/md/lg/xl），改一处即全站生效。
  */
 private val TianyanShapes = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(12.dp),
-    medium = RoundedCornerShape(16.dp),
-    large = RoundedCornerShape(24.dp),
-    extraLarge = RoundedCornerShape(32.dp),
+    extraSmall = Radius.xsShape,
+    small = Radius.smShape,
+    medium = Radius.mdShape,
+    large = Radius.lgShape,
+    extraLarge = Radius.xlShape,
 )
 
 @Composable
@@ -233,16 +233,19 @@ fun TianyanTheme(
         ThemeStyle.XUANTONG -> if (darkTheme) XuantongDarkColors else XuantongLightColors
         ThemeStyle.CHENGMING -> if (darkTheme) ChengmingDarkColors else ChengmingLightColors
     }
+    val tianyanColors = if (darkTheme) DarkTianyanColors else LightTianyanColors
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = AppTypography,
-        shapes = TianyanShapes,
-    ) {
-        if (style == ThemeStyle.CHENGMING) {
-            LiquidGlassRoot(content, darkTheme, backgroundUri)
-        } else {
-            content()
+    CompositionLocalProvider(LocalTianyanColors provides tianyanColors) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = AppTypography,
+            shapes = TianyanShapes,
+        ) {
+            if (style == ThemeStyle.CHENGMING) {
+                LiquidGlassRoot(content, darkTheme, backgroundUri)
+            } else {
+                content()
+            }
         }
     }
 }

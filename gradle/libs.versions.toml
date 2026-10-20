@@ -1,42 +1,49 @@
 [versions]
-ktorServer = "3.5.2"
-androidxWebkit = "1.14.0"
-agp = "9.3.1"
-kotlin = "2.4.10"
-ksp = "2.3.11"
+ktorServer = "3.6.0"
+androidxWebkit = "1.17.1"
+agp = "9.4.1"
+kotlin = "2.4.21"
+ksp = "2.3.12"
 hilt = "2.60.1"
-composeBom = "2026.08.00"
+composeBom = "2026.09.00"
+# material3 单独定版：BOM 2026.09.00 锁定的是 1.4.0，而 M3 Expressive 的
+# ButtonGroup / SplitButton / LoadingIndicator / ToggleButton / FloatingToolbar
+# 只在 1.5.0-beta01 起存在（1.4.0 的 aar 里这些类一个都没有）。
+# 覆盖 BOM 是本仓库唯一能拿到 Expressive 组件的路径，代价是吃 beta 期 API 漂移；
+# 因此所有屏只允许经由 feature/components 的 Runtime* 包装使用这些组件，
+# 升级或回退时只改包装层，不触碰业务屏。
+material3 = "1.5.0-beta01"
 activityCompose = "1.13.0"
 leakcanaryAndroid = "2.14"
 lifecycle = "2.11.0"
-navigation3 = "1.1.1"
+navigation3 = "1.2.0"
 hiltNavigationCompose = "1.4.0"
-room = "2.8.4"
+room = "2.8.5"
 datastore = "1.2.1"
 okhttp = "5.5.0"
-ktor = "3.5.2"
-kotlinxSerializationJson = "1.11.0"
+ktor = "3.6.0"
+kotlinxSerializationJson = "1.12.0"
 coroutines = "1.11.0"
-coreKtx = "1.19.0"
-appcompat = "1.7.1"
+coreKtx = "1.19.1"
+appcompat = "1.8.0"
 junit = "4.13.2"
 xz = "1.12"
-zstd = "1.5.7-15"
+zstd = "1.5.7-24"
 shizuku = "13.1.5"
-hiddenApiBypass = "6.1"
-kadb = "2.1.3"
+hiddenApiBypass = "6.2"
+kadb = "2.1.5"
 androidxJunit = "1.3.0"
 espressoCore = "3.7.0"
-robolectric = "4.16.1"
+robolectric = "4.17"
 androidxTestCore = "1.7.0"
 # AndroidLiquidGlass (Kyant0) — Compose 液态玻璃效果库，澄明主题的渲染核心
-backdrop = "2.0.0"
-coil = "3.5.0"
-coreSplashscreen = "1.0.1"
+backdrop = "2.0.1"
+coil = "3.6.3"
+coreSplashscreen = "1.2.0"
 # Baseline Profile：启动时预编译热点方法，治首次冷启动 JIT 现场编译慢
-baselineprofile = "1.5.0-rc01"
+baselineprofile = "1.5.0"
 profileinstaller = "1.4.1"
-uiautomator = "2.3.0"
+uiautomator = "2.4.0"
 
 [libraries]
 ktor-server-core = { group = "io.ktor", name = "ktor-server-core", version.ref = "ktorServer" }
@@ -59,9 +66,13 @@ androidx-activity-compose = { group = "androidx.activity", name = "activity-comp
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
 androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+# 动效令牌（Motion.kt）直接依赖：虽然 material3 → foundation → animation 会
+# api 传递 animation-core，但令牌文件是本仓的公共契约，不应依赖传递路径。
+androidx-compose-animation-core = { group = "androidx.compose.animation", name = "animation-core" }
 androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
-androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+# 显式 version.ref 覆盖 BOM 锁定：见 [versions].material3 的说明
+androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3", version.ref = "material3" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }
 androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycle" }
 androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycle" }

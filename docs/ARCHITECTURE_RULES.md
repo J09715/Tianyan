@@ -23,6 +23,13 @@
    - 按钮统一使用 `RuntimeButton`, `RuntimeFilledTonalButton`, `RuntimeOutlinedButton`, `RuntimeTextButton`, `RuntimeIconButton`。
    - 弹窗统一使用 `top.tianyan.app.ui.components.RuntimeAlertDialog`。
    - 开关与进度指示使用 `RuntimeSwitch`, `RuntimeLinearProgressIndicator`, `RuntimeCircularProgressIndicator`。
+   - M3 Expressive 组件（`ToggleButton` / `LoadingIndicator` / `ButtonGroup` / `SplitButton` / `FloatingToolbar`）**必须**经 `RuntimeExpressive` 使用，**严禁**在业务屏直接 import `androidx.compose.material3` 的实验性 API：这些组件来自 material3 `1.5.0-beta01`（BOM 锁的是 1.4.0），beta 期 API 会漂移，包装层是唯一的爆栈边界。
+1.1. **尺度与语义色必须走令牌（新增，2026-10）**：
+   - 间距只允许取 `Spacing.xs/sm/md/lg/xl/xxl`（4/8/12/16/24/32）。**严禁**再写 `10.dp` / `14.dp` / `18.dp` 这类中间值——它们正是改造前 3644 处硬编码 dp 里最难对齐的那部分。
+   - 圆角走 `Radius`，触摸目标下限走 `Touch.min`（48dp），内容宽度上限走 `Content.bubbleMax`（560dp）/ `Content.dualPaneMin`（720dp）。
+   - 状态着色（成功/警告/危险/信息/中性）走 `TianyanTheme.colors.success` 等，**严禁**再写 `Color(0xFF10B981)` 这类绝对值：它们不随主题明暗切换，在澄明深色底上会失真。分类标识色走 `accentViolet/Blue/Cyan/Indigo/Slate/Coral`。
+   - 动效参数走 `Motion`（fast 150ms / medium 250ms / slow 350ms + 三条标准曲线），**严禁**再各屏各写 `tween(220)`。
+   - 响应式断点走 `Breakpoints.of(width)`，三档 compact/medium/expanded；**严禁**再散写 `720.dp` 之类的裸阈值。
 2. **弹窗与表单软键盘安全（IME 防遮挡）**：
    - 所有包含 `OutlinedTextField` 或列表的 Dialog `text` 内容区域，**严禁**设置死锁的固定高宽或外层硬编码 `offset`，**必须**包裹 `modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())`，确保在移动端软键盘弹起时表单可顺畅滑动，操作按钮始终可见可达。
 3. **顶部与底部导航栏规范**：
