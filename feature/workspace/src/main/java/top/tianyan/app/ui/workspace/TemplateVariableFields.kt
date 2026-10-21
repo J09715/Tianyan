@@ -26,6 +26,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import top.tianyan.app.feature.workspace.R
+import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.template.ProjectTemplateInputType
 import top.tianyan.app.template.ProjectTemplateVariable
 
@@ -57,7 +58,7 @@ internal fun TemplateVariableFields(
                     checked = value.equals("true", ignoreCase = true),
                     onCheckedChange = { onValueChange(variable.name, it.toString()) },
                 )
-                Column(Modifier.padding(start = 8.dp)) {
+                Column(Modifier.padding(start = Spacing.sm)) {
                     VariableLabel(variable.label, variable.required)
                     if (variable.description.isNotBlank()) {
                         Text(variable.description, style = MaterialTheme.typography.bodySmall)

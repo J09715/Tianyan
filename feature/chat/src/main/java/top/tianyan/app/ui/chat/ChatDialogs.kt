@@ -1334,7 +1334,7 @@ private fun AgentCardRow(
                             }
                             Surface(
                                 color = card.badgeColor.copy(alpha = 0.16f),
-                                shape = RoundedCornerShape(3.dp),
+                                shape = Radius.xsShape,
                             ) {
                                 Text(
                                     card.badge,

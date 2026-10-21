@@ -1,6 +1,8 @@
 package top.tianyan.app.ui.workspace
 
 import top.tianyan.app.ui.components.RuntimeAlertDialog
+import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.Radius
 
 import android.Manifest
 import android.content.Intent
@@ -27,7 +29,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import top.tianyan.app.ui.components.RuntimeButton as Button
 import top.tianyan.app.ui.components.RuntimeCircularProgressIndicator as CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -233,7 +234,7 @@ fun WorkspaceExplorerScreen(
 
             // 消息提示
             message?.let { notice ->
-                Box(Modifier.padding(horizontal = 14.dp, vertical = 6.dp)) {
+                Box(Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm)) {
                     NoticeBanner(text = notice, isError = messageIsError)
                 }
             }
@@ -247,7 +248,7 @@ fun WorkspaceExplorerScreen(
                     icon = RuntimeIconName.Folder,
                     title = stringResource(R.string.workspace_empty_directory),
                     description = stringResource(R.string.workspace_empty_directory_hint),
-                    modifier = Modifier.padding(24.dp),
+                    modifier = Modifier.padding(Spacing.xl),
                 )
             } else {
                 Box(Modifier.fillMaxSize()) {
@@ -305,7 +306,7 @@ fun WorkspaceExplorerScreen(
             onDismissRequest = { showCreateFileDialog = false },
             title = { Text(stringResource(R.string.workspace_new_file), fontWeight = FontWeight.Bold) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     OutlinedTextField(
                         value = newFileName,
                         onValueChange = { newFileName = it },
@@ -453,9 +454,9 @@ private fun BreadcrumbBar(
         LazyRow(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = Spacing.md, vertical = Spacing.sm),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
             item {
                 BreadcrumbChip(
@@ -494,14 +495,14 @@ private fun BreadcrumbChip(
     onClick: () -> Unit,
 ) {
     Surface(
-        shape = RoundedCornerShape(8.dp),
+        shape = Radius.xsShape,
         color = if (isCurrent) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
         modifier = Modifier.clickable(onClick = onClick),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
             RuntimeIcon(
                 icon,
@@ -524,15 +525,15 @@ private fun BreadcrumbChip(
 private fun SharedStoragePermissionBanner(onAuthorize: () -> Unit) {
     Surface(
         color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f),
-        shape = RoundedCornerShape(12.dp),
+        shape = Radius.smShape,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+            .padding(horizontal = Spacing.md, vertical = Spacing.sm),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             RuntimeIcon(
                 RuntimeIconName.Alert,
@@ -541,7 +542,7 @@ private fun SharedStoragePermissionBanner(onAuthorize: () -> Unit) {
             )
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.xs),
             ) {
                 Text(
                     text = stringResource(R.string.workspace_shared_permission_banner_title),
@@ -571,9 +572,9 @@ private fun ParentDirectoryRow(onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = Spacing.lg, vertical = Spacing.md),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         RuntimeIcon(
             RuntimeIconName.ArrowUp,
@@ -606,16 +607,16 @@ private fun FileItemRow(
                 haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                 onClick()
             })
-            .padding(horizontal = 16.dp, vertical = 11.dp),
+            .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         // 图标
         if (item.isDirectory) {
             Box(
                 modifier = Modifier
                     .size(36.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(Radius.smShape)
                     .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)),
                 contentAlignment = Alignment.Center,
             ) {
@@ -629,7 +630,7 @@ private fun FileItemRow(
             Box(
                 modifier = Modifier
                     .size(36.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(Radius.smShape)
                     .background(extColor.copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center,
             ) {
@@ -644,9 +645,9 @@ private fun FileItemRow(
         // 名称和详情
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(3.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 Text(
                     text = item.name,
                     style = MaterialTheme.typography.bodyMedium.copy(
@@ -658,7 +659,7 @@ private fun FileItemRow(
                 if (!item.isDirectory && item.extension.isNotBlank()) {
                     Surface(
                         color = extColor.copy(alpha = 0.15f),
-                        shape = RoundedCornerShape(4.dp),
+                        shape = Radius.xsShape,
                     ) {
                         Text(
                             text = item.extension.uppercase(),
@@ -668,13 +669,13 @@ private fun FileItemRow(
                                 fontWeight = FontWeight.Bold,
                             ),
                             color = extColor,
-                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                         )
                     }
                 }
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 if (!item.isDirectory) {
                     Text(
                         text = item.sizeBytes.toReadableSize(),

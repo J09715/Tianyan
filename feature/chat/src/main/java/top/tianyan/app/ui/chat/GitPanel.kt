@@ -920,7 +920,7 @@ private fun StatusTab(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp)),
+                        .clip(Radius.xsShape),
                 ) {
                     if (staged.isNotEmpty()) {
                         Box(

@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -25,6 +24,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.Radius
 
 /**
  * Git 长操作（clone/pull/push）流式进度横幅。挂在 ChatTopBar 下方，
@@ -78,7 +78,7 @@ fun GitProgressBanner(progress: GitProgress, onCancel: () -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(3.dp)
-                    .clip(RoundedCornerShape(2.dp))
+                    .clip(Radius.xsShape)
                     .background(MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.15f)),
             ) {
                 if (p != null) {

@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
@@ -34,6 +33,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.tianyan.app.runtime.browser.CapturedRequest
+import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.Radius
 import top.tianyan.app.runtime.browser.hook.HookHitRecord
 
 /**
@@ -128,14 +129,14 @@ private fun RequestList(requests: List<CapturedRequest>, onClick: (String) -> Un
 private fun RequestRow(req: CapturedRequest, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(8.dp),
+        shape = Radius.xsShape,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.xs),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             Text(
                 req.method,
@@ -166,7 +167,7 @@ private fun RequestRow(req: CapturedRequest, onClick: () -> Unit) {
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     Text(
                         listOfNotNull(
                             req.durationMs.takeIf { it > 0 }?.let { "${it}ms" },
@@ -189,7 +190,7 @@ private fun RequestRow(req: CapturedRequest, onClick: () -> Unit) {
 @Composable
 private fun NetworkDetailBody(detail: String?) {
     Surface(
-        shape = RoundedCornerShape(8.dp),
+        shape = Radius.xsShape,
         color = Color(0xFF1E1E1E),
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -202,7 +203,7 @@ private fun NetworkDetailBody(detail: String?) {
             ),
             color = Color(0xFFD4D4D4),
             modifier = Modifier
-                .padding(10.dp)
+                .padding(Spacing.sm)
                 .heightIn(max = 460.dp)
                 .verticalScroll(rememberScrollState()),
         )
@@ -223,24 +224,24 @@ private fun HookHitList(hits: List<HookHitRecord>) {
     LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
         items(hits.asReversed(), key = { it.hookId + it.at.toString() + it.target }) { hit ->
             Surface(
-                shape = RoundedCornerShape(8.dp),
+                shape = Radius.xsShape,
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.xs),
             ) {
-                Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)) {
+                Column(modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         Surface(
-                            shape = RoundedCornerShape(4.dp),
+                            shape = Radius.xsShape,
                             color = MaterialTheme.colorScheme.tertiaryContainer,
                         ) {
                             Text(
                                 hit.type.name,
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                                 maxLines = 1,
                             )
                         }

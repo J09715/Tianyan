@@ -23,7 +23,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -55,6 +54,8 @@ import top.tianyan.app.harness.ToolCall
 import top.tianyan.app.harness.ToolResult
 import top.tianyan.app.harness.UserMessage
 import top.tianyan.app.ui.components.RuntimeCircularProgressIndicator
+import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.Radius
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconButton
 import top.tianyan.app.ui.components.RuntimeIconName
@@ -118,7 +119,7 @@ private fun FloatingChatCapsule(
 ) {
     Surface(
         modifier = Modifier
-            .clip(RoundedCornerShape(22.dp))
+            .clip(Radius.lgShape)
             .pointerInput(Unit) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
@@ -145,7 +146,7 @@ private fun FloatingChatCapsule(
                 }
             },
         color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.96f),
-        shape = RoundedCornerShape(22.dp),
+        shape = Radius.lgShape,
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
             if (running) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
@@ -153,9 +154,9 @@ private fun FloatingChatCapsule(
         ),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.sm),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             Box(
                 modifier = Modifier
@@ -235,9 +236,9 @@ private fun FloatingChatPanel(
         modifier = Modifier
             .width(310.dp)
             .height(410.dp)
-            .clip(RoundedCornerShape(16.dp)),
+            .clip(Radius.mdShape),
         color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.98f),
-        shape = RoundedCornerShape(16.dp),
+        shape = Radius.mdShape,
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
             MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
@@ -246,8 +247,8 @@ private fun FloatingChatPanel(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(Spacing.sm),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             // 顶栏（左侧标题区域支持按住拖拽移动，右侧操作按钮独立响应点击）
             Row(
@@ -257,7 +258,7 @@ private fun FloatingChatPanel(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     modifier = Modifier
                         .weight(1f)
                         .pointerInput(Unit) {
@@ -290,7 +291,7 @@ private fun FloatingChatPanel(
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                 ) {
                     if (running) {
                         RuntimeIconButton(
@@ -347,13 +348,13 @@ private fun FloatingChatPanel(
                     .weight(1f)
                     .fillMaxWidth(),
                 color = MaterialTheme.colorScheme.surfaceContainer,
-                shape = RoundedCornerShape(10.dp),
+                shape = Radius.smShape,
             ) {
                 if (displayMessages.isEmpty()) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(16.dp),
+                            .padding(Spacing.lg),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
@@ -367,8 +368,8 @@ private fun FloatingChatPanel(
                         state = listState,
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                            .padding(horizontal = Spacing.sm, vertical = Spacing.sm),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         items(displayMessages, key = { it.id }) { msg ->
                             when (msg) {
@@ -379,14 +380,14 @@ private fun FloatingChatPanel(
                                     ) {
                                         Surface(
                                             color = MaterialTheme.colorScheme.primaryContainer,
-                                            shape = RoundedCornerShape(10.dp),
+                                            shape = Radius.smShape,
                                             modifier = Modifier.widthIn(max = 240.dp),
                                         ) {
                                             Text(
                                                 text = msg.text,
                                                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
                                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                                modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                             )
                                         }
                                     }
@@ -394,16 +395,16 @@ private fun FloatingChatPanel(
                                 is AssistantText -> {
                                     Column(
                                         modifier = Modifier.fillMaxWidth(),
-                                        verticalArrangement = Arrangement.spacedBy(3.dp),
+                                        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
                                     ) {
                                         if (!msg.reasoning.isNullOrBlank()) {
                                             Surface(
                                                 color = MaterialTheme.colorScheme.surfaceContainerLow,
-                                                shape = RoundedCornerShape(6.dp),
+                                                shape = Radius.xsShape,
                                             ) {
                                                 Row(
-                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-                                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                                                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                                                     verticalAlignment = Alignment.CenterVertically,
                                                 ) {
                                                     RuntimeIcon(
@@ -424,14 +425,14 @@ private fun FloatingChatPanel(
                                         if (msg.text.isNotBlank()) {
                                             Surface(
                                                 color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                                shape = RoundedCornerShape(10.dp),
+                                                shape = Radius.smShape,
                                                 modifier = Modifier.widthIn(max = 260.dp),
                                             ) {
                                                 Text(
                                                     text = msg.text,
                                                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
                                                     color = MaterialTheme.colorScheme.onSurface,
-                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                                 )
                                             }
                                         }
@@ -440,11 +441,11 @@ private fun FloatingChatPanel(
                                 is ToolCall -> {
                                     Surface(
                                         color = MaterialTheme.colorScheme.surfaceContainerLow,
-                                        shape = RoundedCornerShape(6.dp),
+                                        shape = Radius.xsShape,
                                     ) {
                                         Row(
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                                            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                                             verticalAlignment = Alignment.CenterVertically,
                                         ) {
                                             RuntimeIcon(
@@ -474,16 +475,16 @@ private fun FloatingChatPanel(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(36.dp)
-                    .clip(RoundedCornerShape(18.dp))
+                    .clip(Radius.lgShape)
                     .background(MaterialTheme.colorScheme.surfaceContainer)
                     .border(
                         0.8.dp,
                         MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                        RoundedCornerShape(18.dp),
+                        Radius.lgShape,
                     )
-                    .padding(horizontal = 10.dp),
+                    .padding(horizontal = Spacing.sm),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
             ) {
                 Box(
                     modifier = Modifier.weight(1f),

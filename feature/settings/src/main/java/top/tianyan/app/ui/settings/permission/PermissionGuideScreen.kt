@@ -24,7 +24,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -52,6 +51,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import top.tianyan.app.ui.components.RuntimeButton
+import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.Radius
 import top.tianyan.app.ui.components.RuntimeCard
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
@@ -105,8 +106,8 @@ fun PermissionGuideScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.lg),
         ) {
             // 1. 顶部当前品牌选择与提示卡片
             item {
@@ -114,8 +115,8 @@ fun PermissionGuideScreen(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.padding(Spacing.lg),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -139,7 +140,7 @@ fun PermissionGuideScreen(
                                     onClick = { brandMenuExpanded = true },
                                 ) {
                                     Text("切换品牌", fontSize = 13.sp)
-                                    Spacer(Modifier.width(4.dp))
+                                    Spacer(Modifier.width(Spacing.xs))
                                     RuntimeIcon(RuntimeIconName.ChevronDown, modifier = Modifier.size(14.dp))
                                 }
                                 DropdownMenu(
@@ -178,7 +179,7 @@ fun PermissionGuideScreen(
             item {
                 LazyRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     items(KeepaliveTopic.entries, key = { it.name }) { topic ->
                         val isSelected = topic == selectedTopic
@@ -189,22 +190,22 @@ fun PermissionGuideScreen(
 
                         Surface(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(20.dp))
+                                .clip(Radius.xlShape)
                                 .clickable { selectedTopic = topic },
                             color = if (isSelected) {
                                 MaterialTheme.colorScheme.primaryContainer
                             } else {
                                 MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                             },
-                            shape = RoundedCornerShape(20.dp),
+                            shape = Radius.xlShape,
                             border = if (isSelected) {
                                 androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
                             } else null,
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                             ) {
                                 RuntimeIcon(
                                     name = topic.icon,
@@ -243,8 +244,8 @@ fun PermissionGuideScreen(
 
                 RuntimeCard(modifier = Modifier.fillMaxWidth()) {
                     Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.padding(Spacing.lg),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.md),
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -253,7 +254,7 @@ fun PermissionGuideScreen(
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                             ) {
                                 RuntimeIcon(
                                     name = selectedTopic.icon,
@@ -269,7 +270,7 @@ fun PermissionGuideScreen(
                             if (hasRealStatus) {
                                 Surface(
                                     color = if (isGranted) Color(0xFF1B5E20).copy(alpha = 0.15f) else Color(0xFFE65100).copy(alpha = 0.15f),
-                                    shape = RoundedCornerShape(12.dp),
+                                    shape = Radius.smShape,
                                     border = androidx.compose.foundation.BorderStroke(
                                         1.dp,
                                         if (isGranted) Color(0xFF4CAF50).copy(alpha = 0.5f) else Color(0xFFFF9800).copy(alpha = 0.5f),
@@ -277,7 +278,7 @@ fun PermissionGuideScreen(
                                 ) {
                                     Text(
                                         text = if (isGranted) "已放行 / 已就绪" else "待配置 / 未豁免",
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                                         color = if (isGranted) Color(0xFF4CAF50) else Color(0xFFFF9800),
                                     )
@@ -299,7 +300,7 @@ fun PermissionGuideScreen(
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             RuntimeIcon(RuntimeIconName.OpenInNew, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(Spacing.sm))
                             Text("直达系统对应设置页")
                         }
                     }
@@ -312,7 +313,7 @@ fun PermissionGuideScreen(
                     text = "配置步骤详解",
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp, top = 4.dp),
+                    modifier = Modifier.padding(start = Spacing.xs, top = Spacing.xs),
                 )
             }
 
@@ -322,8 +323,8 @@ fun PermissionGuideScreen(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Row(
-                        modifier = Modifier.padding(14.dp),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        modifier = Modifier.padding(Spacing.md),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                         verticalAlignment = Alignment.Top,
                     ) {
                         // 序号小圆球
@@ -343,7 +344,7 @@ fun PermissionGuideScreen(
 
                         Column(
                             modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
                         ) {
                             Text(
                                 text = step.title,
@@ -357,7 +358,7 @@ fun PermissionGuideScreen(
                                 lineHeight = 20.sp,
                             )
                             if (step.tip != null) {
-                                Spacer(Modifier.height(2.dp))
+                                Spacer(Modifier.height(Spacing.xs))
                                 Text(
                                     text = "💡 ${step.tip}",
                                     style = MaterialTheme.typography.bodySmall,

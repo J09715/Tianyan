@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -110,7 +109,7 @@ fun ContextUsageDialog(
                     Text("构成（按 token 数）", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Box(
                         Modifier.fillMaxWidth().height(14.dp)
-                            .clip(RoundedCornerShape(7.dp))
+                            .clip(Radius.xsShape)
                             .background(MaterialTheme.colorScheme.surfaceVariant),
                     ) {
                         if (sum > 0) {

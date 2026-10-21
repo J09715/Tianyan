@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.input.OutputTransformation
 import androidx.compose.foundation.text.input.TextFieldLineLimits
@@ -78,6 +77,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withContext
 import top.tianyan.app.ui.components.NoticeBanner
+import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.Radius
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeTopBar
@@ -200,7 +201,7 @@ fun CodeEditorScreen(
         ) {
             // 提示信息
             message?.let { notice ->
-                Box(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
+                Box(Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs)) {
                     NoticeBanner(text = notice, isError = messageIsError)
                 }
             }
@@ -271,7 +272,7 @@ fun CodeEditorScreen(
                         modifier = Modifier
                             .width(gutterWidth)
                             .background(EditorGutterBackground)
-                            .padding(vertical = 12.dp, horizontal = 6.dp),
+                            .padding(vertical = Spacing.md, horizontal = Spacing.sm),
                         horizontalAlignment = Alignment.End,
                     ) {
                         Text(
@@ -303,7 +304,7 @@ fun CodeEditorScreen(
                                 if (!wordWrap) Modifier.horizontalScroll(horizontalScrollState)
                                 else Modifier,
                             )
-                            .padding(horizontal = 12.dp, vertical = 12.dp),
+                            .padding(horizontal = Spacing.md, vertical = Spacing.md),
                     ) {
                         BasicTextField(
                             state = editorState,
@@ -416,9 +417,9 @@ private fun EditorStatusBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 7.dp),
+                .padding(horizontal = Spacing.md, vertical = Spacing.sm),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             // 语言类型
             Text(
@@ -446,7 +447,7 @@ private fun EditorStatusBar(
 
             // 自动换行切换
             Surface(
-                shape = RoundedCornerShape(4.dp),
+                shape = Radius.xsShape,
                 color = if (wordWrap) EditorAccent.copy(alpha = 0.2f) else Color.Transparent,
                 modifier = Modifier
                     .minimumInteractiveComponentSize()
@@ -456,7 +457,7 @@ private fun EditorStatusBar(
                     text = stringResource(if (wordWrap) R.string.workspace_word_wrap_on else R.string.workspace_word_wrap_off),
                     style = MaterialTheme.typography.labelSmall,
                     color = if (wordWrap) EditorAccent else EditorGutterText,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                 )
             }
 

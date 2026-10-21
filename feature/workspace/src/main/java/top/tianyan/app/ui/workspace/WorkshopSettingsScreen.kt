@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -45,6 +46,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.tianyan.app.feature.workspace.R
 import top.tianyan.app.ui.components.RuntimeAlertDialog
+import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.Radius
 import top.tianyan.app.ui.components.RuntimeButton
 import top.tianyan.app.ui.components.RuntimeCard
 import top.tianyan.app.ui.components.RuntimeIcon
@@ -66,7 +69,7 @@ fun WorkshopSettingsScreen(onBack: () -> Unit, onOpenEnvironment: () -> Unit, on
     var creating by rememberSaveable { mutableStateOf(false) }
     var deleteScriptTarget by remember { mutableStateOf<BuildScriptEntity?>(null) }
     Scaffold(containerColor = MaterialTheme.colorScheme.background, topBar = { RuntimeTopBar(stringResource(R.string.workshop_settings_title), onBack, stringResource(R.string.workshop_settings_subtitle)) }) { padding ->
-        LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(Spacing.lg), verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
             item { SectionHeader(stringResource(R.string.workshop_settings_env_section), stringResource(R.string.workshop_settings_env_section_desc)) }
             item {
                 SettingEntry(
@@ -138,8 +141,8 @@ fun WorkshopSettingsScreen(onBack: () -> Unit, onOpenEnvironment: () -> Unit, on
 private fun ManagedScriptCard(script: BuildScriptEntity, onEdit: () -> Unit, onClone: () -> Unit, onDelete: () -> Unit) {
     var actionsExpanded by remember { mutableStateOf(false) }
     RuntimeCard(onClick = onEdit) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 RuntimeIcon(if (script.projectType == ProjectType.FLUTTER.name) RuntimeIconName.Flutter else RuntimeIconName.Android, Modifier.size(24.dp))
                 Column(Modifier.weight(1f)) {
                     Text(script.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
@@ -216,7 +219,7 @@ private fun ManagedScriptEditorDialog(script: BuildScriptEntity?, onDismiss: () 
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.workshop_script_field_name)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(description, { description = it }, label = { Text(stringResource(R.string.workshop_script_field_desc)) }, modifier = Modifier.fillMaxWidth())
@@ -261,8 +264,8 @@ fun WorkshopEnvironmentSettingsScreen(onBack: () -> Unit, viewModel: WorkshopSet
     ) { padding ->
         LazyColumn(
             Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(Spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             item {
                 Row(
@@ -283,7 +286,7 @@ fun WorkshopEnvironmentSettingsScreen(onBack: () -> Unit, viewModel: WorkshopSet
             }
             item {
                 RuntimeCard {
-                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
                         ToolchainPathDropdownField("Gradle", draft.gradlePath, detected.gradleOptions) { viewModel.update(draft.copy(gradlePath = it)) }
                         ToolchainPathDropdownField("Java / JDK", draft.javaPath, detected.javaOptions) { viewModel.update(draft.copy(javaPath = it)) }
                         ToolchainPathDropdownField("Android NDK", draft.ndkPath, detected.ndkOptions) { viewModel.update(draft.copy(ndkPath = it)) }
@@ -299,7 +302,7 @@ fun WorkshopEnvironmentSettingsScreen(onBack: () -> Unit, viewModel: WorkshopSet
                 }
             }
             item {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     RuntimeOutlinedButton(onClick = viewModel::resetEnvironment, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.workshop_action_reset)) }
                     RuntimeButton(onClick = viewModel::saveEnvironment, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.workshop_action_save)) }
                 }
@@ -315,10 +318,10 @@ private fun ToolchainPathDropdownField(
     options: List<ToolchainOption>,
     onValueChange: (String) -> Unit,
 ) {
-    val shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+    val shape = androidx.compose.foundation.shape.Radius.smShape
     var expanded by remember { mutableStateOf(false) }
 
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -328,13 +331,13 @@ private fun ToolchainPathDropdownField(
             if (options.isNotEmpty()) {
                 Surface(
                     onClick = { expanded = true },
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(6.dp),
+                    shape = androidx.compose.foundation.shape.Radius.xsShape,
                     color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
                 ) {
                     Row(
-                        Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                     ) {
                     Text(
                         stringResource(R.string.workshop_env_switch_version),
@@ -352,7 +355,7 @@ private fun ToolchainPathDropdownField(
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.surfaceContainerLow, shape)
                 .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f), shape)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = Spacing.md, vertical = Spacing.sm),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             BasicTextField(
@@ -377,10 +380,10 @@ private fun ToolchainPathDropdownField(
                 val isSelected = option.path == value
                 DropdownMenuItem(
                     text = {
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                             ) {
                                 Text(
                                     option.label,
@@ -390,12 +393,12 @@ private fun ToolchainPathDropdownField(
                                 )
                                 if (option.isDetected) {
                                     Surface(
-                                        shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
+                                        shape = androidx.compose.foundation.shape.Radius.xsShape,
                                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
                                     ) {
                                         Text(
                                             stringResource(R.string.workshop_env_detected),
-                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                            modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                                             color = MaterialTheme.colorScheme.primary,
                                         )
@@ -434,10 +437,10 @@ fun WorkshopScriptEditorScreen(type: WorkshopScriptType, onBack: () -> Unit, vie
     // 未保存修改时拦截返回键，避免静默丢失编辑
     BackHandler(enabled = isDirty && !showUnsavedDialog) { showUnsavedDialog = true }
     Scaffold(containerColor = MaterialTheme.colorScheme.background, topBar = { RuntimeTopBar(type.title, onBack, if (isCustom) stringResource(R.string.workshop_script_screen_custom) else stringResource(R.string.workshop_script_screen_default)) }) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = Spacing.lg, vertical = Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
             ScriptPathPanel(if (isCustom) type.customPath else type.defaultPath)
             CodeEditorPanel(value = content, onValueChange = { content = it }, fileName = type.defaultPath.substringAfterLast('/'), modifier = Modifier.fillMaxWidth().weight(1f))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 RuntimeOutlinedButton(onClick = { viewModel.resetScript(type, onBack) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.workshop_script_reset_default)) }
                 RuntimeButton(onClick = { viewModel.saveScript(type, content, onBack) }, enabled = isDirty, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.workshop_script_save)) }
             }
@@ -465,24 +468,24 @@ fun WorkshopScriptEditorScreen(type: WorkshopScriptType, onBack: () -> Unit, vie
 }
 
 @Composable private fun SettingEntry(icon: RuntimeIconName, title: String, subtitle: String, onClick: () -> Unit) {
-    RuntimeCard(onClick = onClick) { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Surface(shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.size(40.dp)) { RuntimeIcon(icon, Modifier.padding(9.dp), MaterialTheme.colorScheme.onSecondaryContainer) }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) { Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold); Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis) }
+    RuntimeCard(onClick = onClick) { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+        Surface(shape = androidx.compose.foundation.shape.Radius.xsShape, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.size(40.dp)) { RuntimeIcon(icon, Modifier.padding(Spacing.sm), MaterialTheme.colorScheme.onSecondaryContainer) }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) { Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold); Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis) }
         RuntimeIcon(RuntimeIconName.ChevronRight, Modifier.size(20.dp), MaterialTheme.colorScheme.onSurfaceVariant)
     } }
 }
 
-@Composable private fun ScriptPathPanel(path: String) { RuntimeCard(containerColor = MaterialTheme.colorScheme.surfaceContainerLow) { Column(verticalArrangement = Arrangement.spacedBy(4.dp)) { Text(stringResource(R.string.workshop_script_path_title), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); Text(path, style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 11.sp)) } } }
+@Composable private fun ScriptPathPanel(path: String) { RuntimeCard(containerColor = MaterialTheme.colorScheme.surfaceContainerLow) { Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) { Text(stringResource(R.string.workshop_script_path_title), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); Text(path, style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 11.sp)) } } }
 
 @Composable
 private fun PathField(label: String, value: String, onValueChange: (String) -> Unit) {
-    val shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    val shape = androidx.compose.foundation.shape.Radius.smShape
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerLow, shape).border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f), shape).padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerLow, shape).border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f), shape).padding(horizontal = Spacing.md, vertical = Spacing.sm),
             singleLine = true,
             textStyle = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface, fontFamily = FontFamily.Monospace, fontSize = 12.sp),
             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
@@ -492,16 +495,16 @@ private fun PathField(label: String, value: String, onValueChange: (String) -> U
 
 @Composable
 private fun CodeEditorPanel(value: String, onValueChange: (String) -> Unit, fileName: String, modifier: Modifier = Modifier) {
-    val shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp)
+    val shape = androidx.compose.foundation.shape.Radius.mdShape
     Column(modifier.background(MaterialTheme.colorScheme.surfaceContainerLowest, shape).border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f), shape)) {
-        Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerLow, androidx.compose.foundation.shape.RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp)).padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerLow, RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp)).padding(horizontal = Spacing.md, vertical = Spacing.sm), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             RuntimeIcon(RuntimeIconName.Code, Modifier.size(15.dp), MaterialTheme.colorScheme.primary)
             Text(fileName, style = MaterialTheme.typography.labelMedium.copy(fontFamily = FontFamily.Monospace, fontSize = 11.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
-            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier.fillMaxSize().padding(horizontal = Spacing.md, vertical = Spacing.sm),
             textStyle = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface, fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 16.sp),
             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
         )

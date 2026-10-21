@@ -149,6 +149,8 @@ import com.kyant.backdrop.shadow.Shadow
 import top.tianyan.app.feature.components.R
 import androidx.compose.ui.res.stringResource
 import top.tianyan.app.ui.theme.LocalLiquidGlassBackdrop
+import top.tianyan.app.ui.theme.Radius
+import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.ui.theme.LocalLiquidGlassSurfaceBackdrop
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -180,7 +182,7 @@ fun RuntimeBottomBar(
             modifier = modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = 14.dp, vertical = 8.dp),
+                .padding(horizontal = Spacing.md, vertical = Spacing.sm),
             contentAlignment = Alignment.Center,
         ) {
             LiquidGlassBottomBar(
@@ -354,12 +356,12 @@ private fun LiquidGlassBottomBar(
                 },
                 onDrawSurface = { drawRect(containerColor) },
             )
-            .height(64.dp).fillMaxWidth().padding(4.dp)
+            .height(64.dp).fillMaxWidth().padding(Spacing.xs)
         Box(trackModifier)
 
         val indicatorTransform = Modifier
             .align(Alignment.CenterStart)
-            .padding(horizontal = 4.dp)
+            .padding(horizontal = Spacing.xs)
             .graphicsLayer {
                 translationX = indicatorAnimation.value * tabWidth + panelOffset
                 scaleX = scaleXAnimation.value
@@ -408,7 +410,7 @@ private fun LiquidGlassBottomBar(
                 .graphicsLayer { translationX = panelOffset }
                 .height(56.dp)
                 .fillMaxWidth()
-                .padding(horizontal = 4.dp),
+                .padding(horizontal = Spacing.xs),
             verticalAlignment = Alignment.CenterVertically,
         ) {
                 destinations.forEachIndexed { index, destination ->
@@ -431,7 +433,7 @@ private fun LiquidGlassBottomBar(
                                 interactionSource = null,
                                 indication = null,
                             ) { animateTo(destination.ordinal, true) },
-                        verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.xs, Alignment.CenterVertically),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         RuntimeIcon(destination.icon, Modifier.size(22.dp), tint = baseContentColor)
@@ -597,7 +599,7 @@ fun RuntimeTopBar(
         title = {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 if (onBack == null) TianyanBrandBadge(30.dp)
                 Column {
@@ -698,7 +700,7 @@ fun SectionHeader(
         verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Column(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
             Text(
                 title,
                 style = MaterialTheme.typography.titleMedium.copy(
@@ -727,13 +729,13 @@ fun RuntimeCard(
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow,
     borderColor: Color = Color.Transparent,
     onClick: (() -> Unit)? = null,
-    contentPadding: PaddingValues = PaddingValues(16.dp),
+    contentPadding: PaddingValues = PaddingValues(Spacing.lg),
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val glassBackdrop = LocalLiquidGlassSurfaceBackdrop.current
     val colors = CardDefaults.cardColors(containerColor = containerColor)
     val border = borderColor.takeIf { it.alpha > 0f }?.let { BorderStroke(1.dp, it) }
-    val shape = RoundedCornerShape(16.dp)
+    val shape = Radius.mdShape
 
     if (glassBackdrop != null) {
         val interactionSource = remember { MutableInteractionSource() }
@@ -811,8 +813,8 @@ fun RuntimeButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     tonal: Boolean = false,
-    contentPadding: PaddingValues = PaddingValues(horizontal = 18.dp, vertical = 12.dp),
-    shape: Shape = RoundedCornerShape(24.dp),
+    contentPadding: PaddingValues = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.md),
+    shape: Shape = Radius.lgShape,
     colors: ButtonColors? = null,
     border: BorderStroke? = null,
     content: @Composable RowScope.() -> Unit,
@@ -891,7 +893,7 @@ fun RuntimeButton(
             )
             .height(48.dp)
             .padding(contentPadding),
-        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         CompositionLocalProvider(LocalContentColor provides foreground) { content() }
@@ -925,7 +927,7 @@ fun RuntimeSwitch(
         animationSpec = tween(220, easing = FastOutSlowInEasing),
         label = "glassSwitchOffset",
     )
-    val shape = RoundedCornerShape(18.dp)
+    val shape = Radius.lgShape
     val trackColor = when {
         enabled && checked -> colors.checkedTrackColor
         enabled -> colors.uncheckedTrackColor
@@ -986,10 +988,10 @@ fun RuntimeOutlinedButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    shape: Shape = RoundedCornerShape(24.dp),
+    shape: Shape = Radius.lgShape,
     colors: ButtonColors = ButtonDefaults.outlinedButtonColors(),
     border: BorderStroke? = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-    contentPadding: PaddingValues = PaddingValues(horizontal = 18.dp, vertical = 12.dp),
+    contentPadding: PaddingValues = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.md),
     content: @Composable RowScope.() -> Unit,
 ) {
     val backdrop = LocalLiquidGlassSurfaceBackdrop.current
@@ -1005,10 +1007,10 @@ fun RuntimeFilledTonalButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    shape: Shape = RoundedCornerShape(24.dp),
+    shape: Shape = Radius.lgShape,
     colors: ButtonColors = ButtonDefaults.filledTonalButtonColors(),
     border: BorderStroke? = null,
-    contentPadding: PaddingValues = PaddingValues(horizontal = 18.dp, vertical = 12.dp),
+    contentPadding: PaddingValues = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.md),
     content: @Composable RowScope.() -> Unit,
 ) = RuntimeButton(onClick, modifier, enabled, tonal = true, contentPadding = contentPadding, shape = shape, colors = colors, border = border, content = content)
 
@@ -1017,9 +1019,9 @@ fun RuntimeTextButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    contentPadding: PaddingValues = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+    contentPadding: PaddingValues = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.sm),
     colors: ButtonColors = ButtonDefaults.textButtonColors(),
-    shape: Shape = RoundedCornerShape(18.dp),
+    shape: Shape = Radius.lgShape,
     content: @Composable RowScope.() -> Unit,
 ) {
     val backdrop = LocalLiquidGlassSurfaceBackdrop.current
@@ -1213,10 +1215,10 @@ fun RuntimeCheckbox(
         modifier
             .size(24.dp)
             .graphicsLayer { alpha = if (enabled) 1f else 0.45f }
-            .clip(RoundedCornerShape(7.dp))
+            .clip(Radius.xsShape)
             .drawBackdrop(
                 backdrop = backdrop,
-                shape = { RoundedCornerShape(7.dp) },
+                shape = { Radius.xsShape },
                 effects = { blur(5.dp.toPx()); lens(5.dp.toPx(), 7.dp.toPx()) },
                 highlight = { Highlight.Default.copy(alpha = 0.34f) },
                 onDrawSurface = { drawRoundRect(primary.copy(alpha = if (checked) 0.85f else 0.12f)); if (!checked) drawRoundRect(primary.copy(alpha = 0.6f), style = Stroke(1.dp.toPx())) },
@@ -1371,11 +1373,11 @@ fun RuntimeAlertDialog(
                         )
                     },
                 )
-                .padding(horizontal = 24.dp, vertical = 22.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(horizontal = Spacing.xl, vertical = 22.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             if (icon != null || title != null) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     icon?.invoke()
                     title?.invoke()
                 }
@@ -1385,7 +1387,7 @@ fun RuntimeAlertDialog(
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm, Alignment.End),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 dismissButton?.invoke()
@@ -1425,9 +1427,9 @@ fun StatusBadge(
         border = BorderStroke(1.dp, color.copy(alpha = 0.35f)),
     ) {
         Row(
-            Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+            Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             Box(
                 Modifier
@@ -1454,9 +1456,9 @@ fun IconTile(
     Box(
         modifier = modifier
             .size(size)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(Radius.smShape)
             .background(color.copy(alpha = 0.12f))
-            .border(1.dp, color.copy(alpha = 0.22f), RoundedCornerShape(12.dp)),
+            .border(1.dp, color.copy(alpha = 0.22f), Radius.smShape),
         contentAlignment = Alignment.Center,
     ) {
         RuntimeIcon(icon, Modifier.size(size * 0.48f), tint = color)
@@ -1481,7 +1483,7 @@ fun InfoRow(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(0.38f, fill = false),
         )
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(Spacing.sm))
         Text(
             text = value,
             style = MaterialTheme.typography.bodySmall.copy(
@@ -1503,7 +1505,7 @@ fun CodeBlockRow(
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {
         Text(
             text = label,
@@ -1512,7 +1514,7 @@ fun CodeBlockRow(
         )
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(8.dp),
+            shape = Radius.xsShape,
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
         ) {
             Text(
@@ -1523,7 +1525,7 @@ fun CodeBlockRow(
                     lineHeight = 15.sp,
                 ),
                 color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.sm),
             )
         }
     }
@@ -1544,9 +1546,9 @@ fun EmptyPanel(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 20.dp, horizontal = 16.dp),
+                .padding(vertical = Spacing.xl, horizontal = Spacing.lg),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             IconTile(icon, color = MaterialTheme.colorScheme.primary, size = 48.dp)
             Text(
@@ -1576,11 +1578,11 @@ fun NoticeBanner(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(Radius.smShape)
             .background(color.copy(alpha = 0.08f))
-            .border(1.dp, color.copy(alpha = 0.25f), RoundedCornerShape(12.dp))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+            .border(1.dp, color.copy(alpha = 0.25f), Radius.smShape)
+            .padding(horizontal = Spacing.md, vertical = Spacing.sm),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         RuntimeIcon(if (isError) RuntimeIconName.Alert else RuntimeIconName.Check, Modifier.size(17.dp), color)

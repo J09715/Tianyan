@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import top.tianyan.app.ui.components.RuntimeIconButton as IconButton
 import androidx.compose.material3.MaterialTheme
@@ -500,7 +499,7 @@ internal fun ReasoningEffortSlider(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = Spacing.xs, vertical = Spacing.sm),
-        shape = RoundedCornerShape(22.dp),
+        shape = Radius.lgShape,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
@@ -561,7 +560,7 @@ internal fun ReasoningEffortSlider(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(44.dp)
-                    .clip(RoundedCornerShape(22.dp))
+                    .clip(Radius.lgShape)
                     .background(MaterialTheme.colorScheme.surfaceContainerHighest)
                     .padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                 contentAlignment = Alignment.Center,
@@ -586,7 +585,7 @@ internal fun ReasoningEffortSlider(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(36.dp)
-                                .clip(RoundedCornerShape(18.dp))
+                                .clip(Radius.lgShape)
                                 .background(
                                     if (isSelected) {
                                         when (index) {

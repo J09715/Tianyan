@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import top.tianyan.app.ui.components.RuntimeCard
+import top.tianyan.app.ui.theme.Spacing
 
 @Composable
 fun SnapshotSheet(state: SnapshotSheetState, onDismiss: () -> Unit) {
@@ -20,11 +21,11 @@ fun SnapshotSheet(state: SnapshotSheetState, onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         title = { Text("Snapshot · ${state.title.ifBlank { state.url }}", maxLines = 1, overflow = TextOverflow.Ellipsis) },
         text = {
-            Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+            Column(modifier = Modifier.fillMaxWidth().padding(top = Spacing.xs)) {
                 Text(state.url, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 LazyColumn {
                     items(state.snapshot.interactiveRefs) { ref ->
-                        RuntimeCard(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                        RuntimeCard(modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.xs)) {
                             val parts = buildString {
                                 append("[${ref.ref}]")
                                 append(" <${ref.tag}")
