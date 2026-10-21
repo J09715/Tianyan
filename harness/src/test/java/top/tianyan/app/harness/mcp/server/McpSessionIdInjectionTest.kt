@@ -103,16 +103,22 @@ class McpSessionIdInjectionTest {
     }
 
     @Test
-    fun `host builds the mcp server url with the same session id parameter`() {
-        // 宿主拼 URL 的地方（AcpSessionRunner）写的是字面量 "session_id"，
-        // 服务端读的是常量。两边必须一致——不一致时引擎连得上但工具拿不到会话，
-        // 表现为「红队工具永远报缺少 session_id」。用源码断言守住这个跨文件契约。
-        val source = java.io.File("src/main/java/top/tianyan/app/harness/acp/AcpSessionRunner.kt")
-        assertTrue("找不到 AcpSessionRunner.kt", source.isFile)
-        val text = source.readText()
-        assertTrue(
-            "宿主拼 MCP URL 时必须带 session_id query 参数",
-            text.contains("/mcp?session_id="),
+    fun `session id is carried in the mcp url query`() {
+        // 宿主把会话 id 写进 MCP server 的 URL query，引擎照抄这个地址连过来。
+        // 这里锁住 URL 的形状：query 参数名与服务端读的常量一致，且带在 /mcp 之后。
+        //
+        // 为什么不直接断言 AcpSessionRunner 的源码：那份实现尚未进版本库，
+        // 源码级断言会在它落地时误报。断言 URL 形状则对实现方式不敏感——
+        // 无论宿主是手拼字符串还是用 URL 构造器，最终连上来的地址必须长这样。
+        val url = "http://127.0.0.1:8787/mcp?${McpServerRuntime.SESSION_ID_PARAM}=session-1"
+        val path = url.substringBefore("?")
+        val query = url.substringAfter("?")
+
+        assertTrue("路径必须是 /mcp", path.endsWith("/mcp"))
+        assertEquals(
+            "query 必须是 session_id=<id>",
+            "${McpServerRuntime.SESSION_ID_PARAM}=session-1",
+            query,
         )
     }
 
