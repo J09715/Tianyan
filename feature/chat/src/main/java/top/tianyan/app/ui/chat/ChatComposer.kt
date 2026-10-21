@@ -29,7 +29,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import top.tianyan.app.ui.components.RuntimeCircularProgressIndicator as CircularProgressIndicator
@@ -73,6 +72,8 @@ import top.tianyan.app.core.database.AiModelEntity
 import top.tianyan.app.harness.HarnessMessage
 import top.tianyan.app.harness.ToolResult
 import top.tianyan.app.ui.components.RuntimeIcon
+import top.tianyan.app.ui.theme.Radius
+import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.ui.components.RuntimeIconName
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
@@ -241,7 +242,7 @@ internal fun ChatComposer(
         AgentQuestionCard(
             questions = activeQuestion.questions,
             onAnswer = onAnswerQuestion,
-            modifier = Modifier.padding(horizontal = 12.dp),
+            modifier = Modifier.padding(horizontal = Spacing.md),
         )
     }
 
@@ -264,9 +265,9 @@ internal fun ChatComposer(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 4.dp),
+                .padding(vertical = Spacing.xs),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             CircularProgressIndicator(
                 modifier = Modifier.size(14.dp),
@@ -337,9 +338,9 @@ internal fun ChatComposer(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 6.dp, bottom = 6.dp)
+            .padding(top = Spacing.sm, bottom = Spacing.sm)
             .then(auroraBorderModifier),
-        shape = RoundedCornerShape(20.dp),
+        shape = Radius.xlShape,
         color = if (running) MaterialTheme.colorScheme.surfaceContainerHighest else MaterialTheme.colorScheme.surfaceContainerHigh,
         border = if (!running) androidx.compose.foundation.BorderStroke(
             1.dp,
@@ -349,8 +350,8 @@ internal fun ChatComposer(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(3.dp),
+                .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
             // 🌟 常驻/已钉选能力与临时挂载胶囊栏 (Pinned & Attached Capabilities Strip)
             val allDisplayItems = remember(pinnedCapabilities, attachedMentions) {
@@ -360,8 +361,8 @@ internal fun ChatComposer(
                 LazyRow(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 2.dp, vertical = 1.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        .padding(horizontal = Spacing.xs, vertical = Spacing.xs),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     items(allDisplayItems.size, key = { allDisplayItems[it].id }) { index ->
@@ -377,7 +378,7 @@ internal fun ChatComposer(
                                        else MaterialTheme.colorScheme.tertiary
 
                         Surface(
-                            shape = RoundedCornerShape(8.dp),
+                            shape = Radius.xsShape,
                             color = tagBg,
                             border = androidx.compose.foundation.BorderStroke(0.8.dp, tagBorder),
                             modifier = Modifier.clickable {
@@ -389,9 +390,9 @@ internal fun ChatComposer(
                             },
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.5.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                             ) {
                                 RuntimeIcon(
                                     item.icon,
@@ -406,11 +407,11 @@ internal fun ChatComposer(
                                 if (isPinned) {
                                     Surface(
                                         color = tagColor.copy(alpha = 0.18f),
-                                        shape = RoundedCornerShape(4.dp),
+                                        shape = Radius.xsShape,
                                     ) {
                                         Text(
                                             stringResource(R.string.chat_pinned_badge),
-                                            modifier = Modifier.padding(horizontal = 3.5.dp, vertical = 0.5.dp),
+                                            modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp, fontWeight = FontWeight.Bold),
                                             color = tagColor,
                                         )
@@ -427,15 +428,15 @@ internal fun ChatComposer(
 
                     item {
                         Surface(
-                            shape = RoundedCornerShape(8.dp),
+                            shape = Radius.xsShape,
                             color = MaterialTheme.colorScheme.surfaceContainerHighest,
                             border = androidx.compose.foundation.BorderStroke(0.8.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
                             modifier = Modifier.clickable { onOpenSkillsMcp() },
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.5.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                             ) {
                                 RuntimeIcon(
                                     RuntimeIconName.Plus,
@@ -457,7 +458,7 @@ internal fun ChatComposer(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                    .padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                 contentAlignment = Alignment.CenterStart,
             ) {
                 if (input.isEmpty()) {
@@ -522,14 +523,14 @@ internal fun ChatComposer(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 1.dp),
+                    .padding(top = Spacing.xs),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 // 左侧：+ 号展开选单 + 思考深度胶囊
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                     modifier = Modifier.weight(1f, fill = false),
                 ) {
                     var showPlusMenu by rememberSaveable { mutableStateOf(false) }
@@ -588,18 +589,18 @@ internal fun ChatComposer(
                                     if (steerActive) ComposerSendMode.NEXT_RUN else ComposerSendMode.STEER,
                                 )
                             },
-                            shape = RoundedCornerShape(10.dp),
+                            shape = Radius.smShape,
                             color = steerTint.copy(alpha = if (steerActive) 0.16f else 0.08f),
                             border = BorderStroke(
                                 0.7.dp,
                                 steerTint.copy(alpha = if (steerActive) 0.5f else 0.2f),
                             ),
-                            modifier = Modifier.padding(start = 2.dp),
+                            modifier = Modifier.padding(start = Spacing.xs),
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                             ) {
                                 RuntimeIcon(
                                     name = if (steerActive) RuntimeIconName.Prompt else RuntimeIconName.More,
@@ -640,19 +641,19 @@ internal fun ChatComposer(
 
                     Surface(
                         onClick = { showReasoningSlider = !showReasoningSlider },
-                        shape = RoundedCornerShape(10.dp),
+                        shape = Radius.smShape,
                         color = if (showReasoningSlider) effortTint.copy(alpha = 0.15f)
                         else effortTint.copy(alpha = 0.08f),
                         border = BorderStroke(
                             0.7.dp,
                             if (showReasoningSlider) effortTint.copy(alpha = 0.45f) else effortTint.copy(alpha = 0.2f),
                         ),
-                        modifier = Modifier.padding(start = 2.dp),
+                        modifier = Modifier.padding(start = Spacing.xs),
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                         ) {
                             RuntimeIcon(
                                 name = RuntimeIconName.Sparkles,
@@ -683,7 +684,7 @@ internal fun ChatComposer(
                 if (running) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         ContextUsageRingWithDialog(contextUsage)
                         if (canSend) {
@@ -733,7 +734,7 @@ internal fun ChatComposer(
                 } else {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         ContextUsageRingWithDialog(contextUsage)
                         val sendDesc = stringResource(R.string.chat_send)

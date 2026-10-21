@@ -33,7 +33,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.HorizontalDivider
 import top.tianyan.app.ui.components.RuntimeIconButton as IconButton
@@ -94,6 +93,8 @@ import java.net.URL
 import kotlin.math.abs
 import top.tianyan.app.ui.components.RuntimeCircularProgressIndicator as CircularProgressIndicator
 import top.tianyan.app.ui.components.RuntimeIcon
+import top.tianyan.app.ui.theme.Radius
+import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.SyntaxHighlighter
 
@@ -144,7 +145,7 @@ fun MarkdownText(
             }
     }
     SelectionContainer {
-        Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             blocks.forEachIndexed { index, block ->
                 when (block) {
                     is MdParagraph -> InlineText(block.text, MaterialTheme.typography.bodyMedium)
@@ -551,7 +552,7 @@ private fun RemoteMediaBlock(block: MdRemoteMedia, cacheKey: String? = null) {
     var loaded by remember(cacheKey, block.url) { mutableStateOf(false) }
     var failed by remember(cacheKey, block.url) { mutableStateOf(false) }
     var aspectRatio by remember(cacheKey, block.url) { mutableFloatStateOf(0f) }
-    val shape = RoundedCornerShape(14.dp)
+    val shape = Radius.mdShape
     val density = LocalDensity.current
     val decodeWidthPx = with(density) { MEDIA_MAX_WIDTH.roundToPx() }
     val decodeHeightPx = with(density) { MEDIA_MAX_HEIGHT.roundToPx() }
@@ -624,7 +625,7 @@ private fun RemoteMediaBlock(block: MdRemoteMedia, cacheKey: String? = null) {
         when {
             failed -> Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 RuntimeIcon(
                     RuntimeIconName.Image,
@@ -689,7 +690,7 @@ private fun ImagePreviewDialog(block: MdRemoteMedia, onDismiss: () -> Unit) {
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(12.dp)
+                        .padding(Spacing.md)
                         .graphicsLayer {
                             val progress = (abs(dismissOffsetY) / fadeDistancePx).coerceIn(0f, 1f)
                             val dismissScale = 1f - progress * 0.14f
@@ -767,12 +768,12 @@ private fun ImagePreviewDialog(block: MdRemoteMedia, onDismiss: () -> Unit) {
                 Row(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(16.dp)
+                        .padding(Spacing.lg)
                         .graphicsLayer {
                             val progress = (abs(dismissOffsetY) / fadeDistancePx).coerceIn(0f, 1f)
                             alpha = 1f - progress
                         },
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     IconButton(
                         onClick = {
@@ -914,7 +915,7 @@ private fun CodeBlock(block: MdCodeBlock) {
 
     Surface(
         color = containerBg,
-        shape = RoundedCornerShape(8.dp),
+        shape = Radius.xsShape,
         border = androidx.compose.foundation.BorderStroke(0.6.dp, borderColor),
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -924,7 +925,7 @@ private fun CodeBlock(block: MdCodeBlock) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(headerBg)
-                    .padding(horizontal = 10.dp, vertical = 3.5.dp),
+                    .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
@@ -939,13 +940,13 @@ private fun CodeBlock(block: MdCodeBlock) {
                 )
                 Surface(
                     color = Color.Transparent,
-                    shape = RoundedCornerShape(4.dp),
+                    shape = Radius.xsShape,
                     modifier = Modifier.clickable(onClick = copyCode),
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(3.dp),
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                        modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                     ) {
                         RuntimeIcon(
                             RuntimeIconName.Copy,
@@ -966,7 +967,7 @@ private fun CodeBlock(block: MdCodeBlock) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                    .padding(horizontal = Spacing.sm, vertical = Spacing.sm),
             ) {
                 Text(
                     text = highlightedText,
@@ -1006,14 +1007,14 @@ private fun TableBlock(table: MdTable) {
     Box(
         Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(8.dp)),
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), Radius.xsShape),
     ) {
         Column(
             Modifier
                 .horizontalScroll(rememberScrollState())
                 .width(IntrinsicSize.Max)
-                .padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+                .padding(Spacing.sm),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
             Row(Modifier.fillMaxWidth()) {
                 (0 until colCount).forEach { c ->
@@ -1021,7 +1022,7 @@ private fun TableBlock(table: MdTable) {
                         table.headers.getOrNull(c) ?: "",
                         MaterialTheme.typography.bodySmall,
                         bold = true,
-                        modifier = Modifier.weight(1f).padding(end = 8.dp),
+                        modifier = Modifier.weight(1f).padding(end = Spacing.sm),
                     )
                 }
             }
@@ -1032,7 +1033,7 @@ private fun TableBlock(table: MdTable) {
                         InlineText(
                             row.getOrNull(c) ?: "",
                             MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.weight(1f).padding(end = 8.dp),
+                            modifier = Modifier.weight(1f).padding(end = Spacing.sm),
                         )
                     }
                 }
@@ -1043,14 +1044,14 @@ private fun TableBlock(table: MdTable) {
 
 @Composable
 private fun ListBlock(block: MdList) {
-    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
         block.items.forEachIndexed { index, item ->
             Row(Modifier.fillMaxWidth()) {
                 Text(
                     if (block.ordered) "${index + 1}." else "\u2022",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(end = 8.dp),
+                    modifier = Modifier.padding(end = Spacing.sm),
                 )
                 InlineText(item, MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(end = 0.dp))
             }
@@ -1061,11 +1062,11 @@ private fun ListBlock(block: MdList) {
 @Composable
 private fun QuoteBlock(block: MdQuote) {
     Column(
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), Radius.xsShape)
+            .padding(horizontal = Spacing.sm, vertical = Spacing.sm),
     ) {
         block.lines.forEach { line ->
             InlineText(line, MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)

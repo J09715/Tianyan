@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.tianyan.app.feature.chat.R
 import top.tianyan.app.ui.components.RuntimeLinearProgressIndicator
+import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.ui.components.StatusBadge
 import kotlin.math.roundToInt
 
@@ -114,8 +115,8 @@ fun ContextUsageRing(
             modifier = Modifier.widthIn(min = 260.dp, max = 300.dp),
         ) {
             Column(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -145,8 +146,8 @@ fun ContextUsageRing(
                 )
 
                 Column(
-                    verticalArrangement = Arrangement.spacedBy(3.dp),
-                    modifier = Modifier.padding(top = 2.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+                    modifier = Modifier.padding(top = Spacing.xs),
                 ) {
                     UsageBreakdownRow(
                         label = stringResource(R.string.chat_context_system_tokens),
@@ -175,7 +176,7 @@ fun ContextUsageRing(
                     StatusBadge(
                         text = stringResource(R.string.chat_context_compacted_active),
                         color = MaterialTheme.colorScheme.secondary,
-                        modifier = Modifier.padding(top = 2.dp),
+                        modifier = Modifier.padding(top = Spacing.xs),
                     )
                 }
             }

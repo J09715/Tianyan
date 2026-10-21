@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import top.tianyan.app.ui.components.RuntimeButton as Button
 import androidx.compose.material3.MaterialTheme
 import top.tianyan.app.ui.components.RuntimeOutlinedButton as OutlinedButton
@@ -47,6 +46,8 @@ import top.tianyan.app.harness.HarnessTool
 import top.tianyan.app.harness.ToolCall
 import top.tianyan.app.harness.ToolResult
 import top.tianyan.app.ui.components.RuntimeIcon
+import top.tianyan.app.ui.theme.Radius
+import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.ui.components.RuntimeIconName
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
@@ -92,7 +93,7 @@ internal fun ToolCard(
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
         Column(
             Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
             if (showReasoning) {
                 call.reasoning?.takeIf { it.isNotBlank() }
@@ -106,12 +107,12 @@ internal fun ToolCard(
             }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(6.dp))
+                    .clip(Radius.xsShape)
                     .clickable { expanded = !expanded }
-                    .padding(vertical = 1.dp),
+                    .padding(vertical = Spacing.xs),
             ) {
                 Box(
                     modifier = Modifier.size(16.dp),
@@ -226,7 +227,7 @@ internal fun ToolCard(
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         TextButton(onClick = onRetry) {
                             RuntimeIcon(RuntimeIconName.Refresh, Modifier.size(13.dp), MaterialTheme.colorScheme.primary)
-                            Spacer(Modifier.width(4.dp))
+                            Spacer(Modifier.width(Spacing.xs))
                             Text(stringResource(R.string.chat_retry_from_tool), fontSize = 11.5.sp)
                         }
                     }
@@ -250,20 +251,20 @@ internal fun ApprovalRequestCard(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = RoundedCornerShape(12.dp),
+        shape = Radius.smShape,
         border = androidx.compose.foundation.BorderStroke(1.dp, riskColor.copy(alpha = 0.55f)),
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 RuntimeIcon(RuntimeIconName.Shield, Modifier.size(18.dp), riskColor)
                 Text(stringResource(R.string.chat_approval_required), style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
-                Surface(color = riskColor.copy(alpha = 0.12f), shape = RoundedCornerShape(4.dp)) {
+                Surface(color = riskColor.copy(alpha = 0.12f), shape = Radius.xsShape) {
                     Text(
                         request.riskLevel.uppercase(),
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         color = riskColor,
                     )
@@ -297,7 +298,7 @@ internal fun ApprovalRequestCard(
 
             // 审批处理期间禁用按钮，防止重复提交
             var resolving by remember { mutableStateOf(false) }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), modifier = Modifier.fillMaxWidth()) {
                 OutlinedButton(
                     onClick = {
                         resolving = true
@@ -363,10 +364,10 @@ internal fun DiffStatBadge(
     if (added == 0 && deleted == 0) return
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(4.dp))
+            .clip(Radius.xsShape)
             .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f))
-            .padding(horizontal = 4.dp, vertical = 1.dp),
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
+            .padding(horizontal = Spacing.xs, vertical = Spacing.xs),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (added > 0) {

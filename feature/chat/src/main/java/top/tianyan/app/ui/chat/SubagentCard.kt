@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -44,6 +43,8 @@ import top.tianyan.app.harness.SubagentArgsParser
 import top.tianyan.app.harness.session.ConversationBranch
 import top.tianyan.app.harness.session.ConversationBranchKind
 import top.tianyan.app.ui.components.RuntimeIcon
+import top.tianyan.app.ui.theme.Radius
+import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.ui.components.RuntimeIconName
 
 /**
@@ -82,7 +83,7 @@ fun SubagentCard(
     }
 
     Surface(
-        shape = RoundedCornerShape(10.dp),
+        shape = Radius.smShape,
         color = MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.5f),
         border = androidx.compose.foundation.BorderStroke(0.6.dp, cardBorderColor.copy(alpha = 0.35f)),
         modifier = modifier.fillMaxWidth(),
@@ -90,8 +91,8 @@ fun SubagentCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+                .padding(Spacing.sm),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             // Header Row
             Row(
@@ -103,7 +104,7 @@ fun SubagentCard(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     modifier = Modifier.weight(1f),
                 ) {
                     Box(
@@ -120,10 +121,10 @@ fun SubagentCard(
                         )
                     }
 
-                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             Text(
                                 stringResource(R.string.chat_subagent_delegation),
@@ -134,13 +135,13 @@ fun SubagentCard(
                                 color = if (isFinished) {
                                     if (isSuccess) Color(0xFF10B981).copy(alpha = 0.15f) else Color(0xFFEF4444).copy(alpha = 0.15f)
                                 } else Color(0xFFF59E0B).copy(alpha = 0.15f),
-                                shape = RoundedCornerShape(4.dp),
+                                shape = Radius.xsShape,
                             ) {
                                 Text(
                                     text = stringResource(if (isFinished) (if (isSuccess) R.string.chat_completed else R.string.chat_interrupted) else R.string.chat_parallel_running),
                                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.SemiBold),
                                     color = if (isFinished) (if (isSuccess) Color(0xFF10B981) else Color(0xFFEF4444)) else Color(0xFFF59E0B),
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                                    modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                                 )
                             }
                         }
@@ -165,7 +166,7 @@ fun SubagentCard(
             // Task Badges List：FlowRow 自动换行，任务多时不再溢出屏幕
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 tasks.forEach { (taskName, role, _) ->
                     val roleKey = role.lowercase()
@@ -190,7 +191,7 @@ fun SubagentCard(
                     val clickable = targetBranch != null && onOpenSubagent != null
 
                     Surface(
-                        shape = RoundedCornerShape(6.dp),
+                        shape = Radius.xsShape,
                         color = roleColor.copy(alpha = 0.1f),
                         border = androidx.compose.foundation.BorderStroke(0.5.dp, roleColor.copy(alpha = 0.3f)),
                         modifier = Modifier.clickable(enabled = clickable) {
@@ -198,9 +199,9 @@ fun SubagentCard(
                         },
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                         ) {
                             RuntimeIcon(name = roleIcon, modifier = Modifier.size(12.dp), tint = roleColor)
                             Text(
@@ -227,16 +228,16 @@ fun SubagentCard(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                        .padding(top = Spacing.xs),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     if (result != null) {
                         Surface(
-                            shape = RoundedCornerShape(8.dp),
+                            shape = Radius.xsShape,
                             color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f),
                             modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Column(Modifier.padding(Spacing.sm), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                 Text(
                                     stringResource(R.string.chat_execution_summary),
                                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
@@ -254,7 +255,7 @@ fun SubagentCard(
                             stringResource(R.string.chat_subagent_running),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(vertical = 4.dp),
+                            modifier = Modifier.padding(vertical = Spacing.xs),
                         )
                     }
 
@@ -266,7 +267,7 @@ fun SubagentCard(
                                     stringResource(R.string.chat_subagent_view_details),
                                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                                 )
-                                Spacer(Modifier.width(4.dp))
+                                Spacer(Modifier.width(Spacing.xs))
                                 RuntimeIcon(
                                     name = RuntimeIconName.ChevronRight,
                                     modifier = Modifier.size(14.dp),

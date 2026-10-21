@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -54,6 +53,8 @@ import kotlin.math.min
 import kotlin.math.sin
 import top.tianyan.app.core.model.RedTeamConsoleModel
 import top.tianyan.app.ui.components.RuntimeCard
+import top.tianyan.app.ui.theme.Radius
+import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeLinearProgressIndicator
@@ -91,12 +92,12 @@ internal fun RedTeamAssetsTab(
     onToggleAsset: (String) -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         SegmentRail(state = state, onSelectSegment = onSelectSegment)
 
-        RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(12.dp)) {
+        RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(Spacing.md)) {
             AssetToolbar(
                 state = state,
                 onQueryChange = onQueryChange,
@@ -108,14 +109,14 @@ internal fun RedTeamAssetsTab(
                 onViewChange = onViewChange,
             )
             if (state.loading) {
-                RuntimeLinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                RuntimeLinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm))
             }
             state.error?.let { message ->
                 Text(
                     message,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(top = 8.dp),
+                    modifier = Modifier.padding(top = Spacing.sm),
                 )
             }
         }
@@ -133,7 +134,7 @@ internal fun RedTeamAssetsTab(
 /** 段侧栏：全部 C 段 + 每个网段的资产/端口/来源构成。 */
 @Composable
 private fun SegmentRail(state: RedTeamConsoleState, onSelectSegment: (String?) -> Unit) {
-    RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(10.dp)) {
+    RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(Spacing.sm)) {
         Text(
             if (state.segments.isEmpty()) {
                 "网段 · 当前资产都不是 IP，无法归段"
@@ -148,7 +149,7 @@ private fun SegmentRail(state: RedTeamConsoleState, onSelectSegment: (String?) -
         )
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             SegmentChip(
                 selected = state.selectedSegment == null,
@@ -215,12 +216,12 @@ private fun AssetToolbar(
     onSortChange: (RedTeamConsoleModel.Sort) -> Unit,
     onViewChange: (RedTeamConsoleView) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
         // 搜索：输入框 + 图标按钮。图标按钮改成有边框的小方按钮，
         // 原来它悬在输入框右侧、和输入框不等高，看着像没对齐。
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             OutlinedTextField(
@@ -233,14 +234,14 @@ private fun AssetToolbar(
                 },
                 singleLine = true,
                 textStyle = MaterialTheme.typography.bodyMedium,
-                shape = RoundedCornerShape(12.dp),
+                shape = Radius.smShape,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { onSubmitQuery() }),
             )
             RuntimeOutlinedButton(
                 onClick = onSubmitQuery,
-                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 14.dp),
-                shape = RoundedCornerShape(12.dp),
+                contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.md),
+                shape = Radius.smShape,
             ) {
                 Text("搜索", style = MaterialTheme.typography.labelMedium, maxLines = 1)
             }
@@ -250,7 +251,7 @@ private fun AssetToolbar(
         // 挤成两行会让下拉框窄到看不清当前选中项（截图里两个下拉只剩一个箭头）。
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             OutlinedTextField(
@@ -260,7 +261,7 @@ private fun AssetToolbar(
                 placeholder = { Text("服务", fontSize = 12.sp) },
                 singleLine = true,
                 textStyle = MaterialTheme.typography.bodySmall,
-                shape = RoundedCornerShape(12.dp),
+                shape = Radius.smShape,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { onSubmitQuery() }),
             )
@@ -271,7 +272,7 @@ private fun AssetToolbar(
                 placeholder = { Text("端口", fontSize = 12.sp) },
                 singleLine = true,
                 textStyle = MaterialTheme.typography.bodySmall,
-                shape = RoundedCornerShape(12.dp),
+                shape = Radius.smShape,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { onSubmitQuery() }),
             )
@@ -306,7 +307,7 @@ private fun AssetToolbar(
         // 视图切换 + 结果计数。
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             RedTeamConsoleView.entries.forEach { view ->
@@ -381,11 +382,11 @@ private fun <T> ConsoleSelect(
 
 @Composable
 private fun AssetListCard(state: RedTeamConsoleState, onToggleAsset: (String) -> Unit) {
-    RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(10.dp)) {
+    RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(Spacing.sm)) {
         // 行改成了两行式卡片，不再有列对齐，所以这里不放假表头——
         // 列名对不齐比没有列名更容易误读。改为计数 + 排序说明。
         Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+            modifier = Modifier.fillMaxWidth().padding(bottom = Spacing.sm),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -408,7 +409,7 @@ private fun AssetListCard(state: RedTeamConsoleState, onToggleAsset: (String) ->
                 if (state.loading) "加载中…" else "没有匹配的资产",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(vertical = 12.dp),
+                modifier = Modifier.padding(vertical = Spacing.md),
             )
             return@RuntimeCard
         }
@@ -437,22 +438,22 @@ private fun AssetRow(
     Surface(
         modifier = Modifier.fillMaxWidth().clickable { onToggle() },
         color = if (expanded) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent,
-        shape = RoundedCornerShape(10.dp),
+        shape = Radius.smShape,
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.sm, vertical = Spacing.sm),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 // 状态点：比「存活/离线」两个字更省位置，颜色本身就是信息。
                 Box(
                     modifier = Modifier
                         .size(8.dp)
-                        .clip(RoundedCornerShape(4.dp))
+                        .clip(Radius.xsShape)
                         .background(
                             when (asset.state) {
                                 RedTeamConsoleModel.State.LIVE -> LiveAssetColor
@@ -535,10 +536,10 @@ private fun AssetDetail(detail: RedTeamConsoleModel.Detail?) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 4.dp, top = 4.dp)
+            .padding(start = Spacing.xs, top = Spacing.xs)
             .heightIn(max = 320.dp)
             .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         DetailBlock("主机名", asset.names.map { it.name }.ifEmpty { listOf("—") }.joinToString("、"))
         DetailBlock("C 段", asset.segmentCidr ?: "未分类")
@@ -602,7 +603,7 @@ private fun DetailBlock(title: String, body: String) {
  */
 @Composable
 private fun AssetGraphCard(state: RedTeamConsoleState) {
-    RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(10.dp)) {
+    RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(Spacing.sm)) {
         when {
             state.graphLoading -> Text("图谱加载中…", style = MaterialTheme.typography.bodySmall)
             state.graph == null -> Text("暂无数据", style = MaterialTheme.typography.bodySmall)
@@ -678,7 +679,7 @@ private fun AssetGraphCard(state: RedTeamConsoleState) {
 /** 底栏统计：与上游面板同口径。 */
 @Composable
 private fun ConsoleFooter(state: RedTeamConsoleState) {
-    RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(10.dp)) {
+    RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(Spacing.sm)) {
         Text(
             buildString {
                 append("C 段 ${state.stats.segments}")

@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -34,6 +33,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.tianyan.app.feature.chat.R
 import top.tianyan.app.ui.components.RuntimeIcon
+import top.tianyan.app.ui.theme.Radius
+import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.ui.components.RuntimeIconName
 import android.webkit.MimeTypeMap
 import java.io.File
@@ -184,12 +185,12 @@ fun AttachmentPreviewRow(
     if (attachments.isEmpty()) return
 
     LazyRow(
-        modifier = modifier.fillMaxWidth().padding(bottom = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = modifier.fillMaxWidth().padding(bottom = Spacing.sm),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         items(attachments, key = { it.id }) { item ->
             Surface(
-                shape = RoundedCornerShape(10.dp),
+                shape = Radius.smShape,
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 border = androidx.compose.foundation.BorderStroke(
                     0.8.dp,
@@ -197,9 +198,9 @@ fun AttachmentPreviewRow(
                 ),
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.sm),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     Box(
                         modifier = Modifier
@@ -218,7 +219,7 @@ fun AttachmentPreviewRow(
                         )
                     }
 
-                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                         Text(
                             text = item.name,
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
@@ -230,7 +231,7 @@ fun AttachmentPreviewRow(
                         when (val st = statuses[item.id]) {
                             is AttachmentStatus.Extracting -> Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                             ) {
                                 androidx.compose.material3.CircularProgressIndicator(
                                     modifier = Modifier.size(9.dp),

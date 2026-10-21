@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -140,12 +139,12 @@ internal fun ChatMessageList(
     LazyColumn(
         state = listState,
         modifier = modifier.scrollFadingEdge(top = 4.dp, bottom = 20.dp),
-        contentPadding = PaddingValues(top = 4.dp, bottom = 20.dp),
+        contentPadding = PaddingValues(top = Spacing.xs, bottom = Spacing.xl),
     ) {
         if (initializing) {
             item {
                 ChatMessageSkeleton(
-                    modifier = Modifier.padding(vertical = 16.dp),
+                    modifier = Modifier.padding(vertical = Spacing.lg),
                 )
             }
         } else {
@@ -165,7 +164,7 @@ internal fun ChatMessageList(
                 item(key = "session_compaction_banner") {
                     CompactionBanner(
                         snapshot = snapshot,
-                        modifier = Modifier.padding(bottom = 2.dp),
+                        modifier = Modifier.padding(bottom = Spacing.xs),
                     )
                 }
             }
@@ -245,7 +244,7 @@ internal fun ChatMessageList(
             }
             if (waitingForFirstOutput) {
                 item(key = "assistant_generation_placeholder") {
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(Spacing.sm))
                     AssistantGenerationPlaceholder()
                 }
             }
@@ -257,9 +256,9 @@ internal fun ChatMessageList(
                     onApprove = { onResolveApproval(request.id, true) },
                     onReject = { onResolveApproval(request.id, false) },
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(Spacing.sm))
             }
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(Spacing.xs))
         }
     }
 }
@@ -282,22 +281,22 @@ private fun chatItemContentType(item: ChatRenderItem): Int = when {
 private fun AssistantGenerationPlaceholder() {
     RuntimeCard(
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+        contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.md),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             Box(
                 modifier = Modifier
                     .size(44.dp)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), RoundedCornerShape(12.dp)),
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), Radius.smShape),
                 contentAlignment = Alignment.Center,
             ) {
                 RuntimeIcon(RuntimeIconName.Image, Modifier.size(22.dp), MaterialTheme.colorScheme.primary)
             }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 Text(
                     text = stringResource(R.string.chat_generating_content),
                     style = MaterialTheme.typography.bodyMedium,
@@ -367,14 +366,14 @@ internal fun EmptyChatGuidance(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+            .padding(vertical = Spacing.xl),
+        verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         onboardingPrivilege?.let { privilege ->
             val ready = privilege == OnboardingPrivilege.SHIZUKU_READY || privilege == OnboardingPrivilege.ROOT_READY
             Surface(
                 color = if (ready) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
-                shape = RoundedCornerShape(10.dp),
+                shape = Radius.smShape,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
@@ -388,7 +387,7 @@ internal fun EmptyChatGuidance(
                     ),
                     style = MaterialTheme.typography.bodySmall,
                     color = if (ready) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
                 )
             }
         }
@@ -402,21 +401,21 @@ internal fun EmptyChatGuidance(
             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.primary,
         )
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             if (enabledPhrases.isNotEmpty()) {
                 enabledPhrases.forEach { phrase ->
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerLow,
-                        shape = RoundedCornerShape(10.dp),
+                        shape = Radius.smShape,
                         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onSelectPhrase(phrase) },
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                         ) {
                             RuntimeIcon(parseIconName(phrase.iconName), Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                             Column(Modifier.weight(1f)) {
@@ -441,16 +440,16 @@ internal fun EmptyChatGuidance(
                 quickCommands.forEach { cmd ->
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerLow,
-                        shape = RoundedCornerShape(10.dp),
+                        shape = Radius.smShape,
                         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onSelectCommand(cmd) },
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                         ) {
                             RuntimeIcon(cmd.icon, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                             Column(Modifier.weight(1f)) {
@@ -510,7 +509,7 @@ internal fun RoundCollapseButton(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onToggle)
-            .padding(horizontal = 8.dp, vertical = 6.dp),
+            .padding(horizontal = Spacing.sm, vertical = Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
@@ -523,7 +522,7 @@ internal fun RoundCollapseButton(
             text = text,
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 12.dp),
+            modifier = Modifier.padding(horizontal = Spacing.md),
         )
         HorizontalDivider(
             modifier = Modifier.weight(1f),

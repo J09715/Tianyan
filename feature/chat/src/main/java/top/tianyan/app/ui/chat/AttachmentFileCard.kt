@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -20,6 +19,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import top.tianyan.app.harness.MessageAttachment
 import top.tianyan.app.ui.components.RuntimeIcon
+import top.tianyan.app.ui.theme.Radius
+import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.ui.components.RuntimeIconName
 
 /**
@@ -42,7 +43,7 @@ internal fun AttachmentFileCard(
     val isArchive = isArchiveName(attachment.name)
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
+        shape = Radius.smShape,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         // 触摸目标下限 48dp，对齐 UI 铁律
         modifier = modifier
@@ -52,12 +53,12 @@ internal fun AttachmentFileCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = Spacing.md, vertical = Spacing.sm),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             Surface(
-                shape = RoundedCornerShape(8.dp),
+                shape = Radius.xsShape,
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
                 modifier = Modifier.size(32.dp),
             ) {
@@ -69,7 +70,7 @@ internal fun AttachmentFileCard(
                     )
                 }
             }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 Text(
                     text = attachment.name,
                     style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),

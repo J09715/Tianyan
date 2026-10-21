@@ -48,6 +48,8 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import top.tianyan.app.feature.chat.R
 import top.tianyan.app.ui.components.RuntimeIcon
+import top.tianyan.app.ui.theme.Radius
+import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.ui.components.RuntimeIconName
 
 /** 结构化任务规划的单条步骤展示模型（与文本正则提取的 TaskStepItem 解耦）。 */
@@ -159,22 +161,22 @@ internal fun SessionPlanBoardCard(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(Radius.smShape)
             .clickable {
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 expanded = !expanded
             },
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = RoundedCornerShape(12.dp),
+        shape = Radius.smShape,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)),
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(12.dp).animateContentSize(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(Spacing.md).animateContentSize(),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 RuntimeIcon(RuntimeIconName.List, Modifier.size(16.dp), MaterialTheme.colorScheme.primary)
                 Text(
@@ -195,11 +197,11 @@ internal fun SessionPlanBoardCard(
                 modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape),
             )
             AnimatedVisibility(visible = expanded) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     steps.forEach { step ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             if (step.isCompleted) {
                                 Box(
@@ -275,13 +277,13 @@ internal fun StickyPlanBar(
         ),
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp).animateContentSize(),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md, vertical = Spacing.sm).animateContentSize(),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             // ── 标题行 ──
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 RuntimeIcon(
                     if (allDone) RuntimeIconName.Check else RuntimeIconName.List,
@@ -303,11 +305,11 @@ internal fun StickyPlanBar(
                 // 进度计数 chip
                 Surface(
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
-                    shape = RoundedCornerShape(4.dp),
+                    shape = Radius.xsShape,
                 ) {
                     Text(
                         stringResource(R.string.chat_plan_board_progress, completedCount, steps.size),
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                     )
@@ -329,15 +331,15 @@ internal fun StickyPlanBar(
             AnimatedVisibility(visible = expanded) {
                 Column(
                     modifier = Modifier
-                        .padding(top = 4.dp)
+                        .padding(top = Spacing.xs)
                         .heightIn(max = 220.dp)
                         .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     steps.forEach { step ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             if (step.isCompleted) {
                                 Box(

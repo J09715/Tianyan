@@ -54,7 +54,6 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.activity.compose.BackHandler
 import top.tianyan.app.ui.components.RuntimeButton as Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -97,7 +96,10 @@ import top.tianyan.app.runtime.WorkspaceProject
 import top.tianyan.app.ui.components.MainDestination
 import top.tianyan.app.ui.components.RuntimeBottomBar
 import top.tianyan.app.ui.components.liquidGlassContent
+import top.tianyan.app.ui.theme.Content
 import top.tianyan.app.ui.theme.LocalLiquidGlassBackdrop
+import top.tianyan.app.ui.theme.Radius
+import top.tianyan.app.ui.theme.Spacing
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.lazy.LazyListState
@@ -521,7 +523,7 @@ fun ChatScreen(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { padding ->
         BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
-            val isDualPane = maxWidth >= 720.dp
+            val isDualPane = maxWidth >= Content.dualPaneMin
 
             val knownMentionNames = remember(allSkills, mcpServers) {
                 (allSkills.filter { it.isEnabled }.flatMap { listOf(it.name, it.id) } +
@@ -618,9 +620,9 @@ fun ChatScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .liquidGlassContent()
-                            .padding(horizontal = 12.dp)
+                            .padding(horizontal = Spacing.md)
                             .windowInsetsPadding(bottomInsets),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                     ) {
                     // 左栏：Agent 对话与指令区
                     chatContent(
@@ -630,7 +632,7 @@ fun ChatScreen(
                     )
 
                     VerticalDivider(
-                        modifier = Modifier.fillMaxHeight().padding(vertical = 8.dp),
+                        modifier = Modifier.fillMaxHeight().padding(vertical = Spacing.sm),
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                     )
 
@@ -640,12 +642,12 @@ fun ChatScreen(
                         modifier = Modifier
                             .weight(0.52f)
                             .fillMaxHeight()
-                            .padding(top = 4.dp, bottom = 4.dp)
-                            .clip(RoundedCornerShape(14.dp))
+                            .padding(top = Spacing.xs, bottom = Spacing.xs)
+                            .clip(Radius.mdShape)
                             .border(
                                 1.dp,
                                 MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
-                                RoundedCornerShape(14.dp),
+                                Radius.mdShape,
                             ),
                     ) {
                         if (browserPane != null) {
@@ -653,8 +655,8 @@ fun ChatScreen(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     TextButton(onClick = { rightPaneBrowser = false }) {
@@ -722,7 +724,7 @@ fun ChatScreen(
                                     Modifier
                                         .fillMaxSize()
                                         .liquidGlassContent()
-                                        .padding(horizontal = 12.dp)
+                                        .padding(horizontal = Spacing.md)
                                         .windowInsetsPadding(bottomInsets)
                                 )
                             }
@@ -751,7 +753,7 @@ fun ChatScreen(
                         Modifier
                             .fillMaxSize()
                             .liquidGlassContent()
-                            .padding(horizontal = 12.dp)
+                            .padding(horizontal = Spacing.md)
                             .windowInsetsPadding(bottomInsets)
                     )
                 }
@@ -1217,7 +1219,7 @@ private fun ChatPaneContent(
                     steps = steps,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                        .padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                 )
             }
         }
@@ -1226,12 +1228,12 @@ private fun ChatPaneContent(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                shape = RoundedCornerShape(10.dp),
+                    .padding(vertical = Spacing.xs),
+                shape = Radius.smShape,
                 color = MaterialTheme.colorScheme.errorContainer,
             ) {
                 Row(
-                    Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
@@ -1327,12 +1329,12 @@ private fun McpRecommendationBanner(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 4.dp),
-            shape = RoundedCornerShape(10.dp),
+                .padding(vertical = Spacing.xs),
+            shape = Radius.smShape,
             color = MaterialTheme.colorScheme.secondaryContainer,
         ) {
             Row(
-                Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
@@ -1373,7 +1375,7 @@ private fun SkillCandidateConfirmDialog(
         confirmButton = {
             Button(onClick = { onAccept(candidate) }) {
                 RuntimeIcon(RuntimeIconName.Brain, Modifier.size(16.dp), MaterialTheme.colorScheme.onPrimary)
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(Spacing.sm))
                 Text("采纳入库", color = MaterialTheme.colorScheme.onPrimary)
             }
         },
@@ -1386,7 +1388,7 @@ private fun SkillCandidateConfirmDialog(
             Box(
                 modifier = Modifier
                     .size(52.dp)
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(Radius.mdShape)
                     .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center,
             ) {
@@ -1413,16 +1415,16 @@ private fun SkillCandidateConfirmDialog(
                     .fillMaxWidth()
                     .heightIn(max = 320.dp)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
                 Surface(
-                    shape = RoundedCornerShape(14.dp),
+                    shape = Radius.mdShape,
                     color = MaterialTheme.colorScheme.secondaryContainer,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(
-                        Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        Modifier.padding(horizontal = Spacing.md, vertical = Spacing.md),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
                     ) {
                         Text(
                             candidate.name,
@@ -1436,12 +1438,12 @@ private fun SkillCandidateConfirmDialog(
                         )
                         if (candidate.triggerCommand.isNotBlank()) {
                             Surface(
-                                shape = RoundedCornerShape(6.dp),
+                                shape = Radius.xsShape,
                                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
                             ) {
                                 Text(
                                     candidate.triggerCommand,
-                                    Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                    Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.primary,
                                 )
@@ -1477,18 +1479,18 @@ private fun DistillFailureBanner(
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
+            shape = Radius.smShape,
             color = MaterialTheme.colorScheme.errorContainer,
         ) {
             Row(
-                Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
                 Box(
                     modifier = Modifier
                         .size(30.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(Radius.xsShape)
                         .background(MaterialTheme.colorScheme.error.copy(alpha = 0.12f)),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -1525,29 +1527,29 @@ private fun ProactiveWorkflowBanner(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp)
+            .padding(vertical = Spacing.xs)
             .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         suggestions.forEach { suggestion ->
             Surface(
-                modifier = Modifier.clip(RoundedCornerShape(20.dp)),
-                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.clip(Radius.xlShape),
+                shape = Radius.xlShape,
                 color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.90f),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.55f)),
                 tonalElevation = 2.dp,
             ) {
                 Row(
-                    modifier = Modifier.padding(start = 12.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+                    modifier = Modifier.padding(start = Spacing.md, end = Spacing.sm, top = Spacing.sm, bottom = Spacing.sm),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     RuntimeIcon(RuntimeIconName.Hub, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                     Column(
                         modifier = Modifier
                             .clickable { onLaunch(suggestion) }
-                            .padding(end = 4.dp),
+                            .padding(end = Spacing.xs),
                     ) {
                         Text(
                             text = if (suggestion.projectName.isNotBlank()) "${suggestion.projectName} · ${suggestion.title}" else suggestion.title,
@@ -1568,7 +1570,7 @@ private fun ProactiveWorkflowBanner(
                     }
                     Button(
                         onClick = { onLaunch(suggestion) },
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs),
                         modifier = Modifier.height(28.dp),
                     ) {
                         Text("运行", style = MaterialTheme.typography.labelSmall)

@@ -36,6 +36,8 @@ import top.tianyan.app.core.model.RedTeamPhase
 import top.tianyan.app.core.model.RedTeamPreflightReport
 import top.tianyan.app.harness.redteam.RedTeamSkillStore
 import top.tianyan.app.ui.components.RuntimeCard
+import top.tianyan.app.ui.theme.Radius
+import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconButton
 import top.tianyan.app.ui.components.RuntimeTopBar
@@ -141,9 +143,9 @@ internal fun RedTeamConsole(
                 autoBindNotice?.let { notice ->
                     androidx.compose.runtime.LaunchedEffect(notice) { onConsumeAutoBind() }
                     RuntimeCard(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md, vertical = Spacing.sm),
                         containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                        contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
                     ) {
                         Text(notice, style = MaterialTheme.typography.labelMedium)
                     }
@@ -244,10 +246,10 @@ private fun RedTeamSectionTab(
     loading: Boolean,
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
-        RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(10.dp)) {
+        RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(Spacing.sm)) {
             Text(
                 buildString {
                     append(tab.label)
@@ -264,13 +266,13 @@ private fun RedTeamSectionTab(
                     if (loading) "加载中…" else "这一类还没有记录。派发角色后由工具写回，或在上方对话里让智能体补录。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 6.dp),
+                    modifier = Modifier.padding(top = Spacing.sm),
                 )
                 return@RuntimeCard
             }
             Column(
                 modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.xs),
             ) {
                 rows.forEachIndexed { index, fact ->
                     Surface(
@@ -278,10 +280,10 @@ private fun RedTeamSectionTab(
                         // 有一条被看见的动线；更深的行不参与，滚动长列表不卡。
                         modifier = Modifier.fillMaxWidth().staggeredEntrance(index),
                         color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        shape = RoundedCornerShape(8.dp),
+                        shape = Radius.xsShape,
                     ) {
                         Column(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.sm, vertical = Spacing.sm),
                         ) {
                             Text(
                                 fact.title.ifBlank { fact.id },
@@ -331,7 +333,7 @@ private fun SeverityPill(severity: String) {
         modifier = Modifier
             .height(18.dp)
             .background(container, RoundedCornerShape(percent = 50))
-            .padding(horizontal = 6.dp),
+            .padding(horizontal = Spacing.sm),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -370,9 +372,9 @@ private fun RedTeamStatsCard(state: RedTeamConsoleState) {
     RuntimeCard(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .padding(horizontal = Spacing.md, vertical = Spacing.sm)
             .staggeredEntrance(0),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+        contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
     ) {
         Text(
             "态势总览",
@@ -384,7 +386,7 @@ private fun RedTeamStatsCard(state: RedTeamConsoleState) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = if (rowIndex == 0) 10.dp else 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
             ) {
                 rowCells.forEach { (label, value) ->
                     Column(
@@ -440,9 +442,9 @@ private fun RedTeamMoreSectionsCard(
     RuntimeCard(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .padding(horizontal = Spacing.md, vertical = Spacing.sm)
             .staggeredEntrance(1),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+        contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
     ) {
         Text(
             "更多分区",
@@ -455,11 +457,11 @@ private fun RedTeamMoreSectionsCard(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Column(
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             entries.chunked(2).forEach { rowEntries ->
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     rowEntries.forEach { (tab, icon) ->
                         SecondarySectionEntry(
                             icon = icon,
@@ -505,7 +507,7 @@ private fun SecondarySectionEntry(
 ) {
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
+            .clip(Radius.smShape)
             .background(
                 if (current) {
                     // 与 OrbitalTabRow 选中态同一套配色语言（primaryContainer 底）。
@@ -515,9 +517,9 @@ private fun SecondarySectionEntry(
                 },
             )
             .clickable { onClick() }
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+            .padding(horizontal = Spacing.sm, vertical = Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         RuntimeIcon(
             icon,
@@ -560,14 +562,14 @@ private fun RedTeamAgentsCard(
     RuntimeCard(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .padding(horizontal = Spacing.md, vertical = Spacing.sm)
             .staggeredEntrance(2),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+        contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             RuntimeIcon(RuntimeIconName.Bot, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
             Column(Modifier.weight(1f)) {
@@ -602,7 +604,7 @@ private fun RedTeamAgentsCard(
 
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             (1..agents.limit).forEach { value ->
@@ -624,7 +626,7 @@ private fun RedTeamAgentsCard(
                 "改完立即生效，不用重启",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 6.dp),
+                modifier = Modifier.padding(start = Spacing.sm),
                 maxLines = 1,
             )
         }
@@ -650,14 +652,14 @@ private fun ConsoleChrome(
 ) {
     val phase = RedTeamPhase.fromId(session.redTeamPhase)
     RuntimeCard(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md, vertical = Spacing.sm),
         containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.28f),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+        contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             RuntimeIcon(RuntimeIconName.Shield, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.error)
             Column(Modifier.weight(1f)) {
@@ -714,7 +716,7 @@ private fun ConsoleChrome(
         // coerceAtLeast(0) 落回「概览」高亮。已知折衷：次级页签内容仍完整显示，
         // 用户点「概览」即回到导航枢纽，再从「更多分区」卡去别处。
         selectedIndex = primaryTabs.indexOf(state.tab).coerceAtLeast(0),
-        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+        modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
         onSelect = { onSelectTab(primaryTabs[it]) },
     )
 }

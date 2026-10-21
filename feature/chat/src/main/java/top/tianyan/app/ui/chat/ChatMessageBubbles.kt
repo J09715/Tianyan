@@ -3,6 +3,8 @@ package top.tianyan.app.ui.chat
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import top.tianyan.app.ui.components.RuntimeAlertDialog
+import top.tianyan.app.ui.theme.Radius
+import top.tianyan.app.ui.theme.Spacing
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -129,13 +131,13 @@ internal fun UserBubble(
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
         Column(
             horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
             // 🌟 1. 多模态图片预览卡片
             if (message.imageUrls.isNotEmpty()) {
                 LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.padding(bottom = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    modifier = Modifier.padding(bottom = Spacing.xs),
                 ) {
                     itemsIndexed(
                         items = message.imageUrls,
@@ -159,9 +161,9 @@ internal fun UserBubble(
             val fileAttachments = message.attachments.filter { !it.isImage }
             if (fileAttachments.isNotEmpty()) {
                 Column(
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                     modifier = Modifier
-                        .padding(bottom = 2.dp)
+                        .padding(bottom = Spacing.xs)
                         .widthIn(max = 560.dp),
                 ) {
                     fileAttachments.forEach { attachment ->
@@ -189,7 +191,7 @@ internal fun UserBubble(
                     }
                     Text(
                         text = annotatedText,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
@@ -308,7 +310,7 @@ internal fun UserBubble(
             onDismissRequest = { showRewindScopeDialog = false },
             title = { Text(stringResource(R.string.chat_rewind_title), fontWeight = FontWeight.Bold) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     Text(
                         stringResource(R.string.chat_rewind_subtitle),
                         style = MaterialTheme.typography.bodyMedium,
@@ -357,11 +359,11 @@ private fun RewindScopeOption(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             RuntimeIcon(icon, Modifier.size(20.dp), MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(Spacing.md))
             Column {
                 Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
                 Text(
@@ -409,12 +411,12 @@ internal fun ImageThumbnail(
         contentScale = ContentScale.Crop,
         modifier = Modifier
             .size(width = 130.dp, height = 130.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(Radius.smShape)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .border(
                 1.dp,
                 MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
-                RoundedCornerShape(12.dp),
+                Radius.smShape,
             )
             // 与文字气泡一致的点击语义：弹出操作菜单
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
@@ -533,7 +535,7 @@ internal fun AssistantBubble(
         Toast.makeText(context, context.getString(R.string.chat_response_copied), Toast.LENGTH_SHORT).show()
     }
 
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
         if (!reasoning.isNullOrBlank()) {
             ThinkingBlock(
                 id = message.id,
@@ -572,12 +574,12 @@ internal fun AssistantBubble(
                     }
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerLow,
-                        shape = RoundedCornerShape(14.dp),
+                        shape = Radius.mdShape,
                         modifier = Modifier.size(width = 260.dp, height = 180.dp),
                     ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically),
+                            verticalArrangement = Arrangement.spacedBy(Spacing.md, Alignment.CenterVertically),
                         ) {
                             CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 3.dp)
                             Text(
@@ -625,7 +627,7 @@ internal fun AssistantBubble(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 message.totalMs?.let {
                     Text(
@@ -740,7 +742,7 @@ private fun TaskPlanCard(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(Radius.smShape)
             .clickable {
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 expanded = !expanded
@@ -750,20 +752,20 @@ private fun TaskPlanCard(
             1.dp,
             MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
         ),
-        shape = RoundedCornerShape(12.dp),
+        shape = Radius.smShape,
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 Box(
                     modifier = Modifier
                         .size(24.dp)
-                        .clip(RoundedCornerShape(6.dp))
+                        .clip(Radius.xsShape)
                         .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -785,7 +787,7 @@ private fun TaskPlanCard(
                 Surface(
                     color = if (completedCount == steps.size) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                     else MaterialTheme.colorScheme.surfaceContainerHigh,
-                    shape = RoundedCornerShape(6.dp),
+                    shape = Radius.xsShape,
                 ) {
                     Text(
                         text = stringResource(R.string.chat_plan_completed, completedCount, steps.size),
@@ -796,7 +798,7 @@ private fun TaskPlanCard(
                         ),
                         color = if (completedCount == steps.size) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                     )
                 }
 
@@ -824,13 +826,13 @@ private fun TaskPlanCard(
                 exit = shrinkVertically() + fadeOut(),
             ) {
                 Column(
-                    modifier = Modifier.padding(top = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.padding(top = Spacing.xs),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     steps.forEach { step ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             Box(
                                 modifier = Modifier
@@ -894,14 +896,14 @@ internal fun ThinkingBlock(
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 expanded = !expanded
             },
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 1.dp),
+                .padding(vertical = Spacing.xs),
         ) {
             Box(
                 modifier = Modifier.size(16.dp),
@@ -972,7 +974,7 @@ internal fun ThinkingBlock(
                             strokeWidth = 1.5.dp.toPx(),
                         )
                     }
-                    .padding(start = 22.dp, top = 1.dp, bottom = 2.dp),
+                    .padding(start = Spacing.xl, top = Spacing.xs, bottom = Spacing.xs),
             ) {
                 if (live) {
                     SelectionContainer {
@@ -1008,9 +1010,9 @@ internal fun CapabilityEventCard(event: CapabilityEvent) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 1.dp),
+            .padding(vertical = Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         Box(
             modifier = Modifier.size(16.dp),

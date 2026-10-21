@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -29,6 +28,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.tianyan.app.ui.components.RuntimeIcon
+import top.tianyan.app.ui.theme.Radius
+import top.tianyan.app.ui.theme.Spacing
 
 /** 输入框上方的斜杠指令 / @能力 快捷弹窗。 */
 @Composable
@@ -38,22 +39,22 @@ internal fun SlashCommandPopup(
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = RoundedCornerShape(12.dp),
+        shape = Radius.smShape,
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         shadowElevation = 6.dp,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 6.dp),
+            .padding(bottom = Spacing.sm),
     ) {
-        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+        Column(modifier = Modifier.padding(vertical = Spacing.xs)) {
             commands.forEach { cmd ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { onSelect(cmd) }
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                        .padding(horizontal = Spacing.md, vertical = Spacing.sm),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                 ) {
                     RuntimeIcon(cmd.icon, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                     Text(
@@ -84,18 +85,18 @@ internal fun MentionPopup(
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainer,
-        shape = RoundedCornerShape(16.dp),
+        shape = Radius.mdShape,
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         shadowElevation = 10.dp,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 6.dp),
+            .padding(bottom = Spacing.sm),
     ) {
-        Column(modifier = Modifier.padding(vertical = 6.dp)) {
+        Column(modifier = Modifier.padding(vertical = Spacing.sm)) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                    .padding(horizontal = Spacing.md, vertical = Spacing.sm),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
@@ -128,13 +129,13 @@ internal fun MentionPopup(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onSelect(item) }
-                            .padding(horizontal = 12.dp, vertical = 7.dp),
+                            .padding(horizontal = Spacing.md, vertical = Spacing.sm),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                     ) {
                         // 左侧图标芯片
                         Surface(
-                            shape = RoundedCornerShape(8.dp),
+                            shape = Radius.xsShape,
                             color = tagBg,
                             border = androidx.compose.foundation.BorderStroke(1.dp, tagBorder),
                             modifier = Modifier.size(34.dp),
@@ -152,7 +153,7 @@ internal fun MentionPopup(
                         Column(modifier = Modifier.weight(1f)) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                             ) {
                                 Text(
                                     "@${item.name}",
@@ -162,11 +163,11 @@ internal fun MentionPopup(
                                 Surface(
                                     color = tagBg,
                                     border = androidx.compose.foundation.BorderStroke(0.8.dp, tagBorder),
-                                    shape = RoundedCornerShape(4.dp),
+                                    shape = Radius.xsShape,
                                 ) {
                                     Text(
                                         if (isSkill) stringResource(R.string.chat_skill_badge) else stringResource(R.string.chat_mcp_badge),
-                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                                        modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Medium),
                                         color = tagColor,
                                     )

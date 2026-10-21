@@ -24,6 +24,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import top.tianyan.app.ui.theme.Spacing
 
 /**
  * Git 长操作（clone/pull/push）流式进度横幅。挂在 ChatTopBar 下方，
@@ -43,10 +44,10 @@ fun GitProgressBanner(progress: GitProgress, onCancel: () -> Unit) {
             modifier = Modifier
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.secondaryContainer)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+                .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 Text(
                     text = progress.label,
                     style = MaterialTheme.typography.bodySmall,
@@ -65,10 +66,10 @@ fun GitProgressBanner(progress: GitProgress, onCancel: () -> Unit) {
                 }
                 TextButton(
                     onClick = onCancel,
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = Spacing.sm, vertical = 0.dp),
                 ) { Text("取消", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
                 progress.objects?.let { Text("对象 $it", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSecondaryContainer) }
                 progress.transfer?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSecondaryContainer) }
             }

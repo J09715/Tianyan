@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
@@ -34,6 +33,8 @@ import top.tianyan.app.core.model.AgentQuestion
 import top.tianyan.app.core.model.AgentQuestionAnswer
 import top.tianyan.app.core.model.AgentQuestionRecommendation
 import top.tianyan.app.ui.components.RuntimeButton
+import top.tianyan.app.ui.theme.Radius
+import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.ui.components.RuntimeCheckbox
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
@@ -75,21 +76,21 @@ internal fun AgentQuestionCard(
 
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = Radius.xlShape,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         tonalElevation = 2.dp,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+                .padding(Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             // 标题行：短标题 + 进度
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 RuntimeIcon(
                     name = RuntimeIconName.Prompt,
@@ -119,7 +120,7 @@ internal fun AgentQuestionCard(
                     .fillMaxWidth()
                     .heightIn(max = 260.dp)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 Text(
                     text = current.question,
@@ -162,7 +163,7 @@ internal fun AgentQuestionCard(
             // 操作行：多题时翻页；最后一题才提交
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 RuntimeTextButton(
@@ -174,7 +175,7 @@ internal fun AgentQuestionCard(
                             index += 1
                         }
                     },
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                    contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
                 ) {
                     Text("跳过", style = MaterialTheme.typography.labelLarge)
                 }
@@ -184,7 +185,7 @@ internal fun AgentQuestionCard(
                 if (index > 0) {
                     RuntimeTextButton(
                         onClick = { index -= 1 },
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
                     ) {
                         Text("上一题", style = MaterialTheme.typography.labelLarge)
                     }
@@ -198,7 +199,7 @@ internal fun AgentQuestionCard(
                             index += 1
                         }
                     },
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.sm),
                 ) {
                     Text(
                         text = if (isLast) "提交" else "下一题",
@@ -231,7 +232,7 @@ private fun QuestionOptionRow(
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = Radius.smShape,
         color = if (selected) {
             MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
         } else {
@@ -241,9 +242,9 @@ private fun QuestionOptionRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+                .padding(horizontal = Spacing.sm, vertical = Spacing.sm),
             verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             // 单选用 RadioButton、多选用 Checkbox，与选项语义一致
             if (multiSelect) {
@@ -251,10 +252,10 @@ private fun QuestionOptionRow(
             } else {
                 RuntimeRadioButton(selected = selected, onClick = onClick)
             }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     Text(
                         text = label,
@@ -264,14 +265,14 @@ private fun QuestionOptionRow(
                     )
                     if (recommended) {
                         Surface(
-                            shape = RoundedCornerShape(6.dp),
+                            shape = Radius.xsShape,
                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
                         ) {
                             Text(
                                 text = "推荐",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                             )
                         }
                     }
@@ -296,13 +297,13 @@ private fun QuestionCustomInput(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = Radius.smShape,
         color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.4f),
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 9.dp),
+                .padding(horizontal = Spacing.sm, vertical = Spacing.sm),
         ) {
             if (value.isEmpty()) {
                 Text(

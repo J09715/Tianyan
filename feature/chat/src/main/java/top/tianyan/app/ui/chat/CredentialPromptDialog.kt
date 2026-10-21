@@ -25,6 +25,7 @@ import androidx.compose.foundation.rememberScrollState
 import top.tianyan.app.core.datastore.GitCredential
 import top.tianyan.app.feature.chat.R
 import top.tianyan.app.ui.components.RuntimeAlertDialog
+import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.ui.components.RuntimeButton
 import top.tianyan.app.ui.components.RuntimeTextButton
 
@@ -52,7 +53,7 @@ internal fun CredentialPromptDialog(
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 Text(
                     text = "为 $host 填一次用户名和 Personal Access Token（PAT），保存后自动重跑刚才那条 git 命令。",

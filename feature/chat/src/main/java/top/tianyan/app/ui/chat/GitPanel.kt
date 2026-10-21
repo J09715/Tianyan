@@ -62,6 +62,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import top.tianyan.app.feature.chat.R
 // 星轨 Orbital 共享组件：与红队指挥室共用同一套轨道页签/呼吸点/等宽数字/交错入场
 import top.tianyan.app.ui.components.OrbitalTabRow
+import top.tianyan.app.ui.theme.Radius
+import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.ui.components.OrbitalTabSpec
 import top.tianyan.app.ui.components.PulseDot
 import top.tianyan.app.ui.components.RuntimeAlertDialog
@@ -281,7 +283,7 @@ fun GitPanel(
             OrbitalTabRow(
                 specs = listOf(OrbitalTabSpec("状态"), OrbitalTabSpec("分支"), OrbitalTabSpec("提交")),
                 selectedIndex = pagerState.currentPage,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.sm),
                 onSelect = { panelScope.launch { pagerState.animateScrollToPage(it) } },
             )
             Box(Modifier.fillMaxSize()) {
@@ -311,8 +313,8 @@ fun GitPanel(
                     hostState = gitSnackHost,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(horizontal = 16.dp)
-                        .padding(bottom = 16.dp),
+                        .padding(horizontal = Spacing.lg)
+                        .padding(bottom = Spacing.lg),
                 )
             }
         }
@@ -330,7 +332,7 @@ fun GitPanel(
             dismissButton = { RuntimeTextButton(onClick = { showCredentialDialog = false }) { Text("取消") } },
             title = { Text("Git 署名配置") },
             text = {
-                Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     OutlinedTextField(value = credentialName, onValueChange = { credentialName = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("用户名（user.name）") }, singleLine = true)
                     OutlinedTextField(value = credentialEmail, onValueChange = { credentialEmail = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("邮箱（user.email）") }, singleLine = true)
                 }
@@ -357,7 +359,7 @@ fun GitPanel(
             dismissButton = { RuntimeTextButton(onClick = { showCloneDialog = false }) { Text("取消") } },
             title = { Text("克隆远程仓库") },
             text = {
-                Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     Text(
                         "私有仓库会自动使用「凭证」标签页里匹配的 HTTPS PAT。",
                         style = MaterialTheme.typography.bodySmall,
@@ -383,7 +385,7 @@ fun GitPanel(
                     if (matchedCredentialId != null) {
                         val matched = credentials.firstOrNull { it.id == matchedCredentialId }
                         if (matched != null) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
                                 Text(
                                     "✓ 将自动使用凭证：${matched.name}",
                                     style = MaterialTheme.typography.labelSmall,
@@ -418,9 +420,9 @@ fun GitPanel(
                                 modifier = Modifier.fillMaxWidth().clickable {
                                     cloneUrl = u
                                     onProbeCredential(u)
-                                }.padding(vertical = 4.dp, horizontal = 6.dp),
+                                }.padding(vertical = Spacing.xs, horizontal = Spacing.sm),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                             ) {
                                 Text("🕘", style = MaterialTheme.typography.labelSmall)
                                 Text(
@@ -435,7 +437,7 @@ fun GitPanel(
                     }
                     when (val st = repoListState) {
                         is top.tianyan.app.ui.chat.GitRepoListState.Loading ->
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                                 CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
                                 Text("正在拉取仓库列表…", style = MaterialTheme.typography.labelSmall)
                             }
@@ -445,8 +447,8 @@ fun GitPanel(
                             Text("点仓库自动填 URL（共 ${st.repos.size} 个）", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             st.repos.take(30).forEach { repo ->
                                 Row(
-                                    modifier = Modifier.fillMaxWidth().clickable { cloneUrl = repo.cloneUrl; onProbeCredential(repo.cloneUrl) }.padding(vertical = 4.dp, horizontal = 6.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    modifier = Modifier.fillMaxWidth().clickable { cloneUrl = repo.cloneUrl; onProbeCredential(repo.cloneUrl) }.padding(vertical = Spacing.xs, horizontal = Spacing.sm),
+                                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Text(
@@ -478,7 +480,7 @@ fun GitPanel(
             dismissButton = { RuntimeTextButton(onClick = { showAddPatDialog = false }) { Text("取消") } },
             title = { Text("新增 HTTPS 凭证") },
             text = {
-                Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     OutlinedTextField(value = newPatName, onValueChange = { newPatName = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("名称（如 GitHub 我的账号）") }, singleLine = true)
                     OutlinedTextField(value = newPatHost, onValueChange = { newPatHost = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("主机（github.com / gitee.com）") }, singleLine = true)
                     OutlinedTextField(value = newPatUser, onValueChange = { newPatUser = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("用户名（GitLab 可填 oauth2）") }, singleLine = true)
@@ -548,8 +550,8 @@ private fun CredentialsTab(
             // 不自带 verticalScroll：本页只作为「凭据与署名」子页 outer Column（已有滚动）的
             // 内容块。曾嵌套两层 verticalScroll → 内层收到无限 maxHeight → 点 Key 图标必崩
             // （IllegalStateException: Vertically scrollable ... infinity，真机复现 2 次）。
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+            .padding(Spacing.lg),
+        verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -564,10 +566,10 @@ private fun CredentialsTab(
             RuntimeButton(onClick = onAdd) { Text("新增") }
         }
         if (credentials.isEmpty()) {
-            Box(Modifier.fillMaxWidth().padding(top = 40.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.fillMaxWidth().padding(top = Spacing.xxl), contentAlignment = Alignment.Center) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.md),
                 ) {
                     RuntimeIcon(
                         RuntimeIconName.Key,
@@ -584,9 +586,9 @@ private fun CredentialsTab(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 24.dp),
+                        modifier = Modifier.padding(horizontal = Spacing.xl),
                     )
-                    RuntimeButton(onClick = onAdd, modifier = Modifier.padding(top = 8.dp)) {
+                    RuntimeButton(onClick = onAdd, modifier = Modifier.padding(top = Spacing.sm)) {
                         Text("添加第一条凭证", fontWeight = FontWeight.SemiBold)
                     }
                 }
@@ -595,11 +597,11 @@ private fun CredentialsTab(
             credentials.forEach { cred ->
                 RuntimeCard(modifier = Modifier.fillMaxWidth()) {
                     Row(
-                        modifier = Modifier.padding(12.dp),
+                        modifier = Modifier.padding(Spacing.md),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                             Text(cred.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text("${cred.username}@${cred.host}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text("token: ${cred.token.take(4)}${"\u2022".repeat(8)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
@@ -611,7 +613,7 @@ private fun CredentialsTab(
                                 is top.tianyan.app.ui.chat.GitCredHealth.Unknown ->
                                     Text("⚠ ${h.reason}", color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.labelSmall)
                                 is top.tianyan.app.ui.chat.GitCredHealth.Checking ->
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                         androidx.compose.foundation.layout.Box(Modifier.size(10.dp)) {
                                             CircularProgressIndicator(strokeWidth = 1.dp, modifier = Modifier.size(10.dp))
                                         }
@@ -635,10 +637,10 @@ private fun CredentialsTab(
 
 @Composable
 private fun CenterHint(text: String, isError: Boolean = false, icon: RuntimeIconName? = null) {
-    Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+    Box(Modifier.fillMaxSize().padding(Spacing.lg), contentAlignment = Alignment.Center) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             if (icon != null) {
                 RuntimeIcon(
@@ -660,7 +662,7 @@ private fun CenterHint(text: String, isError: Boolean = false, icon: RuntimeIcon
 @Composable
 private fun NotARepoView(onInit: () -> Unit, onOpenClone: () -> Unit) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier.fillMaxSize().padding(Spacing.xl),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -672,11 +674,11 @@ private fun NotARepoView(onInit: () -> Unit, onOpenClone: () -> Unit) {
         )
         RuntimeButton(
             onClick = onOpenClone,
-            modifier = Modifier.padding(top = 16.dp),
+            modifier = Modifier.padding(top = Spacing.lg),
         ) { Text("克隆远程仓库", fontWeight = FontWeight.SemiBold) }
         RuntimeTextButton(
             onClick = onInit,
-            modifier = Modifier.padding(top = 8.dp),
+            modifier = Modifier.padding(top = Spacing.sm),
         ) { Text("初始化空仓库") }
     }
 }
@@ -721,7 +723,7 @@ private fun DiffText(text: String) {
                 line.ifEmpty { " " },
                 style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                 color = color,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 1.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md, vertical = Spacing.xs),
             )
         }
     }
@@ -734,20 +736,20 @@ private fun GitWorkspaceHeader(state: GitPanelState) {
     val syncText = state.aheadBehind?.let { (ahead, behind) -> "↑$ahead  ↓$behind" } ?: "已同步"
     RuntimeCard(
         modifier = Modifier
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .padding(horizontal = Spacing.lg, vertical = Spacing.md)
             // 驾驶舱首屏第 0 位交错入场：头卡最先浮现，状态页各区块（1/2/3 位）
             // 随后跟上，打开面板时视线顺着动画从「仓库概况」自然落到「文件清单」。
             .staggeredEntrance(0),
         containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.34f),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+        contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.md),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top,
             ) {
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     // 用「仓库」而不是「Git 工作区」：本 App 里「工作区」特指工坊那个
                     // 项目目录（WorkspaceDestination），而这里说的是当前会话目录里的
                     // Git 仓库。两个词混用会让人以为这个面板管的是工坊工作区。
@@ -758,7 +760,7 @@ private fun GitWorkspaceHeader(state: GitPanelState) {
                     )
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         // 分支名配 GitBranch 小图标：驾驶舱语义下「当前在哪个分支」是
                         // 第一等公民，图标 + titleMedium 让它比副标签醒目、又比原来的
@@ -782,7 +784,7 @@ private fun GitWorkspaceHeader(state: GitPanelState) {
                 // 可辨的信号，改动计数移到状态页的比例条上，这里只留「要不要行动」。
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     PulseDot(
                         // 干净 = 绿点持续呼吸（一切正常，仓库是「活」的）；
@@ -800,8 +802,8 @@ private fun GitWorkspaceHeader(state: GitPanelState) {
                             style = MaterialTheme.typography.labelMedium.tabular(),
                             color = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier
-                                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(999.dp))
-                                .padding(horizontal = 8.dp, vertical = 2.dp),
+                                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(percent = 50))
+                                .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                             maxLines = 1,
                         )
                     } else {
@@ -816,7 +818,7 @@ private fun GitWorkspaceHeader(state: GitPanelState) {
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 GitHeaderMetric("暂存", state.staged.size.toString(), Modifier.weight(1f))
                 GitHeaderMetric("修改", state.unstaged.size.toString(), Modifier.weight(1f))
@@ -829,7 +831,7 @@ private fun GitWorkspaceHeader(state: GitPanelState) {
 
 @Composable
 private fun GitHeaderMetric(label: String, value: String, modifier: Modifier = Modifier) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
         // value 加 tnum 等宽数字：四个指标横排、刷新时数字跳动，比例数字的「1」比
         // 「8」窄，宽度抖动会带着整列标签一起晃；等宽后数字变化只换字形不换宽度。
         Text(value, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold).tabular(), color = MaterialTheme.colorScheme.onPrimaryContainer, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -881,8 +883,8 @@ private fun StatusTab(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(horizontal = Spacing.lg, vertical = Spacing.md),
+        verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         // 这里原本还有一张「工作区概览」卡，但面板顶部的 GitWorkspaceHeader 已经
         // 展示了同样的四个数字（暂存/修改/未跟踪/同步），两处并排显示同一份数据，
@@ -893,7 +895,7 @@ private fun StatusTab(
         // 同一套状态语义色，扫一眼色带比例就知道该先「提交」还是先「暂存」。
         // clean 时不渲染：空条没有任何信息量，只会占一行位置。
         if (!clean) {
-            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     // 总数用 tnum：刷新后数字变化不带动文案宽度抖动
                     Text(
@@ -953,7 +955,7 @@ private fun StatusTab(
             onClick = { showCommitDialog = true },
             enabled = staged.isNotEmpty() && state.hasIdentity,
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(vertical = 12.dp),
+            contentPadding = PaddingValues(vertical = Spacing.md),
         ) { Text("提交改动", fontWeight = FontWeight.SemiBold, maxLines = 1) }
         if (!state.hasIdentity) {
             Text(
@@ -966,45 +968,45 @@ private fun StatusTab(
         }
 
         // 次级操作：暂存全部 / 拉取 / 推送
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             RuntimeOutlinedButton(
                 onClick = onStageAll,
                 enabled = !clean,
                 modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(vertical = 8.dp),
+                contentPadding = PaddingValues(vertical = Spacing.sm),
             ) { Text("暂存全部", maxLines = 1) }
             RuntimeOutlinedButton(
                 onClick = onPull,
                 enabled = state.hasRemote,
                 modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(vertical = 8.dp),
+                contentPadding = PaddingValues(vertical = Spacing.sm),
             ) { Text("拉取", maxLines = 1) }
             RuntimeOutlinedButton(
                 onClick = onPush,
                 enabled = state.hasRemote,
                 modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(vertical = 8.dp),
+                contentPadding = PaddingValues(vertical = Spacing.sm),
             ) { Text("推送", maxLines = 1) }
         }
 
         // 第三排：stash（工作区脏时可存；有 stash 时可恢复）
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             RuntimeOutlinedButton(
                 onClick = onStash,
                 enabled = !clean,
                 modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(vertical = 8.dp),
+                contentPadding = PaddingValues(vertical = Spacing.sm),
             ) { Text("存起改动", maxLines = 1) }
             RuntimeOutlinedButton(
                 onClick = onStashPop,
                 enabled = state.stashCount > 0,
                 modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(vertical = 8.dp),
+                contentPadding = PaddingValues(vertical = Spacing.sm),
             ) { Text(if (state.stashCount > 0) "恢复 ${state.stashCount} 号" else "无 stash", maxLines = 1) }
         }
 
         if (clean) {
-            Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.fillMaxWidth().padding(vertical = Spacing.xxl), contentAlignment = Alignment.Center) {
                 Text(
                     stringResource(R.string.chat_git_no_changes),
                     style = MaterialTheme.typography.bodySmall,
@@ -1019,7 +1021,7 @@ private fun StatusTab(
             if (staged.isNotEmpty()) {
                 Column(
                     modifier = Modifier.staggeredEntrance(1),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.md),
                 ) {
                     SectionHeader("已暂存 (${staged.size})", actionLabel = "全部取消暂存", onAction = onUnstageAll)
                     RuntimeCard(contentPadding = PaddingValues(0.dp)) {
@@ -1035,7 +1037,7 @@ private fun StatusTab(
             if (unstaged.isNotEmpty()) {
                 Column(
                     modifier = Modifier.staggeredEntrance(2),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.md),
                 ) {
                     SectionHeader("已修改 (${unstaged.size})", actionLabel = if (unstaged.isNotEmpty()) "全部回退" else null, onAction = onRevertAll)
                     RuntimeCard(contentPadding = PaddingValues(0.dp)) {
@@ -1051,7 +1053,7 @@ private fun StatusTab(
             if (untracked.isNotEmpty()) {
                 Column(
                     modifier = Modifier.staggeredEntrance(3),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.md),
                 ) {
                     SectionHeader("未跟踪 (${if (state.untrackedOverflow) "99+" else untrackedCount})")
                     RuntimeCard(contentPadding = PaddingValues(0.dp)) {
@@ -1066,7 +1068,7 @@ private fun StatusTab(
                                 "仅显示 ${untracked.size} 个入口，共 $untrackedCount 项；大目录已聚合，避免打开 Git 时卡顿。",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
                             )
                         }
                     }
@@ -1090,9 +1092,9 @@ private fun StatusTab(
             text = {
                 Column(
                     Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
                         RuntimeButton(
                             onClick = onAiGenerate,
                             enabled = !aiLoading && staged.isNotEmpty(),
@@ -1150,9 +1152,9 @@ private fun FileRow(
                 copyText(change.path)
                 android.widget.Toast.makeText(context, "已复制：${change.path}", android.widget.Toast.LENGTH_SHORT).show()
             })
-            .padding(start = 14.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+            .padding(start = Spacing.md, end = Spacing.sm, top = Spacing.xs, bottom = Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         // 22dp 固定边长彩色底徽章：原来 Surface 随字母宽度收缩，M/A/D 各行左侧
         // 参差不齐；固定尺寸后纵向扫一眼就是一条直线，色彩语义也更醒目。
@@ -1197,7 +1199,7 @@ private fun StatusLetterBadge(status: Char) {
     Box(
         modifier = Modifier
             .size(22.dp)
-            .background(bg, RoundedCornerShape(6.dp)),
+            .background(bg, Radius.xsShape),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -1233,7 +1235,7 @@ private fun BranchesTab(
     var pendingDeleteTag by rememberSaveable { mutableStateOf<String?>(null) }
 
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.lg, vertical = Spacing.sm), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             RuntimeOutlinedButton(onClick = { showCreateDialog = true }, modifier = Modifier.weight(1f)) { Text("新建分支", maxLines = 1) }
             RuntimeOutlinedButton(onClick = { showCreateTag = true }, modifier = Modifier.weight(1f)) { Text("新建标签", maxLines = 1) }
         }
@@ -1247,9 +1249,9 @@ private fun BranchesTab(
                     items(state.localBranches, key = { it }) { branch ->
                         val isCurrent = branch == state.branch
                         Row(
-                            modifier = Modifier.fillMaxWidth().clickable(enabled = !isCurrent) { onCheckout(branch) }.padding(horizontal = 16.dp, vertical = 11.dp),
+                            modifier = Modifier.fillMaxWidth().clickable(enabled = !isCurrent) { onCheckout(branch) }.padding(horizontal = Spacing.lg, vertical = Spacing.md),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                         ) {
                             if (isCurrent) RuntimeIcon(RuntimeIconName.Check, Modifier.size(15.dp), MaterialTheme.colorScheme.primary)
                             else RuntimeIcon(RuntimeIconName.GitBranch, Modifier.size(15.dp), MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1270,9 +1272,9 @@ private fun BranchesTab(
                     item { SectionHeader("远程分支") }
                     items(state.remoteBranches, key = { it }) { branch ->
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 11.dp),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.lg, vertical = Spacing.md),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                         ) {
                             RuntimeIcon(RuntimeIconName.GitBranch, Modifier.size(15.dp), MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(branch, style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace), color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
@@ -1285,9 +1287,9 @@ private fun BranchesTab(
                     item { SectionHeader("标签") }
                     items(state.tags, key = { it }) { tag ->
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 11.dp),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.lg, vertical = Spacing.md),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                         ) {
                             RuntimeIcon(RuntimeIconName.Hub, Modifier.size(15.dp), MaterialTheme.colorScheme.tertiary)
                             Text(tag, style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace), color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
@@ -1393,7 +1395,7 @@ private fun BranchesTab(
             dismissButton = { RuntimeTextButton(onClick = { pendingRename = null }) { Text("取消") } },
             title = { Text("重命名分支") },
             text = {
-                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     Text("原分支：$oldName", style = MaterialTheme.typography.bodySmall)
                     OutlinedTextField(value = renameInput, onValueChange = { renameInput = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("新的分支名") }, singleLine = true)
                 }
@@ -1462,7 +1464,7 @@ private fun LogTab(
             "提交记录 (${commits.size})",
             style = MaterialTheme.typography.labelLarge,
             color = gitSubtleText(),
-            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 4.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = Spacing.lg, top = Spacing.lg, end = Spacing.lg, bottom = Spacing.xs),
         )
         LazyColumn(
             modifier = Modifier
@@ -1471,13 +1473,13 @@ private fun LogTab(
                 // 大列表实测崩溃）。weight(1f) 保证拿到"剩余有界空间"，从根上消灭这类崩溃。
                 .weight(1f)
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = Spacing.lg),
             state = listState,
             contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 70.dp),
         ) {
             itemsIndexed(commits, key = { _, c -> c.hash }) { index, c ->
                 val shape = when {
-                    index == 0 && commits.size == 1 && !graph.hasMore -> RoundedCornerShape(14.dp)
+                    index == 0 && commits.size == 1 && !graph.hasMore -> Radius.mdShape
                     index == 0 -> RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp)
                     index == commits.lastIndex && !graph.hasMore -> RoundedCornerShape(bottomStart = 14.dp, bottomEnd = 14.dp)
                     else -> androidx.compose.ui.graphics.RectangleShape
@@ -1510,7 +1512,7 @@ private fun LogTab(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Box(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.md),
                         contentAlignment = Alignment.Center,
                     ) {
                         if (graph.hasMore) {
@@ -1567,9 +1569,9 @@ private fun CommitDetailSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(horizontal = Spacing.lg)
+                .padding(bottom = Spacing.xl),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             Text(commit.message, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             if (commit.body.isNotBlank()) {
@@ -1601,7 +1603,7 @@ private fun CommitDetailSheet(
             if (commit.isMerge) {
                 Text("合并提交", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
             }
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(Spacing.xs))
             when {
                 loading -> Text("正在加载改动文件…", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 files == null -> Unit
@@ -1613,9 +1615,9 @@ private fun CommitDetailSheet(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable { onFileDiff(file.path) }
-                                .padding(vertical = 4.dp),
+                                .padding(vertical = Spacing.xs),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                         ) {
                             StatusChip(file.status)
                             Column(Modifier.weight(1f)) {
@@ -1690,12 +1692,12 @@ private fun GraphCommitRow(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(vertical = 8.dp)
-                    .padding(end = 16.dp),
+                    .padding(vertical = Spacing.sm)
+                    .padding(end = Spacing.lg),
             ) {
                 if (refs.isNotEmpty()) {
                     RefPills(refs = refs)
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(Spacing.xs))
                 }
                 Row(verticalAlignment = Alignment.Top) {
                     RuntimeIcon(
@@ -1703,7 +1705,7 @@ private fun GraphCommitRow(
                         Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.width(Spacing.xs))
                     Column(Modifier.weight(1f)) {
                         Text(
                             commit.message,
@@ -1713,19 +1715,19 @@ private fun GraphCommitRow(
                             maxLines = 2,
                             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         )
-                        Spacer(Modifier.height(2.dp))
+                        Spacer(Modifier.height(Spacing.xs))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Surface(color = nodeColor.copy(alpha = 0.15f), shape = RoundedCornerShape(999.dp)) {
+                            Surface(color = nodeColor.copy(alpha = 0.15f), shape = RoundedCornerShape(percent = 50)) {
                                 Text(
                                     commit.shortHash,
                                     style = MaterialTheme.typography.labelSmall,
                                     fontFamily = FontFamily.Monospace,
                                     color = nodeColor,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                     maxLines = 1,
                                 )
                             }
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(Spacing.sm))
                             Text(
                                 commit.author,
                                 style = MaterialTheme.typography.labelSmall,
@@ -1734,7 +1736,7 @@ private fun GraphCommitRow(
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f, fill = false),
                             )
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(Spacing.sm))
                             Text(
                                 commit.date,
                                 style = MaterialTheme.typography.labelSmall,
@@ -1749,7 +1751,7 @@ private fun GraphCommitRow(
         HorizontalDivider(
             color = gitSubtleBorder(),
             thickness = 0.5.dp,
-            modifier = Modifier.padding(start = canvasWidth + 12.dp),
+            modifier = Modifier.padding(start = canvasWidth + Spacing.md),
         )
     }
 }
@@ -1877,7 +1879,7 @@ private fun GraphCanvas(
 /** 引用 pill 行：当前分支 primary、分支 secondaryContainer、标签 tertiaryContainer。 */
 @Composable
 private fun RefPills(refs: List<top.tianyan.app.ui.chat.git.GitGraphRef>) {
-    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
         refs.forEach { ref ->
             val bg = if (ref.isCurrent) MaterialTheme.colorScheme.primary
                 else if (ref.isBranch) MaterialTheme.colorScheme.secondaryContainer
@@ -1885,11 +1887,11 @@ private fun RefPills(refs: List<top.tianyan.app.ui.chat.git.GitGraphRef>) {
             val fg = if (ref.isCurrent) MaterialTheme.colorScheme.onPrimary
                 else if (ref.isBranch) MaterialTheme.colorScheme.onSecondaryContainer
                 else MaterialTheme.colorScheme.onTertiaryContainer
-            Surface(color = bg, shape = RoundedCornerShape(4.dp)) {
+            Surface(color = bg, shape = Radius.xsShape) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                 ) {
                     RuntimeIcon(
                         when {
@@ -1918,7 +1920,7 @@ private fun RefPills(refs: List<top.tianyan.app.ui.chat.git.GitGraphRef>) {
 private fun StatusChip(status: Char) {
     Surface(
         color = statusColor(status),
-        shape = RoundedCornerShape(999.dp),
+        shape = RoundedCornerShape(percent = 50),
         modifier = Modifier.size(width = 32.dp, height = 20.dp),
     ) {
         Box(contentAlignment = Alignment.Center) {
@@ -1950,11 +1952,11 @@ private fun groupEdgesByCommit(graph: top.tianyan.app.ui.chat.git.GitGraph): Map
 /** 签名卡（凭据与署名子页顶部）：显示当前署名状态，点击编辑。 */
 @Composable
 private fun IdentityCard(hasIdentity: Boolean, onEdit: () -> Unit) {
-    RuntimeCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
+    RuntimeCard(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md, vertical = Spacing.sm)) {
         Row(
-            modifier = Modifier.fillMaxWidth().clickable(onClick = onEdit).padding(14.dp),
+            modifier = Modifier.fillMaxWidth().clickable(onClick = onEdit).padding(Spacing.md),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             RuntimeIcon(RuntimeIconName.Edit, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
             Column(Modifier.weight(1f)) {

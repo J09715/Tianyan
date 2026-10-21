@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import top.tianyan.app.ui.components.TianyanBrandBadge
+import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.ui.components.RuntimeIconButton as IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -67,20 +68,20 @@ internal fun ChatTopBar(
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding(),
-        verticalArrangement = Arrangement.spacedBy(1.dp),
+        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {
         // 第 1 行：品牌 Badge + 标题/工作区 + 右侧模型胶囊与操作按钮
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 14.dp, end = 12.dp, top = 6.dp, bottom = 2.dp),
+                .padding(start = Spacing.md, end = Spacing.md, top = Spacing.sm, bottom = Spacing.xs),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             // 左侧：品牌 Badge + 标题/状态
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 modifier = Modifier.weight(1f, fill = false),
             ) {
                 TianyanBrandBadge(28.dp)
@@ -111,7 +112,7 @@ internal fun ChatTopBar(
             // 右侧：Git + 小窗 + 会话抽屉
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
             ) {
                 // 仓库入口只在下方工作台条上留一个（带未提交改动数）。
                 // 顶栏这里原本还有一个同样的 Git 图标，同一功能两个入口，

@@ -28,7 +28,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -69,6 +68,8 @@ import top.tianyan.app.harness.ToolCall
 import top.tianyan.app.harness.ToolResult
 import top.tianyan.app.harness.UserMessage
 import top.tianyan.app.ui.components.RuntimeIcon
+import top.tianyan.app.ui.theme.Radius
+import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeTextButton
 import top.tianyan.app.ui.components.StatusBadge
@@ -171,7 +172,7 @@ fun ToolActivityPill(
 
         Surface(
             onClick = { showDetailSheet = true },
-            shape = RoundedCornerShape(8.dp),
+            shape = Radius.xsShape,
             color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f),
             border = androidx.compose.foundation.BorderStroke(
                 0.5.dp,
@@ -179,18 +180,18 @@ fun ToolActivityPill(
             ),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 4.dp, vertical = 1.5.dp),
+                .padding(horizontal = Spacing.xs, vertical = Spacing.xs),
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 3.dp),
+                    .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     modifier = Modifier.weight(1f),
                 ) {
                     // 运行状态微光指示点（纯颜色补文本语义，TalkBack 可读）
@@ -240,7 +241,7 @@ fun ToolActivityPill(
                     }
                 }
 
-                Spacer(Modifier.width(4.dp))
+                Spacer(Modifier.width(Spacing.xs))
 
                 // 一键终止极简微型按钮
                 val stopLabel = stringResource(R.string.chat_stop_generation)
@@ -278,9 +279,9 @@ fun ToolActivityPill(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 12.dp)
+                    .padding(horizontal = Spacing.xl, vertical = Spacing.md)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -298,13 +299,13 @@ fun ToolActivityPill(
                 }
 
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
+                    shape = Radius.smShape,
                     color = MaterialTheme.colorScheme.surfaceContainerLowest,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.padding(Spacing.md),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         Text(
                             text = typeText,
@@ -341,7 +342,7 @@ fun ToolActivityPill(
                     }
                 }
 
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(Spacing.lg))
             }
         }
     }

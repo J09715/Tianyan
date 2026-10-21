@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -41,6 +40,8 @@ import top.tianyan.app.core.database.AgentMemoryEntity
 import top.tianyan.app.core.database.AgentScratchpadEntity
 import top.tianyan.app.feature.chat.R
 import top.tianyan.app.ui.components.RuntimeAlertDialog
+import top.tianyan.app.ui.theme.Radius
+import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
 
@@ -69,10 +70,10 @@ internal fun SessionMemorySheet(
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.lg, vertical = Spacing.xs),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 RuntimeIcon(RuntimeIconName.Brain, Modifier.size(20.dp), MaterialTheme.colorScheme.primary)
                 Text(
                     stringResource(R.string.chat_memory_sheet_title),
@@ -82,7 +83,7 @@ internal fun SessionMemorySheet(
 
             LazyColumn(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 // —— 长期记忆 ——
                 item(key = "header_memories") {
@@ -115,7 +116,7 @@ internal fun SessionMemorySheet(
                 item(key = "header_scratchpads") {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         SectionHeader(
@@ -223,7 +224,7 @@ private fun SectionHeader(
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         modifier = modifier.fillMaxWidth(),
     ) {
         RuntimeIcon(icon, Modifier.size(15.dp), MaterialTheme.colorScheme.primary)
@@ -240,7 +241,7 @@ private fun EmptyHint(text: String) {
         text,
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.xs),
     )
 }
 
@@ -253,22 +254,22 @@ private fun MemoryRow(
     onDelete: () -> Unit,
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)),
+        modifier = Modifier.fillMaxWidth().clip(Radius.smShape),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = RoundedCornerShape(10.dp),
+        shape = Radius.smShape,
     ) {
         Row(
             verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md, vertical = Spacing.sm),
         ) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     if (scope != null) {
-                        Surface(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), shape = RoundedCornerShape(4.dp)) {
+                        Surface(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), shape = Radius.xsShape) {
                             Text(
                                 scope,
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary,
                             )

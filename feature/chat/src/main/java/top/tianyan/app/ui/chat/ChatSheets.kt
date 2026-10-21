@@ -52,6 +52,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.tianyan.app.core.model.ApprovalMode
 import top.tianyan.app.ui.components.RuntimeIcon
+import top.tianyan.app.ui.theme.Radius
+import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.core.model.McpConnectionState
 import top.tianyan.app.core.model.AgentSkill
@@ -84,9 +86,9 @@ internal fun SkillsAndMcpSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp)
+                .padding(horizontal = Spacing.xl)
                 .padding(bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.lg),
         ) {
             // 头部标题与统计
             Row(
@@ -108,13 +110,13 @@ internal fun SkillsAndMcpSheet(
                 }
                 Surface(
                     color = MaterialTheme.colorScheme.primaryContainer,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = Radius.smShape,
                 ) {
                     Text(
                         text = stringResource(R.string.chat_capabilities_enabled, activeSkillsCount + activeMcpCount),
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.sm),
                     )
                 }
             }
@@ -124,7 +126,7 @@ internal fun SkillsAndMcpSheet(
                 selectedTabIndex = selectedTab,
                 containerColor = MaterialTheme.colorScheme.surfaceContainer,
                 contentColor = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clip(RoundedCornerShape(12.dp)),
+                modifier = Modifier.clip(Radius.smShape),
             ) {
                 Tab(
                     selected = selectedTab == 0,
@@ -164,7 +166,7 @@ internal fun SkillsAndMcpSheet(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 32.dp),
+                                .padding(vertical = Spacing.xxl),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
@@ -175,7 +177,7 @@ internal fun SkillsAndMcpSheet(
                         }
                     } else {
                         LazyColumn(
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             items(allSkills.size, key = { allSkills[it].id }) { index ->
@@ -184,7 +186,7 @@ internal fun SkillsAndMcpSheet(
                                 Surface(
                                     color = if (skill.isEnabled) MaterialTheme.colorScheme.surfaceContainerHigh
                                     else MaterialTheme.colorScheme.surfaceContainer,
-                                    shape = RoundedCornerShape(12.dp),
+                                    shape = Radius.smShape,
                                     border = androidx.compose.foundation.BorderStroke(
                                         1.dp,
                                         if (skill.isEnabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
@@ -193,14 +195,14 @@ internal fun SkillsAndMcpSheet(
                                     modifier = Modifier.fillMaxWidth(),
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                        modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                                     ) {
                                         Column(modifier = Modifier.weight(1f)) {
                                             Row(
                                                 verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                                             ) {
                                                 Text(
                                                     text = skill.name,
@@ -211,7 +213,7 @@ internal fun SkillsAndMcpSheet(
                                                 )
                                                 Surface(
                                                     color = MaterialTheme.colorScheme.secondaryContainer,
-                                                    shape = RoundedCornerShape(6.dp),
+                                                    shape = Radius.xsShape,
                                                 ) {
                                                     Text(
                                                         text = skill.category,
@@ -220,7 +222,7 @@ internal fun SkillsAndMcpSheet(
                                                             fontWeight = FontWeight.Bold,
                                                         ),
                                                         color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                                        modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                                                     )
                                                 }
                                             }
@@ -231,17 +233,17 @@ internal fun SkillsAndMcpSheet(
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                     maxLines = 2,
                                                     overflow = TextOverflow.Ellipsis,
-                                                    modifier = Modifier.padding(top = 2.dp),
+                                                    modifier = Modifier.padding(top = Spacing.xs),
                                                 )
                                             }
                                         }
 
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                                         ) {
                                             Surface(
-                                                shape = RoundedCornerShape(8.dp),
+                                                shape = Radius.xsShape,
                                                 color = if (isPinned) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
                                                 border = androidx.compose.foundation.BorderStroke(
                                                     0.8.dp,
@@ -258,7 +260,7 @@ internal fun SkillsAndMcpSheet(
                                                         fontWeight = if (isPinned) FontWeight.Bold else FontWeight.Normal,
                                                     ),
                                                     color = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                                 )
                                             }
 
@@ -282,7 +284,7 @@ internal fun SkillsAndMcpSheet(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 32.dp),
+                                .padding(vertical = Spacing.xxl),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
@@ -294,7 +296,7 @@ internal fun SkillsAndMcpSheet(
                         }
                     } else {
                         LazyColumn(
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             items(mcpServers.size, key = { mcpServers[it].id }) { index ->
@@ -304,7 +306,7 @@ internal fun SkillsAndMcpSheet(
                                 Surface(
                                     color = if (server.isEnabled) MaterialTheme.colorScheme.surfaceContainerHigh
                                     else MaterialTheme.colorScheme.surfaceContainer,
-                                    shape = RoundedCornerShape(12.dp),
+                                    shape = Radius.smShape,
                                     border = androidx.compose.foundation.BorderStroke(
                                         1.dp,
                                         if (server.isEnabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
@@ -313,14 +315,14 @@ internal fun SkillsAndMcpSheet(
                                     modifier = Modifier.fillMaxWidth(),
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                        modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                                     ) {
                                         Column(modifier = Modifier.weight(1f)) {
                                             Row(
                                                 verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                                             ) {
                                                 Text(
                                                     text = server.name,
@@ -354,7 +356,7 @@ internal fun SkillsAndMcpSheet(
                                                 )
                                                 Surface(
                                                     color = MaterialTheme.colorScheme.tertiaryContainer,
-                                                    shape = RoundedCornerShape(6.dp),
+                                                    shape = Radius.xsShape,
                                                 ) {
                                                     Text(
                                                         text = server.transportType.name,
@@ -363,7 +365,7 @@ internal fun SkillsAndMcpSheet(
                                                             fontWeight = FontWeight.Bold,
                                                         ),
                                                         color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                                        modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                                                     )
                                                 }
                                             }
@@ -378,17 +380,17 @@ internal fun SkillsAndMcpSheet(
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis,
-                                                    modifier = Modifier.padding(top = 2.dp),
+                                                    modifier = Modifier.padding(top = Spacing.xs),
                                                 )
                                             }
                                         }
 
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                                         ) {
                                             Surface(
-                                                shape = RoundedCornerShape(8.dp),
+                                                shape = Radius.xsShape,
                                                 color = if (isPinned) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
                                                 border = androidx.compose.foundation.BorderStroke(
                                                     0.8.dp,
@@ -405,7 +407,7 @@ internal fun SkillsAndMcpSheet(
                                                         fontWeight = if (isPinned) FontWeight.Bold else FontWeight.Normal,
                                                     ),
                                                     color = if (isPinned) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                                 )
                                             }
 
@@ -429,19 +431,19 @@ internal fun SkillsAndMcpSheet(
             // 底部操作区：直达管理
             Surface(
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                shape = RoundedCornerShape(12.dp),
+                shape = Radius.smShape,
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable(onClick = onNavigateToSettings),
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+                    modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.md),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         RuntimeIcon(
                             name = RuntimeIconName.Settings,
@@ -497,7 +499,7 @@ internal fun ReasoningEffortSlider(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 6.dp),
+            .padding(horizontal = Spacing.xs, vertical = Spacing.sm),
         shape = RoundedCornerShape(22.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         border = androidx.compose.foundation.BorderStroke(
@@ -507,9 +509,9 @@ internal fun ReasoningEffortSlider(
         shadowElevation = 6.dp,
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.md),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             val activeLevel = levels.getOrElse(selectedIndex) { levels[2] }
 
@@ -522,7 +524,7 @@ internal fun ReasoningEffortSlider(
                 Spacer(Modifier.size(20.dp))
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.xs),
                 ) {
                     Text(
                         text = activeLevel.first,
@@ -561,7 +563,7 @@ internal fun ReasoningEffortSlider(
                     .height(44.dp)
                     .clip(RoundedCornerShape(22.dp))
                     .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                    .padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                 contentAlignment = Alignment.Center,
             ) {
                 Row(
@@ -627,13 +629,13 @@ internal fun ReasoningEffortSlider(
             // 💡 说明提示：必须模型支持才生效
             Surface(
                 color = MaterialTheme.colorScheme.surfaceContainer,
-                shape = RoundedCornerShape(12.dp),
+                shape = Radius.smShape,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.sm),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     RuntimeIcon(
                         name = RuntimeIconName.Info,
@@ -669,9 +671,9 @@ internal fun ApprovalModeSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(horizontal = Spacing.xl)
+                .padding(bottom = Spacing.xxl),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -705,7 +707,7 @@ internal fun ApprovalModeSheet(
                 val isSelected = mode == currentApprovalMode
                 Surface(
                     onClick = { onSelect(mode) },
-                    shape = RoundedCornerShape(14.dp),
+                    shape = Radius.mdShape,
                     color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
                     else MaterialTheme.colorScheme.surfaceContainerHigh,
                     border = BorderStroke(
@@ -715,16 +717,16 @@ internal fun ApprovalModeSheet(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Row(
-                        modifier = Modifier.padding(14.dp),
+                        modifier = Modifier.padding(Spacing.md),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                     ) {
                         RuntimeIcon(
                             name = if (isSelected) RuntimeIconName.Check else RuntimeIconName.Shield,
                             modifier = Modifier.size(22.dp),
                             tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                             Text(
                                 text = title,
                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),

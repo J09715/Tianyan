@@ -3,6 +3,8 @@ package top.tianyan.app.ui.chat
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import top.tianyan.app.ui.components.RuntimeAlertDialog
+import top.tianyan.app.ui.theme.Radius
+import top.tianyan.app.ui.theme.Spacing
 import android.provider.Settings
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -77,7 +79,7 @@ internal fun EditAndResendDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.chat_edit_resend), fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 OutlinedTextField(
                     value = text,
                     onValueChange = { text = it },
@@ -127,19 +129,19 @@ internal fun SessionsDialog(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     RuntimeIcon(RuntimeIconName.List, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
                     Text(stringResource(R.string.chat_session_manager), fontWeight = FontWeight.Bold)
                 }
                 Surface(
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                    shape = RoundedCornerShape(6.dp),
+                    shape = Radius.xsShape,
                 ) {
                     Text(
                         stringResource(R.string.chat_session_count, sessions.size),
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                     )
                 }
             }
@@ -149,18 +151,18 @@ internal fun SessionsDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = 400.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 if (sessions.size == 1) {
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        shape = RoundedCornerShape(8.dp),
+                        shape = Radius.xsShape,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Row(
-                            modifier = Modifier.padding(8.dp),
+                            modifier = Modifier.padding(Spacing.sm),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             RuntimeIcon(RuntimeIconName.Alert, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
                             Text(
@@ -173,7 +175,7 @@ internal fun SessionsDialog(
                 }
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     items(sessions.size, key = { sessions[it].id }) { index ->
                         val session = sessions[index]
@@ -189,7 +191,7 @@ internal fun SessionsDialog(
                         }
 
                         Surface(
-                            shape = RoundedCornerShape(12.dp),
+                            shape = Radius.smShape,
                             color = if (isCurrent) MaterialTheme.colorScheme.surfaceContainer
                                 else MaterialTheme.colorScheme.surfaceContainerLow,
                             border = androidx.compose.foundation.BorderStroke(
@@ -203,9 +205,9 @@ internal fun SessionsDialog(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable { onSwitch(session.id) }
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    .padding(horizontal = Spacing.md, vertical = Spacing.sm),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                             ) {
                                 // 状态指示圆点（绿色完成/橙色进行中/红色失败）
                                 Box(
@@ -215,10 +217,10 @@ internal fun SessionsDialog(
                                         .background(dotColor),
                                 )
 
-                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                                     ) {
                                         Text(
                                             session.title,
@@ -233,21 +235,21 @@ internal fun SessionsDialog(
                                         if (isCurrent) {
                                             Surface(
                                                 color = MaterialTheme.colorScheme.primaryContainer,
-                                                shape = RoundedCornerShape(4.dp),
+                                                shape = Radius.xsShape,
                                             ) {
                                                 Text(
                                                     stringResource(R.string.chat_current),
                                                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                                                     color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                                    modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                                                 )
                                             }
                                         }
                                     }
-                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
                                         Surface(
                                             color = dotColor.copy(alpha = 0.12f),
-                                            shape = RoundedCornerShape(4.dp),
+                                            shape = Radius.xsShape,
                                         ) {
                                             Text(
                                                 stateLabel,
@@ -256,20 +258,20 @@ internal fun SessionsDialog(
                                                     fontWeight = FontWeight.SemiBold,
                                                 ),
                                                 color = dotColor,
-                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                                modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                                             )
                                         }
 
                                         if (session.workspace.isNotBlank()) {
                                             Surface(
                                                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                                shape = RoundedCornerShape(4.dp),
+                                                shape = Radius.xsShape,
                                             ) {
                                                 Text(
                                                     session.workspace,
                                                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                                    modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis,
                                                 )
@@ -304,8 +306,8 @@ internal fun SessionsDialog(
             }
         },
         confirmButton = {
-            Button(onClick = onNew, shape = RoundedCornerShape(8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Button(onClick = onNew, shape = Radius.xsShape) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     RuntimeIcon(RuntimeIconName.Plus, Modifier.size(16.dp), MaterialTheme.colorScheme.onPrimary)
                     Text(stringResource(R.string.chat_new_session))
                 }
@@ -334,7 +336,7 @@ internal fun SessionsDialog(
             onDismissRequest = { deleteTargetId = null },
             title = { Text(stringResource(R.string.chat_delete_session_title), fontWeight = FontWeight.Bold) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     Text(
                         stringResource(R.string.chat_delete_session_message),
                         style = MaterialTheme.typography.bodyMedium,
@@ -455,7 +457,7 @@ internal fun ModelDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = 400.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 Text(
                     stringResource(R.string.chat_select_provider_hint),
@@ -471,7 +473,7 @@ internal fun ModelDialog(
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         items(models, key = { it.id }) { model ->
                     val subModels = model.model.split(",").map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { listOf(model.model) }
@@ -489,15 +491,15 @@ internal fun ModelDialog(
                                 if (isProfileSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f) else Color.Transparent,
                                 MaterialTheme.shapes.small,
                             )
-                            .padding(horizontal = 10.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                            .padding(horizontal = Spacing.sm, vertical = Spacing.sm),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         Row(
                             Modifier
                                 .fillMaxWidth()
                                 .clickable { onSelectProfile(model.id) },
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             ProviderBadge(
                                 providerIdOrName = model.provider,
@@ -521,13 +523,13 @@ internal fun ModelDialog(
                             if (isProfileSelected) {
                                 Surface(
                                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
-                                    shape = RoundedCornerShape(6.dp),
+                                    shape = Radius.xsShape,
                                 ) {
                                     Text(
                                         stringResource(R.string.chat_current),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                     )
                                 }
                             }
@@ -542,14 +544,14 @@ internal fun ModelDialog(
 
                         if (subModels.size > 1) {
                             FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                             ) {
                                 subModels.forEach { subModel ->
                                     val isSubActive = isProfileSelected && subModel == selectedModelVariant
                                     Surface(
                                         color = if (isSubActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceContainerHighest,
-                                        shape = RoundedCornerShape(8.dp),
+                                        shape = Radius.xsShape,
                                         border = if (isSubActive) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
                                         modifier = Modifier.clickable {
                                             onSelectSubModel(model.id, subModel)
@@ -563,7 +565,7 @@ internal fun ModelDialog(
                                                 fontWeight = if (isSubActive) FontWeight.Bold else FontWeight.Normal,
                                             ),
                                             color = if (isSubActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.sm),
                                         )
                                     }
                                 }
@@ -573,12 +575,12 @@ internal fun ModelDialog(
                         Row(
                             Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             if (subModels.size <= 1) {
                                 Surface(
                                     color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                    shape = RoundedCornerShape(8.dp),
+                                    shape = Radius.xsShape,
                                     modifier = Modifier.weight(1f),
                                 ) {
                                     Text(
@@ -587,7 +589,7 @@ internal fun ModelDialog(
                                         color = MaterialTheme.colorScheme.onSurface,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.sm),
                                     )
                                 }
                             } else {
@@ -595,13 +597,13 @@ internal fun ModelDialog(
                             }
                             Surface(
                                 onClick = { onOpenModelPicker(model.id) },
-                                shape = RoundedCornerShape(8.dp),
+                                shape = Radius.xsShape,
                                 color = MaterialTheme.colorScheme.secondaryContainer,
                             ) {
                                 Row(
-                                    Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                    Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.sm),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                                 ) {
                                     RuntimeIcon(RuntimeIconName.Tune, Modifier.size(14.dp), MaterialTheme.colorScheme.onSecondaryContainer)
                                     Text(
@@ -676,7 +678,7 @@ internal fun ProviderModelPickerDialog(
     RuntimeAlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 Text(stringResource(R.string.chat_switch_model_title), fontWeight = FontWeight.Bold)
                 Text(
                     profile.name.ifBlank { profile.provider },
@@ -686,7 +688,7 @@ internal fun ProviderModelPickerDialog(
             }
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 Text(
                     stringResource(R.string.chat_switch_model_hint),
                     style = MaterialTheme.typography.labelSmall,
@@ -695,12 +697,12 @@ internal fun ProviderModelPickerDialog(
                 when {
                     discovering -> {
                         Row(
-                            Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                            Modifier.fillMaxWidth().padding(vertical = Spacing.md),
                             horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(Spacing.sm))
                             Text(
                                 stringResource(R.string.chat_model_discovering),
                                 style = MaterialTheme.typography.bodySmall,
@@ -720,22 +722,22 @@ internal fun ProviderModelPickerDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(max = 280.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
                         ) {
                             items(modelIds, key = { it }) { modelId ->
                                 val selected = modelId == selectedModelVariant
                                 Row(
                                     Modifier
                                         .fillMaxWidth()
-                                        .clip(RoundedCornerShape(8.dp))
+                                        .clip(Radius.xsShape)
                                         .background(
                                             if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                                             else MaterialTheme.colorScheme.surfaceContainerLow,
                                         )
                                         .clickable { onSelect(modelId) }
-                                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                                        .padding(horizontal = Spacing.sm, vertical = Spacing.sm),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                                 ) {
                                     Text(
                                         modelId,
@@ -766,7 +768,7 @@ internal fun ProviderModelPickerDialog(
             }
         },
         confirmButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 TextButton(onClick = onRefresh, enabled = !discovering) {
                     Text(stringResource(R.string.chat_refresh_models), color = MaterialTheme.colorScheme.primary)
                 }
@@ -800,7 +802,7 @@ internal fun AddModelDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.chat_add_model), fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text(stringResource(R.string.chat_optional_name)) }, singleLine = true)
                 OutlinedTextField(value = provider, onValueChange = { provider = it }, label = { Text(stringResource(R.string.chat_provider_label)) }, singleLine = true)
                 OutlinedTextField(
@@ -866,8 +868,8 @@ internal fun NewSessionDialog(
     RuntimeAlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     RuntimeIcon(RuntimeIconName.Plus, Modifier.size(18.dp), tint = LinearAccent)
                     Text(
                         stringResource(R.string.chat_new_agent_session),
@@ -888,7 +890,7 @@ internal fun NewSessionDialog(
                     .fillMaxWidth()
                     .heightIn(max = 470.dp)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
                 LinearFieldLabel(stringResource(R.string.chat_session_title))
                 OutlinedTextField(
@@ -896,7 +898,7 @@ internal fun NewSessionDialog(
                     onValueChange = { title = it },
                     placeholder = { Text(stringResource(R.string.chat_session_name_hint)) },
                     singleLine = true,
-                    shape = RoundedCornerShape(6.dp),
+                    shape = Radius.xsShape,
                     modifier = Modifier.fillMaxWidth(),
                 )
 
@@ -905,12 +907,12 @@ internal fun NewSessionDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     quickTags.forEach { tag ->
                         val active = title == tag
                         Surface(
-                            shape = RoundedCornerShape(999.dp),
+                            shape = RoundedCornerShape(percent = 50),
                             color = if (active) LinearAccent.copy(alpha = 0.16f) else Color.Transparent,
                             border = BorderStroke(1.dp, if (active) LinearAccent.copy(alpha = 0.55f) else LinearBorder),
                             modifier = Modifier.clickable { title = tag },
@@ -919,7 +921,7 @@ internal fun NewSessionDialog(
                                 tag,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = if (active) LinearAccent else linearSecondary(),
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                             )
                         }
                     }
@@ -928,7 +930,7 @@ internal fun NewSessionDialog(
                 HorizontalDivider(color = LinearBorder)
 
                 LinearFieldLabel(stringResource(R.string.chat_link_workspace))
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     WorkspaceOption(stringResource(R.string.chat_no_workspace), "/root", selected == "", onSelect = {
                         selected = ""
                         if (!typeExplicit) selectedTypeName = ProjectType.GENERAL.name
@@ -946,7 +948,7 @@ internal fun NewSessionDialog(
                 // 工程类型即模式：红队演练是列表里的一项，而不是另挂一个开关。
                 // 一个会话只能有一种类型，界面上不可能选出「红队 + 通用」这种矛盾组合。
                 val selectedProject = workspaces.firstOrNull { it.linuxPath == selected }
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     LinearFieldLabel(stringResource(R.string.chat_agent_project_type))
                     Text(
                         if (selectedProject == null || selectedProject.projectType == ProjectType.GENERAL) {
@@ -958,18 +960,18 @@ internal fun NewSessionDialog(
                         color = linearSecondary(),
                     )
                 }
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     ProjectTypeOptions.chunked(2).forEach { rowTypes ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             rowTypes.forEach { option ->
                                 val active = selectedType == option.type
                                 Surface(
                                     color = if (active) option.accent.copy(alpha = 0.16f)
                                     else option.accent.copy(alpha = 0.07f),
-                                    shape = RoundedCornerShape(10.dp),
+                                    shape = Radius.smShape,
                                     border = BorderStroke(
                                         // 选中态实线加粗，未选中态也留一道极淡的品牌色描边——
                                         // 五种类型各有主色，卡片本身就在"报自己的身份"。
@@ -985,15 +987,15 @@ internal fun NewSessionDialog(
                                         },
                                 ) {
                                     Row(
-                                        Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 10.dp),
+                                        Modifier.fillMaxWidth().padding(horizontal = Spacing.sm, vertical = Spacing.sm),
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                                     ) {
                                         // 图标带自己的色底，不再是灰图标
                                         Box(
                                             Modifier
                                                 .size(28.dp)
-                                                .clip(RoundedCornerShape(8.dp))
+                                                .clip(Radius.xsShape)
                                                 .background(option.accent.copy(alpha = if (active) 0.26f else 0.16f)),
                                             contentAlignment = Alignment.Center,
                                         ) {
@@ -1034,12 +1036,12 @@ internal fun NewSessionDialog(
                 if (selectedType == ProjectType.RED_TEAM) {
                     Surface(
                         color = LinearDanger.copy(alpha = 0.10f),
-                        shape = RoundedCornerShape(8.dp),
+                        shape = Radius.xsShape,
                         border = BorderStroke(1.dp, LinearDanger.copy(alpha = 0.35f)),
                     ) {
                         Row(
-                            Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 9.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            Modifier.fillMaxWidth().padding(horizontal = Spacing.sm, vertical = Spacing.sm),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                             verticalAlignment = Alignment.Top,
                         ) {
                             RuntimeIcon(RuntimeIconName.Shield, Modifier.size(16.dp), tint = LinearDanger)
@@ -1073,7 +1075,7 @@ internal fun NewSessionDialog(
                         selectedAgentId.takeIf { it.isNotBlank() },
                     )
                 },
-                shape = RoundedCornerShape(6.dp),
+                shape = Radius.xsShape,
             ) {
                 Text(stringResource(R.string.chat_create_session))
             }
@@ -1173,8 +1175,8 @@ private fun AgentPicker(
         )
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             Text(
                 "智能体",
                 style = MaterialTheme.typography.labelMedium,
@@ -1274,18 +1276,18 @@ private fun AgentCardRow(
     selectedId: String,
     onSelect: (String) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             cards.forEach { card ->
                 val active = card.id == selectedId
                 Surface(
                     color = if (active) card.accent.copy(alpha = 0.15f) else card.accent.copy(alpha = 0.06f),
-                    shape = RoundedCornerShape(10.dp),
+                    shape = Radius.smShape,
                     border = BorderStroke(
                         if (active) 1.5.dp else 1.dp,
                         if (active) card.accent.copy(alpha = 0.7f) else card.accent.copy(alpha = 0.20f),
@@ -1295,14 +1297,14 @@ private fun AgentCardRow(
                         .clickable { onSelect(card.id) },
                 ) {
                     Row(
-                        Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
+                        Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.sm),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         Box(
                             Modifier
                                 .size(28.dp)
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(Radius.xsShape)
                                 .background(card.accent.copy(alpha = if (active) 0.26f else 0.15f)),
                             contentAlignment = Alignment.Center,
                         ) {
@@ -1315,7 +1317,7 @@ private fun AgentCardRow(
                         Column(Modifier.weight(1f)) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                             ) {
                                 Text(
                                     card.title,
@@ -1340,7 +1342,7 @@ private fun AgentCardRow(
                                     color = card.badgeColor,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                    modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                                 )
                             }
                             Text(
@@ -1366,16 +1368,16 @@ internal fun WorkspaceOption(name: String, path: String, selected: Boolean, onSe
             .clickable(onClick = onSelect)
             .background(
                 if (selected) LinearAccent.copy(alpha = 0.10f) else LinearSurface,
-                RoundedCornerShape(8.dp),
+                Radius.xsShape,
             )
             .border(
                 1.dp,
                 if (selected) LinearAccent.copy(alpha = 0.55f) else LinearBorder,
-                RoundedCornerShape(8.dp),
+                Radius.xsShape,
             )
-            .padding(10.dp),
+            .padding(Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         Box(
             Modifier.size(12.dp).clip(CircleShape).background(

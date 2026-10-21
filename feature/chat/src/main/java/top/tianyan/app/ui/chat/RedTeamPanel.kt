@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -34,6 +33,8 @@ import top.tianyan.app.core.model.RedTeamStage
 import top.tianyan.app.core.model.RedTeamPreflightReport
 import top.tianyan.app.core.model.RedTeamPhase
 import top.tianyan.app.ui.components.RuntimeButton
+import top.tianyan.app.ui.theme.Radius
+import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.ui.components.RuntimeCard
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
@@ -54,9 +55,9 @@ internal fun RedTeamPanel(
     val phase = RedTeamPhase.fromId(session.redTeamPhase)
     val grouped = remember(facts) { facts.groupBy { it.kind } }
     RuntimeCard(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md, vertical = Spacing.sm),
         containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.28f),
-        contentPadding = PaddingValues(14.dp),
+        contentPadding = PaddingValues(Spacing.md),
     ) {
         // 这里刻意不自己滚动：本面板是控制台「概览」页签的内容，
         // 而控制台的内容区已经有一层 verticalScroll。
@@ -65,9 +66,9 @@ internal fun RedTeamPanel(
         // 滚动容器归页面所有，内容组件不重复声明。
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 RuntimeIcon(RuntimeIconName.Shield, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.error)
                 Column(Modifier.weight(1f)) {
                     Text("红队模式 · 当前会话", fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -111,14 +112,14 @@ internal fun RedTeamPanel(
                 onClick = { onBindTarget(target.trim(), scope.trim()) },
                 enabled = target.trim().isNotEmpty() && scope.trim().isNotEmpty(),
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp),
+                shape = Radius.xsShape,
             ) {
                 Text(if (session.redTeamTarget.isNullOrBlank()) "确认并绑定目标" else "更新当前会话目标", maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
 
             if (!session.redTeamTarget.isNullOrBlank()) {
-                Surface(color = Color(0xFF2E7D32).copy(alpha = 0.10f), shape = RoundedCornerShape(8.dp)) {
-                    Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Surface(color = Color(0xFF2E7D32).copy(alpha = 0.10f), shape = Radius.xsShape) {
+                    Column(Modifier.fillMaxWidth().padding(Spacing.sm), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                         Text("Scope", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                         session.redTeamScope.lineSequence().filter { it.isNotBlank() }.take(8).forEach {
                             Text(it.trim(), style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -145,14 +146,14 @@ internal fun RedTeamPanel(
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.weight(1f),
                     )
-                    RuntimeButton(onClick = { showGraph = !showGraph }, shape = RoundedCornerShape(8.dp)) {
+                    RuntimeButton(onClick = { showGraph = !showGraph }, shape = Radius.xsShape) {
                         Text(if (showGraph) "收起" else "展开", maxLines = 1)
                     }
                 }
                 if (showGraph) {
                     graph.byScope.forEach { (scope, segments) ->
-                        Surface(color = MaterialTheme.colorScheme.surfaceContainerHighest, shape = RoundedCornerShape(8.dp)) {
-                            Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Surface(color = MaterialTheme.colorScheme.surfaceContainerHighest, shape = Radius.xsShape) {
+                            Column(Modifier.fillMaxWidth().padding(Spacing.sm), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                 Text(
                                     "${when (scope) {
                                         "internal" -> "内网"
@@ -199,8 +200,8 @@ internal fun RedTeamPanel(
             if (scored.isNotEmpty()) {
                 val buckets = remember(facts) { stageBuckets(facts) }
                 Text("阶段进度", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
-                Surface(color = MaterialTheme.colorScheme.surfaceContainerHighest, shape = RoundedCornerShape(8.dp)) {
-                    Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Surface(color = MaterialTheme.colorScheme.surfaceContainerHighest, shape = Radius.xsShape) {
+                    Column(Modifier.fillMaxWidth().padding(Spacing.sm), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                         RedTeamStage.DEFAULT_STAGES.forEach { stage ->
                             val rows = buckets[stage.code].orEmpty()
                             val points = rows.mapNotNull { it.first }.sum()
@@ -235,7 +236,7 @@ internal fun RedTeamPanel(
                         modifier = Modifier.weight(1f),
                     )
                     onRefreshSkillHealth?.let { refresh ->
-                        RuntimeButton(onClick = refresh, shape = RoundedCornerShape(8.dp)) {
+                        RuntimeButton(onClick = refresh, shape = Radius.xsShape) {
                             Text("重新体检", maxLines = 1)
                         }
                     }
@@ -243,9 +244,9 @@ internal fun RedTeamPanel(
                 val unusable = health.skills.filterNot { it.usable }
                 Surface(
                     color = if (health.ready) Color(0xFF2E7D32).copy(alpha = 0.10f) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.30f),
-                    shape = RoundedCornerShape(8.dp),
+                    shape = Radius.xsShape,
                 ) {
-                    Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(Spacing.sm), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                         if (health.total == 0) {
                             Text("没有可体检的红队技能。", style = MaterialTheme.typography.labelSmall)
                         } else if (health.ready) {
@@ -293,8 +294,8 @@ internal fun RedTeamPanel(
             } else {
                 RedTeamFactKinds.filter { grouped.containsKey(it.id) }.forEach { kind ->
                     val rows = grouped.getValue(kind.id)
-                    Surface(color = MaterialTheme.colorScheme.surfaceContainerHighest, shape = RoundedCornerShape(8.dp)) {
-                        Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Surface(color = MaterialTheme.colorScheme.surfaceContainerHighest, shape = Radius.xsShape) {
+                        Column(Modifier.fillMaxWidth().padding(Spacing.sm), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                             Text("${kind.label} · ${rows.size}", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                             rows.take(if (expanded) 20 else 3).forEach { fact ->
                                 Text(
@@ -315,7 +316,7 @@ internal fun RedTeamPanel(
                     RuntimeButton(
                         onClick = { expanded = !expanded },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(8.dp),
+                        shape = Radius.xsShape,
                     ) {
                         Text(if (expanded) "收起明细" else "展开全部 ${facts.size} 条", maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }

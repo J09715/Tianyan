@@ -27,6 +27,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.tianyan.app.ui.components.RuntimeAlertDialog
+import top.tianyan.app.ui.theme.Radius
+import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.ui.components.RuntimeTextButton as TextButton
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -70,7 +72,7 @@ fun ContextUsageDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
                 // 顶部大数字
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -80,7 +82,7 @@ fun ContextUsageDialog(
                         color = if (pct > 90) palette.warn else if (pct > 70) palette.warnSoft else palette.accent,
                         fontWeight = FontWeight.Bold,
                     )
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(Spacing.sm))
                     Text(
                         "${format(used)} / ${format(limit)} tokens",
                         style = MaterialTheme.typography.bodySmall,
@@ -93,18 +95,18 @@ fun ContextUsageDialog(
                 // 总进度条
                 Box(
                     Modifier.fillMaxWidth().height(8.dp)
-                        .clip(RoundedCornerShape(4.dp))
+                        .clip(Radius.xsShape)
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                 ) {
                     Box(
                         Modifier.fillMaxWidth(pct / 100f).height(8.dp)
-                            .clip(RoundedCornerShape(4.dp))
+                            .clip(Radius.xsShape)
                             .background(if (pct > 90) palette.warn else palette.accent),
                     ) {}
                 }
 
                 // 分段彩条：用比例而不是 weight，避免三段全为 0 时权重布局的边界问题。
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     Text("构成（按 token 数）", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Box(
                         Modifier.fillMaxWidth().height(14.dp)
@@ -131,7 +133,7 @@ fun ContextUsageDialog(
                     LegendRow("对话历史", conversation, sum, palette.conversation)
                 }
 
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(Spacing.xs))
 
                 // 明细行
                 UsageRow("已用 tokens", format(used))
@@ -183,10 +185,10 @@ private fun usagePalette(): UsagePalette {
 @Composable
 private fun LegendRow(label: String, tokens: Int, total: Int, color: Color) {
     val pct = if (total > 0) (tokens * 100f / total).roundToInt() else 0
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         Box(Modifier.size(10.dp).clip(CircleShape).background(color)) {}
         Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-        Spacer(Modifier.width(4.dp))
+        Spacer(Modifier.width(Spacing.xs))
         Text("${format(tokens)} · $pct%", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = MaterialTheme.colorScheme.onSurface)
     }
 }
