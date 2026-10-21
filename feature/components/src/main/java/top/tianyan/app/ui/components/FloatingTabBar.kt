@@ -54,6 +54,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import top.tianyan.app.ui.theme.Radius
+import top.tianyan.app.ui.theme.Spacing
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -63,20 +65,21 @@ import kotlin.math.roundToInt
  * 指示器弹簧跟手、长按可拖、滚动时整条弱化。图标体系换成天衍 RuntimeIcon。
  */
 
-/** Git/页面共用设计令牌（AiCode Radius/Spacing/GitLanePalette/GitStatusColors 的天衍映射）。 */
+/**
+ * Git 泳道/状态配色。
+ *
+ * ## 为什么只保留色板，不保留间距与圆角
+ *
+ * 原来这里还有 `spacingXs/sm/md/lg/xl` 与 `radiusXs/sm/md/lg/pill` 五组尺寸，
+ * 与全仓的 [Spacing] / [Radius] 令牌是同一件事的两套写法，且数值不一致
+ * （这里 radiusMd=10dp，令牌里 md=16dp）。两套并存的必然结果是同屏里出现
+ * 两种圆角。尺寸类已全部并入 [Spacing] / [Radius]，本对象只留下**语义色**——
+ * 也就是那些确实不是「间距/圆角」而是**领域配色**的部分。
+ *
+ * 泳道色是 IDE 式的分类色（蓝/绿/琥珀/紫/青/红/粉/金），按列循环。它与语义色的
+ * success/warning 不同：那些表达状态，泳道色表达「哪一条分支」，不能互换。
+ */
 object GitTokens {
-    val spacingXs = 4.dp
-    val spacingSm = 8.dp
-    val spacingMd = 12.dp
-    val spacingLg = 16.dp
-    val spacingXl = 24.dp
-
-    val radiusXs = 4.dp
-    val radiusSm = 8.dp
-    val radiusMd = 10.dp
-    val radiusLg = 14.dp
-    val radiusPill = 999.dp
-
     /** 泳道调色板（IDE 风格，按列循环）。 */
     val laneColors = listOf(
         Color(0xFF2563EB), // 经典蓝
@@ -100,16 +103,19 @@ object GitTokens {
     val statusDefault = Color(0xFF64748B)
 }
 
-/** 语义色映射（AiCode AppSemanticColors 在 Material3 上的近似）。 */
+/**
+ * Git 面板的卡片底色。
+ *
+ * 原先按背景亮度手选（浅色用纯白、深色用 surfaceContainerHigh），但浅色主题下
+ * 纯白卡片压在浅灰页面上看不出边界。这里统一交给 M3 的 surfaceContainerHigh：
+ * 它在两个主题里都有明确的层次关系，不需要按亮度分支。
+ */
 @Composable
-fun gitCardSurface(): Color =
-    if (MaterialTheme.colorScheme.background.luminance() > 0.5f) Color.White
-    else MaterialTheme.colorScheme.surfaceContainerHigh
+fun gitCardSurface(): Color = MaterialTheme.colorScheme.surfaceContainerHigh
 
+/** Git 面板的弱化底色（行 hover、分组条底）。 */
 @Composable
-fun gitMutedSurface(): Color =
-    if (MaterialTheme.colorScheme.background.luminance() > 0.5f) Color(0xFFF1F5F9)
-    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+fun gitMutedSurface(): Color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
 
 @Composable
 fun gitSubtleBorder(): Color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
@@ -216,18 +222,18 @@ fun FloatingTabBar(
     ) {
         Box(
             modifier = Modifier
-                .padding(bottom = 6.dp)
+                .padding(bottom = Spacing.sm)
                 .graphicsLayer { alpha = contentAlpha }
                 .shadow(
                     elevation = 8.dp,
-                    shape = RoundedCornerShape(GitTokens.radiusPill),
+                    shape = RoundedCornerShape(percent = 50),
                     ambientColor = if (isLight) Color.Black.copy(alpha = 0.08f) else Color(0xFF040A14).copy(alpha = 0.35f),
                     spotColor = if (isLight) Color.Black.copy(alpha = 0.14f) else Color(0xFF040A14).copy(alpha = 0.50f),
                 )
-                .clip(RoundedCornerShape(GitTokens.radiusPill))
+                .clip(RoundedCornerShape(percent = 50))
                 .background(glassBackgroundBrush)
-                .border(1.dp, glassBorderBrush, RoundedCornerShape(GitTokens.radiusPill))
-                .padding(horizontal = 6.dp, vertical = 3.dp)
+                .border(1.dp, glassBorderBrush, RoundedCornerShape(percent = 50))
+                .padding(horizontal = Spacing.sm, vertical = Spacing.xs)
                 .pointerInput(items) {
                     detectDragGesturesAfterLongPress(
                         onDragStart = { start ->
@@ -286,18 +292,18 @@ fun FloatingTabBar(
                         .height(44.dp)
                         .shadow(
                             elevation = 2.dp,
-                            shape = RoundedCornerShape(GitTokens.radiusPill),
+                            shape = RoundedCornerShape(percent = 50),
                             ambientColor = Color.Black.copy(alpha = 0.06f),
                             spotColor = Color.Black.copy(alpha = 0.08f),
                         )
-                        .clip(RoundedCornerShape(GitTokens.radiusPill))
+                        .clip(RoundedCornerShape(percent = 50))
                         .background(indicatorBrush)
-                        .border(1.dp, indicatorBorderBrush, RoundedCornerShape(GitTokens.radiusPill)),
+                        .border(1.dp, indicatorBorderBrush, RoundedCornerShape(percent = 50)),
                 )
             }
 
             Row(
-                horizontalArrangement = Arrangement.spacedBy(GitTokens.spacingXs),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
             ) {
                 items.forEachIndexed { index, item ->
                     val isSelected = index == selected
@@ -331,13 +337,13 @@ fun FloatingTabBar(
                                 scaleX = tabScale
                                 scaleY = tabScale
                             }
-                            .clip(RoundedCornerShape(16.dp))
+                            .clip(Radius.mdShape)
                             .clickable(
                                 interactionSource = interactionSource,
                                 indication = null,
                                 onClick = { onSelect(index) },
                             )
-                            .padding(horizontal = GitTokens.spacingMd, vertical = 7.dp),
+                            .padding(horizontal = Spacing.md, vertical = Spacing.sm),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center,
                     ) {
@@ -351,7 +357,7 @@ fun FloatingTabBar(
                                 },
                             tint = fgColor,
                         )
-                        Spacer(Modifier.height(3.dp))
+                        Spacer(Modifier.height(Spacing.xs))
                         Text(
                             text = item.label,
                             style = MaterialTheme.typography.labelSmall,
