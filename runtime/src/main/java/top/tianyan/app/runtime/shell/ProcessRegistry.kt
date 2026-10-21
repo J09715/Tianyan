@@ -4,6 +4,7 @@ import top.tianyan.app.core.model.StorageMountBinding
 import top.tianyan.app.runtime.RuntimePathManager
 import top.tianyan.app.runtime.proot.ProotCommandBuilder
 import java.io.File
+import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -58,7 +59,24 @@ class ProcessRegistryImpl @Inject constructor(
     private val prootCommandBuilder: ProotCommandBuilder,
 ) : ProcessRegistry {
     private val mutex = Mutex()
-    private val processes = LinkedHashMap<String, ManagedProcess>()
+
+    /**
+     * 进程表。
+     *
+     * 用 [Collections.synchronizedMap] 而不是裸 [LinkedHashMap]：写路径都走
+     * [mutex]，但 [list] 是**非挂起**函数——它的接口签名里没有 suspend，
+     * 没法在 mutex.withLock 里读。
+     *
+     * 裸 LinkedHashMap 在这种「写端加锁、读端不加锁」的结构下不是线程安全的：
+     * 读端遍历 values 时写端正好在扩容/重建节点，会抛
+     * ConcurrentModificationException。症状是「后台任务列表偶尔刷新就崩」，
+     * 且只在特定时序下出现，极难复现。
+     *
+     * synchronizedMap 保证每次操作（含遍历）都持锁，读端拿到的快照是自洽的。
+     * 锁粒度是进程表本身，与 [mutex] 不冲突：mutex 保护的是「start/stop 的复合
+     * 操作」，synchronizedMap 保护的是「单次读写」。
+     */
+    private val processes = Collections.synchronizedMap(LinkedHashMap<String, ManagedProcess>())
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val logsMap = ConcurrentHashMap<String, MutableStateFlow<List<String>>>()
 
@@ -152,17 +170,28 @@ class ProcessRegistryImpl @Inject constructor(
     }
 
     override suspend fun stopAll() = mutex.withLock {
-        processes.values.forEach { it.session.close() }
+        // 先取快照再 close：close 可能阻塞（等进程退出），期间不持有进程表的锁，
+        // 否则别处的 list() 会被拖住。close 之后 clear 一次即可。
+        val snapshot = synchronized(processes) { processes.values.toList() }
+        snapshot.forEach { it.session.close() }
         processes.clear()
     }
 
     override suspend fun cleanupDeadProcesses(): Int = mutex.withLock {
-        val dead = processes.values.filter { !it.session.isAlive }
+        // 同上：先取快照（此时持有 mutex，写端不会同时改），再逐个 remove。
+        val dead = synchronized(processes) { processes.values.filter { !it.session.isAlive } }
         dead.forEach { processes.remove(it.id) }
         dead.size
     }
 
-    override fun list(): List<ManagedProcess> = processes.values.toList()
+    /**
+     * 进程快照。
+     *
+     * 显式在 [processes] 的监视器上同步取整份快照：返回值是一个**独立列表**，
+     * 之后写端再改进程表也不会影响这份快照——调用方（UI 渲染、运行详情面板）
+     * 拿到的必须是某个时刻的一致状态。
+     */
+    override fun list(): List<ManagedProcess> = synchronized(processes) { processes.values.toList() }
 
     override fun observeLogs(idOrToolId: String): Flow<List<String>> =
         getOrCreateLogFlow(idOrToolId).asStateFlow()
