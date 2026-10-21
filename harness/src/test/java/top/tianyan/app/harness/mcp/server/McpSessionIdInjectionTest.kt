@@ -43,7 +43,7 @@ class McpSessionIdInjectionTest {
 
     @Test
     fun `query session id is injected into tool arguments`() = runBlocking {
-        val engine = FakeBrowserEngine()
+        val engine = SessionIdFakeBrowserEngine()
         val dispatcher = dispatcher(engine)
 
         val result = dispatcher.dispatch(
@@ -116,7 +116,7 @@ class McpSessionIdInjectionTest {
         )
     }
 
-    private fun dispatcher(engine: FakeBrowserEngine): McpToolDispatcher {
+    private fun dispatcher(engine: SessionIdFakeBrowserEngine): McpToolDispatcher {
         val tools = BrowserMcpTools(
             engines = emptyList(),
             engineSelector = { engine },
@@ -141,7 +141,7 @@ private fun JsonObject.withSessionIdForTest(sessionId: String?): JsonObject {
     }
 }
 
-private class FakeBrowserEngine : BrowserEngine {
+private class SessionIdFakeBrowserEngine : BrowserEngine {
     override val eventBus = BrowserEventBus()
     override val descriptor = BrowserDescriptor(
         family = BrowserFamily.IN_APP,
@@ -192,7 +192,7 @@ private class FakeBrowserEngine : BrowserEngine {
     override suspend fun setActiveTab(tab: BrowserSessionToken) = Unit
     override suspend fun cookiesGet(tab: BrowserSessionToken, url: String?): String = cookies
     override suspend fun cookiesSet(tab: BrowserSessionToken, url: String, headerLine: String) = Unit
-    override suspend fun cookiesDelete(tab: BrowserSessionToken, url: String) = Unit
+    override suspend fun cookiesDelete(tab: BrowserSessionToken, url: String, name: String) = Unit
     override suspend fun localGet(tab: BrowserSessionToken, key: String): String? = null
     override suspend fun localSet(tab: BrowserSessionToken, key: String, value: String) = Unit
     override suspend fun localDelete(tab: BrowserSessionToken, key: String) = Unit
