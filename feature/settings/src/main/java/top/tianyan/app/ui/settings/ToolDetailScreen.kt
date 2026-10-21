@@ -446,7 +446,7 @@ private fun ToolOverviewCard(
                                         fontFamily = FontFamily.Monospace,
                                     ),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(horizontal = Spacing.xs, vertical = 1.5.dp),
+                                    modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
@@ -1240,7 +1240,7 @@ private fun ToolMetadataCard(
                                 text = perm.trim(),
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Medium),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = Spacing.sm, vertical = 3.5.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                             )
                         }
                     }

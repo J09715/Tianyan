@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
@@ -23,6 +22,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import top.tianyan.app.runtime.gui.WorkflowGuiHudBridge
+import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.Radius
 
 @Composable
 fun WorkflowHudOverlay(
@@ -49,15 +50,15 @@ fun WorkflowHudOverlay(
     Surface(
         modifier = Modifier
             .widthIn(min = 220.dp, max = 340.dp)
-            .padding(12.dp),
-        shape = RoundedCornerShape(16.dp),
+            .padding(Spacing.md),
+        shape = Radius.mdShape,
         tonalElevation = 6.dp,
         shadowElevation = 8.dp,
         color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.96f),
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,

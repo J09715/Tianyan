@@ -27,6 +27,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.ui.text.font.FontFamily
 import top.tianyan.app.ui.components.RuntimeIcon
+import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.Radius
 import top.tianyan.app.ui.components.RuntimeIconButton
 import top.tianyan.app.ui.components.RuntimeIconName
 import androidx.compose.runtime.Composable
@@ -323,14 +325,14 @@ fun WorkflowCanvas2D(
             onZoomIn = { zoomBy(1.22f) },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 12.dp, bottom = 12.dp),
+                .padding(end = Spacing.md, bottom = Spacing.md),
         )
 
         Text(
             text = "双指缩放 · 拖动画布 · 双击适配",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.align(Alignment.BottomStart).padding(start = 14.dp, bottom = 10.dp),
+            modifier = Modifier.align(Alignment.BottomStart).padding(start = Spacing.md, bottom = Spacing.sm),
         )
     }
 }
@@ -524,7 +526,7 @@ private fun WorkflowNodeCard(
         else -> theme.accentColor.copy(alpha = 0.38f)
     }
     val borderWidth = if (selected || connecting) 2.5.dp else 1.2.dp
-    val shape = RoundedCornerShape(14.dp)
+    val shape = Radius.mdShape
 
     Surface(
         modifier = modifier.size(NodeWidth, NodeHeight),
@@ -546,18 +548,18 @@ private fun WorkflowNodeCard(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                    .padding(horizontal = Spacing.sm, vertical = Spacing.sm),
                 verticalArrangement = Arrangement.SpaceBetween,
             ) {
                 // 顶部行：类型图标 + 类型 Tag + 运行状态 Pill
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     Surface(
                         color = theme.accentColor.copy(alpha = 0.16f),
-                        shape = RoundedCornerShape(6.dp),
+                        shape = Radius.xsShape,
                         modifier = Modifier.size(20.dp),
                     ) {
                         Box(contentAlignment = Alignment.Center) {
@@ -580,7 +582,7 @@ private fun WorkflowNodeCard(
                             text = statusLabel(status),
                             style = MaterialTheme.typography.labelSmall,
                             color = statusClr,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                             maxLines = 1,
                         )
                     }
@@ -599,36 +601,36 @@ private fun WorkflowNodeCard(
                 if (selected) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Surface(
                             onClick = onConfigure,
-                            shape = RoundedCornerShape(6.dp),
+                            shape = Radius.xsShape,
                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
                             modifier = Modifier.weight(1f),
                         ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = 4.dp)) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = Spacing.xs)) {
                                 Text("⚙ 调参", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, maxLines = 1)
                             }
                         }
                         Surface(
                             onClick = onBeginConnection,
-                            shape = RoundedCornerShape(6.dp),
+                            shape = Radius.xsShape,
                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
                             modifier = Modifier.weight(1f),
                         ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = 4.dp)) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = Spacing.xs)) {
                                 Text("🔗 连线", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, maxLines = 1)
                             }
                         }
                         Surface(
                             onClick = onRemove,
-                            shape = RoundedCornerShape(6.dp),
+                            shape = Radius.xsShape,
                             color = MaterialTheme.colorScheme.error.copy(alpha = 0.18f),
                             modifier = Modifier.weight(1f),
                         ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = 4.dp)) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = Spacing.xs)) {
                                 Text("🗑 删除", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error, maxLines = 1)
                             }
                         }
@@ -636,7 +638,7 @@ private fun WorkflowNodeCard(
                 } else {
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.65f),
-                        shape = RoundedCornerShape(6.dp),
+                        shape = Radius.xsShape,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         val previewText = when (node.type) {
@@ -656,7 +658,7 @@ private fun WorkflowNodeCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                         )
                     }
                 }
@@ -674,8 +676,8 @@ private fun ViewportControls(
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = modifier.padding(12.dp),
-        shape = RoundedCornerShape(12.dp),
+        modifier = modifier.padding(Spacing.md),
+        shape = Radius.smShape,
         color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.94f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
         tonalElevation = 2.dp,
@@ -683,8 +685,8 @@ private fun ViewportControls(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+            modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
         ) {
             RuntimeIconButton(
                 onClick = onZoomOut,
@@ -698,7 +700,7 @@ private fun ViewportControls(
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 4.dp),
+                modifier = Modifier.padding(horizontal = Spacing.xs),
             )
             RuntimeIconButton(
                 onClick = onFit,

@@ -1373,7 +1373,7 @@ fun RuntimeAlertDialog(
                         )
                     },
                 )
-                .padding(horizontal = Spacing.xl, vertical = 22.dp),
+                .padding(horizontal = Spacing.xl, vertical = Spacing.xl),
             verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             if (icon != null || title != null) {

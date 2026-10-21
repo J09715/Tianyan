@@ -561,7 +561,7 @@ private fun McpServerItemCard(
                             server.transportType.name,
                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.padding(horizontal = Spacing.xs, vertical = 1.5.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                             maxLines = 1,
                             overflow = TextOverflow.Visible,
                             softWrap = false,

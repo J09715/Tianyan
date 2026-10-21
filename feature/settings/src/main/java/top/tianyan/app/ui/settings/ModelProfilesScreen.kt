@@ -260,7 +260,7 @@ private fun ModelProfilesContent(
         if (models.isEmpty()) {
             item {
                 Column(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.xxl),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {

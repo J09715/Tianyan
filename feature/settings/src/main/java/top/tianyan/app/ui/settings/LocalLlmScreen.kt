@@ -299,7 +299,7 @@ fun LocalLlmScreen(
                         borderColor = Color.Transparent,
                     ) {
                         Column(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 28.dp),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.xl),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {

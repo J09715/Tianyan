@@ -86,7 +86,7 @@ internal fun SkillsAndMcpSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = Spacing.xl)
-                .padding(bottom = 28.dp),
+                .padding(bottom = Spacing.xl),
             verticalArrangement = Arrangement.spacedBy(Spacing.lg),
         ) {
             // 头部标题与统计
