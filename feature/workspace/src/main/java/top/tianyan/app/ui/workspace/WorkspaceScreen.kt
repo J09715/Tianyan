@@ -104,6 +104,7 @@ import top.tianyan.app.ui.components.SectionHeader
 import top.tianyan.app.ui.theme.LocalLiquidGlassBackdrop
 import top.tianyan.app.ui.theme.Radius
 import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.TianyanTheme
 import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -347,8 +348,8 @@ fun WorkspaceScreen(
                 .fillMaxSize()
                 .liquidGlassContent()
                 .padding(top = padding.calculateTopPadding()),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 104.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(start = Spacing.lg, end = Spacing.lg, top = Spacing.sm, bottom = 104.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             item {
                 message?.let { notice ->
@@ -362,20 +363,20 @@ fun WorkspaceScreen(
                 if (activeBuildingProjectName != null && !isBuildDialogVisible) {
                     Surface(
                     color = MaterialTheme.colorScheme.primaryContainer,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = Radius.smShape,
                     modifier = Modifier.fillMaxWidth().clickable { viewModel.showBuildDialog() },
                     ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                     ) {
                         RuntimeCircularProgressIndicator(
                             modifier = Modifier.size(20.dp),
                             strokeWidth = 2.5.dp,
                             color = MaterialTheme.colorScheme.primary,
                         )
-                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                             Text(
                                 text = stringResource(R.string.workspace_building_project, activeBuildingProjectName.orEmpty()),
                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
@@ -398,13 +399,13 @@ fun WorkspaceScreen(
                     val progress = buildProgress!!
                     Surface(
                     color = if (progress.isSuccess == true) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.errorContainer,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = Radius.smShape,
                     modifier = Modifier.fillMaxWidth(),
                     ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                     ) {
                         RuntimeIcon(
                             if (progress.isSuccess == true) RuntimeIconName.Check else RuntimeIconName.Close,
@@ -427,7 +428,7 @@ fun WorkspaceScreen(
                                 )
                             }
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                             if (progress.isSuccess == true && progress.apkPath != null) {
                                 TextButton(onClick = { viewModel.launchInstaller(progress.apkPath!!) }) {
                                     Text(stringResource(R.string.workspace_install), fontWeight = FontWeight.Bold)
@@ -457,12 +458,12 @@ fun WorkspaceScreen(
                 modifier = Modifier.fillMaxWidth(),
                 borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
                 onClick = { onOpenExplorer("sdcard") },
-                contentPadding = PaddingValues(14.dp),
+                contentPadding = PaddingValues(Spacing.md),
                 ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                 ) {
                     Box(
                         modifier = Modifier
@@ -478,7 +479,7 @@ fun WorkspaceScreen(
                         )
                     }
 
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                         Text(
                             text = stringResource(R.string.workspace_shared_storage),
                             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
@@ -521,7 +522,7 @@ fun WorkspaceScreen(
                         icon = RuntimeIconName.Workspace,
                         title = stringResource(R.string.workspace_no_projects),
                         description = stringResource(R.string.workspace_no_projects_description),
-                        modifier = Modifier.padding(top = 24.dp),
+                        modifier = Modifier.padding(top = Spacing.xl),
                     )
                 }
             } else {
@@ -545,7 +546,7 @@ fun WorkspaceScreen(
             }
 
 
-            item { Spacer(Modifier.height(16.dp)) }
+            item { Spacer(Modifier.height(Spacing.lg)) }
         }
     }
 
@@ -576,7 +577,7 @@ fun WorkspaceScreen(
             title = {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     if (progress.isRunning) {
                         RuntimeCircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -587,24 +588,24 @@ fun WorkspaceScreen(
             text = {
                 Column(
                     modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.md),
                 ) {
                     Text(progress.step, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium))
                     if (progress.isRunning) {
                         LinearProgressIndicator(
                             progress = { progress.progress },
-                            modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+                            modifier = Modifier.fillMaxWidth().height(6.dp).clip(Radius.xsShape),
                         )
                     }
                     if (progress.currentDependency != null || progress.dependencyItemsObserved > 0) {
                         Surface(
                             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
-                            shape = RoundedCornerShape(8.dp),
+                            shape = Radius.xsShape,
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Column(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.sm),
+                                verticalArrangement = Arrangement.spacedBy(Spacing.xs),
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -633,7 +634,7 @@ fun WorkspaceScreen(
                                 progress.dependencyProgressPercent?.let { percent ->
                                     LinearProgressIndicator(
                                         progress = { percent / 100f },
-                                        modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
+                                        modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(percent = 50)),
                                     )
                                     Text(
                                         text = stringResource(R.string.workspace_dependency_percent, percent),
@@ -658,7 +659,7 @@ fun WorkspaceScreen(
                             onClick = { showStepAnalysis = !showStepAnalysis },
                             contentPadding = PaddingValues(0.dp),
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                 RuntimeIcon(if (showStepAnalysis) RuntimeIconName.ArrowUp else RuntimeIconName.ChevronDown, Modifier.size(14.dp))
                                 Text(stringResource(if (showStepAnalysis) R.string.workspace_hide_timing else R.string.workspace_timing), style = MaterialTheme.typography.labelMedium)
                             }
@@ -667,21 +668,24 @@ fun WorkspaceScreen(
                         if (showStepAnalysis) {
                             Surface(
                                 color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                shape = Radius.xsShape,
+                                modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.xs),
                             ) {
-                                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Column(modifier = Modifier.padding(Spacing.sm), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                                     val maxDuration = (progress.stepDurations.maxOfOrNull { it.durationMs } ?: 1L).coerceAtLeast(1L)
                                     progress.stepDurations.forEach { step ->
                                         val barRatio = (step.durationMs.toFloat() / maxDuration.toFloat()).coerceIn(0.02f, 1f)
+                                        // 构建阶段色：拉取=蓝、编译=绿、打包=橙、其它=灰。
+                                        // 取自语义色令牌，深浅主题各自有对比度保证。
                                         val barColor = when {
-                                            step.step.contains("拉取") || step.step.contains("依赖") -> androidx.compose.ui.graphics.Color(0xFF2196F3) // 蓝色
-                                            step.step.contains("编译") || step.step.contains("Kotlin") || step.step.contains("Java") || step.step.contains("Dex") -> androidx.compose.ui.graphics.Color(0xFF4CAF50) // 绿色
-                                            step.step.contains("打包") || step.step.contains("APK") -> androidx.compose.ui.graphics.Color(0xFFFF9800) // 橙色
-                                            else -> androidx.compose.ui.graphics.Color(0xFF9E9E9E) // 灰色
+                                            step.step.contains("拉取") || step.step.contains("依赖") -> TianyanTheme.colors.info
+                                            step.step.contains("编译") || step.step.contains("Kotlin") ||
+                                                step.step.contains("Java") || step.step.contains("Dex") -> TianyanTheme.colors.success
+                                            step.step.contains("打包") || step.step.contains("APK") -> TianyanTheme.colors.warning
+                                            else -> TianyanTheme.colors.neutral
                                         }
                                         val durationText = if (step.durationMs >= 1000) "${"%.1f".format(step.durationMs / 1000.0)}s" else "${step.durationMs}ms"
-                                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -701,14 +705,14 @@ fun WorkspaceScreen(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
                                                     .height(6.dp)
-                                                    .clip(RoundedCornerShape(3.dp))
+                                                    .clip(Radius.xsShape)
                                                     .background(MaterialTheme.colorScheme.surfaceVariant),
                                             ) {
                                                 Box(
                                                     modifier = Modifier
                                                         .fillMaxWidth(barRatio)
                                                         .height(6.dp)
-                                                        .clip(RoundedCornerShape(3.dp))
+                                                        .clip(Radius.xsShape)
                                                         .background(barColor),
                                                 )
                                             }
@@ -754,7 +758,7 @@ fun WorkspaceScreen(
                                 onClick = { showBuildLog = !showBuildLog },
                                 contentPadding = PaddingValues(0.dp),
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                     RuntimeIcon(if (showBuildLog) RuntimeIconName.ArrowUp else RuntimeIconName.ChevronDown, Modifier.size(14.dp))
                                     Text(stringResource(if (showBuildLog) R.string.workspace_hide_build_log else R.string.workspace_view_build_log), style = MaterialTheme.typography.labelMedium)
                                 }
@@ -768,7 +772,7 @@ fun WorkspaceScreen(
                                     },
                                     contentPadding = PaddingValues(0.dp),
                                 ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                         RuntimeIcon(RuntimeIconName.Copy, Modifier.size(12.dp))
                                         Text(stringResource(R.string.workspace_copy_log), style = MaterialTheme.typography.labelSmall)
                                     }
@@ -812,7 +816,7 @@ fun WorkspaceScreen(
                                 Category(3, "📋", stringResource(R.string.workspace_log_other), otherLogs),
                             )
 
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                 categories.forEach { cat ->
                                     if (cat.logs.isNotEmpty()) {
                                         val isCollapsed = when (cat.type) {
@@ -838,7 +842,7 @@ fun WorkspaceScreen(
                                                 verticalAlignment = Alignment.CenterVertically,
                                                 horizontalArrangement = Arrangement.SpaceBetween,
                                             ) {
-                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                                     RuntimeIcon(if (isCollapsed) RuntimeIconName.ChevronRight else RuntimeIconName.ArrowUp, Modifier.size(12.dp))
                                                     Text("${cat.emoji} ${cat.name}", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
                                                 }
@@ -848,10 +852,10 @@ fun WorkspaceScreen(
                                         if (!isCollapsed) {
                                             Surface(
                                                 color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                                shape = RoundedCornerShape(6.dp),
+                                                shape = Radius.xsShape,
                                                 modifier = Modifier.fillMaxWidth(),
                                             ) {
-                                                Column(modifier = Modifier.padding(6.dp)) {
+                                                Column(modifier = Modifier.padding(Spacing.sm)) {
                                                     val displayLogs = if (cat.logs.size > 200) cat.logs.takeLast(200) else cat.logs
                                                     displayLogs.forEach { line ->
                                                         Text(
@@ -883,7 +887,7 @@ fun WorkspaceScreen(
             },
             confirmButton = {
                 if (!progress.isRunning) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         // 缺少环境时展示前往插件中心准备环境按钮
                         if (progress.suggestedSuiteId != null) {
                             Button(
@@ -892,7 +896,7 @@ fun WorkspaceScreen(
                                     onOpenToolCenter()
                                 },
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                     RuntimeIcon(RuntimeIconName.Package, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onPrimary)
                                     Text(stringResource(R.string.workspace_prepare_environment))
                                 }
@@ -902,7 +906,7 @@ fun WorkspaceScreen(
                         val path = progress.apkPath
                         if (progress.isSuccess == true && path != null) {
                             Button(onClick = { viewModel.launchInstaller(path) }) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                     RuntimeIcon(RuntimeIconName.Download, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onPrimary)
                                     Text(stringResource(R.string.workspace_launch_install))
                                 }
@@ -913,7 +917,7 @@ fun WorkspaceScreen(
                         }
                     }
                 } else {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         TextButton(onClick = { viewModel.cancelBuild() }) {
                             Text(stringResource(R.string.workspace_stop_build), color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
                         }
@@ -1026,14 +1030,14 @@ fun WorkspaceScreen(
                     modifier = Modifier
                         .heightIn(min = 360.dp, max = 420.dp)
                         .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.md),
                 ) {
                     when (createProjectStep) {
                         CreateProjectStep.PROJECT_TYPE -> {
                             Text("选择项目类型", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                             Text("先选择要创建的项目平台", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             val projectTypes = projectTemplates.map { it.manifest.projectType }.distinct()
-                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
                                 // 空项目：跳过平台与模板选择，直接输入名称创建空文件夹
                                 RuntimeCard(
                                     onClick = {
@@ -1050,11 +1054,11 @@ fun WorkspaceScreen(
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md, vertical = Spacing.md),
                                     ) {
                                         RuntimeIcon(RuntimeIconName.Folder, Modifier.size(36.dp), MaterialTheme.colorScheme.primary)
-                                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                             Text("空项目", fontWeight = FontWeight.SemiBold)
                                             Text(
                                                 "只创建一个空文件夹，随时手动添加内容",
@@ -1067,7 +1071,7 @@ fun WorkspaceScreen(
                                 projectTypes.chunked(2).forEach { rowTypes ->
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                                     ) {
                                         rowTypes.forEach { type ->
                                             RuntimeCard(
@@ -1082,7 +1086,7 @@ fun WorkspaceScreen(
                                                     MaterialTheme.colorScheme.surfaceContainer
                                                 },
                                             ) {
-                                                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
+                                                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.md)) {
                                                     RuntimeIcon(
                                                         when (type) {
                                                             TemplateProjectType.ANDROID -> RuntimeIconName.Android
@@ -1092,7 +1096,7 @@ fun WorkspaceScreen(
                                                         Modifier.size(36.dp),
                                                         MaterialTheme.colorScheme.primary,
                                                     )
-                                                    Spacer(Modifier.height(8.dp))
+                                                    Spacer(Modifier.height(Spacing.sm))
                                                     Text(type.name.lowercase().replaceFirstChar { it.uppercase() }, fontWeight = FontWeight.SemiBold)
                                                 }
                                             }
@@ -1129,7 +1133,7 @@ fun WorkspaceScreen(
                             Text("选择模板", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                             Text("选择一个具体模板后继续", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             val filteredTemplates = projectTemplates.filter { it.manifest.projectType == selectedProjectType }
-                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
                                 filteredTemplates.groupBy { it.manifest.category }.forEach { (category, templates) ->
                                     if (filteredTemplates.map { it.manifest.category.id }.distinct().size > 1) {
                                         Text(category.name, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
@@ -1137,7 +1141,7 @@ fun WorkspaceScreen(
                                     templates.chunked(2).forEach { rowTemplates ->
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                                         ) {
                                             rowTemplates.forEach { template ->
                                                 val selected = selectedTemplateId == template.manifest.id
@@ -1164,7 +1168,7 @@ fun WorkspaceScreen(
                                                 ) {
                                                     Surface(
                                                         modifier = Modifier.fillMaxWidth().aspectRatio(1f),
-                                                        shape = RoundedCornerShape(12.dp),
+                                                        shape = Radius.smShape,
                                                         color = MaterialTheme.colorScheme.surfaceContainerHighest,
                                                     ) {
                                                         Box(contentAlignment = Alignment.Center) {
@@ -1184,14 +1188,14 @@ fun WorkspaceScreen(
                                                             }
                                                         }
                                                     }
-                                                    Spacer(Modifier.height(8.dp))
+                                                    Spacer(Modifier.height(Spacing.sm))
                                                     Text(
                                                         template.manifest.name,
                                                         fontWeight = FontWeight.SemiBold,
                                                         maxLines = 1,
                                                         overflow = TextOverflow.Ellipsis,
                                                         fontSize = 12.sp,
-                                                        modifier = Modifier.padding(horizontal = 4.dp).padding(bottom = 4.dp),
+                                                        modifier = Modifier.padding(horizontal = Spacing.xs).padding(bottom = Spacing.xs),
                                                     )
                                                 }
                                             }
@@ -1243,7 +1247,7 @@ fun WorkspaceScreen(
                         )
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             OutlinedButton(
                                 onClick = { showAppPicker = true },
@@ -1282,14 +1286,14 @@ fun WorkspaceScreen(
                             else -> MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f)
                         }
                         Surface(
-                            shape = RoundedCornerShape(10.dp),
+                            shape = Radius.smShape,
                             color = statusSurfaceColor,
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                             ) {
                                 RuntimeIcon(
                                     when {
@@ -1304,7 +1308,7 @@ fun WorkspaceScreen(
                                         else -> MaterialTheme.colorScheme.onSurfaceVariant
                                     },
                                 )
-                                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                     Text(
                                         text = when {
                                             reverseToolReady -> stringResource(R.string.workspace_reverse_ready)
@@ -1344,17 +1348,17 @@ fun WorkspaceScreen(
                         }
                         apkSource?.let { source ->
                             Surface(
-                                shape = RoundedCornerShape(10.dp),
+                                shape = Radius.smShape,
                                 color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+                                    modifier = Modifier.padding(start = Spacing.md, end = Spacing.xs, top = Spacing.sm, bottom = Spacing.sm),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                                 ) {
                                     RuntimeIcon(RuntimeIconName.Reverse, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
-                                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                         Text(
                                             text = source.displayName,
                                             style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
@@ -1386,17 +1390,17 @@ fun WorkspaceScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
+                                .clip(Radius.smShape)
                                 .clickable { exportApkToDownload = !exportApkToDownload }
-                                .padding(vertical = 4.dp),
+                                .padding(vertical = Spacing.xs),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                         ) {
                             Checkbox(
                                 checked = exportApkToDownload,
                                 onCheckedChange = { exportApkToDownload = it },
                             )
-                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                 Text(
                                     stringResource(R.string.workspace_export_apk),
                                     style = MaterialTheme.typography.bodyMedium,
@@ -1431,18 +1435,18 @@ fun WorkspaceScreen(
                         if (hasTemplateScripts) {
                             Surface(
                                 color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.55f),
-                                shape = RoundedCornerShape(12.dp),
+                                shape = Radius.smShape,
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
                                 Row(
                                     modifier = Modifier
                                         .clickable { trustTemplateScripts = !trustTemplateScripts }
-                                        .padding(10.dp),
+                                        .padding(Spacing.sm),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                                 ) {
                                     Checkbox(checked = trustTemplateScripts, onCheckedChange = { trustTemplateScripts = it })
-                                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                         Text(stringResource(R.string.workspace_trust_scripts_title), fontWeight = FontWeight.SemiBold)
                                         Text(
                                             if (runtimeReady) {
@@ -1517,7 +1521,7 @@ fun WorkspaceScreen(
                 ) {
                     if (createInProgress) {
                         RuntimeCircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                        Spacer(Modifier.width(6.dp))
+                        Spacer(Modifier.width(Spacing.sm))
                         Text(stringResource(R.string.workspace_creating), color = MaterialTheme.colorScheme.primary)
                     } else {
                         Text(
@@ -1587,23 +1591,23 @@ fun WorkspaceScreen(
             text = {
                 Column(
                     modifier = Modifier.verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.md),
                 ) {
                     // GitHub 拉取进度：git 克隆可能耗时数分钟，实时展示最新进度与百分比
                     if (importInProgress) {
                         Surface(
-                            shape = RoundedCornerShape(10.dp),
+                            shape = Radius.smShape,
                             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Column(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                                 ) {
                                     RuntimeCircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                                     Text(
@@ -1623,7 +1627,7 @@ fun WorkspaceScreen(
                                 val clonePercent = githubImportProgress?.percent
                                 LinearProgressIndicator(
                                     progress = clonePercent?.let { percent -> { percent / 100f } },
-                                    modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)),
+                                    modifier = Modifier.fillMaxWidth().height(5.dp).clip(Radius.xsShape),
                                 )
                                 githubImportProgress?.let { progress ->
                                     Text(
@@ -1642,7 +1646,7 @@ fun WorkspaceScreen(
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         FilterChip(
                             selected = importMode == ProjectImportMode.LOCAL,
                             onClick = { importMode = ProjectImportMode.LOCAL },
@@ -1674,14 +1678,14 @@ fun WorkspaceScreen(
                         }
                         archiveSource?.let { source ->
                             Surface(
-                                shape = RoundedCornerShape(10.dp),
+                                shape = Radius.smShape,
                                 color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+                                    modifier = Modifier.padding(start = Spacing.md, end = Spacing.xs, top = Spacing.sm, bottom = Spacing.sm),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                                 ) {
                                     RuntimeIcon(RuntimeIconName.Compress, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
                                     Text(
@@ -1709,7 +1713,7 @@ fun WorkspaceScreen(
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                             FilterChip(
                                 selected = gitTransport == GitTransport.HTTP,
                                 onClick = { gitTransport = GitTransport.HTTP },
@@ -1749,7 +1753,7 @@ fun WorkspaceScreen(
                     )
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         listOf(
                             ProjectType.ANDROID to ("Android" to RuntimeIconName.Android),
@@ -1931,9 +1935,9 @@ private fun TemplateManagerDialog(
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     Button(onClick = onImport, enabled = !busy, modifier = Modifier.weight(1f)) {
                         Text(stringResource(R.string.workspace_template_import_zip))
                     }
@@ -1951,17 +1955,17 @@ private fun TemplateManagerDialog(
                         RuntimeCard(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Surface(
                                     modifier = Modifier.size(56.dp),
-                                    shape = RoundedCornerShape(8.dp),
+                                    shape = Radius.xsShape,
                                     color = MaterialTheme.colorScheme.surfaceContainerHighest,
                                 ) {
                                     template.previewFile?.let { TemplatePreviewImage(it, Modifier.fillMaxSize()) }
                                 }
-                                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                     Text(template.manifest.name, fontWeight = FontWeight.SemiBold, maxLines = 1)
                                     Text(
                                         "${template.manifest.category.name} · ${if (template.isBundled) stringResource(R.string.workspace_template_bundled) else stringResource(R.string.workspace_template_user)}",
@@ -2004,7 +2008,7 @@ private fun ProjectTemplateSpecDialog(onDismiss: () -> Unit) {
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
                 Text(stringResource(R.string.workspace_spec_intro))
                 Text(stringResource(R.string.workspace_spec_min_structure), fontWeight = FontWeight.SemiBold)
@@ -2047,7 +2051,7 @@ private fun BuildTypePickerDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.workspace_build_type_title, project.name), fontWeight = FontWeight.Bold) },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
                 BuildTypeOption(
                     title = stringResource(R.string.workspace_build_type_debug),
                     description = stringResource(R.string.workspace_build_type_debug_description),
@@ -2062,8 +2066,8 @@ private fun BuildTypePickerDialog(
                 )
                 if (isRelease) {
                     if (keystores.isEmpty()) {
-                        Surface(color = MaterialTheme.colorScheme.errorContainer, shape = RoundedCornerShape(10.dp)) {
-                            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Surface(color = MaterialTheme.colorScheme.errorContainer, shape = Radius.smShape) {
+                            Column(Modifier.fillMaxWidth().padding(Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                                 Text(stringResource(R.string.workspace_build_no_keystore), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
                                 Button(onClick = onManageSigning) { Text(stringResource(R.string.workspace_build_go_create_keystore)) }
                             }
@@ -2104,17 +2108,17 @@ private fun BuildTypeOption(
     val borderColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
     Surface(
         color = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) else MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = RoundedCornerShape(12.dp),
+        shape = Radius.smShape,
         border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick),
+        modifier = Modifier.fillMaxWidth().clip(Radius.smShape).clickable(onClick = onClick),
     ) {
-        Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
             RuntimeIcon(
                 if (selected) RuntimeIconName.Check else RuntimeIconName.Key,
                 Modifier.size(18.dp),
                 if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -2137,11 +2141,12 @@ private fun ProjectCard(
 ) {
     var moreExpanded by remember { mutableStateOf(false) }
 
+    // 项目类型徽章色：与构建阶段色同源，避免工坊里出现第三套绿/蓝/紫/红。
     val typeBadgeColor = when (project.projectType) {
-        ProjectType.ANDROID -> androidx.compose.ui.graphics.Color(0xFF2E7D32)
-        ProjectType.FLUTTER -> androidx.compose.ui.graphics.Color(0xFF0288D1)
-        ProjectType.REVERSE -> androidx.compose.ui.graphics.Color(0xFF6A1B9A)
-        ProjectType.RED_TEAM -> androidx.compose.ui.graphics.Color(0xFFB3261E)
+        ProjectType.ANDROID -> TianyanTheme.colors.success
+        ProjectType.FLUTTER -> TianyanTheme.colors.info
+        ProjectType.REVERSE -> TianyanTheme.colors.accentViolet
+        ProjectType.RED_TEAM -> TianyanTheme.colors.danger
         ProjectType.GENERAL -> MaterialTheme.colorScheme.primary
     }
 
@@ -2158,20 +2163,20 @@ private fun ProjectCard(
         borderColor = if (isBuilding) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
         onClick = onOpenExplorer,
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
                 IconTile(typeIcon, size = 40.dp, color = typeBadgeColor)
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.xs),
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         Text(
                             text = project.name,
@@ -2182,13 +2187,13 @@ private fun ProjectCard(
                         )
                         Surface(
                             color = if (isBuilding) MaterialTheme.colorScheme.primaryContainer else typeBadgeColor.copy(alpha = 0.15f),
-                            shape = RoundedCornerShape(4.dp),
+                            shape = Radius.xsShape,
                         ) {
                             Text(
                                 text = if (isBuilding) stringResource(R.string.workspace_building_badge) else project.projectType.displayName,
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
                                 color = if (isBuilding) MaterialTheme.colorScheme.primary else typeBadgeColor,
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                             )
                         }
                     }
@@ -2255,7 +2260,7 @@ private fun ProjectCard(
 
             if (isBuilding) {
                 LinearProgressIndicator(
-                    modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(1.5.dp)),
+                    modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(percent = 50)),
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
@@ -2273,13 +2278,13 @@ private fun ProjectCard(
                     FilledTonalButton(
                         onClick = if (isBuilding) onShowBuildLog else onRunProject,
                         enabled = !busy || isBuilding,
-                        shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                        modifier = Modifier.padding(end = 8.dp),
+                        shape = Radius.smShape,
+                        contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
+                        modifier = Modifier.padding(end = Spacing.sm),
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             if (isBuilding) {
                                 RuntimeCircularProgressIndicator(
@@ -2298,11 +2303,11 @@ private fun ProjectCard(
                     TextButton(
                         onClick = onOpenTerminal,
                         enabled = !busy,
-                        modifier = Modifier.padding(end = 4.dp),
+                        modifier = Modifier.padding(end = Spacing.xs),
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                         ) {
                             RuntimeIcon(RuntimeIconName.Terminal, Modifier.size(15.dp), MaterialTheme.colorScheme.primary)
                             Text(stringResource(R.string.workspace_terminal), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
@@ -2365,7 +2370,7 @@ private fun AppPickerDialog(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(Spacing.sm))
                     LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
                     items(apps, key = { it.packageName }) { app ->
                         val label = app.appLabel(context)
@@ -2373,14 +2378,14 @@ private fun AppPickerDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable { onSelect(app) }
-                                .padding(vertical = 10.dp, horizontal = 4.dp),
+                                .padding(vertical = Spacing.sm, horizontal = Spacing.xs),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                         ) {
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .clip(Radius.xsShape)
                                     .background(MaterialTheme.colorScheme.surfaceContainerHighest),
                                 contentAlignment = Alignment.Center,
                             ) {
@@ -2392,7 +2397,7 @@ private fun AppPickerDialog(
                             }
                             Column(
                                 modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(2.dp),
+                                verticalArrangement = Arrangement.spacedBy(Spacing.xs),
                             ) {
                                 Text(
                                     text = label,

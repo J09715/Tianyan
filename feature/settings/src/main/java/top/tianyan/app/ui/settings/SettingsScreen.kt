@@ -37,7 +37,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import top.tianyan.app.ui.components.RuntimeButton as Button
 import androidx.compose.material3.ButtonDefaults
 import top.tianyan.app.ui.components.RuntimeCircularProgressIndicator as CircularProgressIndicator
@@ -99,6 +98,9 @@ import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeTopBar
 import top.tianyan.app.ui.components.SectionHeader
 import top.tianyan.app.ui.theme.LocalLiquidGlassBackdrop
+import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.Radius
+import top.tianyan.app.ui.theme.TianyanTheme
 
 /**
  * 天衍 · 乾坤配置 (Tianyan Settings & Models)
@@ -151,15 +153,15 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .liquidGlassContent()
                 .padding(top = padding.calculateTopPadding()),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 104.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(start = Spacing.lg, end = Spacing.lg, top = Spacing.sm, bottom = 104.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             item {
                 Text(
                     text = "系统与配置分类",
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 2.dp),
+                    modifier = Modifier.padding(start = Spacing.xs, bottom = Spacing.xs),
                 )
             }
 
@@ -167,8 +169,8 @@ fun SettingsScreen(
             item {
                 SettingsCategoryCard(
                     icon = RuntimeIconName.Brain,
-                    iconTint = Color(0xFF6366F1),
-                    iconBg = Color(0xFF6366F1).copy(alpha = 0.12f),
+                    iconTint = TianyanTheme.colors.accentIndigo,
+                    iconBg = TianyanTheme.colors.container(TianyanTheme.colors.accentIndigo),
                     title = "智能体与 AI 模型",
                     subtitle = "模型档案 · 插件工具中心 · 技能与 MCP 生态",
                     badge = if (models.isEmpty()) "未配置模型" else "${models.size} 个模型 · ${skills.count { it.isEnabled }} 技能",
@@ -180,8 +182,8 @@ fun SettingsScreen(
             item {
                 SettingsCategoryCard(
                     icon = RuntimeIconName.Server,
-                    iconTint = Color(0xFF10B981),
-                    iconBg = Color(0xFF10B981).copy(alpha = 0.12f),
+                    iconTint = TianyanTheme.colors.success,
+                    iconBg = TianyanTheme.colors.container(TianyanTheme.colors.success),
                     title = "Linux 容器与存储",
                     subtitle = "多发行版管理 · 宿主存储映射 · 运行特权模式",
                     badge = "${installedDistros.size} 套系统 · ${effectiveExecutionMode.shortLabel}",
@@ -193,8 +195,8 @@ fun SettingsScreen(
             item {
                 SettingsCategoryCard(
                     icon = RuntimeIconName.Palette,
-                    iconTint = Color(0xFF8B5CF6),
-                    iconBg = Color(0xFF8B5CF6).copy(alpha = 0.12f),
+                    iconTint = TianyanTheme.colors.accentViolet,
+                    iconBg = TianyanTheme.colors.container(TianyanTheme.colors.accentViolet),
                     title = "外观、字号与终端定制",
                     subtitle = "深浅色主题 · 应用字号缩放 · 终端配色与字体",
                     badge = "$themeLabel · ${terminalFontSize}sp",
@@ -206,8 +208,8 @@ fun SettingsScreen(
             item {
                 SettingsCategoryCard(
                     icon = RuntimeIconName.Admin,
-                    iconTint = Color(0xFFF59E0B),
-                    iconBg = Color(0xFFF59E0B).copy(alpha = 0.12f),
+                    iconTint = TianyanTheme.colors.warning,
+                    iconBg = TianyanTheme.colors.container(TianyanTheme.colors.warning),
                     title = "系统保活与开发者诊断",
                     subtitle = "后台电池优化白名单 · 调试监控 · PRoot 控制台",
                     badge = if (developer) "诊断模式已开启" else "运行平稳",
@@ -219,8 +221,8 @@ fun SettingsScreen(
             item {
                 SettingsCategoryCard(
                     icon = RuntimeIconName.Info,
-                    iconTint = Color(0xFF3B82F6),
-                    iconBg = Color(0xFF3B82F6).copy(alpha = 0.12f),
+                    iconTint = TianyanTheme.colors.info,
+                    iconBg = TianyanTheme.colors.container(TianyanTheme.colors.info),
                     title = "关于天衍",
                     subtitle = "应用版本 · 设备与运行时状态 · 沙箱网络代理",
                     badge = if (appVersionName == "unknown") "版本号未知 · 稳定版" else "v$appVersionName 稳定版",
@@ -250,19 +252,19 @@ private fun SettingsCategoryCard(
         onClick = onClick,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+        contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             Box(
                 modifier = Modifier
                     .size(36.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(Radius.smShape)
                     .background(iconBg)
-                    .border(1.dp, iconTint.copy(alpha = 0.22f), RoundedCornerShape(10.dp)),
+                    .border(1.dp, iconTint.copy(alpha = 0.22f), Radius.smShape),
                 contentAlignment = Alignment.Center,
             ) {
                 RuntimeIcon(icon, Modifier.size(18.dp), tint = iconTint)
@@ -270,7 +272,7 @@ private fun SettingsCategoryCard(
 
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.xs),
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -294,13 +296,13 @@ private fun SettingsCategoryCard(
 
                 Surface(
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    shape = RoundedCornerShape(5.dp),
+                    shape = Radius.xsShape,
                 ) {
                     Text(
                         text = badge,
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Medium),
                         color = iconTint,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.5.dp),
+                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                     )
                 }
             }
@@ -341,15 +343,15 @@ fun AgentEcoSettingsScreen(
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.lg),
         ) {
             item {
                 Text(
                     text = "模型档案与提供商",
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+                    modifier = Modifier.padding(start = Spacing.xs, bottom = Spacing.xs),
                 )
                 SettingsGroup {
                     SettingsRow(
@@ -389,7 +391,7 @@ fun AgentEcoSettingsScreen(
                     text = "工具与插件生态",
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+                    modifier = Modifier.padding(start = Spacing.xs, bottom = Spacing.xs),
                 )
                 SettingsGroup {
                     SettingsRow(
@@ -464,7 +466,7 @@ fun LinuxEnvironmentSettingsScreen(
         RuntimeAlertDialog(
             onDismissRequest = { privilegeResultMessage = null },
             title = {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     RuntimeIcon(RuntimeIconName.Alert, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.error)
                     Text("运行模式授权未通过")
                 }
@@ -496,15 +498,15 @@ fun LinuxEnvironmentSettingsScreen(
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.lg),
         ) {
             item {
                 Text(
                     text = "容器系统与沙箱管理",
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+                    modifier = Modifier.padding(start = Spacing.xs, bottom = Spacing.xs),
                 )
                 SettingsGroup {
                     SettingsRow(
@@ -576,7 +578,7 @@ fun LinuxEnvironmentSettingsScreen(
                     text = "系统底层特权",
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+                    modifier = Modifier.padding(start = Spacing.xs, bottom = Spacing.xs),
                 )
                 SettingsGroup {
                     SettingsRow(
@@ -681,8 +683,8 @@ fun EnvironmentVariableSettingsScreen(
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             item {
                 SettingsGroup {
@@ -699,11 +701,11 @@ fun EnvironmentVariableSettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.72f),
                     borderColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.35f),
-                    contentPadding = PaddingValues(14.dp),
+                    contentPadding = PaddingValues(Spacing.md),
                 ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md), verticalAlignment = Alignment.Top) {
                         RuntimeIcon(RuntimeIconName.Alert, tint = MaterialTheme.colorScheme.tertiary)
-                        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                             Text(
                                 "警告 · 修改环境变量可能导致运行异常",
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
@@ -730,7 +732,7 @@ fun EnvironmentVariableSettingsScreen(
                     RuntimeCard(modifier = Modifier.fillMaxWidth()) {
                         Text(
                             message,
-                            modifier = Modifier.padding(16.dp),
+                            modifier = Modifier.padding(Spacing.lg),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.error,
                         )
@@ -746,19 +748,19 @@ fun EnvironmentVariableSettingsScreen(
             }
             if (loading && entries.isEmpty()) {
                 item {
-                    Row(Modifier.fillMaxWidth().padding(24.dp), horizontalArrangement = Arrangement.Center) {
+                    Row(Modifier.fillMaxWidth().padding(Spacing.xl), horizontalArrangement = Arrangement.Center) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                     }
                 }
             } else if (entries.isEmpty()) {
-                item { RuntimeCard(modifier = Modifier.fillMaxWidth()) { Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) { Text("暂无用户变量", style = MaterialTheme.typography.titleMedium); Text("点击右上角 + 添加", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } } }
+                item { RuntimeCard(modifier = Modifier.fillMaxWidth()) { Column(Modifier.padding(Spacing.xl), horizontalAlignment = Alignment.CenterHorizontally) { Text("暂无用户变量", style = MaterialTheme.typography.titleMedium); Text("点击右上角 + 添加", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } } }
             } else {
                 items(entries, key = { it.id }) { entry ->
                     RuntimeCard(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = { openEnvironmentEditor(entry, entry.key, values[entry.key].orEmpty()) },
                     ) {
-                        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().padding(Spacing.lg), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(entry.key, style = MaterialTheme.typography.titleMedium, fontFamily = FontFamily.Monospace)
                                 if (entry.note.isNotBlank()) Text(entry.note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -784,14 +786,14 @@ fun EnvironmentVariableSettingsScreen(
             }
             if (loading && effectiveEntries.isEmpty()) {
                 item {
-                    Row(Modifier.fillMaxWidth().padding(24.dp), horizontalArrangement = Arrangement.Center) {
+                    Row(Modifier.fillMaxWidth().padding(Spacing.xl), horizontalArrangement = Arrangement.Center) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                     }
                 }
             } else if (effectiveEntries.isEmpty()) {
                 item {
                     RuntimeCard(modifier = Modifier.fillMaxWidth()) {
-                        Text("暂无可读取的运行时环境", modifier = Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("暂无可读取的运行时环境", modifier = Modifier.padding(Spacing.xl), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             } else {
@@ -836,8 +838,8 @@ private fun EnvironmentVariableEditor(
         onDismissRequest = onDismiss,
         title = { Text(if (entry != null) "编辑环境变量" else if (initialKey.isNotBlank()) "配置环境变量" else "添加环境变量") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), verticalAlignment = Alignment.Top) {
                     RuntimeIcon(RuntimeIconName.Alert, Modifier.size(18.dp), MaterialTheme.colorScheme.tertiary)
                     Text(
                         if (entry == null && initialKey.isNotBlank()) {
@@ -917,15 +919,15 @@ fun SystemDevSettingsScreen(
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.lg),
         ) {
             item {
                 Text(
                     text = "进程保活与唤醒",
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+                    modifier = Modifier.padding(start = Spacing.xs, bottom = Spacing.xs),
                 )
                 SettingsGroup {
                     SettingsRow(
@@ -982,7 +984,7 @@ fun SystemDevSettingsScreen(
                     text = "Android 系统调试与日志",
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+                    modifier = Modifier.padding(start = Spacing.xs, bottom = Spacing.xs),
                 )
                 SettingsGroup {
                     SettingsRow(
@@ -1000,7 +1002,7 @@ fun SystemDevSettingsScreen(
                     text = "数据与备份",
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+                    modifier = Modifier.padding(start = Spacing.xs, bottom = Spacing.xs),
                 )
                 SettingsGroup {
                     SettingsRow(
@@ -1017,7 +1019,7 @@ fun SystemDevSettingsScreen(
                     text = "天衍自定义迭代与共建",
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+                    modifier = Modifier.padding(start = Spacing.xs, bottom = Spacing.xs),
                 )
                 SettingsGroup {
                     SettingsRow(
@@ -1034,7 +1036,7 @@ fun SystemDevSettingsScreen(
                     text = "开发者调试与控制台",
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+                    modifier = Modifier.padding(start = Spacing.xs, bottom = Spacing.xs),
                 )
                 SettingsGroup {
                     ToggleRow(
@@ -1074,7 +1076,7 @@ fun SystemDevSettingsScreen(
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = if (qemuCompatibilityReady) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+                        modifier = Modifier.padding(start = Spacing.lg, end = Spacing.lg, bottom = Spacing.md),
                     )
                 }
             }
@@ -1093,7 +1095,7 @@ private fun ExecutionModeDialog(
     RuntimeAlertDialog(
         onDismissRequest = { if (!switching) onDismiss() },
         title = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
                 RuntimeIcon(RuntimeIconName.Shield, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
                 Text("选择系统运行模式", fontWeight = FontWeight.Bold)
             }
@@ -1101,7 +1103,7 @@ private fun ExecutionModeDialog(
         text = {
             Column(
                 modifier = Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
                 Text(
                     "切换特权模式将自动发起授权检测；授权成功后即刻释放对应的高级系统与硬件能力。",
@@ -1110,7 +1112,7 @@ private fun ExecutionModeDialog(
                 )
                 if (switching) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.md),
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -1145,15 +1147,15 @@ private fun ExecutionModeOptionItem(
     onClick: () -> Unit,
 ) {
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = Radius.smShape,
         color = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f) else MaterialTheme.colorScheme.surfaceContainerHigh,
         border = if (selected) androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(Radius.smShape)
             .clickable(enabled = enabled, onClick = onClick),
     ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(modifier = Modifier.padding(Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = mode.title,
@@ -1163,14 +1165,14 @@ private fun ExecutionModeOptionItem(
                 )
                 if (selected) {
                     Surface(
-                        shape = RoundedCornerShape(6.dp),
+                        shape = Radius.xsShape,
                         color = MaterialTheme.colorScheme.primary,
                     ) {
                         Text(
                             "当前激活",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                         )
                     }
                 }
@@ -1202,7 +1204,7 @@ private fun BatteryOptimizationDialog(
     RuntimeAlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
                 RuntimeIcon(RuntimeIconName.Shield, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
                 Text("电池优化与后台运行", fontWeight = FontWeight.Bold)
             }
@@ -1210,11 +1212,11 @@ private fun BatteryOptimizationDialog(
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     Surface(
-                        shape = RoundedCornerShape(6.dp),
+                        shape = Radius.xsShape,
                         color = if (exempted) {
                             MaterialTheme.colorScheme.primaryContainer
                         } else {
@@ -1229,7 +1231,7 @@ private fun BatteryOptimizationDialog(
                             } else {
                                 MaterialTheme.colorScheme.onErrorContainer
                             },
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                         )
                     }
                 }
@@ -1253,7 +1255,7 @@ private fun BatteryOptimizationDialog(
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp),
+                    shape = Radius.smShape,
                 ) {
                     Text("申请豁免电池优化")
                 }
@@ -1271,7 +1273,7 @@ private fun BatteryOptimizationDialog(
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp),
+                    shape = Radius.smShape,
                 ) {
                     Text("打开应用详情（自启动/后台运行）")
                 }
@@ -1317,7 +1319,7 @@ private fun PhantomProcessLimitDialog(
     RuntimeAlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
                 RuntimeIcon(RuntimeIconName.Speed, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
                 Text("Android 12 子进程限制", fontWeight = FontWeight.Bold)
             }
@@ -1325,19 +1327,19 @@ private fun PhantomProcessLimitDialog(
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Surface(shape = RoundedCornerShape(6.dp), color = statusContainer) {
+                    Surface(shape = Radius.xsShape, color = statusContainer) {
                         Text(
                             statusText,
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                             color = statusContent,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                         )
                     }
                     IconButton(onClick = onRefresh, enabled = !busy) {
@@ -1354,12 +1356,12 @@ private fun PhantomProcessLimitDialog(
                 if (state == PhantomProcessLimitState.REMOVED || state == PhantomProcessLimitState.ACTIVE) {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = Radius.smShape,
                         color = MaterialTheme.colorScheme.surfaceContainerHigh,
                     ) {
                         Column(
-                            modifier = Modifier.padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(5.dp),
+                            modifier = Modifier.padding(Spacing.md),
+                            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             Text(
                                 "最大幽灵进程数：${status.maxPhantomProcesses ?: "系统默认（通常为 32）"}",
@@ -1383,11 +1385,11 @@ private fun PhantomProcessLimitDialog(
                     onClick = onRemove,
                     enabled = !busy && state != PhantomProcessLimitState.REMOVED && state != PhantomProcessLimitState.UNSUPPORTED,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp),
+                    shape = Radius.smShape,
                 ) {
                     if (busy) {
                         CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(Spacing.sm))
                         Text("正在处理")
                     } else {
                         Text("使用 Shizuku / Root 一键解除")
@@ -1401,10 +1403,10 @@ private fun PhantomProcessLimitDialog(
                 )
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp),
+                    shape = Radius.smShape,
                     color = MaterialTheme.colorScheme.surfaceContainerHighest,
                 ) {
-                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(modifier = Modifier.padding(Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         Text(
                             adbCommand,
                             style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
@@ -1417,10 +1419,10 @@ private fun PhantomProcessLimitDialog(
                                 Toast.makeText(context, "命令已复制", Toast.LENGTH_SHORT).show()
                             },
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(8.dp),
+                            shape = Radius.xsShape,
                         ) {
                             RuntimeIcon(RuntimeIconName.Copy, Modifier.size(15.dp))
-                            Spacer(Modifier.width(7.dp))
+                            Spacer(Modifier.width(Spacing.sm))
                             Text("复制命令")
                         }
                     }
@@ -1475,20 +1477,20 @@ internal fun SettingsRow(
         rowModifier
             .fillMaxWidth()
             .heightIn(min = 52.dp)
-            .padding(horizontal = 14.dp, vertical = 7.dp),
+            .padding(horizontal = Spacing.md, vertical = Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         Box(
             modifier = Modifier
                 .size(30.dp)
-                .clip(RoundedCornerShape(7.dp))
+                .clip(Radius.xsShape)
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
             contentAlignment = Alignment.Center,
         ) {
             RuntimeIcon(icon, Modifier.size(15.dp), MaterialTheme.colorScheme.primary)
         }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
             Text(
                 title,
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -1506,12 +1508,12 @@ internal fun SettingsRow(
         }
         value?.let {
             Surface(
-                shape = RoundedCornerShape(5.dp),
+                shape = Radius.xsShape,
                 color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
             ) {
                 Text(
                     it,
-                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 1.5.dp),
+                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.SemiBold,
@@ -1543,20 +1545,20 @@ internal fun ToggleRow(
         Modifier
             .fillMaxWidth()
             .heightIn(min = 52.dp)
-            .padding(horizontal = 14.dp, vertical = 6.dp),
+            .padding(horizontal = Spacing.md, vertical = Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         Box(
             modifier = Modifier
                 .size(30.dp)
-                .clip(RoundedCornerShape(7.dp))
+                .clip(Radius.xsShape)
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
             contentAlignment = Alignment.Center,
         ) {
             RuntimeIcon(icon, Modifier.size(15.dp), MaterialTheme.colorScheme.primary)
         }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
             Text(title, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface)
             Text(subtitle, style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -1579,7 +1581,7 @@ fun WebChatBridgeDialog(
     RuntimeAlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 RuntimeIcon(RuntimeIconName.Globe, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
                 Text("天衍智枢 Web 协作台")
             }
@@ -1587,7 +1589,7 @@ fun WebChatBridgeDialog(
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
                 Text(
                     text = "在同一 Wi-Fi / 局域网下，通过电脑浏览器连接天衍智枢，同步处理 Agent 任务、对话与 Linux 工作区文件。",
@@ -1597,7 +1599,7 @@ fun WebChatBridgeDialog(
                 RuntimeCard(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(Modifier.padding(Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         Row(
                             Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -1607,7 +1609,7 @@ fun WebChatBridgeDialog(
                                 text = "协作服务状态",
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                             )
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                                 if (toggling) {
                                     CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                                 }
@@ -1622,7 +1624,7 @@ fun WebChatBridgeDialog(
                         if (status.isRunning) {
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                 Text("浏览器访问地址", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Row(
                                     Modifier.fillMaxWidth(),
@@ -1644,7 +1646,7 @@ fun WebChatBridgeDialog(
                                 }
                             }
 
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                 Text("安全配对码 (PIN)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Row(
                                     Modifier.fillMaxWidth(),
@@ -1673,10 +1675,10 @@ fun WebChatBridgeDialog(
                                     clipboard.setPrimaryClip(ClipData.newPlainText("天衍智枢直连地址", directUrl))
                                     Toast.makeText(context, "已复制免密直达链接，在电脑浏览器打开即可！", Toast.LENGTH_SHORT).show()
                                 },
-                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth().padding(top = Spacing.xs),
+                                shape = Radius.smShape,
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                                     RuntimeIcon(RuntimeIconName.Copy, Modifier.size(16.dp))
                                     Text("一键复制免密直达链接 (免输PIN)")
                                 }

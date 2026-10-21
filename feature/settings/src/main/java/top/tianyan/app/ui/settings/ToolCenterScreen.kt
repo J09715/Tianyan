@@ -1,6 +1,8 @@
 package top.tianyan.app.ui.settings
 
 import top.tianyan.app.ui.components.RuntimeAlertDialog
+import top.tianyan.app.ui.theme.Radius
+import top.tianyan.app.ui.theme.Spacing
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -195,8 +197,8 @@ fun ToolCenterScreen(
             LazyRow(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 items(categories, key = { (catId, _) -> catId }) { (catId, label) ->
                     val isSelected = selectedCategory == catId
@@ -214,8 +216,8 @@ fun ToolCenterScreen(
 
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
+                contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.sm),
+                verticalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
                 if (operationError != null) {
                     item(key = "tool_center_operation_error") {
@@ -247,14 +249,14 @@ fun ToolCenterScreen(
                         RuntimeCard(
                             modifier = Modifier.fillMaxWidth(),
                             containerColor = containerColor,
-                            contentPadding = PaddingValues(14.dp),
+                            contentPadding = PaddingValues(Spacing.md),
                         ) {
                             Column(
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                                 ) {
                                     if (isImporting) {
                                         RuntimeCircularProgressIndicator(
@@ -269,7 +271,7 @@ fun ToolCenterScreen(
                                             tint = contentColor,
                                         )
                                     }
-                                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                         Text(
                                             text = when (state) {
                                                 is top.tianyan.app.core.tools.LocalPluginImportState.Reading -> "正在读取本地插件信息"
@@ -311,13 +313,13 @@ fun ToolCenterScreen(
                                 if (isImporting && state is top.tianyan.app.core.tools.LocalPluginImportState.Importing) {
                                     LinearProgressIndicator(
                                         progress = { state.progress ?: 0.03f },
-                                        modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
+                                        modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(percent = 50)),
                                         color = contentColor,
                                     )
                                 }
                                 if (state is top.tianyan.app.core.tools.LocalPluginImportState.Reading) {
                                     LinearProgressIndicator(
-                                        modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
+                                        modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(percent = 50)),
                                         color = contentColor,
                                     )
                                 }
@@ -333,12 +335,12 @@ fun ToolCenterScreen(
                             modifier = Modifier.fillMaxWidth(),
                             containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
                             borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
-                            contentPadding = PaddingValues(14.dp),
+                            contentPadding = PaddingValues(Spacing.md),
                         ) {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                                 ) {
                                     RuntimeCircularProgressIndicator(
                                         modifier = Modifier.size(18.dp),
@@ -361,13 +363,13 @@ fun ToolCenterScreen(
                                 }
                                 if (isInstallingComponents) {
                                     LinearProgressIndicator(
-                                        modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
+                                        modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(percent = 50)),
                                         color = MaterialTheme.colorScheme.primary,
                                     )
                                 }
                                 TextButton(
                                     onClick = { showBundleInstallLog = true },
-                                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                                    contentPadding = PaddingValues(horizontal = Spacing.xs, vertical = 0.dp),
                                 ) {
                                     Text("查看安装日志", style = MaterialTheme.typography.labelMedium)
                                 }
@@ -383,7 +385,7 @@ fun ToolCenterScreen(
                             text = "开发者全栈套件 (Dev Bundles)",
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(bottom = 2.dp),
+                            modifier = Modifier.padding(bottom = Spacing.xs),
                         )
                     }
 
@@ -397,15 +399,15 @@ fun ToolCenterScreen(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                             borderColor = if (isCoreReady) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
                             else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                            contentPadding = PaddingValues(14.dp),
+                            contentPadding = PaddingValues(Spacing.md),
                         ) {
                             Column(
-                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(Spacing.md),
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                                 ) {
                                     Box(
                                         modifier = Modifier
@@ -432,7 +434,7 @@ fun ToolCenterScreen(
 
                                     Column(
                                         modifier = Modifier.weight(1f),
-                                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                                        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
                                     ) {
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
@@ -447,9 +449,9 @@ fun ToolCenterScreen(
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis,
                                             )
-                                            Spacer(Modifier.width(6.dp))
+                                            Spacer(Modifier.width(Spacing.sm))
                                             Surface(
-                                                shape = RoundedCornerShape(4.dp),
+                                                shape = Radius.xsShape,
                                                 color = if (isCoreReady) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                                                 else MaterialTheme.colorScheme.surfaceContainerHighest,
                                                 modifier = Modifier.wrapContentWidth(),
@@ -458,7 +460,7 @@ fun ToolCenterScreen(
                                                     text = if (isCoreReady) "已就绪 ($installedCount/${bundle.components.size})" else "未装配 ($installedCount/${bundle.components.size})",
                                                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                                                     color = if (isCoreReady) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                                     maxLines = 1,
                                                 )
                                             }
@@ -477,20 +479,20 @@ fun ToolCenterScreen(
                                 @OptIn(ExperimentalLayoutApi::class)
                                 FlowRow(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                                 ) {
                                     bundle.components.forEach { comp ->
                                         val isInstalled = comp.id in installedComponentIds
                                         Surface(
-                                            shape = RoundedCornerShape(4.dp),
+                                            shape = Radius.xsShape,
                                             color = if (isInstalled) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
                                             else MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f),
                                         ) {
                                             Row(
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                                modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                                 verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                                             ) {
                                                 if (comp.isRequired) {
                                                     RuntimeIcon(RuntimeIconName.Shield, Modifier.size(10.dp), tint = MaterialTheme.colorScheme.primary)
@@ -512,10 +514,10 @@ fun ToolCenterScreen(
                                 ) {
                                     FilledTonalButton(
                                         onClick = { viewModel.openBundleSetup(bundle) },
-                                        shape = RoundedCornerShape(8.dp),
-                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                                        shape = Radius.xsShape,
+                                        contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
                                     ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                             RuntimeIcon(RuntimeIconName.Tune, Modifier.size(14.dp))
                                             Text(
                                                 text = if (isCoreReady) "组件管理与配置" else "装配套件",
@@ -533,12 +535,12 @@ fun ToolCenterScreen(
                 if (showTools && filteredTools.isNotEmpty()) {
                     if (showBundles) {
                         item {
-                            Spacer(Modifier.height(4.dp))
+                            Spacer(Modifier.height(Spacing.xs))
                             Text(
                                 text = "智能体生态与服务 (Agents & Services)",
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(bottom = 2.dp),
+                                modifier = Modifier.padding(bottom = Spacing.xs),
                             )
                         }
                     }
@@ -578,12 +580,12 @@ fun ToolCenterScreen(
                             modifier = Modifier.fillMaxWidth(),
                             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                             borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
-                            contentPadding = PaddingValues(24.dp),
+                            contentPadding = PaddingValues(Spacing.xl),
                         ) {
                             Column(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                             ) {
                                 RuntimeIcon(
                                     name = RuntimeIconName.Package,
@@ -615,14 +617,14 @@ fun ToolCenterScreen(
                 title = {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         RuntimeIcon(RuntimeIconName.Extension, Modifier.size(22.dp), MaterialTheme.colorScheme.primary)
                         Text("确认安装本地插件", fontWeight = FontWeight.Bold)
                     }
                 },
                 text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         Text(manifest.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text(manifest.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         InfoRow("版本", manifest.version, isCode = false)
@@ -657,15 +659,15 @@ fun ToolCenterScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = 200.dp, max = 360.dp),
-                        shape = RoundedCornerShape(8.dp),
+                        shape = Radius.xsShape,
                         color = MaterialTheme.colorScheme.surfaceContainerLowest,
                     ) {
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(10.dp)
+                                .padding(Spacing.sm)
                                 .verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
                         ) {
                             if (toolLogs.isEmpty()) {
                                 Text(
@@ -694,7 +696,7 @@ fun ToolCenterScreen(
                 },
                 confirmButton = {
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (hasErrors) {
@@ -704,14 +706,14 @@ fun ToolCenterScreen(
                                     viewModel.viewLogs(null)
                                     onStartAiHealing(toolId, toolName, fullLogs)
                                 },
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                shape = Radius.xsShape,
+                                contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs),
                             ) {
                                 RuntimeIcon(
                                     name = RuntimeIconName.Brain,
                                     modifier = Modifier.size(14.dp),
                                 )
-                                Spacer(Modifier.width(4.dp))
+                                Spacer(Modifier.width(Spacing.xs))
                                 Text("🧠 AI 自愈", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                             }
                         }
@@ -749,12 +751,12 @@ fun ToolCenterScreen(
                 text = {
                     Surface(
                         modifier = Modifier.fillMaxWidth().heightIn(min = 220.dp, max = 420.dp),
-                        shape = RoundedCornerShape(8.dp),
+                        shape = Radius.xsShape,
                         color = MaterialTheme.colorScheme.surfaceContainerLowest,
                     ) {
                         Column(
-                            modifier = Modifier.fillMaxSize().padding(10.dp).verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier.fillMaxSize().padding(Spacing.sm).verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
                         ) {
                             if (componentInstallLog.isEmpty()) {
                                 Text("安装日志正在接收...", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
@@ -776,7 +778,7 @@ fun ToolCenterScreen(
                     }
                 },
                 confirmButton = {
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                         TextButton(
                             onClick = {
                                 val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
@@ -815,7 +817,7 @@ fun ToolCenterScreen(
                 title = {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         RuntimeIcon(
                             name = when (bundle.iconName) {
@@ -839,7 +841,7 @@ fun ToolCenterScreen(
                             // The component list remains fully accessible through this scroll container.
                             .heightIn(max = 360.dp)
                             .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.md),
                     ) {
                         Text(
                             bundle.description,
@@ -850,15 +852,15 @@ fun ToolCenterScreen(
                         if (isInstallingComponents) {
                             Surface(
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(10.dp),
+                                shape = Radius.smShape,
                                 color = MaterialTheme.colorScheme.surfaceContainerHighest,
                             ) {
-                                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Column(modifier = Modifier.padding(Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                                         RuntimeCircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                                         Text(componentInstallProgress ?: "正在执行批量原子装配流水线...", style = MaterialTheme.typography.bodySmall, maxLines = 2)
                                     }
-                                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)))
+                                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(percent = 50)))
                                 }
                             }
                         }
@@ -872,7 +874,7 @@ fun ToolCenterScreen(
                                 "待装配组件 (${uninstalledComponents.size})：",
                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(top = 4.dp),
+                                modifier = Modifier.padding(top = Spacing.xs),
                             )
 
                             uninstalledComponents.forEach { comp ->
@@ -882,11 +884,11 @@ fun ToolCenterScreen(
                                 Surface(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clip(RoundedCornerShape(10.dp))
+                                        .clip(Radius.smShape)
                                         .clickable(enabled = !isInstallingComponents && !isUninstalledRequired) {
                                             viewModel.toggleComponent(comp)
                                         },
-                                    shape = RoundedCornerShape(10.dp),
+                                    shape = Radius.smShape,
                                     border = androidx.compose.foundation.BorderStroke(
                                         1.dp,
                                         if (isChecked) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
@@ -895,9 +897,9 @@ fun ToolCenterScreen(
                                     else MaterialTheme.colorScheme.surfaceContainerLow,
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(10.dp),
+                                        modifier = Modifier.padding(Spacing.sm),
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                                     ) {
                                         RuntimeCheckbox(
                                             checked = isChecked,
@@ -905,19 +907,19 @@ fun ToolCenterScreen(
                                             enabled = !isInstallingComponents && !isUninstalledRequired,
                                         )
 
-                                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                                                 Text(comp.name, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
                                                 if (isUninstalledRequired) {
                                                     Surface(
-                                                        shape = RoundedCornerShape(4.dp),
+                                                        shape = Radius.xsShape,
                                                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
                                                     ) {
                                                         Text(
                                                             "必选基座",
                                                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                                                             color = MaterialTheme.colorScheme.primary,
-                                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                                            modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                                                         )
                                                     }
                                                 }
@@ -935,20 +937,20 @@ fun ToolCenterScreen(
                                 "已装配就绪 (${installedComponentsList.size})：",
                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                 color = successStatusColor(),
-                                modifier = Modifier.padding(top = 6.dp),
+                                modifier = Modifier.padding(top = Spacing.sm),
                             )
 
                             installedComponentsList.forEach { comp ->
                                 Surface(
                                     modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(10.dp),
+                                    shape = Radius.smShape,
                                     border = androidx.compose.foundation.BorderStroke(1.dp, successStatusColor().copy(alpha = 0.25f)),
                                     color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.45f),
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(10.dp),
+                                        modifier = Modifier.padding(Spacing.sm),
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                                     ) {
                                         Box(
                                             modifier = Modifier
@@ -964,18 +966,18 @@ fun ToolCenterScreen(
                                             )
                                         }
 
-                                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                                                 Text(comp.name, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
                                                 Surface(
-                                                    shape = RoundedCornerShape(4.dp),
+                                                    shape = Radius.xsShape,
                                                     color = successStatusColor().copy(alpha = 0.15f),
                                                 ) {
                                                     Text(
                                                         "✓ 已就绪",
                                                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                                                         color = successStatusColor(),
-                                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                                        modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                                                     )
                                                 }
                                             }
@@ -1076,9 +1078,9 @@ private fun ToolBrandAvatar(
     Box(
         modifier = modifier
             .size(size)
-            .clip(RoundedCornerShape(13.dp))
+            .clip(Radius.smShape)
             .background(brandColor.copy(alpha = 0.12f))
-            .border(1.dp, brandColor.copy(alpha = 0.28f), RoundedCornerShape(13.dp)),
+            .border(1.dp, brandColor.copy(alpha = 0.28f), Radius.smShape),
         contentAlignment = Alignment.Center,
     ) {
         if (logoRes != null) {
@@ -1094,7 +1096,7 @@ private fun ToolBrandAvatar(
                     contentDescription = null,
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(5.dp),
+                        .padding(Spacing.xs),
                     contentScale = ContentScale.Fit,
                 )
             }
@@ -1140,10 +1142,10 @@ private fun ToolCard(
         modifier = Modifier.fillMaxWidth(),
         onClick = onOpenDetail,
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(Spacing.lg),
     ) {
         Column(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             // Header: Avatar + Title/Publisher + Status Badge
             Row(
@@ -1153,7 +1155,7 @@ private fun ToolCard(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                     modifier = Modifier.weight(1f),
                 ) {
                     ToolBrandAvatar(
@@ -1164,11 +1166,11 @@ private fun ToolCard(
 
                     Column(
                         modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(3.dp),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             Text(
                                 text = tool.name,
@@ -1185,13 +1187,13 @@ private fun ToolCard(
                             if (displayVersion.isNotBlank()) {
                                 Surface(
                                     color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                    shape = RoundedCornerShape(6.dp),
+                                    shape = Radius.xsShape,
                                 ) {
                                     Text(
                                         text = "v$displayVersion",
                                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                        modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                                         maxLines = 1,
                                         softWrap = false,
                                     )
@@ -1203,7 +1205,7 @@ private fun ToolCard(
                                 } else {
                                     MaterialTheme.colorScheme.secondaryContainer
                                 },
-                                shape = RoundedCornerShape(6.dp),
+                                shape = Radius.xsShape,
                             ) {
                                 Text(
                                     text = if (source == "LOCAL") "本地插件" else "在线插件",
@@ -1213,7 +1215,7 @@ private fun ToolCard(
                                     } else {
                                         MaterialTheme.colorScheme.onSecondaryContainer
                                     },
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                    modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                                     maxLines = 1,
                                     softWrap = false,
                                 )
@@ -1235,7 +1237,7 @@ private fun ToolCard(
                     }
                 }
 
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(Spacing.sm))
 
                 // Status Badge
                 StatusBadge(
@@ -1267,7 +1269,7 @@ private fun ToolCard(
 
             // Installing Progress Bar
             if (isInstalling && progress != null) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -1286,7 +1288,7 @@ private fun ToolCard(
                                 text = "${(p * 100).toInt()}%",
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(start = 8.dp),
+                                modifier = Modifier.padding(start = Spacing.sm),
                                 maxLines = 1,
                                 softWrap = false,
                             )
@@ -1297,7 +1299,7 @@ private fun ToolCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(6.dp)
-                            .clip(RoundedCornerShape(3.dp)),
+                            .clip(Radius.xsShape),
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
@@ -1318,20 +1320,20 @@ private fun ToolCard(
             ) {
                 // Secondary actions
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     FilledTonalButton(
                         onClick = onOpenDetail,
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        shape = Radius.xsShape,
+                        contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.xs),
                     ) {
                         Text("详情配置", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
                     }
 
                     TextButton(
                         onClick = onViewLogs,
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs),
                     ) {
                         Text("日志", style = MaterialTheme.typography.labelSmall)
                     }
@@ -1339,7 +1341,7 @@ private fun ToolCard(
                     if (isInstalled) {
                         TextButton(
                             onClick = onUninstall,
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                            contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs),
                         ) {
                             Text("卸载", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
                         }
@@ -1348,53 +1350,53 @@ private fun ToolCard(
 
                 // Primary actions (Install / Retry / Update)
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (isUpdateAvailable) {
                         Button(
                             onClick = onUpdate,
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            shape = Radius.xsShape,
+                            contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
                         ) {
                             Text("更新", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelMedium)
                         }
                     } else if (isFailed) {
                         Button(
                             onClick = onStartAiHealing,
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                            shape = Radius.xsShape,
+                            contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.sm),
                         ) {
                             RuntimeIcon(
                                 name = RuntimeIconName.Brain,
                                 modifier = Modifier.size(15.dp),
                             )
-                            Spacer(Modifier.width(4.dp))
+                            Spacer(Modifier.width(Spacing.xs))
                             Text("AI 自愈", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
                         }
                         FilledTonalButton(
                             onClick = onInstall,
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                            shape = Radius.xsShape,
+                            contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.sm),
                         ) {
                             RuntimeIcon(
                                 name = RuntimeIconName.Download,
                                 modifier = Modifier.size(14.dp),
                             )
-                            Spacer(Modifier.width(4.dp))
+                            Spacer(Modifier.width(Spacing.xs))
                             Text("重试", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.labelMedium)
                         }
                     } else if (!isInstalled && !isInstalling) {
                         Button(
                             onClick = onInstall,
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                            shape = Radius.xsShape,
+                            contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
                         ) {
                             RuntimeIcon(
                                 name = RuntimeIconName.Download,
                                 modifier = Modifier.size(15.dp),
                             )
-                            Spacer(Modifier.width(4.dp))
+                            Spacer(Modifier.width(Spacing.xs))
                             Text("安装", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelMedium)
                         }
                     }
