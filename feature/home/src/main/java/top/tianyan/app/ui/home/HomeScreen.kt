@@ -1,7 +1,6 @@
 package top.tianyan.app.ui.home
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -29,7 +28,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import top.tianyan.app.ui.components.RuntimeButton as Button
 import androidx.compose.material3.ButtonDefaults
@@ -55,7 +53,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -99,20 +96,26 @@ import top.tianyan.app.ui.components.RuntimeButton
 import top.tianyan.app.ui.components.distroIconFor
 import top.tianyan.app.ui.components.StatusBadge
 import top.tianyan.app.ui.components.isLiquidGlassThemeActive
+import top.tianyan.app.ui.theme.Motion
+import top.tianyan.app.ui.theme.Radius
+import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.TianyanTheme
 
 /** 自动体检防抖间隔：ON_RESUME 触发时距上次不足该间隔则跳过。 */
 private const val DOCTOR_CHECK_MIN_INTERVAL_MS = 30_000L
 
 /**
- * 主题感知的健康绿 / 警告橙：替代硬编码深色，暗色主题下自动换用高亮度变体保证对比。
+ * 主题感知的健康绿 / 警告橙。
+ *
+ * 原先这里按背景亮度手选两个字面色值（0xFF81C784 / 0xFF2E7D32），但那套值是按
+ * Material 默认配色挑的，与天衍自己的绿/琥珀对不上，同一屏里出现两种绿。
+ * 现在统一取语义色令牌：深浅主题各一套由 SemanticColors 给出，对比度已在那边保证。
  */
 @Composable
-private fun healthyStatusColor(): Color =
-    if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color(0xFF81C784) else Color(0xFF2E7D32)
+private fun healthyStatusColor(): Color = TianyanTheme.colors.success
 
 @Composable
-private fun warningStatusColor(): Color =
-    if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color(0xFFFFB74D) else Color(0xFFE65100)
+private fun warningStatusColor(): Color = TianyanTheme.colors.warning
 
 /**
  * 天衍 · 运行仪表盘 (Tianyan Linux Runtime Dashboard)
@@ -254,9 +257,9 @@ fun HomeScreen(
                 .liquidGlassContent()
                 .padding(top = innerPadding.calculateTopPadding())
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-                .padding(bottom = if (isLiquidGlassTheme) 104.dp else innerPadding.calculateBottomPadding() + 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(horizontal = Spacing.lg, vertical = Spacing.md)
+                .padding(bottom = if (isLiquidGlassTheme) 104.dp else innerPadding.calculateBottomPadding() + Spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(Spacing.lg),
         ) {
             // 1. 运行时引擎主状态卡片 (Status Banner)
             RuntimeEngineStatusCard(
@@ -300,7 +303,7 @@ fun HomeScreen(
                     // 而指标加载完成后文本变短又会自己对齐——用户看到的是先歪一下再正。
                     // IntrinsicSize.Min + fillMaxHeight 让两卡取同一高度，从首帧就对称。
                     .height(IntrinsicSize.Min),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
                 // 内存指标
                 ResourceMetricCard(
@@ -363,7 +366,7 @@ fun HomeScreen(
             // 5. 运行环境与规格详情
             SystemSpecsCard(metrics = metrics, modeStatus = modeStatus)
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(Spacing.lg))
         }
     }
 }
@@ -397,10 +400,10 @@ private fun EnvironmentDoctorCard(
         modifier = Modifier.fillMaxWidth(),
         onClick = { isCardExpanded = !isCardExpanded },
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+        contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.md),
     ) {
         Column(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             // Header
             Row(
@@ -411,12 +414,12 @@ private fun EnvironmentDoctorCard(
                 Row(
                     modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                 ) {
                     Box(
                         modifier = Modifier
                             .size(36.dp)
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(Radius.smShape)
                             .background(
                                 if (report?.isAllHealthy == true) healthyStatusColor().copy(alpha = 0.15f)
                                 else MaterialTheme.colorScheme.primaryContainer,
@@ -454,7 +457,7 @@ private fun EnvironmentDoctorCard(
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                 ) {
                     if (isChecking) {
                         RuntimeCircularProgressIndicator(
@@ -492,16 +495,16 @@ private fun EnvironmentDoctorCard(
                 enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
                 exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut(),
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
                     // 修复中状态展示
                     if (isRepairing && repairProgress != null) {
                         RuntimeCard(
                             modifier = Modifier.fillMaxWidth(),
                             containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                            contentPadding = PaddingValues(14.dp),
+                            contentPadding = PaddingValues(Spacing.md),
                         ) {
                             Column(
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -520,7 +523,7 @@ private fun EnvironmentDoctorCard(
                                         text = "${(repairProgress.progress * 100).toInt()}%",
                                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                                         color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.padding(start = 8.dp),
+                                        modifier = Modifier.padding(start = Spacing.sm),
                                         maxLines = 1,
                                         softWrap = false,
                                     )
@@ -531,7 +534,7 @@ private fun EnvironmentDoctorCard(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(6.dp)
-                                        .clip(RoundedCornerShape(3.dp)),
+                                        .clip(Radius.xsShape),
                                     color = MaterialTheme.colorScheme.primary,
                                 )
 
@@ -542,7 +545,7 @@ private fun EnvironmentDoctorCard(
                                 ) {
                                     TextButton(
                                         onClick = { showLogs = !showLogs },
-                                        contentPadding = PaddingValues(horizontal = 4.dp),
+                                        contentPadding = PaddingValues(horizontal = Spacing.xs),
                                     ) {
                                         Text(
                                             text = if (showLogs) stringResource(R.string.home_hide_logs) else stringResource(R.string.home_view_live_logs, repairProgress.logs.size),
@@ -552,7 +555,7 @@ private fun EnvironmentDoctorCard(
 
                                     TextButton(
                                         onClick = onCancelRepair,
-                                        contentPadding = PaddingValues(horizontal = 4.dp),
+                                        contentPadding = PaddingValues(horizontal = Spacing.xs),
                                     ) {
                                         Text(stringResource(R.string.home_cancel_repair), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
                                     }
@@ -563,13 +566,13 @@ private fun EnvironmentDoctorCard(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .heightIn(max = 140.dp),
-                                        shape = RoundedCornerShape(8.dp),
+                                        shape = Radius.xsShape,
                                         color = MaterialTheme.colorScheme.surfaceContainerLowest,
                                     ) {
                                         Column(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .padding(8.dp)
+                                                .padding(Spacing.sm)
                                                 .verticalScroll(rememberScrollState()),
                                         ) {
                                             repairProgress.logs.takeLast(20).forEach { logLine ->
@@ -591,7 +594,7 @@ private fun EnvironmentDoctorCard(
 
                     // 体检报告列表展示
                     if (report != null && !isRepairing) {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                             val displayedItems = if (expandedDetails || report.needsFix) report.items else report.items.take(3)
                             displayedItems.forEach { item ->
                                 DoctorItemRow(
@@ -631,13 +634,13 @@ private fun EnvironmentDoctorCard(
                             RuntimeButton(
                                 onClick = onStartAutoRepair,
                                 modifier = Modifier.fillMaxWidth(),
-                                contentPadding = PaddingValues(vertical = 12.dp),
+                                contentPadding = PaddingValues(vertical = Spacing.md),
                             ) {
                                 RuntimeIcon(
                                     name = RuntimeIconName.Play,
                                     modifier = Modifier.size(18.dp),
                                 )
-                                Spacer(Modifier.width(8.dp))
+                                Spacer(Modifier.width(Spacing.sm))
                                 Text(
                                     text = stringResource(R.string.home_repair),
                                     fontWeight = FontWeight.SemiBold,
@@ -647,11 +650,11 @@ private fun EnvironmentDoctorCard(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(10.dp))
+                                    .clip(Radius.smShape)
                                     .background(healthyStatusColor().copy(alpha = 0.1f))
-                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    .padding(horizontal = Spacing.md, vertical = Spacing.sm),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                             ) {
                                 RuntimeIcon(
                                     name = RuntimeIconName.Check,
@@ -705,19 +708,19 @@ private fun DoctorItemRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .clip(Radius.smShape)
             .background(MaterialTheme.colorScheme.surfaceContainerLow)
             .then(
                 if (isAllFilesIssue) Modifier.clickable { onRequestAllFilesAccess() }
                 else Modifier
             )
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = Spacing.md, vertical = Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
             modifier = Modifier.weight(1f),
         ) {
             Box(
@@ -734,10 +737,10 @@ private fun DoctorItemRow(
                 )
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.weight(1f)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs), modifier = Modifier.weight(1f)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     Text(
                         text = item.title,
@@ -769,10 +772,10 @@ private fun DoctorItemRow(
         }
 
         if (isAllFilesIssue) {
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(Spacing.sm))
             FilledTonalButton(
                 onClick = onRequestAllFilesAccess,
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs),
                 modifier = Modifier.height(30.dp),
             ) {
                 Text(stringResource(R.string.home_grant_access), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
@@ -795,19 +798,19 @@ private fun AndroidEnvAcquisitionCard(
         modifier = Modifier.fillMaxWidth(),
         containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
         borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
-        contentPadding = PaddingValues(14.dp),
+        contentPadding = PaddingValues(Spacing.md),
     ) {
         Column(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
                     modifier = Modifier
                         .size(36.dp)
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(Radius.smShape)
                         .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -816,7 +819,7 @@ private fun AndroidEnvAcquisitionCard(
                         modifier = Modifier.size(22.dp),
                     )
                 }
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     Text(
                         text = stringResource(R.string.home_android_env_title),
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
@@ -833,10 +836,10 @@ private fun AndroidEnvAcquisitionCard(
             RuntimeButton(
                 onClick = onOpenToolCenter,
                 modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
             ) {
                 RuntimeIcon(RuntimeIconName.Extension, Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(Spacing.sm))
                 Text(
                     text = stringResource(R.string.home_android_env_tool_center),
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -888,10 +891,10 @@ private fun RuntimeEngineStatusCard(
         modifier = Modifier.fillMaxWidth(),
         containerColor = statusContainerColor,
         borderColor = statusColor.copy(alpha = if (ready || error || initializing != null) 0.34f else 0f),
-        contentPadding = PaddingValues(18.dp),
+        contentPadding = PaddingValues(Spacing.lg),
     ) {
         Column(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -900,7 +903,7 @@ private fun RuntimeEngineStatusCard(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                     modifier = Modifier.weight(1f),
                 ) {
                     PulsingStatusDot(color = statusColor, isPulsing = ready || initializing != null)
@@ -927,7 +930,7 @@ private fun RuntimeEngineStatusCard(
                 Box(
                     modifier = Modifier
                         .size(40.dp)
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(Radius.smShape)
                         .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -948,15 +951,15 @@ private fun RuntimeEngineStatusCard(
             if (ready && installedDistros.size > 1) {
                 androidx.compose.foundation.layout.FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     Text(
                         text = stringResource(R.string.home_switch_system),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
-                            .padding(end = 2.dp)
+                            .padding(end = Spacing.xs)
                             .align(androidx.compose.ui.Alignment.CenterVertically),
                     )
                     if (switchingDistro) {
@@ -971,7 +974,7 @@ private fun RuntimeEngineStatusCard(
                     installedDistros.forEach { d ->
                         val isSelected = d.id.equals(activeDistroId, ignoreCase = true)
                         Surface(
-                            shape = RoundedCornerShape(6.dp),
+                            shape = Radius.xsShape,
                             color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
                             border = BorderStroke(
                                 1.dp,
@@ -983,8 +986,8 @@ private fun RuntimeEngineStatusCard(
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                                modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                             ) {
                                 RuntimeIcon(distroIconFor(d.id), Modifier.size(13.dp))
                                 Text(
@@ -999,13 +1002,13 @@ private fun RuntimeEngineStatusCard(
             }
 
             if (initializing != null) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     RuntimeLinearProgressIndicator(
                         progress = { initializing.progress },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(6.dp)
-                            .clip(RoundedCornerShape(3.dp)),
+                            .clip(Radius.xsShape),
                         color = MaterialTheme.colorScheme.primary,
                     )
                     Row(
@@ -1023,7 +1026,7 @@ private fun RuntimeEngineStatusCard(
                         )
                         TextButton(
                             onClick = onCancel,
-                            modifier = Modifier.padding(start = 8.dp),
+                            modifier = Modifier.padding(start = Spacing.sm),
                         ) {
                             Text(stringResource(R.string.home_cancel), style = MaterialTheme.typography.labelSmall)
                         }
@@ -1048,32 +1051,32 @@ private fun RuntimeEngineStatusCard(
             // 快捷控制操作区
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
                 if (ready) {
                     RuntimeButton(
                         onClick = onOpenTerminal,
                         modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(vertical = 10.dp),
+                        contentPadding = PaddingValues(vertical = Spacing.sm),
                     ) {
                         RuntimeIcon(
                             name = RuntimeIconName.Terminal,
                             modifier = Modifier.size(18.dp),
                         )
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(Spacing.sm))
                         Text(stringResource(R.string.home_open_console), fontWeight = FontWeight.SemiBold)
                     }
                 } else if (initializing == null) {
                     RuntimeButton(
                         onClick = onInitialize,
                         modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(vertical = 10.dp),
+                        contentPadding = PaddingValues(vertical = Spacing.sm),
                     ) {
                         RuntimeIcon(
                             name = RuntimeIconName.Play,
                             modifier = Modifier.size(18.dp),
                         )
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(Spacing.sm))
                         Text(stringResource(if (error) R.string.home_retry_initialization else R.string.home_initialize_now), fontWeight = FontWeight.SemiBold)
                     }
                 }
@@ -1104,23 +1107,23 @@ private fun ExecutionModeBadge(
     }
 
     Surface(
-        shape = RoundedCornerShape(10.dp),
+        shape = Radius.smShape,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(1.dp, statusColor.copy(alpha = 0.35f)),
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .clip(Radius.smShape)
             .clickable(onClick = onClick),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             Box(
                 modifier = Modifier
                     .size(28.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(Radius.xsShape)
                     .background(statusColor.copy(alpha = 0.14f)),
                 contentAlignment = Alignment.Center,
             ) {
@@ -1194,10 +1197,10 @@ private fun ResourceMetricCard(
     RuntimeCard(
         modifier = modifier,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        contentPadding = PaddingValues(14.dp),
+        contentPadding = PaddingValues(Spacing.md),
     ) {
         Column(
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1230,7 +1233,7 @@ private fun ResourceMetricCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp)),
+                    .clip(Radius.xsShape),
                 color = effectiveAccent,
                 trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
             )
@@ -1283,7 +1286,7 @@ private fun ActiveTasksStatusCard(
     RuntimeCard(
         modifier = Modifier.fillMaxWidth(),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(Spacing.lg),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1292,13 +1295,13 @@ private fun ActiveTasksStatusCard(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                 modifier = Modifier.weight(1f),
             ) {
                 Box(
                     modifier = Modifier
                         .size(42.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(Radius.smShape)
                         .background(MaterialTheme.colorScheme.tertiaryContainer),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -1309,7 +1312,7 @@ private fun ActiveTasksStatusCard(
                     )
                 }
 
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     Text(
                         text = stringResource(R.string.home_active_processes, metrics.activeProcessCount),
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
@@ -1323,12 +1326,12 @@ private fun ActiveTasksStatusCard(
                 }
             }
 
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(Spacing.sm))
 
             RuntimeButton(
                 onClick = onOpenTerminal,
                 tonal = true,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
             ) {
                 Text(stringResource(R.string.home_view), style = MaterialTheme.typography.labelSmall)
             }
@@ -1344,10 +1347,10 @@ private fun SystemSpecsCard(metrics: SystemResourceMetrics, modeStatus: Executio
     RuntimeCard(
         modifier = Modifier.fillMaxWidth(),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(Spacing.lg),
     ) {
         Column(
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             Text(
                 text = stringResource(R.string.home_environment_details),
@@ -1383,7 +1386,7 @@ private fun SpecRow(label: String, value: String) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(Spacing.sm))
         Text(
             text = value,
             style = MaterialTheme.typography.bodySmall.copy(
@@ -1411,7 +1414,9 @@ private fun PulsingStatusDot(color: Color, isPulsing: Boolean) {
             initialValue = 0.4f,
             targetValue = 1f,
             animationSpec = infiniteRepeatable(
-                animation = tween(1000, easing = FastOutSlowInEasing),
+                // 呼吸灯周期 1000ms：慢到不抢眼，快到能被余光捕捉到「在动」。
+                // 用 Motion.medium 的缓动曲线——FastOutSlowInEasing 已被令牌收口。
+                animation = tween(1000, easing = Motion.standardEasing),
                 repeatMode = RepeatMode.Reverse,
             ),
             label = "pulse_alpha",
@@ -1451,10 +1456,10 @@ private fun WebChatDashboardCard(
         modifier = Modifier.fillMaxWidth(),
         containerColor = if (status.isRunning) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.40f) else MaterialTheme.colorScheme.surfaceContainer,
         borderColor = if (status.isRunning) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f) else Color.Transparent,
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(Spacing.lg),
     ) {
         Column(
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1463,7 +1468,7 @@ private fun WebChatDashboardCard(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                     modifier = Modifier.weight(1f),
                 ) {
                     Box(
@@ -1503,7 +1508,7 @@ private fun WebChatDashboardCard(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
                 // 访问地址独立成行：统一 Monospace 等宽字体、颜色与大小
-                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     Text(
                         text = stringResource(R.string.home_webchat_url_label),
                         style = MaterialTheme.typography.labelSmall,
@@ -1522,7 +1527,7 @@ private fun WebChatDashboardCard(
                 }
 
                 // 配对码独立成行显示
-                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     Text(
                         text = stringResource(R.string.home_webchat_pin_label),
                         style = MaterialTheme.typography.labelSmall,
@@ -1546,10 +1551,10 @@ private fun WebChatDashboardCard(
                         Toast.makeText(context, context.getString(R.string.home_webchat_copied), Toast.LENGTH_SHORT).show()
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    contentPadding = PaddingValues(vertical = 10.dp),
+                    contentPadding = PaddingValues(vertical = Spacing.sm),
                 ) {
                     RuntimeIcon(RuntimeIconName.Copy, Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
+                    Spacer(Modifier.width(Spacing.sm))
                     Text(stringResource(R.string.home_webchat_copy), fontWeight = FontWeight.SemiBold)
                 }
 

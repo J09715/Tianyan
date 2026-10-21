@@ -38,6 +38,9 @@ dependencies {
     ksp(libs.hilt.compiler)
     implementation(libs.kotlinx.coroutines.core)
     implementation(project(":feature:components"))
+    // 设计令牌（Spacing/Radius/Motion/TianyanTheme.colors）：components 是 implementation
+    // 依赖不传递，令牌必须显式引入，否则本模块用不了。
+    implementation(project(":feature:theme"))
     implementation(project(":runtime"))
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
