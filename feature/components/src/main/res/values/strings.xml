@@ -13,4 +13,10 @@
     <string name="components_nav_subtitle_agent">智能体</string>
     <string name="components_nav_subtitle_workspace">工作区</string>
     <string name="components_nav_subtitle_settings">设置</string>
+    <!-- 空态 / 骨架 / 错误态 -->
+    <string name="components_loading">正在载入</string>
+    <string name="components_retry">重试</string>
+    <string name="components_goto_settings">去设置</string>
+    <string name="components_show_technical_detail">查看技术详情</string>
+    <string name="components_hide_technical_detail">收起技术详情</string>
 </resources>

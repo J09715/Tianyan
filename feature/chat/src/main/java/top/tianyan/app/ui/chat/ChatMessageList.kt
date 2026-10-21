@@ -2,12 +2,6 @@ package top.tianyan.app.ui.chat
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -38,10 +32,10 @@ import androidx.compose.runtime.saveable.Saver
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import top.tianyan.app.feature.chat.R
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -61,6 +55,11 @@ import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeCard
 import top.tianyan.app.ui.components.RuntimeCircularProgressIndicator as CircularProgressIndicator
 import top.tianyan.app.ui.components.scrollFadingEdge
+import top.tianyan.app.ui.components.SkeletonBlock
+import top.tianyan.app.ui.components.SkeletonCircle
+import top.tianyan.app.ui.components.SkeletonTextLine
+import top.tianyan.app.ui.theme.Radius
+import top.tianyan.app.ui.theme.Spacing
 import androidx.compose.foundation.lazy.LazyListState
 import top.tianyan.app.core.model.QuickPhrase
 import top.tianyan.app.core.database.AgentApprovalRequestEntity
@@ -534,96 +533,60 @@ internal fun RoundCollapseButton(
     }
 }
 
+/**
+ * 会话流骨架。形状与真实气泡对齐：用户气泡右侧、宽度约屏宽 65%；助手侧带头像圆点
+ * 与两行正文 + 一块代码区。扫光由 `RuntimeSkeleton.kt` 统一提供（与工坊页同速同色），
+ * 这里只描述形状。
+ */
 @Composable
 internal fun ChatMessageSkeleton(modifier: Modifier = Modifier) {
-    val brush = shimmerBrush()
-    Column(modifier = modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
+    val loadingLabel = stringResource(top.tianyan.app.feature.components.R.string.components_loading)
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = Spacing.sm)
+            .semantics { contentDescription = loadingLabel },
+        verticalArrangement = Arrangement.spacedBy(Spacing.lg),
+    ) {
         // 用户消息占位（右侧）
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.End,
         ) {
-            Box(
+            SkeletonBlock(
                 modifier = Modifier
                     .fillMaxWidth(0.65f)
-                    .height(42.dp)
-                    .clip(RoundedCornerShape(16.dp, 4.dp, 16.dp, 16.dp))
-                    .background(brush),
+                    .height(42.dp),
+                shape = Radius.mdShape,
             )
         }
-        Spacer(Modifier.height(16.dp))
         // 助手消息占位（左侧）
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(brush),
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.85f)
-                    .height(14.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(brush),
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.55f)
-                    .height(14.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(brush),
-            )
-            Spacer(Modifier.height(6.dp))
-            Box(
+            SkeletonCircle(size = 32.dp)
+            SkeletonTextLine(widthFraction = 0.85f, height = 14.dp)
+            SkeletonTextLine(widthFraction = 0.55f, height = 14.dp)
+            SkeletonBlock(
                 modifier = Modifier
                     .fillMaxWidth(0.7f)
-                    .height(60.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(brush),
+                    .height(60.dp),
+                shape = Radius.smShape,
             )
         }
-        Spacer(Modifier.height(16.dp))
         // 用户消息占位 2
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.End,
         ) {
-            Box(
+            SkeletonBlock(
                 modifier = Modifier
                     .fillMaxWidth(0.45f)
-                    .height(42.dp)
-                    .clip(RoundedCornerShape(16.dp, 4.dp, 16.dp, 16.dp))
-                    .background(brush),
+                    .height(42.dp),
+                shape = Radius.mdShape,
             )
         }
     }
-}
-
-@Composable
-private fun shimmerBrush(): Brush {
-    val transition = rememberInfiniteTransition(label = "chatShimmer")
-    val translateAnim by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1000f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "chatShimmerTranslate",
-    )
-    val shimmerColors = listOf(
-        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.55f),
-        MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.25f),
-        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.55f),
-    )
-    return Brush.linearGradient(
-        colors = shimmerColors,
-        start = Offset(translateAnim - 200f, 0f),
-        end = Offset(translateAnim, 0f),
-    )
 }
 

@@ -91,6 +91,9 @@ import top.tianyan.app.ui.components.NoticeBanner
 import top.tianyan.app.ui.components.RuntimeBottomBar
 import top.tianyan.app.ui.components.liquidGlassContent
 import top.tianyan.app.ui.components.RuntimeCard
+import top.tianyan.app.ui.components.SkeletonBlock
+import top.tianyan.app.ui.components.SkeletonCircle
+import top.tianyan.app.ui.components.SkeletonTextLine
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.SpotlightGuideOverlay
@@ -99,6 +102,8 @@ import top.tianyan.app.ui.components.spotlightAnchor
 import top.tianyan.app.ui.components.RuntimeTopBar
 import top.tianyan.app.ui.components.SectionHeader
 import top.tianyan.app.ui.theme.LocalLiquidGlassBackdrop
+import top.tianyan.app.ui.theme.Radius
+import top.tianyan.app.ui.theme.Spacing
 import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -107,12 +112,6 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import kotlinx.coroutines.flow.Flow
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import top.tianyan.app.runtime.build.StepDuration
 import top.tianyan.app.template.TemplateProjectType
 import top.tianyan.app.template.InstalledProjectTemplate
@@ -143,92 +142,36 @@ private fun TemplatePreviewImage(file: java.io.File, modifier: Modifier = Modifi
  * 天衍 · 工坊空间 (Workspace Space)
  * 管理 Linux 隔离工作区、代码工程与文件项目
  */
-/** 骨架屏：shimmer 流动高光 + 卡片占位 */
-@Composable
-private fun shimmerBrush(): androidx.compose.ui.graphics.Brush {
-    val transition = rememberInfiniteTransition(label = "shimmer")
-    val translateAnim by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1000f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "shimmerTranslate",
-    )
-    val shimmerColors = listOf(
-        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f),
-        MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.3f),
-        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f),
-    )
-    return androidx.compose.ui.graphics.Brush.linearGradient(
-        colors = shimmerColors,
-        start = androidx.compose.ui.geometry.Offset(translateAnim - 200f, 0f),
-        end = androidx.compose.ui.geometry.Offset(translateAnim, 0f),
-    )
-}
+/**
+ * 工程卡片骨架。形状与真实 ProjectCard 对齐：40dp 图标位 + 两行标题/副标题 +
+ * 右侧 32dp 圆点 + 底部右对齐两个按钮位。形状在这里描述，扫光由
+ * `RuntimeSkeleton.kt` 统一提供，避免各屏各写一套 shimmer 导致速度/颜色不一致。
+ */
 @Composable
 private fun ProjectCardSkeleton(modifier: Modifier = Modifier) {
-    val brush = shimmerBrush()
     RuntimeCard(modifier = modifier.fillMaxWidth()) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(brush),
-                )
+                SkeletonBlock(modifier = Modifier.size(40.dp), shape = Radius.xsShape)
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(0.55f)
-                            .height(16.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(brush),
-                    )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(0.8f)
-                            .height(12.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(brush),
-                    )
+                    SkeletonTextLine(widthFraction = 0.55f, height = 16.dp)
+                    SkeletonTextLine(widthFraction = 0.8f, height = 12.dp)
                 }
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(brush),
-                )
+                SkeletonCircle(size = 32.dp)
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm, Alignment.End),
             ) {
-                Box(
-                    modifier = Modifier
-                        .width(72.dp)
-                        .height(28.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(brush),
-                )
-                Spacer(Modifier.width(8.dp))
-                Box(
-                    modifier = Modifier
-                        .width(72.dp)
-                        .height(28.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(brush),
-                )
+                SkeletonBlock(modifier = Modifier.width(72.dp), height = 28.dp)
+                SkeletonBlock(modifier = Modifier.width(72.dp), height = 28.dp)
             }
         }
     }

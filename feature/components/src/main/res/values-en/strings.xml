@@ -13,4 +13,10 @@
     <string name="components_nav_subtitle_agent">AI Agent</string>
     <string name="components_nav_subtitle_workspace">Workspace</string>
     <string name="components_nav_subtitle_settings">Settings</string>
+    <!-- Empty state / skeleton / error state -->
+    <string name="components_loading">Loading</string>
+    <string name="components_retry">Retry</string>
+    <string name="components_goto_settings">Open settings</string>
+    <string name="components_show_technical_detail">Show technical details</string>
+    <string name="components_hide_technical_detail">Hide technical details</string>
 </resources>

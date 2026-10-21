@@ -69,6 +69,9 @@ androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graph
 # 动效令牌（Motion.kt）直接依赖：虽然 material3 → foundation → animation 会
 # api 传递 animation-core，但令牌文件是本仓的公共契约，不应依赖传递路径。
 androidx-compose-animation-core = { group = "androidx.compose.animation", name = "animation-core" }
+# 展开/收起容器（AnimatedVisibility / expandVertically）需要完整 animation 包；
+# animation-core 只提供动画规格类型。空态/错误态的技术详情折叠走这条依赖。
+androidx-compose-animation = { group = "androidx.compose.animation", name = "animation" }
 androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 # 显式 version.ref 覆盖 BOM 锁定：见 [versions].material3 的说明
