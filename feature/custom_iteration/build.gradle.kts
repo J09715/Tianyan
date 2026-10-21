@@ -25,6 +25,9 @@ dependencies {
     implementation(project(":core:common"))
     implementation(project(":core:model"))
     implementation(project(":feature:components"))
+    // 设计令牌（Spacing/Radius/Motion/TianyanTheme.colors）：components 是
+    // implementation 依赖，令牌不传递，本模块要显式引入。
+    implementation(project(":feature:theme"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)

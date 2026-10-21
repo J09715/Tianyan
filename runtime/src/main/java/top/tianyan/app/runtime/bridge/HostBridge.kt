@@ -253,8 +253,11 @@ class HostBridge @Inject constructor(
             return HttpResponse(400, errorJson("Missing 'path' field"))
         }
 
-        // 将沙箱路径映射到宿主路径
+        // 将沙箱路径映射到宿主路径，并拒绝越界（沙箱路径来自 Agent，是不可信输入）
         val hostPath = resolveSandboxPath(apkPath)
+        if (hostPath == null) {
+            return HttpResponse(400, errorJson("Path is outside the allowed storage roots: $apkPath"))
+        }
         val apkFile = File(hostPath)
         if (!apkFile.isFile) {
             return HttpResponse(404, errorJson("APK file not found: $apkPath (resolved: $hostPath)"))
@@ -394,19 +397,41 @@ class HostBridge @Inject constructor(
     // ============================ 工具方法 ============================
 
     /**
-     * 将沙箱内路径映射到宿主路径。
+     * 将沙箱内路径映射到宿主路径，并拒绝越界。
+     *
      * /sdcard/Download/app.apk → /storage/emulated/0/Download/app.apk
+     *
+     * ## 为什么必须做规范化
+     *
+     * 沙箱里的路径来自 Agent 的工具调用，是**不可信输入**。原先的实现对
+     * `/sdcard/../../data/data/top.tianyan.app/shared_prefs/...` 这类路径会先做
+     * 字符串前缀替换，得到 `/storage/emulated/0/../../data/data/...`——字符串看起来
+     * 还在 `/storage/emulated/0` 之下，但文件系统解析 `..` 之后实际落在
+     * `/data/data/top.tianyan.app/`，也就是 App 自己的私有目录。
+     *
+     * 对 install-apk 端点来说这是实打实的问题：它会把目标文件读出来、复制到
+     * cache、再交给系统安装器。虽然安装器只接受 APK，但「能读 App 私有目录任意
+     * 文件并把它带出沙箱」本身就是一条信息泄露通道——配合构造一个同名 APK
+     * 就能把私有文件内容送进安装流程。
+     *
+     * ## 收口策略
+     *
+     * 1. 展开 `..` 与 `.`（用 [java.nio.file.Path.normalize]，不解符号链接），
+     *    得到规范路径；
+     * 2. 规范化后必须落在**允许的根**之内：宿主共享存储 `/storage/emulated/0`
+     *    或 App 自己的外部文件目录（`context.getExternalFilesDir(null)`）——
+     *    前者是用户放 APK 的地方，后者是 App 自己下载产物的地方；
+     * 3. 不满足则返回 null，调用方回 400。
+     *
+     * 用 [java.nio.file.Path.normalize] 而不是手写字符串 split 是因为它还处理了
+     * 重复分隔符与尾部斜杠，手写容易漏。
      */
-    private fun resolveSandboxPath(sandboxPath: String): String {
-        return when {
-            sandboxPath.startsWith("/sdcard/") ->
-                "/storage/emulated/0/${sandboxPath.removePrefix("/sdcard/")}"
-            sandboxPath == "/sdcard" ->
-                "/storage/emulated/0"
-            sandboxPath.startsWith("/storage/emulated/0/") ->
-                sandboxPath // 已经是宿主路径
-            else -> sandboxPath // 原样返回（可能是宿主绝对路径）
+    private fun resolveSandboxPath(sandboxPath: String): String? {
+        val allowedRoots = buildList {
+            add(File(HostPathPolicy.SHARED_STORAGE_ROOT))
+            context.getExternalFilesDir(null)?.let { add(it) }
         }
+        return HostPathPolicy.resolve(sandboxPath, allowedRoots)
     }
 
     private fun writeResponse(client: Socket, status: Int, body: String) {

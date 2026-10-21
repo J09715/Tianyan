@@ -318,7 +318,7 @@ private fun ToolchainPathDropdownField(
     options: List<ToolchainOption>,
     onValueChange: (String) -> Unit,
 ) {
-    val shape = androidx.compose.foundation.shape.Radius.smShape
+    val shape = Radius.smShape
     var expanded by remember { mutableStateOf(false) }
 
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
@@ -331,7 +331,7 @@ private fun ToolchainPathDropdownField(
             if (options.isNotEmpty()) {
                 Surface(
                     onClick = { expanded = true },
-                    shape = androidx.compose.foundation.shape.Radius.xsShape,
+                    shape = Radius.xsShape,
                     color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
                 ) {
                     Row(
@@ -393,7 +393,7 @@ private fun ToolchainPathDropdownField(
                                 )
                                 if (option.isDetected) {
                                     Surface(
-                                        shape = androidx.compose.foundation.shape.Radius.xsShape,
+                                        shape = Radius.xsShape,
                                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
                                     ) {
                                         Text(
@@ -469,7 +469,7 @@ fun WorkshopScriptEditorScreen(type: WorkshopScriptType, onBack: () -> Unit, vie
 
 @Composable private fun SettingEntry(icon: RuntimeIconName, title: String, subtitle: String, onClick: () -> Unit) {
     RuntimeCard(onClick = onClick) { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
-        Surface(shape = androidx.compose.foundation.shape.Radius.xsShape, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.size(40.dp)) { RuntimeIcon(icon, Modifier.padding(Spacing.sm), MaterialTheme.colorScheme.onSecondaryContainer) }
+        Surface(shape = Radius.xsShape, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.size(40.dp)) { RuntimeIcon(icon, Modifier.padding(Spacing.sm), MaterialTheme.colorScheme.onSecondaryContainer) }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) { Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold); Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis) }
         RuntimeIcon(RuntimeIconName.ChevronRight, Modifier.size(20.dp), MaterialTheme.colorScheme.onSurfaceVariant)
     } }
@@ -479,7 +479,7 @@ fun WorkshopScriptEditorScreen(type: WorkshopScriptType, onBack: () -> Unit, vie
 
 @Composable
 private fun PathField(label: String, value: String, onValueChange: (String) -> Unit) {
-    val shape = androidx.compose.foundation.shape.Radius.smShape
+    val shape = Radius.smShape
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         BasicTextField(
@@ -495,7 +495,7 @@ private fun PathField(label: String, value: String, onValueChange: (String) -> U
 
 @Composable
 private fun CodeEditorPanel(value: String, onValueChange: (String) -> Unit, fileName: String, modifier: Modifier = Modifier) {
-    val shape = androidx.compose.foundation.shape.Radius.mdShape
+    val shape = Radius.mdShape
     Column(modifier.background(MaterialTheme.colorScheme.surfaceContainerLowest, shape).border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f), shape)) {
         Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerLow, RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp)).padding(horizontal = Spacing.md, vertical = Spacing.sm), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             RuntimeIcon(RuntimeIconName.Code, Modifier.size(15.dp), MaterialTheme.colorScheme.primary)

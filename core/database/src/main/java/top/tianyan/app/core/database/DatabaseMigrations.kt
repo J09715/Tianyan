@@ -170,6 +170,28 @@ val MIGRATION_31_32 = object : Migration(31, 32) {
     }
 }
 
+/**
+ * v32 → v33：给 agent_skills 增加 resourcePath 列（技能资源在沙箱内的相对路径）。
+ *
+ * ## 这个迁移此前缺失
+ *
+ * `addMigrations` 里 31_32 之后直接跳到 33_34，32→33 这一段没有注册。
+ * 后果是：任何停在 v32 的设备升级到当前版本时，Room 找不到从 32 出发的迁移路径，
+ * 会走 `fallbackToDestructiveMigration`——**静默清空整库**。用户表现为「升级后
+ * 模型档案、技能、MCP 配置全没了」，且没有任何报错。
+ *
+ * ## DDL 来源
+ *
+ * 不是手写：从 `schemas/top.wkbin.taixu.core.database.AppDatabase/33.json` 的
+ * agent_skills createSql 逐字提取，保证与 Room 的 schema 校验一致。
+ * 32→33 之间表集合完全相同，唯一差异就是这一列。
+ */
+val MIGRATION_32_33 = object : Migration(32, 33) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE agent_skills ADD COLUMN resourcePath TEXT")
+    }
+}
+
 /** Privileged Android application inventory used by Settings and the Agent. */
 val MIGRATION_33_34 = object : Migration(33, 34) {
     override fun migrate(db: SupportSQLiteDatabase) {

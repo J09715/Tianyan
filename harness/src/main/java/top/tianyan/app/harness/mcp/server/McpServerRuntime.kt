@@ -108,8 +108,13 @@ class McpServerRuntime @Inject constructor(
                             )
                             return@post
                         }
+                        // 会话 id 由宿主写在 MCP server 的 URL query 里（引擎照抄地址连接，
+                        // 不会把它带进工具参数）。服务端在这里取出并注入工具调用，
+                        // 工具层据此知道这笔调用属于哪个天衍会话。
+                        val sessionId = call.request.queryParameters[SESSION_ID_PARAM]?.trim()
+                            ?.takeIf { it.isNotEmpty() }
                         val body = call.receiveText()
-                        val payload = handleJsonRpc(body)
+                        val payload = handleJsonRpc(body, sessionId)
                         if (payload == null) {
                             // JSON-RPC notification（无 id）：不返回响应体，仅回 202 Accepted
                             call.respondText("", ContentType.Application.Json, HttpStatusCode.Accepted)
@@ -170,9 +175,11 @@ class McpServerRuntime @Inject constructor(
     /**
      * 处理单条 JSON-RPC 消息。
      *
+     * @param sessionId 宿主注入的会话 id（来自 MCP server URL 的 query），会补进
+     *   工具调用参数。
      * @return 序列化的响应体；null 表示这是一条 notification（无 id），调用方不得返回响应体。
      */
-    private suspend fun handleJsonRpc(body: String): String? {
+    private suspend fun handleJsonRpc(body: String, sessionId: String? = null): String? {
         val req = runCatching { Json.parseToJsonElement(body) }.getOrNull() as? JsonObject
             ?: return jsonrpcError(null, -32700, "bad-json")
         val method = (req["method"] as? JsonPrimitive)?.content ?: ""
@@ -199,7 +206,7 @@ class McpServerRuntime @Inject constructor(
                 val name = (params?.get("name") as? JsonPrimitive)?.content.orEmpty()
                 val args = (params?.get("arguments") as? JsonObject) ?: JsonObject(emptyMap())
                 try {
-                    jsonrpcOk(id, toolDispatcher.dispatch(name, args))
+                    jsonrpcOk(id, toolDispatcher.dispatch(name, args, sessionId))
                 } catch (c: CancellationException) {
                     throw c
                 } catch (t: Throwable) {
@@ -251,5 +258,13 @@ class McpServerRuntime @Inject constructor(
         private const val TAG = "TianyanMcpServer"
         const val defaultPort = 8787
         const val loopbackHost = "127.0.0.1"
+
+        /**
+         * MCP server URL 里携带会话 id 的 query 参数名。
+         *
+         * 宿主在 `session/new` 的 mcpServers 配置里把 `?session_id=xxx` 写进 URL，
+         * 引擎照抄这个地址连过来；服务端在 tools/call 时从 query 取出并注入工具参数。
+         */
+        const val SESSION_ID_PARAM = "session_id"
     }
 }
