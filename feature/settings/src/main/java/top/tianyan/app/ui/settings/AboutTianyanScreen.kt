@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.tianyan.app.core.model.RuntimeState
 import top.tianyan.app.ui.components.RuntimeCard
+import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.ui.components.RuntimeAlertDialog
 import top.tianyan.app.ui.components.TianyanBrandBadge
 import top.tianyan.app.ui.components.RuntimeIcon
@@ -90,16 +91,16 @@ fun AboutTianyanScreen(
                 .fillMaxSize()
                 .liquidGlassContent()
                 .padding(padding),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 120.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(start = Spacing.lg, end = Spacing.lg, top = Spacing.sm, bottom = 120.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             item {
                 SectionHeader("应用信息")
                 RuntimeCard(Modifier.fillMaxWidth()) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = Spacing.md),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                     ) {
                         TianyanBrandBadge(size = 52.dp)
                         Column {
@@ -107,7 +108,7 @@ fun AboutTianyanScreen(
                             Text("黑白观象，知行相衍", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    Column(Modifier.padding(vertical = 4.dp)) {
+                    Column(Modifier.padding(vertical = Spacing.xs)) {
                         SettingsRowLocal(
                             icon = RuntimeIconName.Info,
                             title = "天衍 · Tianyan",
@@ -160,7 +161,7 @@ fun AboutTianyanScreen(
             item {
                 SectionHeader("设备信息")
                 RuntimeCard(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(vertical = 4.dp)) {
+                    Column(Modifier.padding(vertical = Spacing.xs)) {
                         SettingsRowLocal(icon = RuntimeIconName.Cpu, title = "设备型号", value = deviceInfo.deviceModel)
                         SettingsRowLocal(icon = RuntimeIconName.Info, title = "Android 版本", value = "API ${Build.VERSION.SDK_INT}")
                         SettingsRowLocal(icon = RuntimeIconName.Speed, title = "CPU 核心数", value = deviceInfo.cpuCores)
@@ -172,19 +173,19 @@ fun AboutTianyanScreen(
             item {
                 SectionHeader("沙箱网络")
                 RuntimeCard(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(vertical = 4.dp)) {
+                    Column(Modifier.padding(vertical = Spacing.xs)) {
                         Text(
                             "沙箱内置 HTTP 代理：让沙箱内的 git / curl / apt 走指定代理。留空表示不启用，回落到系统全局网络。",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(Spacing.sm))
                         SettingsRowLocal(
                             icon = RuntimeIconName.Network,
                             title = "沙箱 HTTP 代理",
                             value = sandboxProxy.ifBlank { "未设置" },
                         )
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(Spacing.xs))
                         Text(
                             "当前值：${sandboxProxy.ifBlank { "（空）" }}",
                             style = MaterialTheme.typography.labelSmall,
@@ -196,7 +197,7 @@ fun AboutTianyanScreen(
             item {
                 SectionHeader("引导与权限")
                 RuntimeCard(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(vertical = 4.dp)) {
+                    Column(Modifier.padding(vertical = Spacing.xs)) {
                         SettingsRowLocal(
                             icon = RuntimeIconName.Play,
                             title = "重看功能引导",
@@ -268,7 +269,7 @@ private fun SettingsRowLocal(
             .fillMaxWidth()
             .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         RuntimeIcon(icon, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary)
         Column(Modifier.weight(1f)) {

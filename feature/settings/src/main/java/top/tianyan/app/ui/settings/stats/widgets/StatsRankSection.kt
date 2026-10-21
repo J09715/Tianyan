@@ -16,6 +16,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import top.tianyan.app.ui.components.RuntimeAlertDialog
+import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.ui.components.RuntimeIconButton as IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -137,12 +138,12 @@ private fun RankBody(
 
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 4.dp),
+                .padding(horizontal = Spacing.xs),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
@@ -202,9 +203,9 @@ private fun RankRow(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 10.dp),
+                    .padding(horizontal = Spacing.sm),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 if (icon != null) {
                     RuntimeIcon(

@@ -61,6 +61,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.tianyan.app.core.database.AiModelEntity
 import top.tianyan.app.core.model.ToolState
 import top.tianyan.app.ui.components.CodeBlockRow
+import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.Radius
 import top.tianyan.app.ui.components.InfoRow
 import top.tianyan.app.ui.components.NoticeBanner
 import top.tianyan.app.ui.components.RuntimeAlertDialog
@@ -137,7 +139,7 @@ fun ToolDetailScreen(
             ) {
                 if (!hasLoadedOnce) {
                     // 工具列表尚未加载完成：显示加载中而非「未找到」
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         CircularProgressIndicator(modifier = Modifier.size(32.dp), strokeWidth = 3.dp)
                         Text("正在加载工具信息…", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                     }
@@ -153,8 +155,8 @@ fun ToolDetailScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+                .padding(horizontal = Spacing.lg, vertical = Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             // ── 错误提示 / AI 自愈入口 ──
             if (tool.state == ToolState.FAILED.name || state.error != null) {
@@ -169,7 +171,7 @@ fun ToolDetailScreen(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                             modifier = Modifier.weight(1f),
                         ) {
                             RuntimeIcon(
@@ -177,7 +179,7 @@ fun ToolDetailScreen(
                                 modifier = Modifier.size(24.dp),
                                 tint = MaterialTheme.colorScheme.error,
                             )
-                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                 Text(
                                     text = "工具安装/环境自检未通过",
                                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
@@ -192,7 +194,7 @@ fun ToolDetailScreen(
                                 )
                             }
                         }
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(Spacing.sm))
                         Button(
                             onClick = {
                                 onStartAiHealing(
@@ -201,8 +203,8 @@ fun ToolDetailScreen(
                                     state.error?.let { listOf(it) } ?: emptyList(),
                                 )
                             },
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            shape = Radius.xsShape,
+                            contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
                         ) {
                             Text("呼叫自愈", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
                         }
@@ -288,7 +290,7 @@ fun ToolDetailScreen(
                 onUninstall = { showUninstallConfirm = true },
             )
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(Spacing.lg))
         }
     }
 }
@@ -351,7 +353,7 @@ private fun DetailToolAvatar(
                     contentDescription = null,
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(6.dp),
+                        .padding(Spacing.sm),
                     contentScale = ContentScale.Fit,
                 )
             }
@@ -396,13 +398,13 @@ private fun ToolOverviewCard(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                 modifier = Modifier.weight(1f),
             ) {
                 DetailToolAvatar(toolId = tool.id, category = tool.category)
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.xs),
                 ) {
                     Text(
                         text = tool.name,
@@ -415,7 +417,7 @@ private fun ToolOverviewCard(
                     )
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         Text(
                             text = "${tool.publisher} · ${
@@ -435,7 +437,7 @@ private fun ToolOverviewCard(
                         if (formattedVersion != null) {
                             Surface(
                                 color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                shape = RoundedCornerShape(4.dp),
+                                shape = Radius.xsShape,
                             ) {
                                 Text(
                                     text = formattedVersion,
@@ -444,7 +446,7 @@ private fun ToolOverviewCard(
                                         fontFamily = FontFamily.Monospace,
                                     ),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp),
+                                    modifier = Modifier.padding(horizontal = Spacing.xs, vertical = 1.5.dp),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
@@ -454,7 +456,7 @@ private fun ToolOverviewCard(
                 }
             }
 
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(Spacing.sm))
 
             StatusBadge(
                 text = when {
@@ -476,7 +478,7 @@ private fun ToolOverviewCard(
             )
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(Spacing.sm))
         Text(
             text = tool.description,
             style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
@@ -500,10 +502,10 @@ private fun GatewayManagementCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     RuntimeIcon(
                         name = RuntimeIconName.Globe,
@@ -517,7 +519,7 @@ private fun GatewayManagementCard(
                 }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     val statusColor = when {
                         running -> successStatusColor()
@@ -559,21 +561,21 @@ private fun GatewayManagementCard(
             } else if (running) {
                 OutlinedButton(
                     onClick = onStop,
-                    shape = RoundedCornerShape(10.dp),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                    shape = Radius.smShape,
+                    contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
                 ) {
                     RuntimeIcon(name = RuntimeIconName.Stop, modifier = Modifier.size(15.dp))
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.width(Spacing.xs))
                     Text("停止", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                 }
             } else {
                 Button(
                     onClick = onStart,
-                    shape = RoundedCornerShape(10.dp),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                    shape = Radius.smShape,
+                    contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
                 ) {
                     RuntimeIcon(name = RuntimeIconName.Play, modifier = Modifier.size(15.dp))
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.width(Spacing.xs))
                     Text("启动", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                 }
             }
@@ -606,7 +608,7 @@ private fun ServiceLogsCard(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 RuntimeIcon(
                     name = RuntimeIconName.Terminal,
@@ -621,7 +623,7 @@ private fun ServiceLogsCard(
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
             ) {
                 if (logs.isNotEmpty()) {
                     IconButton(
@@ -654,19 +656,19 @@ private fun ServiceLogsCard(
             }
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(Spacing.sm))
 
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(180.dp),
-            shape = RoundedCornerShape(10.dp),
+            shape = Radius.smShape,
             color = Color(0xFF14171A),
             border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2A2E33)),
         ) {
             if (logs.isEmpty()) {
                 Box(
-                    modifier = Modifier.fillMaxSize().padding(12.dp),
+                    modifier = Modifier.fillMaxSize().padding(Spacing.md),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
@@ -683,9 +685,9 @@ private fun ServiceLogsCard(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(10.dp)
+                        .padding(Spacing.sm)
                         .verticalScroll(logScrollState),
-                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.xs),
                 ) {
                     logs.forEach { line ->
                         val textColor = when {
@@ -728,7 +730,7 @@ private fun ModelApplyCard(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 RuntimeIcon(
                     name = RuntimeIconName.Chat,
@@ -742,17 +744,17 @@ private fun ModelApplyCard(
             }
             Surface(
                 color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                shape = RoundedCornerShape(6.dp),
+                shape = Radius.xsShape,
             ) {
                 Text(
                     text = "AI 插件",
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                 )
             }
         }
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(Spacing.xs))
         Text(
             text = "一键将已配置的 AI 模型（API Key、Base URL 与 Model）注入至 $toolName，插件重启后生效。",
             style = MaterialTheme.typography.bodySmall,
@@ -760,18 +762,18 @@ private fun ModelApplyCard(
         )
 
         if (models.isEmpty()) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(Spacing.sm))
             NoticeBanner(text = "尚未配置任何模型档案，可前往【设置 → 模型档案管理】添加 Claude、OpenAI 或 DeepSeek 模型")
         } else {
-            Spacer(Modifier.height(10.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Spacer(Modifier.height(Spacing.sm))
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 models.forEach { model ->
                     val isApplied = model.id == appliedModelId
                     val isActive = model.isActive
 
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = Radius.smShape,
                         color = when {
                             isApplied -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
                             isActive -> MaterialTheme.colorScheme.surfaceContainerHigh
@@ -784,17 +786,17 @@ private fun ModelApplyCard(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                                .padding(horizontal = Spacing.md, vertical = Spacing.sm),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Column(
                                 modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(2.dp),
+                                verticalArrangement = Arrangement.spacedBy(Spacing.xs),
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                                 ) {
                                     Text(
                                         text = model.name,
@@ -806,26 +808,26 @@ private fun ModelApplyCard(
                                     if (isActive) {
                                         Surface(
                                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                            shape = RoundedCornerShape(4.dp),
+                                            shape = Radius.xsShape,
                                         ) {
                                             Text(
                                                 text = "当前活跃",
                                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                                                 color = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                                modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                                             )
                                         }
                                     }
                                     if (isApplied) {
                                         Surface(
                                             color = successStatusColor().copy(alpha = 0.12f),
-                                            shape = RoundedCornerShape(4.dp),
+                                            shape = Radius.xsShape,
                                         ) {
                                             Text(
                                                 text = "已应用",
                                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                                                 color = successStatusColor(),
-                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                                modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                                             )
                                         }
                                     }
@@ -844,8 +846,8 @@ private fun ModelApplyCard(
                             } else if (!isApplied) {
                                 FilledTonalButton(
                                     onClick = { onApply(model) },
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                    shape = Radius.xsShape,
+                                    contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs),
                                 ) {
                                     Text(
                                         "应用",
@@ -880,7 +882,7 @@ private fun AutoStartCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 Text(
                     text = "随应用自启动",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -891,7 +893,7 @@ private fun AutoStartCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(Spacing.md))
             Switch(
                 checked = enabled,
                 onCheckedChange = onToggle,
@@ -925,7 +927,7 @@ private fun AccessLinkCard(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 RuntimeIcon(
                     name = RuntimeIconName.Globe,
@@ -940,18 +942,18 @@ private fun AccessLinkCard(
 
             Surface(
                 color = if (running) successStatusColor().copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceContainerHighest,
-                shape = RoundedCornerShape(6.dp),
+                shape = Radius.xsShape,
             ) {
                 Text(
                     text = if (running) "已绑定 0.0.0.0" else "服务未启动",
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.SemiBold),
                     color = if (running) successStatusColor() else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                 )
             }
         }
 
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(Spacing.xs))
         Text(
             text = if (running) {
                 "网关服务已绑定全网卡 (0.0.0.0)。同局域网设备打开【局域网 IP 链接】即可直接操作，无需 localhost 映射。"
@@ -962,12 +964,12 @@ private fun AccessLinkCard(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(Spacing.sm))
 
         // 地址模式选择 (局域网 IP / 0.0.0.0 / 127.0.0.1)
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             listOf(
                 "LAN" to "局域网 IP",
@@ -977,7 +979,7 @@ private fun AccessLinkCard(
                 val isSelected = selectedMode == modeKey
                 Surface(
                     onClick = { selectedMode = modeKey },
-                    shape = RoundedCornerShape(8.dp),
+                    shape = Radius.xsShape,
                     color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
                     modifier = Modifier.weight(1f),
                 ) {
@@ -989,7 +991,7 @@ private fun AccessLinkCard(
                         ),
                         color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
-                            .padding(vertical = 8.dp)
+                            .padding(vertical = Spacing.sm)
                             .align(Alignment.CenterVertically),
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                         maxLines = 1,
@@ -999,7 +1001,7 @@ private fun AccessLinkCard(
         }
 
         if (selectedMode == "LAN" && !state.deviceLanIp.isNullOrBlank()) {
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(Spacing.xs))
             Text(
                 text = "设备局域网 IP：${state.deviceLanIp}",
                 style = MaterialTheme.typography.labelSmall.copy(
@@ -1007,22 +1009,22 @@ private fun AccessLinkCard(
                     fontSize = 10.sp,
                 ),
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(start = 2.dp),
+                modifier = Modifier.padding(start = Spacing.xs),
             )
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(Spacing.sm))
 
         if (running && currentUrl != null) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(10.dp),
+                shape = Radius.smShape,
                 color = MaterialTheme.colorScheme.surfaceContainerHighest,
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     Text(
                         text = currentUrl,
@@ -1053,7 +1055,7 @@ private fun AccessLinkCard(
         } else if (!running) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(10.dp),
+                shape = Radius.smShape,
                 color = MaterialTheme.colorScheme.surfaceContainerHighest,
             ) {
                 Text(
@@ -1063,18 +1065,18 @@ private fun AccessLinkCard(
                         fontSize = 11.sp,
                     ),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+                    modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.md),
                 )
             }
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(Spacing.sm))
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             FilledTonalButton(
                 onClick = onGenerate,
-                shape = RoundedCornerShape(10.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                shape = Radius.smShape,
+                contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
             ) {
                 Text(
                     text = if (state.accessToken != null) "重新生成 Token" else "生成安全 Token",
@@ -1084,7 +1086,7 @@ private fun AccessLinkCard(
             if (state.accessToken != null) {
                 TextButton(
                     onClick = onClear,
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                    contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.sm),
                 ) {
                     Text(
                         "清除 Token",
@@ -1107,7 +1109,7 @@ private fun ToolMetadataCard(
     RuntimeCard(modifier = Modifier.fillMaxWidth()) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             RuntimeIcon(
                 name = RuntimeIconName.Settings,
@@ -1120,9 +1122,9 @@ private fun ToolMetadataCard(
             )
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(Spacing.sm))
 
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             InfoRow(label = "工具 ID", value = tool.id)
             InfoRow(
                 label = "启动类型",
@@ -1155,12 +1157,12 @@ private fun ToolMetadataCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 androidx.compose.foundation.layout.FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     manifest.dependencies.forEach { dep ->
                         Surface(
-                            shape = RoundedCornerShape(6.dp),
+                            shape = Radius.xsShape,
                             color = MaterialTheme.colorScheme.surfaceContainerHigh,
                         ) {
                             Text(
@@ -1170,7 +1172,7 @@ private fun ToolMetadataCard(
                                     fontSize = 11.sp,
                                 ),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                             )
                         }
                     }
@@ -1186,15 +1188,15 @@ private fun ToolMetadataCard(
                 )
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
+                    shape = Radius.xsShape,
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 ) {
                     Column(
-                        modifier = Modifier.padding(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.padding(Spacing.sm),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         manifest.environment.forEach { (key, value) ->
-                            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                 Text(
                                     text = key,
                                     style = MaterialTheme.typography.labelSmall.copy(
@@ -1226,19 +1228,19 @@ private fun ToolMetadataCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 androidx.compose.foundation.layout.FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     tool.permissions.split(",").filter { it.isNotBlank() }.forEach { perm ->
                         Surface(
-                            shape = RoundedCornerShape(6.dp),
+                            shape = Radius.xsShape,
                             color = MaterialTheme.colorScheme.surfaceContainerHigh,
                         ) {
                             Text(
                                 text = perm.trim(),
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Medium),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.5.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.sm, vertical = 3.5.dp),
                             )
                         }
                     }
@@ -1258,7 +1260,7 @@ private fun ToolActionsCard(
     RuntimeCard(modifier = Modifier.fillMaxWidth()) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             RuntimeIcon(
                 name = RuntimeIconName.More,
@@ -1271,35 +1273,35 @@ private fun ToolActionsCard(
             )
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(Spacing.sm))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             if (isInstalled) {
                 FilledTonalButton(
                     onClick = onLaunchTerminal,
-                    shape = RoundedCornerShape(10.dp),
+                    shape = Radius.smShape,
                     modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                    contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
                 ) {
                     RuntimeIcon(name = RuntimeIconName.Terminal, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
+                    Spacer(Modifier.width(Spacing.sm))
                     Text("打开终端", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                 }
 
                 OutlinedButton(
                     onClick = onUninstall,
-                    shape = RoundedCornerShape(10.dp),
+                    shape = Radius.smShape,
                     modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                    contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
                     colors = ButtonDefaults.outlinedButtonColors(
                         contentColor = MaterialTheme.colorScheme.error,
                     ),
                 ) {
                     RuntimeIcon(name = RuntimeIconName.Trash, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
+                    Spacer(Modifier.width(Spacing.sm))
                     Text("卸载工具", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                 }
             } else {
@@ -1338,7 +1340,7 @@ internal fun UninstallToolConfirmDialog(
             )
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 Text(
                     text = "• 将移除该工具及其在沙箱内的数据目录",
                     style = MaterialTheme.typography.bodyMedium,

@@ -1,6 +1,8 @@
 package top.tianyan.app.ui.settings
 
 import top.tianyan.app.ui.components.RuntimeAlertDialog
+import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.Radius
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -25,7 +27,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import top.tianyan.app.ui.components.RuntimeButton as Button
 import top.tianyan.app.ui.components.RuntimeCircularProgressIndicator as CircularProgressIndicator
@@ -115,19 +116,19 @@ fun McpSettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+                .padding(horizontal = Spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             item {
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(Spacing.xs))
                 // Banner Card
                 RuntimeCard(
                     modifier = Modifier.fillMaxWidth(),
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
+                    contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.md),
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                             Box(
                                 modifier = Modifier
                                     .size(28.dp)
@@ -154,7 +155,7 @@ fun McpSettingsScreen(
 
             item {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = Spacing.xs, bottom = Spacing.xs),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -163,7 +164,7 @@ fun McpSettingsScreen(
                         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.primary,
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                         IconButton(
                             onClick = { viewModel.refreshMcpConnections() },
                             modifier = Modifier.size(30.dp),
@@ -176,13 +177,13 @@ fun McpSettingsScreen(
                                 viewModel.discoverLocalMcpServers()
                             },
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                 RuntimeIcon(RuntimeIconName.Search, Modifier.size(14.dp), MaterialTheme.colorScheme.primary)
                                 Text("探测本机", style = MaterialTheme.typography.labelMedium)
                             }
                         }
                         TextButton(onClick = { showAddDialog = true }) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                 RuntimeIcon(RuntimeIconName.Plus, Modifier.size(14.dp), MaterialTheme.colorScheme.primary)
                                 Text("添加服务", style = MaterialTheme.typography.labelMedium)
                             }
@@ -235,7 +236,7 @@ fun McpSettingsScreen(
             }
 
             item {
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(Spacing.xl))
             }
         }
     }
@@ -321,7 +322,7 @@ private fun LocalMcpDiscoveryDialog(
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 Text(
                     "正在检查 127.0.0.1 的监听端口，并用 MCP 协议验证。仅显示真正可用的服务，不会自动添加。",
@@ -336,7 +337,7 @@ private fun LocalMcpDiscoveryDialog(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             CircularProgressIndicator(Modifier.size(20.dp))
-                            Spacer(Modifier.width(10.dp))
+                            Spacer(Modifier.width(Spacing.sm))
                             Text("正在探测本机服务…", style = MaterialTheme.typography.bodyMedium)
                         }
                     }
@@ -355,10 +356,10 @@ private fun LocalMcpDiscoveryDialog(
                                 RuntimeCard(
                                     modifier = Modifier.fillMaxWidth(),
                                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                                    contentPadding = PaddingValues(10.dp),
+                                    contentPadding = PaddingValues(Spacing.sm),
                                 ) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                             Text(
                                                 detected.serverUrl,
                                                 style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
@@ -371,7 +372,7 @@ private fun LocalMcpDiscoveryDialog(
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
                                         }
-                                        Spacer(Modifier.width(8.dp))
+                                        Spacer(Modifier.width(Spacing.sm))
                                         if (detected.server.id in addedIds) {
                                             Text("已添加", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                                         } else {
@@ -380,7 +381,7 @@ private fun LocalMcpDiscoveryDialog(
                                                     onAdd(detected.server)
                                                     addedIds = addedIds + detected.server.id
                                                 },
-                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                                contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs),
                                             ) { Text("添加", style = MaterialTheme.typography.labelSmall) }
                                         }
                                     }
@@ -410,8 +411,8 @@ private fun BrowserGatesCard(gates: BrowserGateState, viewModel: SettingsViewMod
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 10.dp, bottom = 2.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+            .padding(top = Spacing.sm, bottom = Spacing.xs),
+        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {
         Text(
             "浏览器 MCP 安全门禁",
@@ -427,9 +428,9 @@ private fun BrowserGatesCard(gates: BrowserGateState, viewModel: SettingsViewMod
     RuntimeCard(
         modifier = Modifier.fillMaxWidth(),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
+        contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.md),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             BrowserGateRow(
                 title = "远程连接",
                 description = "允许局域网设备连接浏览器 MCP 服务（绑定 0.0.0.0）；关闭时仅限本机回环，仍强制 Bearer 认证",
@@ -468,11 +469,11 @@ private fun BrowserGateRow(
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
             Text(
                 title,
@@ -497,8 +498,8 @@ private fun McpSectionHeader(title: String, subtitle: String, count: Int) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 10.dp, bottom = 2.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+            .padding(top = Spacing.sm, bottom = Spacing.xs),
+        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {
         Text(
             "$title ($count)",
@@ -526,7 +527,7 @@ private fun McpServerItemCard(
     RuntimeCard(
         modifier = Modifier.fillMaxWidth(),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
+        contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.md),
         onClick = onClickDetail,
     ) {
         Row(
@@ -535,13 +536,13 @@ private fun McpServerItemCard(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Column(
-                modifier = Modifier.weight(1f).padding(end = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.weight(1f).padding(end = Spacing.md),
+                verticalArrangement = Arrangement.spacedBy(Spacing.xs),
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     Text(
                         server.name,
@@ -553,14 +554,14 @@ private fun McpServerItemCard(
                     )
                     McpConnectionDot(state = connectionState, enabled = server.isEnabled)
                     Surface(
-                        shape = RoundedCornerShape(4.dp),
+                        shape = Radius.xsShape,
                         color = MaterialTheme.colorScheme.primaryContainer,
                     ) {
                         MaterialText(
                             server.transportType.name,
                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.xs, vertical = 1.5.dp),
                             maxLines = 1,
                             overflow = TextOverflow.Visible,
                             softWrap = false,
@@ -628,7 +629,7 @@ private fun McpServerDetailDialog(
     RuntimeAlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 Text(
                     server.name,
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
@@ -637,14 +638,14 @@ private fun McpServerDetailDialog(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Surface(
-                    shape = RoundedCornerShape(4.dp),
+                    shape = Radius.xsShape,
                     color = MaterialTheme.colorScheme.primaryContainer,
                 ) {
                     MaterialText(
                         server.transportType.name,
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                         maxLines = 1,
                         softWrap = false,
                         overflow = TextOverflow.Visible,
@@ -657,7 +658,7 @@ private fun McpServerDetailDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
                 if (server.description.isNotBlank()) {
                     Text(
@@ -668,19 +669,19 @@ private fun McpServerDetailDialog(
                 }
 
                 // 启动命令 / URL 预览
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     Text(
                         if (server.transportType == McpTransportType.STDIO) "启动命令" else "服务端点 URL",
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                         color = MaterialTheme.colorScheme.primary,
                     )
                     Surface(
-                        shape = RoundedCornerShape(8.dp),
+                        shape = Radius.xsShape,
                         color = MaterialTheme.colorScheme.surfaceContainerHighest,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.sm),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
@@ -710,7 +711,7 @@ private fun McpServerDetailDialog(
                 }
 
                 // JSON 配置代码块
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -727,13 +728,13 @@ private fun McpServerDetailDialog(
                                 clipboard?.setPrimaryClip(ClipData.newPlainText("mcp_json", jsonConfig))
                                 Toast.makeText(context, "JSON 配置已复制", Toast.LENGTH_SHORT).show()
                             },
-                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                            contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs),
                         ) {
                             Text("复制 JSON", style = MaterialTheme.typography.labelSmall)
                         }
                     }
                     Surface(
-                        shape = RoundedCornerShape(8.dp),
+                        shape = Radius.xsShape,
                         color = Color(0xFF1E1E1E),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
@@ -745,13 +746,13 @@ private fun McpServerDetailDialog(
                                 lineHeight = 15.sp,
                             ),
                             color = Color(0xFFD4D4D4),
-                            modifier = Modifier.padding(10.dp),
+                            modifier = Modifier.padding(Spacing.sm),
                         )
                     }
                 }
 
                 // 测试与工具探测区域
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -780,12 +781,12 @@ private fun McpServerDetailDialog(
                                     }
                                 }
                             },
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            shape = Radius.xsShape,
+                            contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs),
                         ) {
                             if (testing) {
                                 CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 2.dp)
-                                Spacer(Modifier.width(6.dp))
+                                Spacer(Modifier.width(Spacing.sm))
                             }
                             Text("探测工具", style = MaterialTheme.typography.labelSmall)
                         }
@@ -807,7 +808,7 @@ private fun McpServerDetailDialog(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         } else {
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                 Text(
                                     "已注册工具 (${tools.size}):",
                                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
@@ -815,11 +816,11 @@ private fun McpServerDetailDialog(
                                 )
                                 tools.forEach { tool ->
                                     Surface(
-                                        shape = RoundedCornerShape(6.dp),
+                                        shape = Radius.xsShape,
                                         color = MaterialTheme.colorScheme.surfaceContainerHigh,
                                         modifier = Modifier.fillMaxWidth(),
                                     ) {
-                                        Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Column(Modifier.padding(Spacing.sm), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                             Text(
                                                 tool.name,
                                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace),
@@ -840,7 +841,7 @@ private fun McpServerDetailDialog(
             }
         },
         confirmButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 if (!server.isBuiltin) {
                     TextButton(onClick = onDelete) {
                         Text("删除服务", color = MaterialTheme.colorScheme.error)
@@ -894,7 +895,7 @@ private fun AddMcpServerDialog(
     RuntimeAlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 Text("添加 MCP 服务", fontWeight = FontWeight.Bold)
                 SecondaryTabRow(
                     selectedTabIndex = selectedTab,
@@ -919,7 +920,7 @@ private fun AddMcpServerDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 if (selectedTab == 0) {
                     // 📝 表单模式
@@ -939,7 +940,7 @@ private fun AddMcpServerDialog(
                         modifier = Modifier.fillMaxWidth(),
                     )
 
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         Text(
                             "传输协议类型",
                             style = MaterialTheme.typography.labelSmall,
@@ -948,10 +949,10 @@ private fun AddMcpServerDialog(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
+                                .clip(Radius.smShape)
                                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                                .padding(4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                .padding(Spacing.xs),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                         ) {
                             val isStdio = transport == McpTransportType.STDIO
                             val isSse = transport == McpTransportType.SSE
@@ -961,11 +962,11 @@ private fun AddMcpServerDialog(
                                 modifier = Modifier
                                     .weight(1f)
                                     .clickable { transport = McpTransportType.STDIO },
-                                shape = RoundedCornerShape(8.dp),
+                                shape = Radius.xsShape,
                                 color = if (isStdio) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
                             ) {
                                 Column(
-                                    modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp),
+                                    modifier = Modifier.padding(vertical = Spacing.sm, horizontal = Spacing.sm),
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                 ) {
                                     Text(
@@ -987,11 +988,11 @@ private fun AddMcpServerDialog(
                                 modifier = Modifier
                                     .weight(1f)
                                     .clickable { transport = McpTransportType.SSE },
-                                shape = RoundedCornerShape(8.dp),
+                                shape = Radius.xsShape,
                                 color = if (isSse) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
                             ) {
                                 Column(
-                                    modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp),
+                                    modifier = Modifier.padding(vertical = Spacing.sm, horizontal = Spacing.sm),
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                 ) {
                                     Text(
@@ -1068,14 +1069,14 @@ private fun AddMcpServerDialog(
                         val list = parsedServers.getOrThrow()
                         Surface(
                             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
-                            shape = RoundedCornerShape(8.dp),
+                            shape = Radius.xsShape,
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text(
                                 "✅ 成功解析 ${list.size} 个服务: " + list.joinToString(", ") { it.name },
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.sm),
                             )
                         }
                     } else {

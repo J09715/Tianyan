@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
@@ -42,6 +41,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.tianyan.app.runtime.SshServiceState
 import top.tianyan.app.ui.components.NoticeBanner
+import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.Radius
 import top.tianyan.app.ui.components.RuntimeAlertDialog
 import top.tianyan.app.ui.components.RuntimeButton
 import top.tianyan.app.ui.components.RuntimeCard
@@ -113,8 +114,8 @@ fun SshSettingsScreen(
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.lg),
         ) {
             item {
                 NoticeBanner(
@@ -165,7 +166,7 @@ fun SshSettingsScreen(
                 }
                 (serviceState as? SshServiceState.Failed)?.let { failed ->
                     RuntimeCard(
-                        modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                        modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm),
                         containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f),
                         borderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.25f),
                     ) {
@@ -220,7 +221,7 @@ fun SshSettingsScreen(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                     borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         Text(
                             text = settings.connectionCommand,
                             style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold),
@@ -256,9 +257,9 @@ fun SshSettingsScreen(
                 SectionLabel("网络配置")
                 SettingsGroup {
                     Row(
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 76.dp).padding(horizontal = 16.dp, vertical = 10.dp),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 76.dp).padding(horizontal = Spacing.lg, vertical = Spacing.sm),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                     ) {
                         RuntimeIcon(RuntimeIconName.Network, Modifier.size(20.dp), MaterialTheme.colorScheme.primary)
                         val portValue = portText.toIntOrNull()
@@ -290,7 +291,7 @@ fun SshSettingsScreen(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                     borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         Text(
                             "无需公钥也可以使用密码登录。需要免密连接时，每行添加一个 OpenSSH 公钥。",
                             style = MaterialTheme.typography.bodySmall,
@@ -310,7 +311,7 @@ fun SshSettingsScreen(
                             onClick = { viewModel.saveAuthorizedKeys(authorizedKeysText) },
                             enabled = !busy,
                             modifier = Modifier.align(Alignment.End),
-                            shape = RoundedCornerShape(10.dp),
+                            shape = Radius.smShape,
                         ) {
                             RuntimeIcon(RuntimeIconName.Save, Modifier.size(16.dp))
                             Spacer(Modifier.size(6.dp))
@@ -346,7 +347,7 @@ private fun SectionLabel(text: String) {
         text = text,
         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+        modifier = Modifier.padding(start = Spacing.xs, bottom = Spacing.xs),
     )
 }
 
@@ -374,7 +375,7 @@ private fun PasswordSettingsDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
                 Text(
                     "密码将通过 Android Keystore 加密保存，并应用到当前 Linux 发行版的 root 账户。",

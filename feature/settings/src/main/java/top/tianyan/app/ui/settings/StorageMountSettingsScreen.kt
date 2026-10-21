@@ -1,6 +1,8 @@
 package top.tianyan.app.ui.settings
 
 import top.tianyan.app.ui.components.RuntimeAlertDialog
+import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.Radius
 import androidx.compose.material3.minimumInteractiveComponentSize
 
 import androidx.compose.foundation.BorderStroke
@@ -18,7 +20,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import top.tianyan.app.ui.components.RuntimeButton as Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -98,8 +99,8 @@ fun StorageMountSettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.lg),
         ) {
             item {
                 NoticeBanner(
@@ -113,7 +114,7 @@ fun StorageMountSettingsScreen(
                     text = "系统预设快捷挂载",
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+                    modifier = Modifier.padding(start = Spacing.xs, bottom = Spacing.xs),
                 )
                 RuntimeCard(
                     modifier = Modifier.fillMaxWidth(),
@@ -163,12 +164,12 @@ fun StorageMountSettingsScreen(
                         text = "自定义映射绑定",
                         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(start = 4.dp),
+                        modifier = Modifier.padding(start = Spacing.xs),
                     )
                     OutlinedButton(
                         onClick = { showAddDialog = true },
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        shape = Radius.xsShape,
+                        contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs),
                     ) {
                         RuntimeIcon(RuntimeIconName.Plus, Modifier.size(14.dp))
                         Spacer(Modifier.size(4.dp))
@@ -183,12 +184,12 @@ fun StorageMountSettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                         borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
-                        contentPadding = PaddingValues(24.dp),
+                        contentPadding = PaddingValues(Spacing.xl),
                     ) {
                         Column(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             Text(
                                 "暂无自定义挂载点",
@@ -209,16 +210,16 @@ fun StorageMountSettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                         borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                        contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.md),
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                                .padding(horizontal = Spacing.lg, vertical = Spacing.md),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                         ) {
-                            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                 Text(
                                     text = binding.name,
                                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
@@ -317,21 +318,21 @@ private fun MountToggleRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = Spacing.lg, vertical = Spacing.md),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         Box(
             modifier = Modifier
                 .size(36.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(Radius.xsShape)
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
             contentAlignment = Alignment.Center,
         ) {
             RuntimeIcon(icon, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
         }
 
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -374,7 +375,7 @@ private fun AddMountDialog(
         onDismissRequest = onDismiss,
         title = { Text("新增存储挂载点", fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },

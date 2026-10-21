@@ -23,7 +23,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -58,6 +57,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.tianyan.app.core.model.QuickPhrase
 import top.tianyan.app.ui.components.RuntimeAlertDialog
+import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.Radius
 import top.tianyan.app.ui.components.RuntimeButton as Button
 import top.tianyan.app.ui.components.RuntimeCard
 import top.tianyan.app.ui.components.RuntimeIcon
@@ -223,8 +224,8 @@ fun QuickPhrasesScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 filterOptions.forEach { (key, label) ->
                     val isSelected = selectedFilter == key
@@ -252,12 +253,12 @@ fun QuickPhrasesScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(24.dp),
+                        .padding(Spacing.xl),
                     contentAlignment = Alignment.Center,
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         RuntimeIcon(
                             name = RuntimeIconName.Chat,
@@ -277,8 +278,8 @@ fun QuickPhrasesScreen(
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 88.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = PaddingValues(start = Spacing.lg, end = Spacing.lg, top = Spacing.sm, bottom = 88.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     items(filteredPhrases, key = { it.id }) { phrase ->
                         QuickPhraseCard(
@@ -306,20 +307,20 @@ private fun QuickPhraseCard(
         borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
         onClick = onEdit,
         modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(14.dp),
+        contentPadding = PaddingValues(Spacing.md),
     ) {
         Column(
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 // 图标胶囊
                 Box(
                     modifier = Modifier
                         .size(36.dp)
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(Radius.smShape)
                         .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -333,7 +334,7 @@ private fun QuickPhraseCard(
                 Column(modifier = Modifier.weight(1f)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         Text(
                             text = phrase.title,
@@ -350,13 +351,13 @@ private fun QuickPhraseCard(
                             else -> "通用"
                         }
                         Surface(
-                            shape = RoundedCornerShape(4.dp),
+                            shape = Radius.xsShape,
                             color = MaterialTheme.colorScheme.surfaceContainerHighest,
                         ) {
                             Text(
                                 text = typeLabel,
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
@@ -376,7 +377,7 @@ private fun QuickPhraseCard(
 
             // 提示词/指令内容预览
             Surface(
-                shape = RoundedCornerShape(8.dp),
+                shape = Radius.xsShape,
                 color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f),
                 modifier = Modifier.fillMaxWidth(),
             ) {
@@ -389,14 +390,14 @@ private fun QuickPhraseCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.sm),
                 )
             }
 
             // 底部三等分等宽操作栏 (状态切换 + 编辑 + 删除)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 // 1. 状态切换开关 (1/3 宽，与 MCP/插件/Agent 设置页一致使用 Switch)
@@ -413,7 +414,7 @@ private fun QuickPhraseCard(
 
                 // 2. 编辑按钮 (1/3 宽)
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
+                    shape = Radius.xsShape,
                     color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.4f),
                     modifier = Modifier
                         .weight(1f)
@@ -421,7 +422,7 @@ private fun QuickPhraseCard(
                         .clickable { onEdit() },
                 ) {
                     Row(
-                        modifier = Modifier.padding(vertical = 7.dp),
+                        modifier = Modifier.padding(vertical = Spacing.sm),
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -435,7 +436,7 @@ private fun QuickPhraseCard(
 
                 // 3. 删除按钮 (1/3 宽)
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
+                    shape = Radius.xsShape,
                     color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f),
                     modifier = Modifier
                         .weight(1f)
@@ -443,7 +444,7 @@ private fun QuickPhraseCard(
                         .clickable { onDelete() },
                 ) {
                     Row(
-                        modifier = Modifier.padding(vertical = 7.dp),
+                        modifier = Modifier.padding(vertical = Spacing.sm),
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -523,8 +524,8 @@ private fun QuickPhraseEditorDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
-                    .padding(vertical = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                    .padding(vertical = Spacing.xs),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 OutlinedTextField(
                     value = title,
@@ -591,7 +592,7 @@ private fun QuickPhraseEditorDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     iconOptions.forEach { (name, icon) ->
                         val isSelected = iconName == name
@@ -599,7 +600,7 @@ private fun QuickPhraseEditorDialog(
                             modifier = Modifier
                                 .size(38.dp)
                                 .minimumInteractiveComponentSize()
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(Radius.xsShape)
                                 .background(
                                     if (isSelected) MaterialTheme.colorScheme.primaryContainer
                                     else MaterialTheme.colorScheme.surfaceContainerHighest,

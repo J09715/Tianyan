@@ -33,6 +33,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.tianyan.app.core.model.StatsTrendDay
+import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.Radius
 import java.util.Locale
 
 @Composable
@@ -76,7 +78,7 @@ fun StatsUsageChart(
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         // 浮动详情指示卡片
         if (selectedDay != null) {
@@ -84,11 +86,11 @@ fun StatsUsageChart(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(Radius.xsShape)
                     .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f))
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                    .padding(horizontal = Spacing.md, vertical = Spacing.sm),
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -121,7 +123,7 @@ fun StatsUsageChart(
                                         fontSize = 11.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     ),
-                                    modifier = Modifier.weight(1f).padding(end = 8.dp),
+                                    modifier = Modifier.weight(1f).padding(end = Spacing.sm),
                                     maxLines = 1,
                                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                 )

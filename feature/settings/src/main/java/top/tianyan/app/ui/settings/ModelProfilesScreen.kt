@@ -28,7 +28,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -63,6 +62,8 @@ import kotlinx.coroutines.launch
 import top.tianyan.app.core.database.AiModelEntity
 import top.tianyan.app.core.model.AiModelProfileExport
 import top.tianyan.app.ui.components.IconTile
+import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.Radius
 import top.tianyan.app.ui.components.ProviderBadge
 import top.tianyan.app.ui.components.RuntimeAlertDialog
 import top.tianyan.app.ui.components.RuntimeButton
@@ -202,7 +203,7 @@ fun ModelProfilesScreen(
         RuntimeAlertDialog(
             onDismissRequest = { modelPendingDelete = null },
             title = {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     RuntimeIcon(RuntimeIconName.Alert, Modifier.size(20.dp), MaterialTheme.colorScheme.error)
                     Text("删除模型档案", fontWeight = FontWeight.Bold)
                 }
@@ -240,16 +241,16 @@ private fun ModelProfilesContent(
 ) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.sm),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         item {
             RuntimeButton(
                 onClick = onCreate,
                 modifier = Modifier.fillMaxWidth().height(44.dp),
-                shape = RoundedCornerShape(10.dp),
+                shape = Radius.smShape,
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     RuntimeIcon(RuntimeIconName.Plus, Modifier.size(16.dp), MaterialTheme.colorScheme.onPrimary)
                     Text("新增模型档案", fontWeight = FontWeight.Bold)
                 }
@@ -261,7 +262,7 @@ private fun ModelProfilesContent(
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     IconTile(RuntimeIconName.Model, color = MaterialTheme.colorScheme.primary, size = 42.dp)
                     Text("暂无模型档案", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
@@ -306,20 +307,20 @@ private fun ModelProfileCard(
             MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
         },
         onClick = onEdit,
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+        contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
     ) {
         Column(
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
         // 头部：Provider Badge + 标题 + 激活状态 + 更多菜单
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             ProviderBadge(providerIdOrName = model.provider, size = 24.dp)
 
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 Text(
                     text = model.name,
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
@@ -337,19 +338,19 @@ private fun ModelProfileCard(
             if (model.isActive) {
                 Surface(
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                    shape = RoundedCornerShape(6.dp),
+                    shape = Radius.xsShape,
                 ) {
                     Text(
                         text = "当前激活",
                         color = MaterialTheme.colorScheme.primary,
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                     )
                 }
             } else {
                 RuntimeTextButton(
                     onClick = onActivate,
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                    contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs),
                 ) {
                     Text("设为激活", style = MaterialTheme.typography.labelMedium)
                 }
@@ -377,7 +378,7 @@ private fun ModelProfileCard(
                 ) {
                     DropdownMenuItem(
                         text = {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                                 RuntimeIcon(RuntimeIconName.Edit, Modifier.size(16.dp))
                                 Text("编辑档案")
                             }
@@ -389,7 +390,7 @@ private fun ModelProfileCard(
                     )
                     DropdownMenuItem(
                         text = {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                                 RuntimeIcon(RuntimeIconName.OpenInNew, Modifier.size(16.dp))
                                 Text("导出为 JSON")
                             }
@@ -402,7 +403,7 @@ private fun ModelProfileCard(
                     if (!model.isActive) {
                         DropdownMenuItem(
                             text = {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                                     RuntimeIcon(RuntimeIconName.Check, Modifier.size(16.dp))
                                     Text("设为激活")
                                 }
@@ -416,7 +417,7 @@ private fun ModelProfileCard(
                     HorizontalDivider()
                     DropdownMenuItem(
                         text = {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                                 RuntimeIcon(RuntimeIconName.Trash, Modifier.size(16.dp), MaterialTheme.colorScheme.error)
                                 Text("删除档案", color = MaterialTheme.colorScheme.error)
                             }
@@ -436,32 +437,32 @@ private fun ModelProfileCard(
         }
         if (modelList.isNotEmpty()) {
             FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                verticalArrangement = Arrangement.spacedBy(Spacing.xs),
             ) {
                 modelList.take(3).forEach { modelId ->
                     Surface(
-                        shape = RoundedCornerShape(6.dp),
+                        shape = Radius.xsShape,
                         color = MaterialTheme.colorScheme.surfaceContainerHigh,
                     ) {
                         Text(
                             text = modelId,
                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontFamily = FontFamily.Monospace),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                         )
                     }
                 }
                 if (modelList.size > 3) {
                     Surface(
-                        shape = RoundedCornerShape(6.dp),
+                        shape = Radius.xsShape,
                         color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f),
                     ) {
                         Text(
                             text = "+${modelList.size - 3} 更多",
                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                         )
                     }
                 }
@@ -527,13 +528,13 @@ fun ModelImportDialog(
     RuntimeAlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 RuntimeIcon(RuntimeIconName.Download, Modifier.size(20.dp), MaterialTheme.colorScheme.primary)
                 Text("导入模型档案", fontWeight = FontWeight.Bold)
             }
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
                 SecondaryTabRow(
                     selectedTabIndex = selectedTab,
                     containerColor = Color.Transparent,
@@ -560,7 +561,7 @@ fun ModelImportDialog(
                         modifier = Modifier.fillMaxWidth().height(170.dp),
                         placeholder = { Text("粘贴导出的 JSON 模型配置（支持单个或批量 bundle）") },
                         textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = Radius.smShape,
                     )
 
                     RuntimeOutlinedButton(
@@ -574,22 +575,22 @@ fun ModelImportDialog(
                             }
                         },
                         modifier = Modifier.fillMaxWidth().height(36.dp),
-                        shape = RoundedCornerShape(8.dp),
+                        shape = Radius.xsShape,
                     ) {
                         Text("一键粘贴剪贴板内容")
                     }
                 } else {
                     Column(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.lg),
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         RuntimeOutlinedButton(
                             onClick = {
                                 filePickerLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
                             },
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                                 RuntimeIcon(RuntimeIconName.File, Modifier.size(16.dp))
                                 Text("选择本地 JSON 文件")
                             }
@@ -612,7 +613,7 @@ fun ModelImportDialog(
             ) {
                 if (importing) {
                     RuntimeCircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                    Spacer(Modifier.width(6.dp))
+                    Spacer(Modifier.width(Spacing.sm))
                 }
                 Text(if (importing) "正在导入…" else "开始导入")
             }
@@ -664,13 +665,13 @@ fun ModelExportDialog(
     RuntimeAlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 RuntimeIcon(RuntimeIconName.OpenInNew, Modifier.size(20.dp), MaterialTheme.colorScheme.primary)
                 Text(title, fontWeight = FontWeight.Bold)
             }
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodyMedium,
@@ -679,20 +680,20 @@ fun ModelExportDialog(
 
                 // 是否包含 API Key 复选框
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
+                    shape = Radius.smShape,
                     color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Row(
-                        modifier = Modifier.padding(12.dp),
+                        modifier = Modifier.padding(Spacing.md),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         RuntimeCheckbox(
                             checked = includeKeys,
                             onCheckedChange = { includeKeys = it },
                         )
-                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                             Text(
                                 text = "包含 API Key",
                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -707,7 +708,7 @@ fun ModelExportDialog(
                 }
 
                 // 导出操作选项
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     // 1. 复制到剪贴板
                     RuntimeOutlinedButton(
                         onClick = {
@@ -721,9 +722,9 @@ fun ModelExportDialog(
                             }
                         },
                         modifier = Modifier.fillMaxWidth().height(42.dp),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = Radius.smShape,
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                             RuntimeIcon(RuntimeIconName.Copy, Modifier.size(16.dp))
                             Text("复制 JSON 到剪贴板")
                         }
@@ -735,9 +736,9 @@ fun ModelExportDialog(
                             createFileLauncher.launch(defaultFileName)
                         },
                         modifier = Modifier.fillMaxWidth().height(42.dp),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = Radius.smShape,
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                             RuntimeIcon(RuntimeIconName.Save, Modifier.size(16.dp))
                             Text("保存为 .json 文件")
                         }
@@ -758,9 +759,9 @@ fun ModelExportDialog(
                             }
                         },
                         modifier = Modifier.fillMaxWidth().height(42.dp),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = Radius.smShape,
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                             RuntimeIcon(RuntimeIconName.OpenInNew, Modifier.size(16.dp))
                             Text("系统分享 (Share Sheet)")
                         }

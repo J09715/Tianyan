@@ -30,7 +30,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -80,6 +79,8 @@ import top.tianyan.app.core.model.AiModelProfileExport
 import top.tianyan.app.core.tools.AgentProviderDefinition
 import top.tianyan.app.core.tools.ProviderGroup
 import top.tianyan.app.ui.components.ProviderBadge
+import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.Radius
 import top.tianyan.app.ui.components.RuntimeAlertDialog
 import top.tianyan.app.ui.components.RuntimeButton
 import top.tianyan.app.ui.components.RuntimeCard
@@ -414,7 +415,7 @@ private fun ModelEditorContent(
         )
     }
 
-    val compactFieldShape = RoundedCornerShape(12.dp)
+    val compactFieldShape = Radius.smShape
     val fieldColors = OutlinedTextFieldDefaults.colors(
         focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f),
@@ -424,41 +425,41 @@ private fun ModelEditorContent(
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.sm),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         // ---- 1. 服务商选择与 Hero 卡片 ----
         item {
             RuntimeCard(
                 modifier = Modifier.fillMaxWidth(),
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
                 onClick = { showProviderPicker = true },
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     Box(
                         modifier = Modifier
                             .size(38.dp)
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(Radius.smShape)
                             .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)),
                         contentAlignment = Alignment.Center,
                     ) {
                         ProviderBadge(providerIdOrName = provider.id, size = 26.dp)
                     }
 
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                             Text(
                                 text = provider.name,
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
                             Surface(
-                                shape = RoundedCornerShape(6.dp),
+                                shape = Radius.xsShape,
                                 color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
                             ) {
                                 Text(
@@ -471,7 +472,7 @@ private fun ModelEditorContent(
                                     },
                                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                                     color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                 )
                             }
                         }
@@ -484,9 +485,9 @@ private fun ModelEditorContent(
 
                     RuntimeFilledTonalButton(
                         onClick = { showProviderPicker = true },
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                        contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.sm),
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                             Text("切换预设", style = MaterialTheme.typography.labelMedium)
                             RuntimeIcon(RuntimeIconName.ChevronDown, Modifier.size(14.dp))
                         }
@@ -500,13 +501,13 @@ private fun ModelEditorContent(
             RuntimeCard(
                 modifier = Modifier.fillMaxWidth(),
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         RuntimeIcon(RuntimeIconName.Globe, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
                         Text(
@@ -584,9 +585,9 @@ private fun ModelEditorContent(
             RuntimeCard(
                 modifier = Modifier.fillMaxWidth(),
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -594,7 +595,7 @@ private fun ModelEditorContent(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             RuntimeIcon(RuntimeIconName.Key, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
                             Text(
@@ -605,14 +606,14 @@ private fun ModelEditorContent(
                         }
 
                         Surface(
-                            shape = RoundedCornerShape(6.dp),
+                            shape = Radius.xsShape,
                             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
                         ) {
                             Text(
                                 text = "${keyList.count { it.isNotBlank() }} 个已配置",
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                             )
                         }
                     }
@@ -623,7 +624,7 @@ private fun ModelEditorContent(
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             OutlinedTextField(
                                 value = currentKey,
@@ -688,15 +689,15 @@ private fun ModelEditorContent(
                     // 添加备用 Key / 批量导入
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         RuntimeOutlinedButton(
                             onClick = { keyList = keyList + "" },
                             modifier = Modifier.weight(1f).height(38.dp),
-                            shape = RoundedCornerShape(10.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp),
+                            shape = Radius.smShape,
+                            contentPadding = PaddingValues(horizontal = Spacing.sm),
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                 RuntimeIcon(RuntimeIconName.Plus, Modifier.size(14.dp), MaterialTheme.colorScheme.primary)
                                 Text("+ 备用 Key", style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
@@ -704,10 +705,10 @@ private fun ModelEditorContent(
                         RuntimeOutlinedButton(
                             onClick = { showBatchImportKeysDialog = true },
                             modifier = Modifier.weight(1f).height(38.dp),
-                            shape = RoundedCornerShape(10.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp),
+                            shape = Radius.smShape,
+                            contentPadding = PaddingValues(horizontal = Spacing.sm),
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                 RuntimeIcon(RuntimeIconName.Download, Modifier.size(14.dp), MaterialTheme.colorScheme.primary)
                                 Text("批量导入", style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
@@ -728,9 +729,9 @@ private fun ModelEditorContent(
             RuntimeCard(
                 modifier = Modifier.fillMaxWidth(),
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     val totalSelectedCount = (selectedModels + customModelInput.split(",").map { it.trim() }).filter { it.isNotBlank() }.distinct().size
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -739,7 +740,7 @@ private fun ModelEditorContent(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             RuntimeIcon(RuntimeIconName.Brain, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
                             Text(
@@ -751,14 +752,14 @@ private fun ModelEditorContent(
 
                         if (totalSelectedCount > 0) {
                             Surface(
-                                shape = RoundedCornerShape(6.dp),
+                                shape = Radius.xsShape,
                                 color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
                             ) {
                                 Text(
                                     text = "已选 $totalSelectedCount 个模型",
                                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                                     color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                 )
                             }
                         }
@@ -769,9 +770,9 @@ private fun ModelEditorContent(
                         onClick = { discover(providerId, url, combinedKey) },
                         enabled = !discovering && url.isNotBlank(),
                         modifier = Modifier.fillMaxWidth().height(38.dp),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = Radius.smShape,
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                             if (discovering) {
                                 RuntimeCircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
                                 Text("正在拉取模型列表…", style = MaterialTheme.typography.labelMedium)
@@ -852,7 +853,7 @@ private fun ModelEditorContent(
                         if (filteredCandidateModels.isEmpty()) {
                             Text(
                                 text = "没有匹配的模型，可清空搜索或在下方手动填写模型 ID",
-                                modifier = Modifier.padding(vertical = 8.dp),
+                                modifier = Modifier.padding(vertical = Spacing.sm),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -862,14 +863,14 @@ private fun ModelEditorContent(
                                     .fillMaxWidth()
                                     .heightIn(max = 360.dp)
                                     .verticalScroll(candidateScrollState),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                             ) {
                                 filteredCandidateModels.forEach { option ->
                                     val isSelected = selectedModels.contains(option)
                                     Surface(
                                         color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceContainerHigh,
-                                        shape = RoundedCornerShape(10.dp),
+                                        shape = Radius.smShape,
                                         border = BorderStroke(
                                             1.dp,
                                             if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
@@ -879,9 +880,9 @@ private fun ModelEditorContent(
                                         },
                                     ) {
                                         Row(
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.sm),
                                             verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                                         ) {
                                             if (isSelected) {
                                                 RuntimeIcon(
@@ -925,14 +926,14 @@ private fun ModelEditorContent(
             RuntimeCard(
                 modifier = Modifier.fillMaxWidth(),
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
                 onClick = { reasoningSectionExpanded = !reasoningSectionExpanded },
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         RuntimeIcon(RuntimeIconName.Speed, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
                         Column(modifier = Modifier.weight(1f)) {
@@ -955,25 +956,25 @@ private fun ModelEditorContent(
 
                     AnimatedVisibility(visible = reasoningSectionExpanded) {
                         Column(
-                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(14.dp),
+                            modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm),
+                            verticalArrangement = Arrangement.spacedBy(Spacing.md),
                         ) {
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
                             // Temperature 滑块
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Text("Temperature (随机性)", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
-                                    Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)) {
+                                    Surface(shape = Radius.xsShape, color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)) {
                                         Text(
                                             text = String.format("%.2f", temperature),
                                             style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold),
                                             color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                         )
                                     }
                                 }
@@ -984,7 +985,7 @@ private fun ModelEditorContent(
                                     steps = 20,
                                     modifier = Modifier.fillMaxWidth(),
                                 )
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                                     PresetChip("0.2 精准", temperature == 0.2f) { temperature = 0.2f }
                                     PresetChip("0.7 平衡", temperature == 0.7f) { temperature = 0.7f }
                                     PresetChip("1.2 创意", temperature == 1.2f) { temperature = 1.2f }
@@ -994,7 +995,7 @@ private fun ModelEditorContent(
                             // Max Tokens 与 Context Tokens 双列并排
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                             ) {
                                 OutlinedTextField(
                                     value = maxTokensText,
@@ -1021,19 +1022,19 @@ private fun ModelEditorContent(
                             }
 
                             // Top P 滑块
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Text("Top P (核采样)", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
-                                    Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)) {
+                                    Surface(shape = Radius.xsShape, color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)) {
                                         Text(
                                             text = String.format("%.2f", topP),
                                             style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold),
                                             color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                         )
                                     }
                                 }
@@ -1089,14 +1090,14 @@ private fun ModelEditorContent(
             RuntimeCard(
                 modifier = Modifier.fillMaxWidth(),
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
                 onClick = { advancedSectionExpanded = !advancedSectionExpanded },
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         RuntimeIcon(RuntimeIconName.Shield, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
                         Column(modifier = Modifier.weight(1f)) {
@@ -1119,8 +1120,8 @@ private fun ModelEditorContent(
 
                     AnimatedVisibility(visible = advancedSectionExpanded) {
                         Column(
-                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm),
+                            verticalArrangement = Arrangement.spacedBy(Spacing.md),
                         ) {
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
@@ -1198,21 +1199,21 @@ private fun ModelEditorContent(
 
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 RuntimeOutlinedButton(
                     onClick = { test(url, testModelTarget, combinedKey, responseApiEnabled, providerId) },
                     enabled = !testing && url.isNotBlank(),
                     modifier = Modifier.fillMaxWidth().height(44.dp),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = Radius.smShape,
                 ) {
                     if (testing) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                             RuntimeCircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                             Text("正在测试…")
                         }
                     } else {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                             RuntimeIcon(RuntimeIconName.Play, Modifier.size(16.dp), MaterialTheme.colorScheme.primary)
                             Text("测试连接")
                         }
@@ -1221,14 +1222,14 @@ private fun ModelEditorContent(
 
                 discoveryError?.let {
                     Surface(
-                        shape = RoundedCornerShape(10.dp),
+                        shape = Radius.smShape,
                         color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             RuntimeIcon(RuntimeIconName.Alert, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
                             Text(
@@ -1245,14 +1246,14 @@ private fun ModelEditorContent(
                 testResult?.let { resultMsg ->
                     val isSuccess = resultMsg == "连接成功"
                     Surface(
-                        shape = RoundedCornerShape(10.dp),
+                        shape = Radius.smShape,
                         color = if (isSuccess) successStatusColor().copy(alpha = 0.15f) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             RuntimeIcon(
                                 name = if (isSuccess) RuntimeIconName.Check else RuntimeIconName.Alert,
@@ -1312,10 +1313,10 @@ private fun ModelEditorContent(
                     )
                 },
                 modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(12.dp),
+                shape = Radius.smShape,
                 enabled = effectiveModels.isNotEmpty() && urlValid,
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     RuntimeIcon(RuntimeIconName.Check, Modifier.size(18.dp), MaterialTheme.colorScheme.onPrimary)
                     Text(buttonText, fontWeight = FontWeight.Bold)
                 }
@@ -1340,7 +1341,7 @@ private fun PresetChip(
     onClick: () -> Unit,
 ) {
     Surface(
-        shape = RoundedCornerShape(8.dp),
+        shape = Radius.xsShape,
         color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
         border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
         modifier = Modifier.clickable(onClick = onClick),
@@ -1351,7 +1352,7 @@ private fun PresetChip(
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
             ),
             color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
         )
     }
 }
@@ -1365,15 +1366,15 @@ private fun EditorToggleRow(
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f),
-        shape = RoundedCornerShape(10.dp),
+        shape = Radius.smShape,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -1407,13 +1408,13 @@ private fun BatchImportKeysDialog(
     RuntimeAlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 RuntimeIcon(RuntimeIconName.Key, Modifier.size(20.dp), MaterialTheme.colorScheme.primary)
                 Text("批量导入密钥", fontWeight = FontWeight.Bold)
             }
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 Text(
                     "粘贴多个 API 密钥，一行一个，遇到换行即为下一个 Key：",
                     style = MaterialTheme.typography.bodySmall,
@@ -1425,11 +1426,11 @@ private fun BatchImportKeysDialog(
                     modifier = Modifier.fillMaxWidth().height(160.dp),
                     placeholder = { Text("sk-xxxxxxxxxxxxxxxx\nsk-yyyyyyyyyyyyyyyy\nsk-zzzzzzzzzzzzzzzz") },
                     textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                    shape = RoundedCornerShape(10.dp),
+                    shape = Radius.smShape,
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     RuntimeOutlinedButton(
@@ -1443,21 +1444,21 @@ private fun BatchImportKeysDialog(
                             }
                         },
                         modifier = Modifier.weight(1f).height(36.dp),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp),
+                        shape = Radius.xsShape,
+                        contentPadding = PaddingValues(horizontal = Spacing.sm),
                     ) {
                         Text("从剪贴板粘贴", style = MaterialTheme.typography.labelMedium)
                     }
                     if (parsedCount > 0) {
                         Surface(
-                            shape = RoundedCornerShape(6.dp),
+                            shape = Radius.xsShape,
                             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
                         ) {
                             Text(
                                 text = "已识别 $parsedCount 个",
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                             )
                         }
                     }
@@ -1491,13 +1492,13 @@ private fun QuickImportJsonDialog(
     RuntimeAlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 RuntimeIcon(RuntimeIconName.Code, Modifier.size(20.dp), MaterialTheme.colorScheme.primary)
                 Text("从 JSON 填入模型配置", fontWeight = FontWeight.Bold)
             }
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 Text(
                     "粘贴天衍导出的模型配置或 OpenAI 兼容 JSON，将自动解析并填入当前表单：",
                     style = MaterialTheme.typography.bodySmall,
@@ -1509,7 +1510,7 @@ private fun QuickImportJsonDialog(
                     modifier = Modifier.fillMaxWidth().height(160.dp),
                     placeholder = { Text("{\n  \"name\": \"DeepSeek-V4\",\n  \"provider\": \"DeepSeek\",\n  \"baseUrl\": \"https://api.deepseek.com/v1\",\n  \"model\": \"deepseek-v4-flash\"\n}") },
                     textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                    shape = RoundedCornerShape(10.dp),
+                    shape = Radius.smShape,
                 )
                 RuntimeOutlinedButton(
                     onClick = {
@@ -1522,7 +1523,7 @@ private fun QuickImportJsonDialog(
                         }
                     },
                     modifier = Modifier.fillMaxWidth().height(36.dp),
-                    shape = RoundedCornerShape(8.dp),
+                    shape = Radius.xsShape,
                 ) {
                     Text("从剪贴板粘贴")
                 }
@@ -1568,7 +1569,7 @@ private fun ProviderPickerDialog(
     RuntimeAlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 RuntimeIcon(RuntimeIconName.Sparkles, Modifier.size(20.dp), MaterialTheme.colorScheme.primary)
                 Text("选择服务商预设", fontWeight = FontWeight.Bold)
             }
@@ -1576,7 +1577,7 @@ private fun ProviderPickerDialog(
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 // 搜索框
                 OutlinedTextField(
@@ -1597,7 +1598,7 @@ private fun ProviderPickerDialog(
                         }
                     },
                     singleLine = true,
-                    shape = RoundedCornerShape(10.dp),
+                    shape = Radius.smShape,
                     modifier = Modifier.fillMaxWidth().height(52.dp),
                     textStyle = MaterialTheme.typography.bodySmall,
                 )
@@ -1607,7 +1608,7 @@ private fun ProviderPickerDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     ProviderFilterChip(
@@ -1647,14 +1648,14 @@ private fun ProviderPickerDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = 340.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     if (filteredProviders.isEmpty()) {
                         item {
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 24.dp),
+                                    .padding(vertical = Spacing.xl),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Text(
@@ -1668,7 +1669,7 @@ private fun ProviderPickerDialog(
                         items(filteredProviders, key = { it.id }) { option ->
                             val isSelected = option.id == currentProviderId
                             Surface(
-                                shape = RoundedCornerShape(12.dp),
+                                shape = Radius.smShape,
                                 color = if (isSelected) {
                                     MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
                                 } else {
@@ -1688,14 +1689,14 @@ private fun ProviderPickerDialog(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                        .padding(horizontal = Spacing.md, vertical = Spacing.sm),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                                 ) {
                                     Box(
                                         modifier = Modifier
                                             .size(32.dp)
-                                            .clip(RoundedCornerShape(8.dp))
+                                            .clip(Radius.xsShape)
                                             .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f)),
                                         contentAlignment = Alignment.Center,
                                     ) {
@@ -1704,11 +1705,11 @@ private fun ProviderPickerDialog(
 
                                     Column(
                                         modifier = Modifier.weight(1f),
-                                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                                        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
                                     ) {
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                                         ) {
                                             Text(
                                                 text = option.name,
@@ -1720,7 +1721,7 @@ private fun ProviderPickerDialog(
                                                 overflow = TextOverflow.Ellipsis,
                                             )
                                             Surface(
-                                                shape = RoundedCornerShape(4.dp),
+                                                shape = Radius.xsShape,
                                                 color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f),
                                             ) {
                                                 Text(
@@ -1733,7 +1734,7 @@ private fun ProviderPickerDialog(
                                                     },
                                                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                                                     color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                                    modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                                                 )
                                             }
                                         }
@@ -1776,7 +1777,7 @@ private fun ProviderFilterChip(
     onClick: () -> Unit,
 ) {
     Surface(
-        shape = RoundedCornerShape(8.dp),
+        shape = Radius.xsShape,
         color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f),
         border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)) else null,
         modifier = Modifier.clickable(onClick = onClick),
@@ -1788,7 +1789,7 @@ private fun ProviderFilterChip(
                 fontSize = 11.sp,
             ),
             color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
         )
     }
 }

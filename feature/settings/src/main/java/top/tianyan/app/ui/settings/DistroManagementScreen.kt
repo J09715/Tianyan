@@ -1,6 +1,8 @@
 package top.tianyan.app.ui.settings
 
 import top.tianyan.app.ui.components.RuntimeAlertDialog
+import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.Radius
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -21,7 +23,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.shape.RoundedCornerShape
 import top.tianyan.app.ui.components.RuntimeButton as Button
 import androidx.compose.material3.ButtonDefaults
 import top.tianyan.app.ui.components.RuntimeCircularProgressIndicator as CircularProgressIndicator
@@ -118,8 +119,8 @@ fun DistroManagementScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.lg),
         ) {
             item {
                 NoticeBanner(
@@ -142,8 +143,8 @@ fun DistroManagementScreen(
 
                     Button(
                         onClick = { showInstallDialog = true },
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
+                        shape = Radius.xsShape,
                     ) {
                         RuntimeIcon(
                             name = RuntimeIconName.Plus,
@@ -265,7 +266,7 @@ private fun ResetDistroConfirmDialog(
             )
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 Text(
                     text = "• 将清除自行安装的软件包与系统修改",
                     style = MaterialTheme.typography.bodyMedium,
@@ -325,7 +326,7 @@ private fun DeleteDistroConfirmDialog(
             )
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 Text(
                     text = "• 将彻底清除该 Linux 发行版与已安装软件",
                     style = MaterialTheme.typography.bodyMedium,
@@ -376,8 +377,8 @@ private fun DistroItemCard(
         borderColor = if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(Spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -386,13 +387,13 @@ private fun DistroItemCard(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     modifier = Modifier.weight(1f),
                 ) {
                     Box(
                         modifier = Modifier
                             .size(40.dp)
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(Radius.smShape)
                             .background(
                                 if (isActive) MaterialTheme.colorScheme.primaryContainer
                                 else MaterialTheme.colorScheme.surfaceVariant,
@@ -433,15 +434,15 @@ private fun DistroItemCard(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 // 按钮 1: 设为主系统 (当前为主系统或仅有 1 个系统时置灰禁用)
                 OutlinedButton(
                     onClick = onSwitchActive,
                     enabled = !isActive && canOperateMulti && !isRestoring && !isDeleting,
-                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
-                    shape = RoundedCornerShape(6.dp),
+                    contentPadding = PaddingValues(horizontal = Spacing.xs, vertical = Spacing.xs),
+                    shape = Radius.xsShape,
                     modifier = Modifier.weight(1f),
                 ) {
                     Text(
@@ -455,8 +456,8 @@ private fun DistroItemCard(
                 OutlinedButton(
                     onClick = onReset,
                     enabled = !isRestoring && !isDeleting,
-                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
-                    shape = RoundedCornerShape(6.dp),
+                    contentPadding = PaddingValues(horizontal = Spacing.xs, vertical = Spacing.xs),
+                    shape = Radius.xsShape,
                     modifier = Modifier.weight(1f),
                 ) {
                     if (isRestoring) {
@@ -476,8 +477,8 @@ private fun DistroItemCard(
                 OutlinedButton(
                     onClick = onUninstall,
                     enabled = canOperateMulti && !isRestoring && !isDeleting,
-                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
-                    shape = RoundedCornerShape(6.dp),
+                    contentPadding = PaddingValues(horizontal = Spacing.xs, vertical = Spacing.xs),
+                    shape = Radius.xsShape,
                     border = BorderStroke(
                         1.dp,
                         if (canOperateMulti && !isRestoring && !isDeleting) MaterialTheme.colorScheme.error.copy(alpha = 0.5f)
@@ -550,17 +551,17 @@ private fun InstallDistroDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
                 if (isInstalling) {
                     Column(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.lg),
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.md),
                     ) {
                         LinearProgressIndicator(
                             progress = { progressFraction.coerceIn(0f, 1f) },
-                            modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
+                            modifier = Modifier.fillMaxWidth().height(8.dp).clip(Radius.xsShape),
                         )
                         Text(
                             text = progressText ?: "正在下载并配置 RootFS...",
@@ -582,9 +583,9 @@ private fun InstallDistroDialog(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .clip(Radius.xsShape)
                                     .clickable { selectedSpec = spec }
-                                    .padding(vertical = 6.dp, horizontal = 4.dp),
+                                    .padding(vertical = Spacing.sm, horizontal = Spacing.xs),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 RadioButton(
@@ -621,12 +622,12 @@ private fun InstallDistroDialog(
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             OutlinedButton(
                                 onClick = { selectedRoute = RegistryRoute.AUTO },
                                 modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(8.dp),
+                                shape = Radius.xsShape,
                                 colors = if (selectedRoute == RegistryRoute.AUTO) {
                                     ButtonDefaults.outlinedButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
                                 } else ButtonDefaults.outlinedButtonColors(),
@@ -636,7 +637,7 @@ private fun InstallDistroDialog(
                             OutlinedButton(
                                 onClick = { selectedRoute = RegistryRoute.CHINA_ACCELERATED },
                                 modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(8.dp),
+                                shape = Radius.xsShape,
                                 colors = if (selectedRoute == RegistryRoute.CHINA_ACCELERATED) {
                                     ButtonDefaults.outlinedButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
                                 } else ButtonDefaults.outlinedButtonColors(),
@@ -660,7 +661,7 @@ private fun InstallDistroDialog(
             if (!isInstalling && availableDistros.isNotEmpty()) {
                 Button(
                     onClick = { onConfirmInstall(selectedSpec, selectedRoute) },
-                    shape = RoundedCornerShape(8.dp),
+                    shape = Radius.xsShape,
                 ) {
                     Text(text = "开始安装")
                 }

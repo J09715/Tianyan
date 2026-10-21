@@ -24,7 +24,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -55,6 +54,8 @@ import top.tianyan.app.runtime.StorageEntry
 import top.tianyan.app.runtime.StorageRiskLevel
 import top.tianyan.app.runtime.StorageUsage
 import top.tianyan.app.ui.components.IconTile
+import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.Radius
 import top.tianyan.app.ui.components.NoticeBanner
 import top.tianyan.app.ui.components.RuntimeAlertDialog
 import top.tianyan.app.ui.components.RuntimeButton
@@ -92,7 +93,7 @@ fun StorageUsageScreen(
                     text = {
                         Column(
                             modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             Text("将清理以下无风险临时数据：", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                             Text("• APT、Pip、NPM、Cargo、Gradle 与 Pub 依赖下载缓存")
@@ -100,7 +101,7 @@ fun StorageUsageScreen(
                             Text("• 历史版本回滚镜像 (rootfs.previous) 与升级暂存目录")
                             Text("• Linux 沙箱 /tmp 与宿主临时文件")
                             Text("• 历史运行与系统日志")
-                            Spacer(Modifier.height(4.dp))
+                            Spacer(Modifier.height(Spacing.xs))
                             Text("清理后完全不影响任何项目源代码、已配置环境与核心功能。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                         }
                     },
@@ -126,11 +127,11 @@ fun StorageUsageScreen(
                     text = {
                         Column(
                             modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             Text("将扫描并删除 /workspace 中所有项目的构建产物文件夹：", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                             Text("• build / target / .dart_tool / dist / .gradle / .cxx 目录")
-                            Spacer(Modifier.height(4.dp))
+                            Spacer(Modifier.height(Spacing.xs))
                             Text("• 保留全部源代码、静态资源与项目配置文件。", color = MaterialTheme.colorScheme.primary)
                             Text("• 下次编译或运行项目时会自动重新生成构建产物。", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
@@ -158,7 +159,7 @@ fun StorageUsageScreen(
                     text = {
                         Column(
                             modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             Text(category.cleanupHint ?: "确认清理该分类下的可清理数据吗？")
                             if (category.riskLevel == StorageRiskLevel.CAUTION) {
@@ -191,7 +192,7 @@ fun StorageUsageScreen(
                     text = {
                         Column(
                             modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             Text(entry.cleanupHint ?: "确认清理此细项吗？")
                             entry.path?.let {
@@ -231,8 +232,8 @@ fun StorageUsageScreen(
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             // 1. 顶部存储看板与多段占比仪表条
             item(key = "header_dashboard") {
@@ -244,9 +245,9 @@ fun StorageUsageScreen(
                     )
                 } ?: RuntimeCard(Modifier.fillMaxWidth()) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.md),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                     ) {
                         RuntimeCircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                         Text(
@@ -293,9 +294,9 @@ fun StorageUsageScreen(
                         fontWeight = FontWeight.Bold,
                     )
                 }
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(Spacing.sm))
                 LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     items(StorageFilter.entries, key = { it.name }) { filter ->
@@ -338,7 +339,7 @@ fun StorageUsageScreen(
             }
 
             item(key = "bottom_spacer") {
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(Spacing.lg))
             }
         }
     }
@@ -364,7 +365,7 @@ private fun StorageDashboardCard(
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(Spacing.xs))
             Text(
                 usage.totalManagedBytes.readableSize(),
                 style = MaterialTheme.typography.headlineMedium,
@@ -375,21 +376,21 @@ private fun StorageDashboardCard(
         RuntimeOutlinedButton(
             onClick = onRefresh,
             enabled = !refreshing,
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+            contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
         ) {
             if (refreshing) {
                 RuntimeCircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(Spacing.sm))
                 Text("扫描中", style = MaterialTheme.typography.labelSmall)
             } else {
                 RuntimeIcon(RuntimeIconName.Refresh, Modifier.size(14.dp))
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(Spacing.sm))
                 Text("重新扫描", style = MaterialTheme.typography.labelSmall)
             }
         }
     }
 
-    Spacer(Modifier.height(14.dp))
+    Spacer(Modifier.height(Spacing.md))
 
     // 多段存储色彩条
     val visibleCategories = usage.categories.filter { it.bytes > 0L }
@@ -399,7 +400,7 @@ private fun StorageDashboardCard(
         modifier = Modifier
             .fillMaxWidth()
             .height(12.dp)
-            .clip(RoundedCornerShape(6.dp))
+            .clip(Radius.xsShape)
             .background(MaterialTheme.colorScheme.surfaceContainerHighest)
             .semantics {
                 contentDescription = visibleCategories.joinToString("；") { cat ->
@@ -424,12 +425,12 @@ private fun StorageDashboardCard(
         }
     }
 
-    Spacer(Modifier.height(14.dp))
+    Spacer(Modifier.height(Spacing.md))
 
     // 竖向分类占比深度分析列表（每个分类独占一行，绝不折叠与截断）
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         visibleCategories.forEachIndexed { index, item ->
             val pct = (item.bytes.toDouble() / totalBytes * 100.0)
@@ -443,7 +444,7 @@ private fun StorageDashboardCard(
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f).padding(end = 8.dp),
+                        modifier = Modifier.weight(1f).padding(end = Spacing.sm),
                     ) {
                         Box(
                             modifier = Modifier
@@ -451,7 +452,7 @@ private fun StorageDashboardCard(
                                 .clip(CircleShape)
                                 .background(categoryColor(index)),
                         )
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(Spacing.sm))
                         Text(
                             text = item.name,
                             style = MaterialTheme.typography.bodyMedium,
@@ -462,7 +463,7 @@ private fun StorageDashboardCard(
                     }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         Text(
                             text = item.bytes.readableSize(),
@@ -479,13 +480,13 @@ private fun StorageDashboardCard(
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                                 fontWeight = FontWeight.Bold,
                                 color = categoryColor(index),
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                             )
                         }
                     }
                 }
 
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(Spacing.xs))
 
                 // 单项轻量视觉进度细条
                 Box(
@@ -507,9 +508,9 @@ private fun StorageDashboardCard(
         }
     }
 
-    Spacer(Modifier.height(12.dp))
+    Spacer(Modifier.height(Spacing.md))
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-    Spacer(Modifier.height(8.dp))
+    Spacer(Modifier.height(Spacing.sm))
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -540,7 +541,7 @@ private fun SmartCleanupCards(
     onQuickSafeClean: () -> Unit,
     onCleanProjectBuilds: () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
         // 1. 可安全释放缓存卡片
         if (safeCleanableBytes > 0) {
             RuntimeCard(
@@ -549,7 +550,7 @@ private fun SmartCleanupCards(
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.md),
                 ) {
                     // 上半部分：图标 + 标题/描述 + 醒目大字容量
                     Row(
@@ -561,15 +562,15 @@ private fun SmartCleanupCards(
                             color = Color(0xFF10B981),
                             size = 40.dp,
                         )
-                        Spacer(Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                        Spacer(Modifier.width(Spacing.md))
+                        Column(modifier = Modifier.weight(1f).padding(end = Spacing.sm)) {
                             Text(
                                 "可安全释放缓存",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
-                            Spacer(Modifier.height(2.dp))
+                            Spacer(Modifier.height(Spacing.xs))
                             Text(
                                 "依赖下载缓存、临时文件与日志，清理后无副作用",
                                 style = MaterialTheme.typography.bodySmall,
@@ -597,9 +598,9 @@ private fun SmartCleanupCards(
                             color = Color(0xFFE6F8F0),
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                             ) {
                                 RuntimeIcon(
                                     name = RuntimeIconName.Check,
@@ -618,11 +619,11 @@ private fun SmartCleanupCards(
                         RuntimeButton(
                             onClick = onQuickSafeClean,
                             enabled = cleaningAction == null,
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                            contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.sm),
                         ) {
                             if (cleaningAction == "quick_safe") {
                                 RuntimeCircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
-                                Spacer(Modifier.width(6.dp))
+                                Spacer(Modifier.width(Spacing.sm))
                                 Text("清理中…", style = MaterialTheme.typography.labelMedium)
                             } else {
                                 Text("一键安全清理", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
@@ -641,7 +642,7 @@ private fun SmartCleanupCards(
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.md),
                 ) {
                     // 上半部分：图标 + 标题/描述 + 醒目大字容量
                     Row(
@@ -653,15 +654,15 @@ private fun SmartCleanupCards(
                             color = Color(0xFFF59E0B),
                             size = 40.dp,
                         )
-                        Spacer(Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                        Spacer(Modifier.width(Spacing.md))
+                        Column(modifier = Modifier.weight(1f).padding(end = Spacing.sm)) {
                             Text(
                                 "工作区构建生成物",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
-                            Spacer(Modifier.height(2.dp))
+                            Spacer(Modifier.height(Spacing.xs))
                             Text(
                                 "各工程 build/target/dist 产物，完整保留全部源码",
                                 style = MaterialTheme.typography.bodySmall,
@@ -689,9 +690,9 @@ private fun SmartCleanupCards(
                             color = Color(0xFFFFF4E5),
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                             ) {
                                 RuntimeIcon(
                                     name = RuntimeIconName.Info,
@@ -710,11 +711,11 @@ private fun SmartCleanupCards(
                         RuntimeFilledTonalButton(
                             onClick = onCleanProjectBuilds,
                             enabled = cleaningAction == null,
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                            contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.sm),
                         ) {
                             if (cleaningAction == "all_project_builds") {
                                 RuntimeCircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
-                                Spacer(Modifier.width(6.dp))
+                                Spacer(Modifier.width(Spacing.sm))
                                 Text("清理中…", style = MaterialTheme.typography.labelMedium)
                             } else {
                                 Text("一键清理产物", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
@@ -756,7 +757,7 @@ private fun StorageCategoryDetailCard(
                 color = color,
                 size = 42.dp,
             )
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(Spacing.md))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = category.name,
@@ -765,7 +766,7 @@ private fun StorageCategoryDetailCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Spacer(Modifier.height(2.dp))
+                Spacer(Modifier.height(Spacing.xs))
                 Text(
                     text = if (category.description.isNotBlank()) category.description else "${category.entries.size} 个细化项目",
                     style = MaterialTheme.typography.bodySmall,
@@ -774,10 +775,10 @@ private fun StorageCategoryDetailCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(Spacing.sm))
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
             ) {
                 Text(
                     text = category.bytes.readableSize(),
@@ -795,7 +796,7 @@ private fun StorageCategoryDetailCard(
         }
 
         // 底部状态与操作行：风险等级标签（完整不换行） + 清理按钮
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(Spacing.sm))
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -807,7 +808,7 @@ private fun StorageCategoryDetailCard(
                 RuntimeFilledTonalButton(
                     onClick = onCleanCategory,
                     enabled = cleaningAction == null,
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                    contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
                 ) {
                     if (isCategoryCleaning) {
                         RuntimeCircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 2.dp)
@@ -828,7 +829,7 @@ private fun StorageCategoryDetailCard(
             enter = fadeIn() + expandVertically(),
             exit = fadeOut() + shrinkVertically(),
         ) {
-            Column(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+            Column(modifier = Modifier.fillMaxWidth().padding(top = Spacing.md)) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
                 category.entries.forEachIndexed { index, entry ->
                     StorageEntryRow(
@@ -838,7 +839,7 @@ private fun StorageCategoryDetailCard(
                     )
                     if (index < category.entries.size - 1) {
                         HorizontalDivider(
-                            modifier = Modifier.padding(start = 12.dp),
+                            modifier = Modifier.padding(start = Spacing.md),
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
                         )
                     }
@@ -859,13 +860,13 @@ private fun StorageEntryRow(
 ) {
     val isEntryCleaning = cleaningAction == "entry_${entry.id}" || cleaningAction == "project_build_${entry.name}"
 
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.sm)) {
         // 主条目行
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+            Column(modifier = Modifier.weight(1f).padding(end = Spacing.sm)) {
                 Text(
                     entry.name,
                     style = MaterialTheme.typography.bodyMedium,
@@ -874,7 +875,7 @@ private fun StorageEntryRow(
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (entry.detail.isNotBlank()) {
-                    Spacer(Modifier.height(2.dp))
+                    Spacer(Modifier.height(Spacing.xs))
                     Text(
                         entry.detail,
                         style = MaterialTheme.typography.bodySmall,
@@ -886,7 +887,7 @@ private fun StorageEntryRow(
             }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 Text(
                     entry.bytes.readableSize(),
@@ -898,7 +899,7 @@ private fun StorageEntryRow(
                     RuntimeFilledTonalButton(
                         onClick = onClean,
                         enabled = cleaningAction == null,
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs),
                     ) {
                         if (isEntryCleaning) {
                             RuntimeCircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 2.dp)
@@ -922,16 +923,16 @@ private fun StorageEntryRow(
 
         // 次级细项卡片（例如工程下的源码资产 vs 编译构建产物，或者 Android SDK 下的 components）
         if (entry.subItems.isNotEmpty()) {
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(Spacing.sm))
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp)),
+                    .clip(Radius.xsShape),
                 color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.55f),
             ) {
                 Column(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     entry.subItems.forEach { sub ->
                         Row(
@@ -941,7 +942,7 @@ private fun StorageEntryRow(
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.weight(1f).padding(end = 8.dp),
+                                modifier = Modifier.weight(1f).padding(end = Spacing.sm),
                             ) {
                                 Box(
                                     modifier = Modifier
@@ -951,7 +952,7 @@ private fun StorageEntryRow(
                                             if (sub.cleanable) Color(0xFFF59E0B) else MaterialTheme.colorScheme.outlineVariant
                                         ),
                                 )
-                                Spacer(Modifier.width(6.dp))
+                                Spacer(Modifier.width(Spacing.sm))
                                 Text(
                                     sub.name,
                                     style = MaterialTheme.typography.labelMedium,
@@ -1014,7 +1015,7 @@ private fun RiskBadge(riskLevel: StorageRiskLevel, modifier: Modifier = Modifier
             fontWeight = FontWeight.Medium,
             maxLines = 1,
             softWrap = false,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
         )
     }
 }

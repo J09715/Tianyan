@@ -29,6 +29,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.tianyan.app.core.model.StatsDateRangePreset
 import top.tianyan.app.ui.components.RuntimeCard
+import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeTopBar
 import top.tianyan.app.ui.settings.stats.widgets.StatsHeatmap
@@ -63,8 +64,8 @@ fun StatsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 val presets = listOf(
                     StatsDateRangePreset.ALL_TIME to "全部时间",
@@ -106,12 +107,12 @@ fun StatsScreen(
 
             // 加载失败：错误态 + 重试入口（复用模块内 RuntimeCard + 按钮模式）
             uiState.error?.let { errorMessage ->
-                Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Box(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.lg, vertical = Spacing.sm)) {
                     RuntimeCard(modifier = Modifier.fillMaxWidth()) {
                         Column(
-                            modifier = Modifier.fillMaxWidth().padding(24.dp),
+                            modifier = Modifier.fillMaxWidth().padding(Spacing.xl),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             Text(
                                 text = errorMessage,
@@ -130,11 +131,11 @@ fun StatsScreen(
 
             // 加载完成但没有任何数据：给出空态而非整页空白
             if (uiState.error == null && !uiState.isLoading && uiState.snapshot?.heatmap.isNullOrEmpty()) {
-                Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Box(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.lg, vertical = Spacing.sm)) {
                     RuntimeCard(modifier = Modifier.fillMaxWidth()) {
                         Text(
                             text = "暂无统计数据。开始使用 Agent 对话与工具后，这里会展示活跃度与 Token 用量。",
-                            modifier = Modifier.fillMaxWidth().padding(24.dp),
+                            modifier = Modifier.fillMaxWidth().padding(Spacing.xl),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -146,8 +147,8 @@ fun StatsScreen(
             if (snapshot != null) {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.sm),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.md),
                 ) {
                     // 1. 活跃度打卡热力图
                     item {

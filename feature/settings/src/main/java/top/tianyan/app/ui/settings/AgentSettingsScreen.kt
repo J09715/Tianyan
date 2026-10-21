@@ -1,6 +1,8 @@
 package top.tianyan.app.ui.settings
 
 import top.tianyan.app.ui.components.RuntimeAlertDialog
+import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.Radius
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,7 +23,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.shape.RoundedCornerShape
 import top.tianyan.app.ui.components.RuntimeButton as Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
@@ -145,8 +146,8 @@ fun AgentSettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.lg),
         ) {
             if (category == AgentSettingsCategory.EXECUTION) {
             // ---- 模块 1：模型思考与交互表现 ----
@@ -331,10 +332,10 @@ fun AgentSettingsScreen(
                         showSubagentDialog = true
                     },
                     modifier = Modifier.fillMaxWidth().height(44.dp),
-                    shape = RoundedCornerShape(10.dp),
+                    shape = Radius.smShape,
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         RuntimeIcon(RuntimeIconName.Plus, Modifier.size(16.dp), MaterialTheme.colorScheme.onPrimaryContainer)
                         Text("新增子智能体角色", color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold)
                     }
@@ -400,7 +401,7 @@ fun AgentSettingsScreen(
             }
             item {
                 OutlinedButton(onClick = { skillArchivePicker.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")) }, modifier = Modifier.fillMaxWidth().height(44.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         RuntimeIcon(RuntimeIconName.FolderDownload, Modifier.size(16.dp))
                         Text("从 ZIP 导入 Skill（支持批量多选）")
                     }
@@ -408,7 +409,7 @@ fun AgentSettingsScreen(
             }
             item {
                 OutlinedButton(onClick = viewModel::scanSkillDirectories, modifier = Modifier.fillMaxWidth().height(44.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         RuntimeIcon(RuntimeIconName.FolderOpen, Modifier.size(16.dp))
                         Text("扫描 Skill 目录批量导入")
                     }
@@ -417,12 +418,12 @@ fun AgentSettingsScreen(
                     text = "可将 rikkahub、aicode 等工具的 skills 目录整体复制到 attachments/skills 或工作区 skills 目录，重启应用即自动批量导入；运行中复制可点击上方按钮立即扫描，已导入的不会重复注册",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 6.dp, start = 4.dp),
+                    modifier = Modifier.padding(top = Spacing.sm, start = Spacing.xs),
                 )
             }
             item {
                 OutlinedButton(onClick = { skillDirPicker.launch(null) }, modifier = Modifier.fillMaxWidth().height(44.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         RuntimeIcon(RuntimeIconName.Search, Modifier.size(16.dp))
                         Text("从自选目录导入（任意位置）")
                     }
@@ -431,17 +432,17 @@ fun AgentSettingsScreen(
                     text = "在文件管理器中任选一个目录（支持任意深度嵌套，含 Skill 目录内再嵌套 Skill 子目录的情况），自动查找其中所有包含 SKILL.md 的技能文件夹并导入",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 6.dp, start = 4.dp),
+                    modifier = Modifier.padding(top = Spacing.sm, start = Spacing.xs),
                 )
             }
             item {
                 Button(
                     onClick = { showAddSkillDialog = true },
                     modifier = Modifier.fillMaxWidth().height(44.dp),
-                    shape = RoundedCornerShape(10.dp),
+                    shape = Radius.smShape,
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         RuntimeIcon(RuntimeIconName.Sparkles, Modifier.size(16.dp), MaterialTheme.colorScheme.onPrimaryContainer)
                         Text("新增自定义 Skill 技能", color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold)
                     }
@@ -476,7 +477,7 @@ fun AgentSettingsScreen(
             }
             }
 
-            item { Spacer(Modifier.height(16.dp)) }
+            item { Spacer(Modifier.height(Spacing.lg)) }
         }
     }
 
@@ -494,7 +495,7 @@ fun AgentSettingsScreen(
         RuntimeAlertDialog(
             onDismissRequest = { viewingSkillPrompt = null },
             title = {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     Text(skill.name, fontWeight = FontWeight.Bold)
                 }
             },
@@ -504,19 +505,19 @@ fun AgentSettingsScreen(
                         .fillMaxWidth()
                         .heightIn(max = 480.dp)
                         .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     Text(skill.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     Text("注入系统的指导提示词 (System Prompt)：", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        shape = RoundedCornerShape(8.dp),
+                        shape = Radius.xsShape,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(
                             skill.systemPrompt,
-                            modifier = Modifier.padding(10.dp),
+                            modifier = Modifier.padding(Spacing.sm),
                             style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                         )
                     }
@@ -620,8 +621,8 @@ private fun BaseCommandTimeoutSliderRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+            .padding(horizontal = Spacing.lg, vertical = Spacing.md),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -666,7 +667,7 @@ private fun AgentSettingsGroup(content: @Composable () -> Unit) {
 private fun AgentBlockTitle(title: String) {
     Text(
         text = title,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.xs),
         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
         color = MaterialTheme.colorScheme.primary,
     )
@@ -684,20 +685,20 @@ private fun AgentToggleRow(
         Modifier
             .fillMaxWidth()
             .heightIn(min = 68.dp)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = Spacing.lg, vertical = Spacing.md),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         Box(
             modifier = Modifier
                 .size(36.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(Radius.xsShape)
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
             contentAlignment = Alignment.Center,
         ) {
             RuntimeIcon(icon, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
         }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
             Text(title, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface)
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -719,18 +720,18 @@ private fun ApprovalModeSelectorRow(
     onModeChange: (ApprovalMode) -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.lg, vertical = Spacing.md),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
             Box(
-                modifier = Modifier.size(36.dp).clip(RoundedCornerShape(8.dp))
+                modifier = Modifier.size(36.dp).clip(Radius.xsShape)
                     .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center,
             ) {
                 RuntimeIcon(RuntimeIconName.Shield, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
             }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 Text("新会话默认工具权限", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
                 Text(
                     "仅作为新建会话初始值，已存在会话可在聊天顶部单独切换。",
@@ -739,7 +740,7 @@ private fun ApprovalModeSelectorRow(
                 )
             }
         }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             listOf(
                 ApprovalMode.REQUEST to "请求批准",
                 ApprovalMode.ASSISTED to "帮我批准",
@@ -774,18 +775,18 @@ private fun AgentDepartmentCard(
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             Box(
                 modifier = Modifier
                     .size(40.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(Radius.smShape)
                     .background(departmentColor.copy(alpha = 0.14f)),
                 contentAlignment = Alignment.Center,
             ) {
                 RuntimeIcon(RuntimeIconName.Bot, Modifier.size(20.dp), departmentColor)
             }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 Text(
                     "${department.localizedName} · ${department.name}",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
@@ -819,33 +820,33 @@ private fun SubagentProfileCard(
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         borderColor = if (profile.isEnabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant,
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 Box(
                     modifier = Modifier
                         .size(36.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(Radius.xsShape)
                         .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
                     contentAlignment = Alignment.Center,
                 ) {
                     RuntimeIcon(RuntimeIconName.Bot, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
                 }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     Text(profile.name, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                     Text(profile.id, style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = MaterialTheme.colorScheme.primary)
                 }
                 if (profile.isBuiltin) {
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        shape = RoundedCornerShape(4.dp),
+                        shape = Radius.xsShape,
                     ) {
                         Text(
                             "Agency",
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -883,7 +884,7 @@ private fun SubagentProfileCard(
                 ) {
                     RuntimeIcon(RuntimeIconName.Trash, Modifier.size(17.dp), MaterialTheme.colorScheme.error)
                 }
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(Spacing.sm))
                 Switch(
                     checked = profile.isEnabled,
                     onCheckedChange = onToggle,
@@ -908,8 +909,8 @@ private fun RoundsSliderRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+            .padding(horizontal = Spacing.lg, vertical = Spacing.md),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -947,8 +948,8 @@ private fun ThresholdSliderRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+            .padding(horizontal = Spacing.lg, vertical = Spacing.md),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -986,8 +987,8 @@ private fun ContextBudgetSliderRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+            .padding(horizontal = Spacing.lg, vertical = Spacing.md),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1025,8 +1026,8 @@ private fun ToolsPerRoundSliderRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+            .padding(horizontal = Spacing.lg, vertical = Spacing.md),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1064,8 +1065,8 @@ private fun ConsecutiveFailuresSliderRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+            .padding(horizontal = Spacing.lg, vertical = Spacing.md),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1106,7 +1107,7 @@ private fun SkillCard(
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         borderColor = if (skill.isEnabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant,
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1114,17 +1115,17 @@ private fun SkillCard(
                 Row(
                     modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     Text(skill.name, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        shape = RoundedCornerShape(4.dp),
+                        shape = Radius.xsShape,
                     ) {
                         Text(
                             skill.category,
                             style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -1132,12 +1133,12 @@ private fun SkillCard(
                     if (cmd != null) {
                         Surface(
                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                            shape = RoundedCornerShape(4.dp),
+                            shape = Radius.xsShape,
                         ) {
                             Text(
                                 cmd,
                                 style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold),
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                 color = MaterialTheme.colorScheme.primary,
                             )
                         }
@@ -1158,12 +1159,12 @@ private fun SkillCard(
                 if (skill.isImmutable) {
                     Surface(
                         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
-                        shape = RoundedCornerShape(4.dp),
+                        shape = Radius.xsShape,
                     ) {
                         Text(
                             "系统核心常驻",
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
                     }
@@ -1203,14 +1204,14 @@ private fun PluginCard(
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         borderColor = if (plugin.isEnabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant,
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         Text(plugin.name, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                         Text("v${plugin.version}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -1229,14 +1230,14 @@ private fun PluginCard(
             Text(plugin.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
             if (plugin.permissions.isNotEmpty()) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
                     Text("权限:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     plugin.permissions.forEach { perm ->
                         Surface(
                             color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                            shape = RoundedCornerShape(4.dp),
+                            shape = Radius.xsShape,
                         ) {
-                            Text(perm, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(perm, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -1263,7 +1264,7 @@ private fun AddSkillDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 OutlinedTextField(
                     value = name,
@@ -1350,7 +1351,7 @@ private fun SubagentEditorDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 OutlinedTextField(
                     value = roleId,
@@ -1386,7 +1387,7 @@ private fun SubagentEditorDialog(
                     maxLines = 9,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     Text("默认模型", style = MaterialTheme.typography.labelMedium)
                     Box(Modifier.fillMaxWidth()) {
                         OutlinedButton(
@@ -1469,12 +1470,12 @@ private fun ThinkingLanguageSelectorRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            .padding(Spacing.lg),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             RuntimeIcon(RuntimeIconName.Globe, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
             Column(Modifier.weight(1f)) {
@@ -1493,8 +1494,8 @@ private fun ThinkingLanguageSelectorRow(
 
         FlowRow(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             listOf(
                 "zh" to "强制中文 (推荐)",
@@ -1566,8 +1567,8 @@ You are a helpful and expert AI assistant called {{char}}, based on model {{mode
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(Spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1576,7 +1577,7 @@ You are a helpful and expert AI assistant called {{char}}, based on model {{mode
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                     modifier = Modifier.weight(1f),
                 ) {
                     RuntimeIcon(RuntimeIconName.Prompt, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
@@ -1605,9 +1606,9 @@ You are a helpful and expert AI assistant called {{char}}, based on model {{mode
                             textBuffer = defaultPromptTemplate
                             onPromptChange(defaultPromptTemplate)
                         },
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs),
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                             RuntimeIcon(RuntimeIconName.Refresh, Modifier.size(12.dp))
                             Text("重置模板", style = MaterialTheme.typography.labelSmall)
                         }
@@ -1628,8 +1629,8 @@ You are a helpful and expert AI assistant called {{char}}, based on model {{mode
 
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     availableVariables.forEach { (variable, label) ->
                         SuggestionChip(

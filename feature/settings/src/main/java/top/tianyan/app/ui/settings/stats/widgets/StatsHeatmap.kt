@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.tianyan.app.core.model.StatsHeatmapDay
+import top.tianyan.app.ui.theme.Spacing
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -62,7 +63,7 @@ fun StatsHeatmap(
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -77,7 +78,7 @@ fun StatsHeatmap(
                     .weight(1f)
                     .horizontalScroll(scrollState),
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     // 月份标签栏
                     Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
                         for (week in weeks) {
@@ -157,7 +158,7 @@ private fun WeekdayLabels() {
     Column(
         modifier = Modifier
             .width(WeekdayLabelWidth)
-            .padding(top = MonthLabelHeight + 2.dp),
+            .padding(top = MonthLabelHeight + Spacing.xs),
     ) {
         val days = listOf("日", "一", "二", "三", "四", "五", "六")
         for (i in 0..6) {

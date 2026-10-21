@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButtonDefaults
@@ -60,6 +59,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlin.math.roundToInt
 import top.tianyan.app.ui.components.RuntimeCard
+import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.Radius
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeTopBar
@@ -110,8 +111,8 @@ fun AppearanceSettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.lg),
         ) {
             // 1. 终端实时效果预览卡片
             item {
@@ -119,7 +120,7 @@ fun AppearanceSettingsScreen(
                     text = stringResource(R.string.settings_terminal_preview),
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+                    modifier = Modifier.padding(start = Spacing.xs, bottom = Spacing.xs),
                 )
                 TerminalPreviewCard(
                     colorScheme = terminalColorScheme,
@@ -133,11 +134,11 @@ fun AppearanceSettingsScreen(
                     text = stringResource(R.string.settings_terminal_appearance),
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+                    modifier = Modifier.padding(start = Spacing.xs, bottom = Spacing.xs),
                 )
                 SettingsGroup {
                     // 终端配色方案
-                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         Text(
                             text = stringResource(R.string.settings_terminal_color_scheme),
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
@@ -145,7 +146,7 @@ fun AppearanceSettingsScreen(
                         )
                         Row(
                             Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             TerminalThemeChip(
                                 title = stringResource(R.string.settings_terminal_theme_obsidian),
@@ -185,7 +186,7 @@ fun AppearanceSettingsScreen(
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
                     // 终端字体大小
-                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         Row(
                             Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -248,7 +249,7 @@ fun AppearanceSettingsScreen(
                     text = stringResource(R.string.settings_theme_style),
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+                    modifier = Modifier.padding(start = Spacing.xs, bottom = Spacing.xs),
                 )
                 SettingsGroup {
                     ThemeOptionRow(
@@ -274,19 +275,19 @@ fun AppearanceSettingsScreen(
                     text = stringResource(R.string.settings_chengming_background),
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+                    modifier = Modifier.padding(start = Spacing.xs, bottom = Spacing.xs),
                 )
                 SettingsGroup {
                     Column(
-                        Modifier.fillMaxWidth().padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        Modifier.fillMaxWidth().padding(Spacing.md),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         Text(
                             text = stringResource(if (backgroundUri == null) R.string.settings_background_none else R.string.settings_background_custom),
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                         )
                         backgroundUri?.let { uri -> ChengmingBackgroundPreview(uri) }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                             TextButton(
                                 onClick = { backgroundPicker.launch(arrayOf("image/*")) },
                             ) { Text(stringResource(if (backgroundUri == null) R.string.settings_background_upload else R.string.settings_background_change)) }
@@ -306,7 +307,7 @@ fun AppearanceSettingsScreen(
                     text = stringResource(R.string.settings_color_mode),
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+                    modifier = Modifier.padding(start = Spacing.xs, bottom = Spacing.xs),
                 )
                 SettingsGroup {
                     ThemeOptionRow(
@@ -338,7 +339,7 @@ fun AppearanceSettingsScreen(
                     text = stringResource(R.string.settings_language_title),
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+                    modifier = Modifier.padding(start = Spacing.xs, bottom = Spacing.xs),
                 )
                 SettingsGroup {
                     ThemeOptionRow(
@@ -370,10 +371,10 @@ fun AppearanceSettingsScreen(
                     text = stringResource(R.string.settings_interface_scale),
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+                    modifier = Modifier.padding(start = Spacing.xs, bottom = Spacing.xs),
                 )
                 SettingsGroup {
-                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         Row(
                             Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -436,22 +437,22 @@ private fun TerminalPreviewCard(
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = Radius.mdShape,
         color = bg,
         border = BorderStroke(1.dp, Color(0xFF282A36)),
     ) {
         Column(
             Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+                .padding(Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     Box(Modifier.size(10.dp).clip(CircleShape).background(Color(0xFFFF5F56)))
                     Box(Modifier.size(10.dp).clip(CircleShape).background(Color(0xFFFFBD2E)))
                     Box(Modifier.size(10.dp).clip(CircleShape).background(Color(0xFF27C93F)))
@@ -462,7 +463,7 @@ private fun TerminalPreviewCard(
                     color = textColor.copy(alpha = 0.5f),
                 )
             }
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(Spacing.xs))
             Text(
                 text = "tianyan@debian:~$ uname -a",
                 style = MaterialTheme.typography.bodySmall.copy(
@@ -516,7 +517,7 @@ private fun ChengmingBackgroundPreview(uri: String) {
             modifier = Modifier
                 .fillMaxWidth()
                 .height(124.dp)
-                .clip(RoundedCornerShape(12.dp)),
+                .clip(Radius.smShape),
             contentScale = ContentScale.Crop,
         )
     }
@@ -533,9 +534,9 @@ private fun TerminalThemeChip(
 ) {
     Surface(
         modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
+            .clip(Radius.smShape)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(10.dp),
+        shape = Radius.smShape,
         color = bg,
         border = BorderStroke(
             1.5.dp,
@@ -543,9 +544,9 @@ private fun TerminalThemeChip(
         ),
     ) {
         Column(
-            Modifier.padding(vertical = 10.dp, horizontal = 6.dp),
+            Modifier.padding(vertical = Spacing.sm, horizontal = Spacing.sm),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
             Box(
                 Modifier
@@ -581,14 +582,14 @@ private fun ThemeOptionRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = Spacing.lg, vertical = Spacing.md),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Row(
             modifier = Modifier.weight(1f),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             if (accentColor != null) {
                 Box(
@@ -598,7 +599,7 @@ private fun ThemeOptionRow(
                         .background(accentColor),
                 )
             }
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Medium),

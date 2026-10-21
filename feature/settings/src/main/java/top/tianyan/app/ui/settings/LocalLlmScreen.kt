@@ -39,6 +39,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.tianyan.app.runtime.LocalGgufModel
 import top.tianyan.app.runtime.LocalLlmServiceState
 import top.tianyan.app.ui.components.RuntimeAlertDialog
+import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.Radius
 import top.tianyan.app.ui.components.RuntimeButton
 import top.tianyan.app.ui.components.RuntimeCard
 import top.tianyan.app.ui.components.RuntimeIcon
@@ -132,7 +134,7 @@ fun LocalLlmScreen(
                     if (serviceState is LocalLlmServiceState.Running) {
                         RuntimeOutlinedButton(
                             onClick = viewModel::stop,
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp),
+                            contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
                         ) {
                             RuntimeIcon(RuntimeIconName.Stop, Modifier.size(16.dp))
                             Spacer(Modifier.size(4.dp))
@@ -145,19 +147,19 @@ fun LocalLlmScreen(
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     RuntimeOutlinedButton(
                         onClick = { showDownloadDialog = true },
                         enabled = !transfer.running,
                         modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 11.dp),
+                        contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.sm),
                     ) {
                         RuntimeIcon(RuntimeIconName.Download, Modifier.size(18.dp))
                         Spacer(Modifier.size(6.dp))
@@ -167,7 +169,7 @@ fun LocalLlmScreen(
                         onClick = { showPathDialog = true },
                         enabled = !transfer.running,
                         modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 11.dp),
+                        contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.sm),
                     ) {
                         RuntimeIcon(RuntimeIconName.Folder, Modifier.size(18.dp))
                         Spacer(Modifier.size(6.dp))
@@ -177,7 +179,7 @@ fun LocalLlmScreen(
                         onClick = { filePicker.launch(arrayOf("application/octet-stream", "application/*", "*/*")) },
                         enabled = !transfer.running,
                         modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 11.dp),
+                        contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.sm),
                     ) {
                         RuntimeIcon(RuntimeIconName.File, Modifier.size(18.dp))
                         Spacer(Modifier.size(6.dp))
@@ -193,7 +195,7 @@ fun LocalLlmScreen(
                         containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
                         borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
                     ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
                                     transfer.label,
@@ -225,10 +227,10 @@ fun LocalLlmScreen(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                     borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             RuntimeIcon(RuntimeIconName.Info, Modifier.size(23.dp), MaterialTheme.colorScheme.primary)
                             Text("本地 LLM 推理", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
@@ -240,12 +242,12 @@ fun LocalLlmScreen(
                         )
                         if (!engineInstalled) {
                             Surface(
-                                shape = RoundedCornerShape(10.dp),
+                                shape = Radius.smShape,
                                 color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f),
                             ) {
-                                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Column(Modifier.padding(Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                                     Text("需要先安装 llama.cpp 推理引擎", fontWeight = FontWeight.SemiBold)
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                                         RuntimeButton(onClick = viewModel::installEngine) { Text("一键安装") }
                                         RuntimeOutlinedButton(onClick = onOpenEngine) { Text("查看详情") }
                                     }
@@ -257,7 +259,7 @@ fun LocalLlmScreen(
             }
 
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     Text("手机小模型推荐", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                     Text(
                         "本机内存 ${formatBytes(deviceRamBytes)} · 默认推荐 Q4_K_M，兼顾体积、速度和效果",
@@ -299,7 +301,7 @@ fun LocalLlmScreen(
                         Column(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 28.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             RuntimeIcon(RuntimeIconName.Model, Modifier.size(44.dp), MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f))
                             Text("暂无模型", style = MaterialTheme.typography.titleSmall)
@@ -340,8 +342,8 @@ private fun MobileModelPresetCard(
             MaterialTheme.colorScheme.outlineVariant
         },
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 RuntimeIcon(RuntimeIconName.Cpu, Modifier.size(22.dp), MaterialTheme.colorScheme.primary)
                 Text(
                     preset.name,
@@ -349,7 +351,7 @@ private fun MobileModelPresetCard(
                     modifier = Modifier.weight(1f),
                 )
                 Surface(
-                    shape = RoundedCornerShape(7.dp),
+                    shape = Radius.xsShape,
                     color = if (suitable) {
                         MaterialTheme.colorScheme.primaryContainer
                     } else {
@@ -358,7 +360,7 @@ private fun MobileModelPresetCard(
                 ) {
                     Text(
                         if (suitable) "适合本机" else "内存不足",
-                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                         color = if (suitable) {
                             MaterialTheme.colorScheme.onPrimaryContainer
@@ -372,10 +374,10 @@ private fun MobileModelPresetCard(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         ModelSpecChip(preset.parameterCount)
                         ModelSpecChip(preset.quantization)
                         ModelSpecChip(formatBytes(preset.downloadBytes))
@@ -389,7 +391,7 @@ private fun MobileModelPresetCard(
                 RuntimeButton(
                     onClick = download,
                     enabled = suitable && !alreadyDownloaded && !transferRunning,
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                    contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
                 ) {
                     RuntimeIcon(
                         if (alreadyDownloaded) RuntimeIconName.Check else RuntimeIconName.Download,
@@ -406,12 +408,12 @@ private fun MobileModelPresetCard(
 @Composable
 private fun ModelSpecChip(text: String) {
     Surface(
-        shape = RoundedCornerShape(7.dp),
+        shape = Radius.xsShape,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
     ) {
         Text(
             text,
-            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -435,8 +437,8 @@ private fun ServiceStatusCard(
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         borderColor = color.copy(alpha = 0.25f),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 Surface(modifier = Modifier.size(10.dp), shape = RoundedCornerShape(50), color = color) {}
                 Text(
                     when (serviceState) {
@@ -449,7 +451,7 @@ private fun ServiceStatusCard(
                 )
                 Spacer(Modifier.weight(1f))
                 if (running != null) {
-                    RuntimeOutlinedButton(onClick = stop, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp)) {
+                    RuntimeOutlinedButton(onClick = stop, contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm)) {
                         RuntimeIcon(RuntimeIconName.Stop, Modifier.size(16.dp))
                         Spacer(Modifier.size(4.dp))
                         Text("停止")
@@ -484,9 +486,9 @@ private fun ModelCard(
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         borderColor = if (isRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             RuntimeIcon(RuntimeIconName.Model, Modifier.size(28.dp), MaterialTheme.colorScheme.primary)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 Text(
                     model.fileName,
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -496,7 +498,7 @@ private fun ModelCard(
                 Text(formatBytes(model.sizeBytes), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (isRunning) {
-                RuntimeOutlinedButton(onClick = stop, contentPadding = PaddingValues(horizontal = 11.dp, vertical = 8.dp)) {
+                RuntimeOutlinedButton(onClick = stop, contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.sm)) {
                     RuntimeIcon(RuntimeIconName.Stop, Modifier.size(17.dp))
                 }
             } else {
@@ -506,7 +508,7 @@ private fun ModelCard(
                         serviceState is LocalLlmServiceState.Stopped ||
                             serviceState is LocalLlmServiceState.Failed
                         ),
-                    contentPadding = PaddingValues(horizontal = 11.dp, vertical = 8.dp),
+                    contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.sm),
                 ) {
                     RuntimeIcon(RuntimeIconName.Play, Modifier.size(17.dp))
                     if (isStarting) {
@@ -540,7 +542,7 @@ private fun DownloadModelDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 Text("粘贴以 .gguf 结尾的 HTTPS 直链。Hugging Face 文件页请复制 Download 链接。")
                 OutlinedTextField(
@@ -588,7 +590,7 @@ private fun ImportPathDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 Text("输入应用可读取的绝对路径，例如 /storage/emulated/0/Download/model.gguf。受 Android 存储权限限制时请改用“选择文件”。")
                 OutlinedTextField(
@@ -638,7 +640,7 @@ private fun DeleteModelConfirmDialog(
             )
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 Text(
                     text = "• 将从沙箱中删除该 GGUF 模型文件，释放对应存储空间",
                     style = MaterialTheme.typography.bodyMedium,

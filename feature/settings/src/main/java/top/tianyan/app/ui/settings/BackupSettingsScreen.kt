@@ -38,6 +38,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.tianyan.app.runtime.BackupManager
 import top.tianyan.app.ui.components.RuntimeAlertDialog
+import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.Radius
 import top.tianyan.app.ui.components.RuntimeButton as Button
 import top.tianyan.app.ui.components.RuntimeCard
 import top.tianyan.app.ui.components.RuntimeCheckbox
@@ -80,7 +82,7 @@ fun BackupSettingsScreen(
                     Modifier
                         .fillMaxWidth()
                         .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     Text("恢复会用备份里的数据库、偏好与附件整体替换本机当前数据，本机现有改动将无法找回。")
                     Text(
@@ -118,9 +120,9 @@ fun BackupSettingsScreen(
                 .fillMaxSize()
                 .liquidGlassContent()
                 .padding(padding)
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = Spacing.lg)
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.lg),
         ) {
             SettingsSection("备份范围") {
                 BackupSettingsRow(
@@ -215,8 +217,8 @@ fun BackupSettingsScreen(
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        .padding(horizontal = Spacing.md, vertical = Spacing.md),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     Button(
                         onClick = { exportLauncher.launch(viewModel.suggestedArchiveName()) },
@@ -251,7 +253,7 @@ fun BackupSettingsScreen(
 private fun Divider() {
     HorizontalDivider(
         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-        modifier = Modifier.padding(horizontal = 14.dp),
+        modifier = Modifier.padding(horizontal = Spacing.md),
     )
 }
 
@@ -261,13 +263,13 @@ private fun SettingsSection(
     title: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         title?.let {
             Text(
                 it,
                 style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 4.dp),
+                modifier = Modifier.padding(start = Spacing.xs),
             )
         }
         RuntimeCard(
@@ -291,9 +293,9 @@ private fun BackupSettingsRow(
         modifier = Modifier
             .fillMaxWidth()
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(horizontal = Spacing.md, vertical = Spacing.md),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         Box(
             modifier = Modifier
@@ -307,7 +309,7 @@ private fun BackupSettingsRow(
         }
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
             Text(
                 title,
@@ -323,13 +325,13 @@ private fun BackupSettingsRow(
         if (value != null) {
             Surface(
                 color = MaterialTheme.colorScheme.primaryContainer,
-                shape = RoundedCornerShape(5.dp),
+                shape = Radius.xsShape,
             ) {
                 Text(
                     value,
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                 )
             }
         } else if (onClick != null) {
@@ -355,9 +357,9 @@ private fun SelectableBackupRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onCheckedChange(!checked) }
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(horizontal = Spacing.md, vertical = Spacing.md),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         Box(
             modifier = Modifier
@@ -371,7 +373,7 @@ private fun SelectableBackupRow(
         }
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
             Text(
                 title,

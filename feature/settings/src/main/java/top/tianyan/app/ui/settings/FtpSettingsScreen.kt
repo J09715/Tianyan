@@ -41,6 +41,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.tianyan.app.runtime.FtpServiceState
 import top.tianyan.app.ui.components.NoticeBanner
+import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.ui.components.RuntimeAlertDialog
 import top.tianyan.app.ui.components.RuntimeButton
 import top.tianyan.app.ui.components.RuntimeCard
@@ -124,8 +125,8 @@ fun FtpSettingsScreen(
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.lg),
         ) {
             item {
                 NoticeBanner(
@@ -171,7 +172,7 @@ fun FtpSettingsScreen(
                 }
                 (serviceState as? FtpServiceState.Failed)?.let { failed ->
                     RuntimeCard(
-                        modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                        modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm),
                         containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f),
                         borderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.25f),
                     ) {
@@ -187,7 +188,7 @@ fun FtpSettingsScreen(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                     borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         Text(
                             text = "外部 App 连接参数 (分项填入)：",
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
@@ -317,9 +318,9 @@ fun FtpSettingsScreen(
                 SectionLabel("网络配置")
                 SettingsGroup {
                     Row(
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 76.dp).padding(horizontal = 16.dp, vertical = 10.dp),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 76.dp).padding(horizontal = Spacing.lg, vertical = Spacing.sm),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         RuntimeIcon(RuntimeIconName.Network, Modifier.size(20.dp), MaterialTheme.colorScheme.primary)
                         val portValue = portText.toIntOrNull()
@@ -382,7 +383,7 @@ private fun SectionLabel(text: String) {
         text = text,
         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+        modifier = Modifier.padding(start = Spacing.xs, bottom = Spacing.xs),
     )
 }
 
@@ -410,7 +411,7 @@ private fun FtpPasswordDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
                 Text(
                     "密码将通过 Android Keystore 加密保存，外部客户端连接时需输入此密码。",
@@ -504,7 +505,7 @@ private fun ParamRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+        Column(modifier = Modifier.weight(1f).padding(end = Spacing.sm)) {
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelSmall,
@@ -522,7 +523,7 @@ private fun ParamRow(
         RuntimeOutlinedButton(
             onClick = onCopy,
             modifier = Modifier.height(32.dp),
-            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+            contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs),
         ) {
             RuntimeIcon(RuntimeIconName.Copy, Modifier.size(13.dp))
             Spacer(Modifier.size(4.dp))
