@@ -1,6 +1,7 @@
 package top.tianyan.app.ui.developer
 
 import top.tianyan.app.ui.components.RuntimeAlertDialog
+import top.tianyan.app.ui.theme.Spacing
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -126,10 +127,10 @@ fun DeveloperScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+                .padding(horizontal = Spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(Spacing.xs))
 
             RuntimeControlCard(
                 state = runtimeState,
@@ -152,21 +153,21 @@ fun DeveloperScreen(
                     containerColor = if (result.isHealthy) MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f)
                     else MaterialTheme.colorScheme.error.copy(alpha = 0.08f),
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
                         IconTile(
                             if (result.isHealthy) RuntimeIconName.Shield else RuntimeIconName.Alert,
                             color = if (result.isHealthy) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error,
                         )
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                             Text(if (result.isHealthy) "健康检查通过" else "健康检查异常", style = MaterialTheme.typography.titleLarge)
                             Text(result.detail ?: "Runtime 核心能力已完成检测", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    Spacer(Modifier.height(15.dp))
+                    Spacer(Modifier.height(Spacing.md))
                     InfoRow("系统", result.osRelease ?: "-")
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(Spacing.sm))
                     InfoRow("架构", result.architecture ?: "-")
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(Spacing.sm))
                     InfoRow("工作区可写", if (result.workspaceWritable) "是" else "否")
                 }
             }
@@ -177,7 +178,7 @@ fun DeveloperScreen(
                 Row(
                     Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                 ) {
                     IconTile(RuntimeIconName.Terminal)
                     Column(Modifier.weight(1f)) {
@@ -198,13 +199,13 @@ fun DeveloperScreen(
                     }
                     StatusBadge(if (connected != null) "已连接" else "未就绪", if (connected != null) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary)
                 }
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(Spacing.sm))
                 Text(
                     "已发现：配对端口 ${adbDiscovery.pairingEndpoints.size} 个 · 连接端口 ${adbDiscovery.connectEndpoints.size} 个",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(Spacing.md))
                 OutlinedTextField(
                     value = pairingCode,
                     onValueChange = { value -> pairingCode = value.filter(Char::isDigit).take(6) },
@@ -213,7 +214,7 @@ fun DeveloperScreen(
                     supportingText = { Text("先在系统“无线调试”中打开“使用配对码配对设备”；端口无需手填") },
                     singleLine = true,
                 )
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     Button(
                         onClick = { viewModel.pairWirelessAdb(pairingCode) },
                         enabled = !adbBusy && pairingCode.length == 6 && adbDiscovery.pairingEndpoints.isNotEmpty(),
@@ -226,13 +227,13 @@ fun DeveloperScreen(
                     ) { Text("重新连接") }
                 }
                 adbMessage?.let {
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(Spacing.sm))
                     Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
 
-                Spacer(Modifier.height(18.dp))
+                Spacer(Modifier.height(Spacing.lg))
                 Text("应用日志抓取", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(Spacing.sm))
                 OutlinedTextField(
                     value = logcatPackage,
                     onValueChange = { logcatPackage = it },
@@ -240,7 +241,7 @@ fun DeveloperScreen(
                     label = { Text("包名（留空抓取全部）") },
                     singleLine = true,
                 )
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     OutlinedTextField(
                         value = logcatTag,
                         onValueChange = { logcatTag = it },
@@ -263,18 +264,18 @@ fun DeveloperScreen(
                     label = { Text("关键词（可选，忽略大小写）") },
                     singleLine = true,
                 )
-                Spacer(Modifier.height(10.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                Spacer(Modifier.height(Spacing.sm))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     listOf('V', 'D', 'I', 'W', 'E', 'F').forEach { priority ->
                         if (priority == logcatPriority) {
-                            Button(onClick = { logcatPriority = priority }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 2.dp, vertical = 6.dp)) { Text(priority.toString()) }
+                            Button(onClick = { logcatPriority = priority }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = Spacing.xs, vertical = Spacing.sm)) { Text(priority.toString()) }
                         } else {
-                            OutlinedButton(onClick = { logcatPriority = priority }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 2.dp, vertical = 6.dp)) { Text(priority.toString()) }
+                            OutlinedButton(onClick = { logcatPriority = priority }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = Spacing.xs, vertical = Spacing.sm)) { Text(priority.toString()) }
                         }
                     }
                 }
-                Spacer(Modifier.height(10.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Spacer(Modifier.height(Spacing.sm))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     Button(
                         onClick = { viewModel.captureLogcat(logcatPackage, logcatTag, logcatPriority, logcatKeyword, logcatLines.toIntOrNull() ?: 200) },
                         enabled = connected != null && !adbBusy,
@@ -283,7 +284,7 @@ fun DeveloperScreen(
                     OutlinedButton(onClick = viewModel::clearDeviceLogcat, enabled = connected != null && !adbBusy) { Text("清空") }
                 }
                 if (logcatOutput.isNotBlank()) {
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(Spacing.md))
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         color = MaterialTheme.colorScheme.surfaceContainerLowest,
@@ -291,12 +292,12 @@ fun DeveloperScreen(
                     ) {
                         Text(
                             logcatOutput,
-                            modifier = Modifier.padding(12.dp),
+                            modifier = Modifier.padding(Spacing.md),
                             style = MaterialTheme.typography.bodySmall,
                             fontFamily = FontFamily.Monospace,
                         )
                     }
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(Spacing.sm))
                     OutlinedButton(
                         onClick = {
                             val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
@@ -310,7 +311,7 @@ fun DeveloperScreen(
 
             SectionHeader("工具源", "远程清单更新：HTTPS + Ed25519 验签（自定义公钥仅防传输损坏，非防篡改信任锚）")
             RuntimeCard(Modifier.fillMaxWidth()) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
                     // 保存前校验：两个地址必须是 HTTPS，公钥不能为空
                     val manifestUrlValid = manifestUrl.trim().startsWith("https://")
                     val signatureUrlValid = signatureUrl.trim().startsWith("https://")
@@ -353,7 +354,7 @@ fun DeveloperScreen(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         Button(
                             onClick = { viewModel.saveRegistryConfig(manifestUrl.trim(), signatureUrl.trim(), publicKey.trim()) },
                             enabled = manifestUrlValid && signatureUrlValid && publicKeyValid,
@@ -371,14 +372,14 @@ fun DeveloperScreen(
 
             RuntimeCard(Modifier.fillMaxWidth()) {
                 ResourceHeader(RuntimeIconName.Cpu, "后台进程", "${processes.size} 个活动进程", viewModel::refreshProcesses)
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(Spacing.md))
                 if (processes.isEmpty()) {
                     Text("当前没有登记中的后台进程。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
                     processes.forEachIndexed { index, process ->
-                        if (index > 0) HorizontalDivider(Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                        if (index > 0) HorizontalDivider(Modifier.padding(vertical = Spacing.sm), color = MaterialTheme.colorScheme.outlineVariant)
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                 Text(process.toolId ?: process.id, style = MaterialTheme.typography.titleMedium)
                                 Text("${process.type} · PID ${process.pid ?: "未知"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
@@ -390,14 +391,14 @@ fun DeveloperScreen(
 
             RuntimeCard(Modifier.fillMaxWidth()) {
                 ResourceHeader(RuntimeIconName.Package, "可清理 Runtime", "引用计数为 0", viewModel::refreshUnusedRuntimes)
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(Spacing.sm))
                 Text("这里只列出未被任何工具引用的共享依赖，清理会在 Linux 沙箱内执行包管理清理。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(Spacing.md))
                 if (unusedRuntimes.isEmpty()) {
                     Text("当前没有可安全清理的共享 Runtime。", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
                     unusedRuntimes.forEachIndexed { index, runtime ->
-                        if (index > 0) HorizontalDivider(Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                        if (index > 0) HorizontalDivider(Modifier.padding(vertical = Spacing.sm), color = MaterialTheme.colorScheme.outlineVariant)
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(runtime.name.name, style = MaterialTheme.typography.titleMedium)
@@ -411,7 +412,7 @@ fun DeveloperScreen(
 
             SectionHeader("智能体诊断", "智能体执行流、工具调用与错误详情本地持久化")
             RuntimeCard(Modifier.fillMaxWidth()) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
                     IconTile(RuntimeIconName.Shield)
                     Column(Modifier.weight(1f)) {
                         Text("智能体本地调试日志", style = MaterialTheme.typography.titleMedium)
@@ -434,8 +435,8 @@ fun DeveloperScreen(
                     )
                 }
                 if (agentLoggingEnabled || agentLogSize > 0L) {
-                    Spacer(Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Spacer(Modifier.height(Spacing.md))
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         OutlinedButton(
                             onClick = {
                                 agentLogText = viewModel.readAgentLogs()
@@ -473,7 +474,7 @@ fun DeveloperScreen(
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     if (runtimeLogLocation.isNotBlank()) {
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(Spacing.xs))
                         Text(
                             "日志文件：$runtimeLogLocation",
                             style = MaterialTheme.typography.bodySmall,
@@ -483,7 +484,7 @@ fun DeveloperScreen(
                         )
                     }
                     if (crashLocation.isNotBlank()) {
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(Spacing.xs))
                         Text(
                             "崩溃报告：$crashLocation",
                             style = MaterialTheme.typography.bodySmall,
@@ -492,8 +493,8 @@ fun DeveloperScreen(
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
-                    Spacer(Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Spacer(Modifier.height(Spacing.md))
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         OutlinedButton(
                             onClick = {
                                 runtimeLogText = viewModel.readRuntimeLogs()
@@ -513,8 +514,8 @@ fun DeveloperScreen(
                             Text("查看崩溃报告")
                         }
                     }
-                    Spacer(Modifier.height(10.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Spacer(Modifier.height(Spacing.sm))
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         OutlinedButton(
                             onClick = {
                                 val logs = viewModel.readRuntimeLogs()
@@ -538,8 +539,8 @@ fun DeveloperScreen(
                             Text("复制崩溃报告")
                         }
                     }
-                    Spacer(Modifier.height(10.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Spacer(Modifier.height(Spacing.sm))
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         TextButton(
                             onClick = viewModel::clearRuntimeLogs,
                         ) {
@@ -556,14 +557,14 @@ fun DeveloperScreen(
 
             SectionHeader("命令诊断", "在隔离的 Linux 环境中执行一次性 Shell 命令")
             RuntimeCard(Modifier.fillMaxWidth()) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
                     IconTile(RuntimeIconName.Terminal)
                     Column(Modifier.weight(1f)) {
                         Text("Shell Runner", style = MaterialTheme.typography.titleMedium)
                         Text("适合快速诊断，不会创建持久终端会话", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(Spacing.md))
                 OutlinedTextField(
                     value = commandInput,
                     onValueChange = viewModel::onCommandInputChanged,
@@ -572,15 +573,17 @@ fun DeveloperScreen(
                     singleLine = true,
                     textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
                 )
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(Spacing.sm))
                 Button(onClick = viewModel::runCommand, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                     RuntimeIcon(RuntimeIconName.Play, Modifier.size(18.dp)); Spacer(Modifier.size(7.dp)); Text("执行命令")
                 }
                 commandResult?.let { result ->
-                    Spacer(Modifier.height(14.dp))
+                    Spacer(Modifier.height(Spacing.md))
+                    // 命令输出是终端级暗底 + 等宽字：stdout/stderr 的对比度要在
+                    // 暗底上成立，所以正文色固定为浅灰，不随主题切换。
                     Column(
-                        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).background(Color(0xFF080D16)).padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(7.dp),
+                        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).background(Color(0xFF080D16)).padding(Spacing.md),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         Text("exit ${result.exitCode}  •  ${result.durationMs} ms", style = MaterialTheme.typography.labelMedium, color = if (result.exitCode == 0) Color(0xFF83EDC9) else Color(0xFFFFA2AE))
                         Text(result.stdout.ifBlank { "(no stdout)" }, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, color = Color(0xFFD9E2F1))
@@ -591,7 +594,7 @@ fun DeveloperScreen(
                     }
                 }
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(Spacing.sm))
         }
     }
 
@@ -616,7 +619,7 @@ fun DeveloperScreen(
             onDismissRequest = { showResetConfirmation = false },
             title = { Text("重置当前沙箱？") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     Text("• 将清除自行安装的软件包与系统修改", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text("• 不会删除 /workspace 中的项目代码", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
                 }
@@ -725,9 +728,9 @@ private fun RuntimeControlCard(
         else -> MaterialTheme.colorScheme.primary
     }
     RuntimeCard(Modifier.fillMaxWidth(), containerColor = color.copy(alpha = 0.08f)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
             IconTile(RuntimeIconName.Terminal, color = color)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 Text("Linux Runtime", style = MaterialTheme.typography.titleLarge)
                 Text("RootFS ${rootfsVersion ?: "未安装"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 rootfsUpdate?.let { info ->
@@ -742,27 +745,27 @@ private fun RuntimeControlCard(
         }
         val initializing = state as? RuntimeState.Initializing
         if (initializing != null) {
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(Spacing.lg))
             LinearProgressIndicator(progress = { initializing.progress }, modifier = Modifier.fillMaxWidth())
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(Spacing.sm))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(displayStep(initializing.step), style = MaterialTheme.typography.bodySmall)
                 Text("${(initializing.progress * 100).toInt()}%", style = MaterialTheme.typography.labelLarge)
             }
             initializing.detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(Spacing.sm))
             OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text("取消下载") }
         } else {
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(Spacing.lg))
             Button(onClick = onInitialize, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                 Text(if (state is RuntimeState.Error) "重试初始化" else if (state is RuntimeState.Ready) "重新检查初始化" else "下载并初始化")
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 OutlinedButton(
                     onClick = onHealthCheck,
                     enabled = !busy,
                     modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+                    contentPadding = PaddingValues(horizontal = Spacing.xs, vertical = Spacing.sm),
                 ) {
                     Text("健康检查", style = MaterialTheme.typography.labelSmall, maxLines = 1)
                 }
@@ -770,7 +773,7 @@ private fun RuntimeControlCard(
                     onClick = onCheckUpdate,
                     enabled = !busy && state is RuntimeState.Ready,
                     modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+                    contentPadding = PaddingValues(horizontal = Spacing.xs, vertical = Spacing.sm),
                 ) {
                     Text("检查更新", style = MaterialTheme.typography.labelSmall, maxLines = 1)
                 }
@@ -778,12 +781,12 @@ private fun RuntimeControlCard(
                     onClick = onUpdate,
                     enabled = !busy && state is RuntimeState.Ready,
                     modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+                    contentPadding = PaddingValues(horizontal = Spacing.xs, vertical = Spacing.sm),
                 ) {
                     Text("更新RootFS", style = MaterialTheme.typography.labelSmall, maxLines = 1)
                 }
             }
-            Spacer(Modifier.height(9.dp))
+            Spacer(Modifier.height(Spacing.sm))
             OutlinedButton(
                 onClick = onReset,
                 enabled = !busy && state !is RuntimeState.Initializing,
@@ -791,7 +794,7 @@ private fun RuntimeControlCard(
             ) { Text("恢复 Linux 初始状态", color = MaterialTheme.colorScheme.error) }
         }
         (state as? RuntimeState.Error)?.let {
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(Spacing.md))
             // 面向用户的提示与原始异常解耦：原始异常进日志，避免技术文本直接展示
             androidx.compose.runtime.LaunchedEffect(it.throwable) {
                 android.util.Log.w("DeveloperScreen", "Runtime error: ${it.throwable.message}")
@@ -803,7 +806,7 @@ private fun RuntimeControlCard(
 
 @Composable
 private fun ResourceHeader(icon: RuntimeIconName, title: String, detail: String, onRefresh: () -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
         IconTile(icon)
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.titleMedium)

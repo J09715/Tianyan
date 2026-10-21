@@ -14,6 +14,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import top.tianyan.app.core.database.AiModelEntity
+import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.Radius
 import top.tianyan.app.core.model.workflow.*
 import top.tianyan.app.ui.components.*
 
@@ -121,7 +123,7 @@ internal fun WorkflowStartDialog(
                     .fillMaxWidth()
                     .heightIn(max = 480.dp)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 Text(definition.description)
                 if (needsModel) {
@@ -143,7 +145,7 @@ internal fun WorkflowStartDialog(
                                         .filter { it.isNotEmpty() }
                                     selectedVariant = nextVariants.firstOrNull().orEmpty()
                                 },
-                                shape = RoundedCornerShape(10.dp),
+                                shape = Radius.smShape,
                                 color = if (selected) {
                                     MaterialTheme.colorScheme.primaryContainer
                                 } else {
@@ -159,7 +161,7 @@ internal fun WorkflowStartDialog(
                                 ),
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
-                                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+                                Column(modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm)) {
                                     Text(
                                         text = buildString {
                                             append(if (selected) "✓ " else "")
@@ -200,7 +202,7 @@ internal fun WorkflowStartDialog(
                                 ) {
                                     Text(
                                         text = if (selected) "✓ $variant" else variant,
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                        modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
                                         style = MaterialTheme.typography.bodySmall,
                                     )
                                 }
@@ -268,7 +270,7 @@ private fun ApkSelectorSection(
 ) {
     var showManualInput by remember { mutableStateOf(false) }
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -276,16 +278,16 @@ private fun ApkSelectorSection(
         ) {
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                 RuntimeIcon(RuntimeIconName.Android, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(Spacing.sm))
                 Text("选择安装 APK", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
             }
             if (onRefresh != null) {
                 TextButton(
                     onClick = onRefresh,
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                    contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs),
                 ) {
                     RuntimeIcon(RuntimeIconName.Refresh, Modifier.size(14.dp))
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.width(Spacing.xs))
                     Text("重新扫描", style = MaterialTheme.typography.labelSmall)
                 }
             }
@@ -298,7 +300,7 @@ private fun ApkSelectorSection(
                     selectedPath == apk.relativePath
                 Surface(
                     onClick = { onSelectApk(apk.sandboxPath) },
-                    shape = RoundedCornerShape(10.dp),
+                    shape = Radius.smShape,
                     color = if (isSelected) {
                         MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
                     } else {
@@ -314,14 +316,14 @@ private fun ApkSelectorSection(
                     ),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Column(modifier = Modifier.padding(Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                         ) {
                             if (isSelected) {
                                 RuntimeIcon(RuntimeIconName.Check, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                                Spacer(Modifier.width(6.dp))
+                                Spacer(Modifier.width(Spacing.sm))
                             }
                             Text(
                                 text = apk.name,
@@ -332,14 +334,14 @@ private fun ApkSelectorSection(
                             )
                             if (index == 0) {
                                 Surface(
-                                    shape = RoundedCornerShape(4.dp),
+                                    shape = Radius.xsShape,
                                     color = MaterialTheme.colorScheme.primary,
                                 ) {
                                     Text(
                                         text = "✨ 最新生成",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onPrimary,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                     )
                                 }
                             }
@@ -378,7 +380,7 @@ private fun ApkSelectorSection(
                     if (showManualInput) RuntimeIconName.ChevronUp else RuntimeIconName.ChevronDown,
                     Modifier.size(14.dp),
                 )
-                Spacer(Modifier.width(4.dp))
+                Spacer(Modifier.width(Spacing.xs))
                 Text(
                     if (showManualInput) "收起手动输入" else "手动指定其他 APK 路径...",
                     style = MaterialTheme.typography.labelSmall,
@@ -386,15 +388,15 @@ private fun ApkSelectorSection(
             }
         } else {
             Surface(
-                shape = RoundedCornerShape(10.dp),
+                shape = Radius.smShape,
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(modifier = Modifier.padding(Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                         RuntimeIcon(RuntimeIconName.Info, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.width(6.dp))
+                        Spacer(Modifier.width(Spacing.sm))
                         Text("未在工程中扫描到 APK", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                     }
                     Text(

@@ -1,6 +1,8 @@
 package top.tianyan.app.ui.terminal
 
 import top.tianyan.app.ui.components.RuntimeAlertDialog
+import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.Radius
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -36,7 +38,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardActions
@@ -177,6 +178,9 @@ fun TerminalScreen(
     val sysOutline = MaterialTheme.colorScheme.outlineVariant
     val (termBg, termHeaderBg, termTextDefault, termBorder) = remember(colorScheme, sysSurfaceLowest, sysSurfaceHigh, sysOnSurface, sysOutline) {
         when (colorScheme) {
+            // 终端配色是**终端自己的领域配色**（矩阵绿 / 琥珀 CRT / 极光蓝），
+            // 不是 M3 语义色——它描述的是「一台机器长什么样」，与 App 的状态色
+            // 无关，所以保留字面值，不塞进 TianyanTheme.colors。
             "matrix" -> listOf(Color(0xFF0A0F0D), Color(0xFF101B14), Color(0xFF10B981), Color(0xFF1A3324))
             "amber" -> listOf(Color(0xFF140F0A), Color(0xFF1F170F), Color(0xFFF59E0B), Color(0xFF3B2B1B))
             "aurora" -> listOf(Color(0xFF0D1424), Color(0xFF141F36), Color(0xFF38BDF8), Color(0xFF1E3A5F))
@@ -346,9 +350,9 @@ fun TerminalScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 10.dp, vertical = 6.dp)
+                .padding(horizontal = Spacing.sm, vertical = Spacing.sm)
                 .imePadding(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             // 终端主窗口
             Surface(
@@ -356,7 +360,7 @@ fun TerminalScreen(
                     .weight(1f)
                     .fillMaxWidth(),
                 color = termBg,
-                shape = RoundedCornerShape(14.dp),
+                shape = Radius.mdShape,
                 border = BorderStroke(1.dp, termBorder),
             ) {
                 Column {
@@ -365,10 +369,12 @@ fun TerminalScreen(
                         Modifier
                             .fillMaxWidth()
                             .background(termHeaderBg)
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                            .padding(horizontal = Spacing.md, vertical = Spacing.sm),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        // macOS 交通灯三色是系统语汇（关闭/最小化/最大化），
+                        // 与 App 的 success/warning/danger 语义无关，保留原色。
+                        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                             TerminalDot(Color(0xFFFF3366))
                             TerminalDot(Color(0xFFFFB300))
                             TerminalDot(Color(0xFF00E676))
@@ -388,14 +394,14 @@ fun TerminalScreen(
                             color = MaterialTheme.colorScheme.primary,
                             textAlign = TextAlign.Center,
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                             Text(
                                 stringResource(R.string.terminal_copy),
                                 modifier = Modifier
                                     .minimumInteractiveComponentSize()
-                                    .clip(RoundedCornerShape(4.dp))
+                                    .clip(Radius.xsShape)
                                     .clickable(onClick = copyScreen)
-                                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                                    .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = termTextDefault.copy(alpha = 0.6f),
                             )
@@ -403,9 +409,9 @@ fun TerminalScreen(
                                 stringResource(R.string.terminal_paste),
                                 modifier = Modifier
                                     .minimumInteractiveComponentSize()
-                                    .clip(RoundedCornerShape(4.dp))
+                                    .clip(Radius.xsShape)
                                     .clickable(onClick = pasteToTerminal)
-                                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                                    .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = termTextDefault.copy(alpha = 0.6f),
                             )
@@ -451,8 +457,8 @@ fun TerminalScreen(
                             error != null -> Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    .padding(Spacing.md),
+                                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                             ) {
                                 Text(
                                     error.orEmpty(),
@@ -461,16 +467,16 @@ fun TerminalScreen(
                                 )
                                 Button(
                                     onClick = { viewModel.retryInitialize(project) },
-                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = Spacing.lg, vertical = Spacing.sm),
                                 ) {
                                     RuntimeIcon(RuntimeIconName.Refresh, Modifier.size(14.dp))
-                                    Spacer(Modifier.width(6.dp))
+                                    Spacer(Modifier.width(Spacing.sm))
                                     Text(stringResource(R.string.terminal_retry))
                                 }
                             }
                             screen.isEmpty() || screen.all { it.cells.isEmpty() } -> Text(
                                 stringResource(R.string.terminal_starting),
-                                Modifier.padding(12.dp),
+                                Modifier.padding(Spacing.md),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                                 fontFamily = FontFamily.Monospace,
                             )
@@ -482,7 +488,7 @@ fun TerminalScreen(
                                         terminalFocusRequester.requestFocus()
                                         keyboard?.show()
                                     }
-                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    .padding(horizontal = Spacing.md, vertical = Spacing.sm),
                                 state = listState,
                             ) {
                                 itemsIndexed(
@@ -577,7 +583,7 @@ fun TerminalScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 ExtraKey("ESC", isAccent = true, hapticsEnabled = hapticsEnabled) { viewModel.sendText("\u001B") }
                 ExtraKey("Tab", isAccent = true, hapticsEnabled = hapticsEnabled) { viewModel.sendText("\u0009") }
@@ -678,7 +684,7 @@ private fun CreateTerminalDialog(
     RuntimeAlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 RuntimeIcon(RuntimeIconName.Terminal, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
                 Text(stringResource(R.string.terminal_new_session), fontWeight = FontWeight.Bold)
             }
@@ -688,7 +694,7 @@ private fun CreateTerminalDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 if (installedDistros.size > 1) {
                     Text(stringResource(R.string.terminal_target_distribution), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
@@ -696,11 +702,11 @@ private fun CreateTerminalDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         installedDistros.forEach { d ->
                             Surface(
-                                shape = RoundedCornerShape(6.dp),
+                                shape = Radius.xsShape,
                                 color = if (selectedDistroId == d.id) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceContainerHigh,
                                 border = BorderStroke(
                                     1.dp,
@@ -712,7 +718,7 @@ private fun CreateTerminalDialog(
                                     d.displayName,
                                     style = MaterialTheme.typography.labelSmall,
                                     color = if (selectedDistroId == d.id) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                 )
                             }
                         }
@@ -726,7 +732,7 @@ private fun CreateTerminalDialog(
                     onValueChange = { label = it },
                     placeholder = { Text(stringResource(R.string.terminal_label_hint)) },
                     singleLine = true,
-                    shape = RoundedCornerShape(10.dp),
+                    shape = Radius.smShape,
                     modifier = Modifier.fillMaxWidth(),
                 )
 
@@ -735,11 +741,11 @@ private fun CreateTerminalDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     quickLabels.forEach { tag ->
                         Surface(
-                            shape = RoundedCornerShape(6.dp),
+                            shape = Radius.xsShape,
                             color = if (label == tag) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceContainerHigh,
                             border = BorderStroke(
                                 1.dp,
@@ -751,7 +757,7 @@ private fun CreateTerminalDialog(
                                 tag,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = if (label == tag) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                             )
                         }
                     }
@@ -763,7 +769,7 @@ private fun CreateTerminalDialog(
 
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     item {
                         TerminalDirOption(
@@ -788,7 +794,7 @@ private fun CreateTerminalDialog(
         confirmButton = {
             Button(
                 onClick = { onCreate(label.ifBlank { defaultLabel }, selectedDir, selectedDistroId) },
-                shape = RoundedCornerShape(8.dp),
+                shape = Radius.xsShape,
             ) {
                 Text(stringResource(R.string.terminal_create))
             }
@@ -812,16 +818,16 @@ private fun TerminalDirOption(
             .clickable(onClick = onSelect)
             .background(
                 if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceContainerLow,
-                RoundedCornerShape(8.dp),
+                Radius.xsShape,
             )
             .border(
                 1.dp,
                 if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outlineVariant,
-                RoundedCornerShape(8.dp),
+                Radius.xsShape,
             )
-            .padding(10.dp),
+            .padding(Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         Box(
             Modifier.size(10.dp).clip(CircleShape).background(
@@ -852,19 +858,19 @@ private fun SessionListDialog(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     RuntimeIcon(RuntimeIconName.Terminal, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
                     Text(stringResource(R.string.terminal_sessions), fontWeight = FontWeight.Bold)
                 }
                 Surface(
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                    shape = RoundedCornerShape(6.dp),
+                    shape = Radius.xsShape,
                 ) {
                     Text(
                         stringResource(R.string.terminal_active_sessions, handles.size),
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                     )
                 }
             }
@@ -874,18 +880,18 @@ private fun SessionListDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = 380.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 if (handles.size == 1) {
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        shape = RoundedCornerShape(8.dp),
+                        shape = Radius.xsShape,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Row(
-                            modifier = Modifier.padding(8.dp),
+                            modifier = Modifier.padding(Spacing.sm),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             RuntimeIcon(RuntimeIconName.Alert, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
                             Text(
@@ -899,7 +905,7 @@ private fun SessionListDialog(
 
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     items(handles.size) { index ->
                         val handle = handles[index]
@@ -908,7 +914,7 @@ private fun SessionListDialog(
                             top.tianyan.app.runtime.DistributionCatalog.require(handle.distributionId).displayName
                         }.getOrDefault(handle.distributionId)
                         Surface(
-                            shape = RoundedCornerShape(10.dp),
+                            shape = Radius.smShape,
                             color = if (active) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surfaceContainerLowest,
                             border = BorderStroke(
                                 1.dp,
@@ -920,9 +926,9 @@ private fun SessionListDialog(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable { onSwitch(handle.id) }
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    .padding(horizontal = Spacing.md, vertical = Spacing.sm),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                             ) {
                                 Box(
                                     Modifier.size(8.dp).clip(CircleShape).background(
@@ -930,32 +936,32 @@ private fun SessionListDialog(
                                     ),
                                 )
                                 Column(Modifier.weight(1f)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                                         Text(
                                             handle.label,
                                             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                                         )
                                         Surface(
                                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                            shape = RoundedCornerShape(4.dp),
+                                            shape = Radius.xsShape,
                                         ) {
                                             Text(
                                                 distroName,
                                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                                                 color = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                                modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                                             )
                                         }
                                         if (active) {
                                             Surface(
                                                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                                                shape = RoundedCornerShape(4.dp),
+                                                shape = Radius.xsShape,
                                             ) {
                                                 Text(
                                                     stringResource(R.string.terminal_current),
                                                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                                                     color = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                                    modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                                                 )
                                             }
                                         }
@@ -988,8 +994,8 @@ private fun SessionListDialog(
             }
         },
         confirmButton = {
-            Button(onClick = onCreate, shape = RoundedCornerShape(8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Button(onClick = onCreate, shape = Radius.xsShape) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     RuntimeIcon(RuntimeIconName.Plus, Modifier.size(16.dp), MaterialTheme.colorScheme.onPrimary)
                     Text(stringResource(R.string.terminal_new))
                 }
@@ -1084,7 +1090,7 @@ private fun ExtraKey(
     Surface(
         modifier = Modifier
             .minimumInteractiveComponentSize()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(Radius.xsShape)
             .clickable(onClick = {
                 if (hapticsEnabled) {
                     haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
@@ -1092,12 +1098,12 @@ private fun ExtraKey(
                 onClick()
             }),
         color = bg,
-        shape = RoundedCornerShape(8.dp),
+        shape = Radius.xsShape,
         border = BorderStroke(1.dp, borderCol),
     ) {
         Text(
             label,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.sm),
             style = MaterialTheme.typography.labelSmall.copy(
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.SemiBold,

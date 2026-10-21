@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -74,6 +73,8 @@ import top.tianyan.app.core.model.RuntimeState
 import top.tianyan.app.core.tools.AgentProviderDefinition
 import top.tianyan.app.runtime.DistributionCatalog
 import top.tianyan.app.ui.components.IconTile
+import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.Radius
 import top.tianyan.app.ui.components.ProviderBadge
 import top.tianyan.app.ui.components.RuntimeAlertDialog
 import top.tianyan.app.ui.components.RuntimeButton
@@ -127,8 +128,8 @@ private fun SystemSetupPage(viewModel: OnboardingViewModel, modifier: Modifier) 
 
     LazyColumn(
         modifier = modifier,
-        contentPadding = PaddingValues(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        contentPadding = PaddingValues(Spacing.xl),
+        verticalArrangement = Arrangement.spacedBy(Spacing.lg),
     ) {
         item {
             Intro(
@@ -159,10 +160,10 @@ private fun SystemSetupPage(viewModel: OnboardingViewModel, modifier: Modifier) 
             item {
                 Surface(
                     color = MaterialTheme.colorScheme.surfaceContainerLow,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = Radius.smShape,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 ) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(Modifier.padding(Spacing.lg), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         Row(
                             Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -179,14 +180,14 @@ private fun SystemSetupPage(viewModel: OnboardingViewModel, modifier: Modifier) 
                                 text = "${(progress.progress * 100).toInt()}%",
                                 style = MaterialTheme.typography.labelMedium.copy(fontFamily = FontFamily.Monospace),
                                 color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(start = 8.dp),
+                                modifier = Modifier.padding(start = Spacing.sm),
                                 maxLines = 1,
                                 softWrap = false,
                             )
                         }
                         RuntimeLinearProgressIndicator(
                             progress = { progress.progress },
-                            modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+                            modifier = Modifier.fillMaxWidth().height(6.dp).clip(Radius.xsShape),
                             color = MaterialTheme.colorScheme.primary,
                         )
                         progress.detail?.let {
@@ -216,7 +217,7 @@ private fun SystemSetupPage(viewModel: OnboardingViewModel, modifier: Modifier) 
                 onClick = viewModel::install,
                 enabled = !installing,
                 modifier = Modifier.fillMaxWidth().height(50.dp),
-                shape = RoundedCornerShape(12.dp),
+                shape = Radius.smShape,
             ) {
                 Text(
                     stringResource(
@@ -276,14 +277,14 @@ private fun SuiteSelectionPage(viewModel: OnboardingViewModel, modifier: Modifie
 
     LazyColumn(
         modifier = modifier,
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.sm),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         item {
             Column(
-                Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp),
+                Modifier.fillMaxWidth().padding(top = Spacing.sm, bottom = Spacing.xs),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 Text(
                     text = stringResource(R.string.onboarding_suite_title),
@@ -312,13 +313,13 @@ private fun SuiteSelectionPage(viewModel: OnboardingViewModel, modifier: Modifie
             item {
                 Surface(
                     color = MaterialTheme.colorScheme.surfaceContainerLow,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = Radius.smShape,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 ) {
                     Row(
-                        Modifier.fillMaxWidth().padding(14.dp),
+                        Modifier.fillMaxWidth().padding(Spacing.md),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         RuntimeCircularProgressIndicator(modifier = Modifier.size(16.dp))
                         Text(
@@ -338,9 +339,9 @@ private fun SuiteSelectionPage(viewModel: OnboardingViewModel, modifier: Modifie
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(Radius.smShape)
                     .clickable(enabled = !installing) { viewModel.toggleSuite(suite.id) },
-                shape = RoundedCornerShape(12.dp),
+                shape = Radius.smShape,
                 border = BorderStroke(
                     1.dp,
                     if (checked) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
@@ -350,9 +351,9 @@ private fun SuiteSelectionPage(viewModel: OnboardingViewModel, modifier: Modifie
                 else MaterialTheme.colorScheme.surfaceContainerLow,
             ) {
                 Row(
-                    modifier = Modifier.padding(12.dp),
+                    modifier = Modifier.padding(Spacing.md),
                     verticalAlignment = Alignment.Top,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     RuntimeCheckbox(
                         checked = checked,
@@ -361,11 +362,11 @@ private fun SuiteSelectionPage(viewModel: OnboardingViewModel, modifier: Modifie
                     )
                     Column(
                         modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(3.dp),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             Text(
                                 text = suite.name,
@@ -399,12 +400,12 @@ private fun SuiteSelectionPage(viewModel: OnboardingViewModel, modifier: Modifie
         }
 
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 RuntimeButton(
                     onClick = viewModel::installSelectedSuitesAndProceed,
                     enabled = !installing && selected.isNotEmpty(),
                     modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = Radius.smShape,
                 ) {
                     Text(
                         stringResource(R.string.onboarding_suite_install),
@@ -451,7 +452,7 @@ private fun ModelSetupPage(viewModel: OnboardingViewModel, modifier: Modifier) {
         (discovered + selectedProvider.recommendedModels).distinct().filter { it.isNotBlank() }
     }
 
-    val compactFieldShape = RoundedCornerShape(10.dp)
+    val compactFieldShape = Radius.smShape
     val compactFieldColors = OutlinedTextFieldDefaults.colors(
         focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -462,8 +463,8 @@ private fun ModelSetupPage(viewModel: OnboardingViewModel, modifier: Modifier) {
 
     LazyColumn(
         modifier = modifier,
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.sm),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         // 套件在后台装配（本页是装配开始后才进入的），进度与失败都必须在这里可见
         if (suitesInstalling || suitesError != null) {
@@ -471,7 +472,7 @@ private fun ModelSetupPage(viewModel: OnboardingViewModel, modifier: Modifier) {
                 Surface(
                     color = if (suitesError != null) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
                     else MaterialTheme.colorScheme.surfaceContainerLow,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = Radius.smShape,
                     border = BorderStroke(
                         1.dp,
                         if (suitesError != null) MaterialTheme.colorScheme.error.copy(alpha = 0.5f)
@@ -479,9 +480,9 @@ private fun ModelSetupPage(viewModel: OnboardingViewModel, modifier: Modifier) {
                     ),
                 ) {
                     Row(
-                        Modifier.fillMaxWidth().padding(12.dp),
+                        Modifier.fillMaxWidth().padding(Spacing.md),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         if (suitesInstalling) {
                             RuntimeCircularProgressIndicator(modifier = Modifier.size(16.dp))
@@ -505,9 +506,9 @@ private fun ModelSetupPage(viewModel: OnboardingViewModel, modifier: Modifier) {
         // 顶部 Hero 与快速导入入口
         item {
             Column(
-                Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp),
+                Modifier.fillMaxWidth().padding(top = Spacing.sm, bottom = Spacing.xs),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -546,15 +547,15 @@ private fun ModelSetupPage(viewModel: OnboardingViewModel, modifier: Modifier) {
             RuntimeCard(
                 modifier = Modifier.fillMaxWidth(),
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     ProviderBadge(providerIdOrName = selectedProvider.id, size = 32.dp)
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                         Text(
                             text = "服务商预设",
                             style = MaterialTheme.typography.labelSmall,
@@ -570,9 +571,9 @@ private fun ModelSetupPage(viewModel: OnboardingViewModel, modifier: Modifier) {
                     Box {
                         RuntimeFilledTonalButton(
                             onClick = { providerMenuExpanded = true },
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                            contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.sm),
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                                 Text("切换", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold))
                                 RuntimeIcon(RuntimeIconName.ChevronDown, Modifier.size(14.dp))
                             }
@@ -610,9 +611,9 @@ private fun ModelSetupPage(viewModel: OnboardingViewModel, modifier: Modifier) {
             RuntimeCard(
                 modifier = Modifier.fillMaxWidth(),
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     Text(
                         text = "接口地址 (Base URL)",
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -650,9 +651,9 @@ private fun ModelSetupPage(viewModel: OnboardingViewModel, modifier: Modifier) {
             RuntimeCard(
                 modifier = Modifier.fillMaxWidth(),
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -705,9 +706,9 @@ private fun ModelSetupPage(viewModel: OnboardingViewModel, modifier: Modifier) {
             RuntimeCard(
                 modifier = Modifier.fillMaxWidth(),
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     Text(
                         text = "选择模型 (Model ID)",
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -730,9 +731,9 @@ private fun ModelSetupPage(viewModel: OnboardingViewModel, modifier: Modifier) {
                         onClick = viewModel::discoverModels,
                         enabled = !discovering && baseUrl.isNotBlank(),
                         modifier = Modifier.fillMaxWidth().height(38.dp),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = Radius.smShape,
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                             if (discovering) {
                                 RuntimeCircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
                                 Text("正在拉取模型列表…", style = MaterialTheme.typography.labelMedium)
@@ -757,14 +758,14 @@ private fun ModelSetupPage(viewModel: OnboardingViewModel, modifier: Modifier) {
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             candidateModels.forEach { candidate ->
                                 val isSelected = model == candidate
                                 Surface(
                                     color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    shape = RoundedCornerShape(8.dp),
+                                    shape = Radius.xsShape,
                                     border = BorderStroke(
                                         1.dp,
                                         if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
@@ -772,9 +773,9 @@ private fun ModelSetupPage(viewModel: OnboardingViewModel, modifier: Modifier) {
                                     modifier = Modifier.clickable { viewModel.setModelId(candidate) },
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.sm),
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                                     ) {
                                         if (isSelected) {
                                             RuntimeIcon(
@@ -814,12 +815,12 @@ private fun ModelSetupPage(viewModel: OnboardingViewModel, modifier: Modifier) {
 
         // 底部操作栏
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 RuntimeButton(
                     onClick = viewModel::saveModelAndFinish,
                     enabled = model.isNotBlank() && baseUrl.isNotBlank(),
                     modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = Radius.smShape,
                 ) {
                     Text(
                         stringResource(R.string.onboarding_enter),
@@ -863,9 +864,9 @@ private fun ModelSetupPage(viewModel: OnboardingViewModel, modifier: Modifier) {
 @Composable
 private fun Intro(title: String, description: String) {
     Column(
-        Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 8.dp),
+        Modifier.fillMaxWidth().padding(top = Spacing.xl, bottom = Spacing.sm),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         TianyanBrandBadge(52.dp)
         Text(title, style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold))
@@ -899,7 +900,7 @@ private fun SetupDropdown(
             readOnly = true,
             enabled = enabled,
             label = { Text(label) },
-            shape = RoundedCornerShape(10.dp),
+            shape = Radius.smShape,
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
             modifier = Modifier.fillMaxWidth().menuAnchor(
                 ExposedDropdownMenuAnchorType.PrimaryNotEditable,
@@ -955,13 +956,13 @@ private fun OnboardingModelImportDialog(
     RuntimeAlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 RuntimeIcon(RuntimeIconName.Download, Modifier.size(20.dp), MaterialTheme.colorScheme.primary)
                 Text("导入模型配置", fontWeight = FontWeight.Bold)
             }
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
                 SecondaryTabRow(
                     selectedTabIndex = selectedTab,
                     containerColor = Color.Transparent,
@@ -988,7 +989,7 @@ private fun OnboardingModelImportDialog(
                         modifier = Modifier.fillMaxWidth().height(160.dp),
                         placeholder = { Text("粘贴导出的 JSON 模型配置（单个或 bundle 均支持）") },
                         textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = Radius.smShape,
                     )
 
                     RuntimeOutlinedButton(
@@ -1002,22 +1003,22 @@ private fun OnboardingModelImportDialog(
                             }
                         },
                         modifier = Modifier.fillMaxWidth().height(36.dp),
-                        shape = RoundedCornerShape(8.dp),
+                        shape = Radius.xsShape,
                     ) {
                         Text("一键粘贴剪贴板内容")
                     }
                 } else {
                     Column(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.lg),
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         RuntimeOutlinedButton(
                             onClick = {
                                 filePickerLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
                             },
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                                 RuntimeIcon(RuntimeIconName.File, Modifier.size(16.dp))
                                 Text("选择本地 JSON 文件")
                             }

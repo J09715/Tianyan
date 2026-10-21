@@ -42,6 +42,9 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.sp
 import top.tianyan.app.ui.components.RuntimeIconButton
+import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.TianyanTheme
+import top.tianyan.app.ui.theme.Radius
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -139,7 +142,7 @@ fun WorkflowEditorView(
                         } else {
                             MaterialTheme.colorScheme.error
                         },
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.xs),
                     )
                 }
             }
@@ -206,21 +209,21 @@ fun WorkflowEditorView(
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                                            .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                                     ) {
                                         val theme = selectedNode.type.visualTheme()
                                         Surface(
                                             color = theme.accentColor.copy(alpha = 0.16f),
-                                            shape = RoundedCornerShape(6.dp),
+                                            shape = Radius.xsShape,
                                         ) {
                                             Text(
                                                 text = theme.tag,
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = theme.accentColor,
                                                 fontWeight = FontWeight.Bold,
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                                modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                             )
                                         }
                                         Text(
@@ -301,7 +304,7 @@ fun WorkflowEditorView(
         RuntimeAlertDialog(
             onDismissRequest = { nodePendingDelete = null },
             title = {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     RuntimeIcon(RuntimeIconName.Trash, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.error)
                     Text("确认删除节点", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 }
@@ -391,7 +394,7 @@ private fun EditorBottomSheetLayout(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(top = 8.dp, bottom = 4.dp),
+                                .padding(top = Spacing.sm, bottom = Spacing.xs),
                             contentAlignment = Alignment.Center,
                         ) {
                             Box(
@@ -408,20 +411,20 @@ private fun EditorBottomSheetLayout(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 6.dp),
+                                .padding(horizontal = Spacing.md, vertical = Spacing.sm),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             Surface(
                                 color = theme.accentColor.copy(alpha = 0.16f),
-                                shape = RoundedCornerShape(6.dp),
+                                shape = Radius.xsShape,
                             ) {
                                 Text(
                                     text = theme.tag,
                                     style = MaterialTheme.typography.labelSmall,
                                     color = theme.accentColor,
                                     fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                 )
                             }
                             Text(
@@ -487,8 +490,8 @@ private fun EditorBottomDock(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
             // 添加节点
@@ -613,18 +616,18 @@ private fun DockActionButton(
         color = Color.Transparent,
         modifier = modifier
             .alpha(if (enabled) 1f else 0.38f)
-            .padding(horizontal = 2.dp),
+            .padding(horizontal = Spacing.xs),
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.sm),
         ) {
             Box(contentAlignment = Alignment.Center) {
                 RuntimeIcon(icon, Modifier.size(19.dp), tint = tint)
                 badge?.invoke(this)
             }
-            Spacer(Modifier.height(3.dp))
+            Spacer(Modifier.height(Spacing.xs))
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
@@ -697,19 +700,19 @@ private fun RunConsoleModal(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 RuntimeIcon(RuntimeIconName.Terminal, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
                 Text("运行调试控制台", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 Surface(
                     color = runStatusColor(activeRunState.status).copy(alpha = 0.16f),
-                    shape = RoundedCornerShape(50),
+                    shape = RoundedCornerShape(percent = 50),
                 ) {
                     Text(
                         text = runStatusLabel(activeRunState.status),
                         style = MaterialTheme.typography.labelSmall,
                         color = runStatusColor(activeRunState.status),
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                     )
                 }
             }
@@ -717,23 +720,23 @@ private fun RunConsoleModal(
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     activeRunState.definition.nodes.forEach { node ->
                         val nodeRun = activeRunState.nodeStates[node.id]
                         val st = nodeRun?.status ?: NodeRunStatus.PENDING
                         Surface(
-                            shape = RoundedCornerShape(8.dp),
+                            shape = Radius.xsShape,
                             color = statusColor(st).copy(alpha = 0.14f),
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                             ) {
                                 Text(
                                     text = statusIconText(st),
@@ -752,13 +755,16 @@ private fun RunConsoleModal(
                 }
 
                 Surface(
+                    // 控制台是「终端级」暗底：工作流编辑页要读的是运行日志，
+                    // 浅色卡片承载深色等宽字才不刺眼，因此固定深底 + 浅字，
+                    // 不随主题切换。
                     color = Color(0xFF0F172A),
-                    shape = RoundedCornerShape(8.dp),
+                    shape = Radius.xsShape,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(300.dp),
                 ) {
-                    Box(Modifier.fillMaxSize().padding(10.dp)) {
+                    Box(Modifier.fillMaxSize().padding(Spacing.sm)) {
                         Text(
                             text = consoleOutput,
                             color = Color(0xFFE2E8F0),
@@ -772,7 +778,7 @@ private fun RunConsoleModal(
             }
         },
         confirmButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 RuntimeOutlinedButton(onClick = {
                     copyText(consoleOutput)
                 }) {
@@ -807,8 +813,10 @@ private fun statusIconText(status: NodeRunStatus) = when (status) {
 
 @Composable
 private fun runStatusColor(status: WorkflowRunStatus): Color = when (status) {
-    WorkflowRunStatus.SUCCESS -> Color(0xFF2E7D32)
-    WorkflowRunStatus.FAILED, WorkflowRunStatus.CANCELLED -> MaterialTheme.colorScheme.error
+    // 成功色走语义令牌：此前用 0xFF2E7D32，与 App 里其它绿（0xFF4CAF50 /
+    // TianyanTheme.success）不是同一个绿，同屏出现两种绿。
+    WorkflowRunStatus.SUCCESS -> TianyanTheme.colors.success
+    WorkflowRunStatus.FAILED, WorkflowRunStatus.CANCELLED -> TianyanTheme.colors.danger
     WorkflowRunStatus.RUNNING, WorkflowRunStatus.WAITING_APPROVAL -> MaterialTheme.colorScheme.primary
     WorkflowRunStatus.IDLE -> MaterialTheme.colorScheme.outline
 }
@@ -838,7 +846,7 @@ private fun NodePickerModal(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 Text(
                     text = "选择要加入画布的节点类型，创建后可在检查面板配置参数：",
@@ -849,18 +857,18 @@ private fun NodePickerModal(
                     val meta = type.metadata()
                     Surface(
                         onClick = { onSelect(type) },
-                        shape = RoundedCornerShape(12.dp),
+                        shape = Radius.smShape,
                         color = MaterialTheme.colorScheme.surfaceContainerHigh,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Row(
-                            modifier = Modifier.padding(12.dp),
+                            modifier = Modifier.padding(Spacing.md),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                         ) {
                             Surface(
                                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                shape = RoundedCornerShape(8.dp),
+                                shape = Radius.xsShape,
                                 modifier = Modifier.size(36.dp),
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
@@ -905,13 +913,13 @@ private fun EditorInspector(
 ) {
     val selected = state.definition.nodes.firstOrNull { it.id == state.selectedNodeId }
     Column(
-        modifier = modifier.verticalScroll(rememberScrollState()).padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = modifier.verticalScroll(rememberScrollState()).padding(Spacing.md),
+        verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         WorkflowMetadataCard(state, onUpdateMetadata)
 
         if (selected == null) {
-            RuntimeCard(Modifier.fillMaxWidth(), contentPadding = PaddingValues(16.dp)) {
+            RuntimeCard(Modifier.fillMaxWidth(), contentPadding = PaddingValues(Spacing.lg)) {
                 Text("请点击画布中的节点以配置参数、管理连线或查看执行日志", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         } else {
@@ -920,20 +928,20 @@ private fun EditorInspector(
                 RuntimeCard(
                     modifier = Modifier.fillMaxWidth(),
                     borderColor = statusColor(nodeRun.status).copy(alpha = 0.5f),
-                    contentPadding = PaddingValues(14.dp),
+                    contentPadding = PaddingValues(Spacing.md),
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("调试运行状态", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                             Surface(
                                 color = statusColor(nodeRun.status).copy(alpha = 0.16f),
-                                shape = RoundedCornerShape(50),
+                                shape = RoundedCornerShape(percent = 50),
                             ) {
                                 Text(
                                     text = statusLabel(nodeRun.status),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = statusColor(nodeRun.status),
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                 )
                             }
                         }
@@ -978,8 +986,8 @@ private fun WorkflowMetadataCard(state: WorkflowEditorUiState, onApply: (String,
     var category by remember(state.definition.id, state.definition.category) { mutableStateOf(state.definition.category) }
     var expanded by remember { mutableStateOf(false) }
 
-    RuntimeCard(Modifier.fillMaxWidth(), contentPadding = PaddingValues(14.dp)) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    RuntimeCard(Modifier.fillMaxWidth(), contentPadding = PaddingValues(Spacing.md)) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             Row(
                 modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
                 verticalAlignment = Alignment.CenterVertically,
@@ -1039,17 +1047,17 @@ private fun NodeInspectorCard(
         runCatching { Json.decodeFromString<Map<String, String>>(rawJsonText) }.getOrNull()
     }
 
-    RuntimeCard(Modifier.fillMaxWidth(), contentPadding = PaddingValues(14.dp)) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    RuntimeCard(Modifier.fillMaxWidth(), contentPadding = PaddingValues(Spacing.md)) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 Surface(
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
-                    shape = RoundedCornerShape(50),
+                    shape = RoundedCornerShape(percent = 50),
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                     ) {
                         RuntimeIcon(meta.icon, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
                         Text(meta.label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
@@ -1065,7 +1073,7 @@ private fun NodeInspectorCard(
                 )
                 RuntimeOutlinedButton(
                     onClick = onRemove,
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs),
                 ) {
                     RuntimeIcon(RuntimeIconName.Trash, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.error)
                     Text("删除", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
@@ -1074,10 +1082,10 @@ private fun NodeInspectorCard(
 
             Surface(
                 color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.55f),
-                shape = RoundedCornerShape(10.dp),
+                shape = Radius.smShape,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Column(modifier = Modifier.padding(Spacing.sm), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     Text(
                         text = "💡 节点作用：${meta.summary}",
                         style = MaterialTheme.typography.labelMedium,
@@ -1114,14 +1122,14 @@ private fun NodeInspectorCard(
                 WorkflowNodeType.BASH_COMMAND -> {
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f),
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, Color(0xFF06B6D4).copy(alpha = 0.4f)),
+                        shape = Radius.smShape,
+                        border = BorderStroke(1.dp, TianyanTheme.colors.accentCyan.copy(alpha = 0.4f)),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                RuntimeIcon(RuntimeIconName.Terminal, Modifier.size(16.dp), tint = Color(0xFF06B6D4))
-                                Text("终端 Shell 命令行（在沙箱环境中执行）", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Color(0xFF06B6D4))
+                        Column(modifier = Modifier.padding(Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                                RuntimeIcon(RuntimeIconName.Terminal, Modifier.size(16.dp), tint = TianyanTheme.colors.accentCyan)
+                                Text("终端 Shell 命令行（在沙箱环境中执行）", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = TianyanTheme.colors.accentCyan)
                             }
                             OutlinedTextField(
                                 value = configMap["command"].orEmpty(),
@@ -1134,7 +1142,7 @@ private fun NodeInspectorCard(
                                 modifier = Modifier.fillMaxWidth(),
                             )
                             Text("常用命令预设（点击直接填入）：", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                                 listOf(
                                     "系统内核" to "echo '=== 系统内核 ===' && uname -a && cat /etc/os-release | head -n 8",
                                     "内存磁盘" to "echo '=== 资源使用 ===' && free -h && df -h /",
@@ -1144,14 +1152,14 @@ private fun NodeInspectorCard(
                                 ).forEach { (name, cmd) ->
                                     Surface(
                                         onClick = { configMap["command"] = cmd },
-                                        shape = RoundedCornerShape(50),
-                                        color = Color(0xFF06B6D4).copy(alpha = 0.14f),
+                                        shape = RoundedCornerShape(percent = 50),
+                                        color = TianyanTheme.colors.accentCyan.copy(alpha = 0.14f),
                                     ) {
                                         Text(
                                             text = "+ $name",
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = Color(0xFF06B6D4),
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            color = TianyanTheme.colors.accentCyan,
+                                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                         )
                                     }
                                 }
@@ -1269,7 +1277,7 @@ private fun NodeInspectorCard(
                     val currentMode = configMap["mode"] ?: "build"
                     val currentType = configMap["projectType"] ?: "android"
 
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         Column(Modifier.weight(1f)) {
                             RuntimeOutlinedButton(onClick = { modeExpanded = true }, modifier = Modifier.fillMaxWidth()) {
                                 Text("模式：$currentMode", maxLines = 1)
@@ -1363,7 +1371,7 @@ private fun NodeInspectorCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { showAdvancedJson = !showAdvancedJson }
-                    .padding(vertical = 4.dp),
+                    .padding(vertical = Spacing.xs),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -1396,7 +1404,7 @@ private fun NodeInspectorCard(
                 )
             }
 
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 OutlinedTextField(
                     value = timeout,
                     onValueChange = { timeout = it.filter(Char::isDigit).take(4) },
@@ -1406,7 +1414,7 @@ private fun NodeInspectorCard(
                     modifier = Modifier.weight(1f),
                 )
                 Column(Modifier.weight(1.2f)) {
-                    RuntimeOutlinedButton(onClick = { policyExpanded = true }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                    RuntimeOutlinedButton(onClick = { policyExpanded = true }, modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm)) {
                         Text("策略：${policy.editorLabel()}", maxLines = 1)
                     }
                     DropdownMenu(expanded = policyExpanded, onDismissRequest = { policyExpanded = false }) {
@@ -1417,7 +1425,7 @@ private fun NodeInspectorCard(
                 }
             }
 
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 RuntimeOutlinedButton(
                     onClick = if (isConnecting) onCancelConnection else onBeginConnection,
                     modifier = Modifier.weight(1f),
@@ -1455,8 +1463,8 @@ private fun HostActionConfigFields(configMap: MutableMap<String, String>) {
     val currentDef = HostWorkflowActions.find(currentActionId)
     val currentCategory = currentDef?.category ?: grouped.keys.firstOrNull().orEmpty()
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             Column(modifier = Modifier.weight(1f)) {
                 RuntimeOutlinedButton(onClick = { categoryExpanded = true }, modifier = Modifier.fillMaxWidth()) {
                     Text("分类：$currentCategory", maxLines = 1)
@@ -1551,19 +1559,19 @@ private fun BranchRouterCard(
 
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.55f),
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, Color(0xFFEAB308).copy(alpha = 0.4f)),
+        shape = Radius.smShape,
+        border = BorderStroke(1.dp, TianyanTheme.colors.warning.copy(alpha = 0.4f)),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                RuntimeIcon(RuntimeIconName.Link, Modifier.size(16.dp), tint = Color(0xFFEAB308))
-                Text("可视化条件分支路由器", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Color(0xFFEAB308))
+        Column(modifier = Modifier.padding(Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                RuntimeIcon(RuntimeIconName.Link, Modifier.size(16.dp), tint = TianyanTheme.colors.warning)
+                Text("可视化条件分支路由器", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = TianyanTheme.colors.warning)
             }
 
             Surface(
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
-                shape = RoundedCornerShape(8.dp),
+                shape = Radius.xsShape,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
@@ -1571,32 +1579,32 @@ private fun BranchRouterCard(
                         "下面可快速把成功/失败分支连到目标节点。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(8.dp),
+                    modifier = Modifier.padding(Spacing.sm),
                 )
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Surface(shape = RoundedCornerShape(50), color = Color(0xFF10B981).copy(alpha = 0.18f)) {
-                    Text("✔ 成功分支 (exitCode == 0)", style = MaterialTheme.typography.labelSmall, color = Color(0xFF10B981), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                Surface(shape = RoundedCornerShape(percent = 50), color = TianyanTheme.colors.success.copy(alpha = 0.18f)) {
+                    Text("✔ 成功分支 (exitCode == 0)", style = MaterialTheme.typography.labelSmall, color = TianyanTheme.colors.success, modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs))
                 }
                 if (successEdge != null) {
                     val target = state.definition.nodes.firstOrNull { it.id == successEdge.toNodeId }
                     Row(
-                        modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(8.dp)).padding(8.dp),
+                        modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerHigh, Radius.xsShape).padding(Spacing.sm),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         Text("已连接至: ${target?.title ?: successEdge.toNodeId}", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                         RuntimeOutlinedButton(
                             onClick = { onRemoveEdge(successEdge.id) },
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs),
                         ) {
                             Text("断开", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
                         }
                     }
                 } else if (otherNodes.isNotEmpty()) {
                     val currentSuccessNode = otherNodes.firstOrNull { it.id == successTargetId } ?: otherNodes.first()
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         Box(Modifier.weight(1f)) {
                             RuntimeOutlinedButton(onClick = { successExpanded = true }, modifier = Modifier.fillMaxWidth()) {
                                 Text("目标: ${currentSuccessNode.title}", maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -1612,7 +1620,7 @@ private fun BranchRouterCard(
                         }
                         RuntimeButton(
                             onClick = { onConnectNodes(node.id, currentSuccessNode.id, "output", "exitCode == 0") },
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs),
                         ) {
                             Text("连接", maxLines = 1)
                         }
@@ -1620,28 +1628,28 @@ private fun BranchRouterCard(
                 }
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Surface(shape = RoundedCornerShape(50), color = Color(0xFFF43F5E).copy(alpha = 0.18f)) {
-                    Text("✘ 失败分支 (exitCode != 0)", style = MaterialTheme.typography.labelSmall, color = Color(0xFFF43F5E), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                Surface(shape = RoundedCornerShape(percent = 50), color = TianyanTheme.colors.danger.copy(alpha = 0.18f)) {
+                    Text("✘ 失败分支 (exitCode != 0)", style = MaterialTheme.typography.labelSmall, color = TianyanTheme.colors.danger, modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs))
                 }
                 if (failureEdge != null) {
                     val target = state.definition.nodes.firstOrNull { it.id == failureEdge.toNodeId }
                     Row(
-                        modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(8.dp)).padding(8.dp),
+                        modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerHigh, Radius.xsShape).padding(Spacing.sm),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         Text("已连接至: ${target?.title ?: failureEdge.toNodeId}", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                         RuntimeOutlinedButton(
                             onClick = { onRemoveEdge(failureEdge.id) },
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs),
                         ) {
                             Text("断开", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
                         }
                     }
                 } else if (otherNodes.isNotEmpty()) {
                     val currentFailureNode = otherNodes.firstOrNull { it.id == failureTargetId } ?: otherNodes.first()
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         Box(Modifier.weight(1f)) {
                             RuntimeOutlinedButton(onClick = { failureExpanded = true }, modifier = Modifier.fillMaxWidth()) {
                                 Text("目标: ${currentFailureNode.title}", maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -1657,7 +1665,7 @@ private fun BranchRouterCard(
                         }
                         RuntimeButton(
                             onClick = { onConnectNodes(node.id, currentFailureNode.id, "output", "exitCode != 0") },
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs),
                         ) {
                             Text("连接", maxLines = 1)
                         }
@@ -1691,23 +1699,23 @@ private fun NodeConnectionsCard(
     var targetExpanded by remember { mutableStateOf(false) }
     var portExpanded by remember { mutableStateOf(false) }
 
-    RuntimeCard(Modifier.fillMaxWidth(), contentPadding = PaddingValues(14.dp)) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    RuntimeCard(Modifier.fillMaxWidth(), contentPadding = PaddingValues(Spacing.md)) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RuntimeIcon(RuntimeIconName.Link, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(Spacing.sm))
                 Text("节点连线与拓扑 (${allConnected.size})", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 if (allConnected.isNotEmpty()) {
                     Surface(
                         onClick = { onDisconnectAll(node.id) },
-                        shape = RoundedCornerShape(50),
+                        shape = RoundedCornerShape(percent = 50),
                         color = MaterialTheme.colorScheme.error.copy(alpha = 0.14f),
                     ) {
                         Text(
                             text = "一键断开全部",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                         )
                     }
                 }
@@ -1720,26 +1728,26 @@ private fun NodeConnectionsCard(
                 outgoingEdges.forEach { edge ->
                     val targetNode = state.definition.nodes.firstOrNull { it.id == edge.toNodeId }
                     Surface(
-                        shape = RoundedCornerShape(8.dp),
+                        shape = Radius.xsShape,
                         color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.sm),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             Column(Modifier.weight(1f)) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                                     Surface(
                                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                                        shape = RoundedCornerShape(50),
+                                        shape = RoundedCornerShape(percent = 50),
                                     ) {
                                         Text(
                                             text = edge.fromPort.portLabel(),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                                         )
                                     }
                                     Text("──►", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1762,7 +1770,7 @@ private fun NodeConnectionsCard(
                             }
                             RuntimeOutlinedButton(
                                 onClick = { onRemoveEdge(edge.id) },
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs),
                             ) {
                                 RuntimeIcon(RuntimeIconName.Close, Modifier.size(12.dp), tint = MaterialTheme.colorScheme.error)
                                 Text("断开", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
@@ -1779,17 +1787,17 @@ private fun NodeConnectionsCard(
                 incomingEdges.forEach { edge ->
                     val sourceNode = state.definition.nodes.firstOrNull { it.id == edge.fromNodeId }
                     Surface(
-                        shape = RoundedCornerShape(8.dp),
+                        shape = Radius.xsShape,
                         color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.sm),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                         ) {
                             Column(Modifier.weight(1f)) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                                     Text(
                                         text = sourceNode?.title ?: edge.fromNodeId,
                                         style = MaterialTheme.typography.labelMedium,
@@ -1811,7 +1819,7 @@ private fun NodeConnectionsCard(
                             }
                             RuntimeOutlinedButton(
                                 onClick = { onRemoveEdge(edge.id) },
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs),
                             ) {
                                 RuntimeIcon(RuntimeIconName.Close, Modifier.size(12.dp), tint = MaterialTheme.colorScheme.error)
                                 Text("断开", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
@@ -1828,7 +1836,7 @@ private fun NodeConnectionsCard(
                 Text("画布中尚无其他可用节点", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
                 val currentTargetNode = otherNodes.firstOrNull { it.id == selectedTargetId } ?: otherNodes.first()
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     Box {
                         RuntimeOutlinedButton(
                             onClick = { targetExpanded = true },
@@ -1849,7 +1857,7 @@ private fun NodeConnectionsCard(
                         }
                     }
 
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         Box(Modifier.weight(1f)) {
                             RuntimeOutlinedButton(
                                 onClick = { portExpanded = true },

@@ -51,6 +51,7 @@ import top.tianyan.app.core.model.workflow.WorkflowDefinition
 import top.tianyan.app.core.model.workflow.WorkflowRunStatus
 import top.tianyan.app.core.model.workflow.WorkflowRuntimeState
 import top.tianyan.app.ui.components.RuntimeAlertDialog
+import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.ui.components.RuntimeButton
 import top.tianyan.app.ui.components.RuntimeCard
 import top.tianyan.app.ui.components.RuntimeIcon
@@ -198,8 +199,8 @@ private fun WorkflowCatalog(
     var deleteRequested by remember { mutableStateOf<WorkflowDefinition?>(null) }
     LazyColumn(
         modifier = modifier,
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(Spacing.lg),
+        verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         item {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -209,36 +210,36 @@ private fun WorkflowCatalog(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(Modifier.width(12.dp))
-                RuntimeButton(onClick = onCreate, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)) {
+                Spacer(Modifier.width(Spacing.md))
+                RuntimeButton(onClick = onCreate, contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm)) {
                     RuntimeIcon(RuntimeIconName.Plus, Modifier.size(16.dp))
                     Text("新建", maxLines = 1)
                 }
             }
         }
         items(definitions, key = { it.id }) { workflow ->
-            RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(16.dp)) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(Spacing.lg)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         RuntimeIcon(RuntimeIconName.Hub, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.width(10.dp))
+                        Spacer(Modifier.width(Spacing.sm))
                         Column(Modifier.weight(1f)) {
                             Text(workflow.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text("${workflow.category} · ${workflow.nodes.size} 个节点", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                     Text(workflow.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Row(Modifier.align(Alignment.End), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.align(Alignment.End), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         if (!workflow.isBuiltin) {
-                            RuntimeOutlinedButton(onClick = { deleteRequested = workflow }, contentPadding = PaddingValues(9.dp)) {
+                            RuntimeOutlinedButton(onClick = { deleteRequested = workflow }, contentPadding = PaddingValues(Spacing.sm)) {
                                 RuntimeIcon(RuntimeIconName.Trash, Modifier.size(16.dp))
                             }
                         }
-                        RuntimeOutlinedButton(onClick = { onEdit(workflow) }, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)) {
+                        RuntimeOutlinedButton(onClick = { onEdit(workflow) }, contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm)) {
                             RuntimeIcon(RuntimeIconName.Edit, Modifier.size(16.dp))
                             Text(if (workflow.isBuiltin) "创建副本" else "编辑", maxLines = 1)
                         }
-                        RuntimeButton(onClick = { onRun(workflow) }, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)) {
+                        RuntimeButton(onClick = { onRun(workflow) }, contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm)) {
                             RuntimeIcon(RuntimeIconName.Play, Modifier.size(16.dp))
                             Text("运行", maxLines = 1)
                         }
@@ -282,7 +283,7 @@ private fun WorkflowRunView(
         if (maxWidth >= 760.dp) {
             Row(Modifier.fillMaxSize()) {
                 WorkflowCanvas2D(state.definition, state, Modifier.weight(1f).fillMaxSize(), selectedNodeId = selectedNode, onNodeSelected = { selectedNode = it })
-                Column(Modifier.width(320.dp).verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(Modifier.width(320.dp).verticalScroll(rememberScrollState()).padding(Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     RunSummary(state)
                     val node = state.definition.nodes.firstOrNull { it.id == selectedNode }
                     if (node == null) Text("点选节点查看日志、错误与产物")
@@ -298,8 +299,8 @@ private fun WorkflowRunView(
         if (state.status in setOf(WorkflowRunStatus.RUNNING, WorkflowRunStatus.WAITING_APPROVAL)) {
             RuntimeOutlinedButton(
                 onClick = onCancel,
-                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
-                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                modifier = Modifier.align(Alignment.BottomEnd).padding(Spacing.lg),
+                contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
             ) { Text("取消", maxLines = 1) }
         }
     }
@@ -307,7 +308,7 @@ private fun WorkflowRunView(
 
 @Composable
 fun WorkflowTimelineView(state: WorkflowRuntimeState, modifier: Modifier = Modifier) {
-    LazyColumn(modifier, contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    LazyColumn(modifier, contentPadding = PaddingValues(Spacing.lg), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         item {
             RunSummary(state)
         }
@@ -348,16 +349,16 @@ fun WorkflowTimelineView(state: WorkflowRuntimeState, modifier: Modifier = Modif
                 modifier = Modifier.fillMaxWidth(),
                 containerColor = cardContainerColor,
                 borderColor = color.copy(alpha = pulseAlpha),
-                contentPadding = PaddingValues(14.dp),
+                contentPadding = PaddingValues(Spacing.md),
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         RuntimeIcon(statusIcon(status), Modifier.size(18.dp), tint = color.copy(alpha = if (isRunning) pulseAlpha else 1f))
-                        Spacer(Modifier.width(10.dp))
+                        Spacer(Modifier.width(Spacing.sm))
                         Text(node.title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         val duration = run?.output?.durationMs
                         if (duration != null && duration > 0L) {
-                            Text("${duration}ms", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f), modifier = Modifier.padding(end = 6.dp))
+                            Text("${duration}ms", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f), modifier = Modifier.padding(end = Spacing.sm))
                         }
                         Text(statusLabel(status), style = MaterialTheme.typography.labelSmall, color = color, maxLines = 1, fontWeight = if (isRunning || isWaiting) FontWeight.Bold else FontWeight.Normal)
                     }
@@ -379,10 +380,10 @@ private fun RunSummary(state: WorkflowRuntimeState) {
         WorkflowRunStatus.FAILED -> MaterialTheme.colorScheme.error
         else -> MaterialTheme.colorScheme.primary
     }
-    RuntimeCard(modifier = Modifier.fillMaxWidth(), borderColor = color.copy(alpha = 0.45f), contentPadding = PaddingValues(14.dp)) {
+    RuntimeCard(modifier = Modifier.fillMaxWidth(), borderColor = color.copy(alpha = 0.45f), contentPadding = PaddingValues(Spacing.md)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             RuntimeIcon(statusIcon(state.nodeStates.values.lastOrNull()?.status ?: NodeRunStatus.PENDING), Modifier.size(20.dp), tint = color)
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(Spacing.sm))
             Column(Modifier.weight(1f)) {
                 Text(runStatusLabel(state.status), fontWeight = FontWeight.SemiBold)
                 WorkflowElapsed(state)
@@ -403,7 +404,7 @@ private fun ApprovalDialog(request: WorkflowApprovalRequest, onDecision: (Boolea
         onDismissRequest = { onDecision(false, emptyMap()) },
         title = { Text(request.title) },
         text = {
-            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 if (request.description.isNotBlank()) Text(request.description, style = MaterialTheme.typography.bodyMedium)
                 request.requestedVariables.forEach { key ->
                     OutlinedTextField(value = values[key].orEmpty(), onValueChange = { values[key] = it }, label = { Text(key, maxLines = 1, overflow = TextOverflow.Ellipsis) }, modifier = Modifier.fillMaxWidth(), singleLine = true)

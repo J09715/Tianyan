@@ -39,6 +39,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.tianyan.app.runtime.bridge.adb.EmbeddedAdbManager
 import top.tianyan.app.ui.components.IconTile
+import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.ui.components.NoticeBanner
 import top.tianyan.app.ui.components.RuntimeButton as Button
 import top.tianyan.app.ui.components.RuntimeCard
@@ -98,21 +99,21 @@ fun AdbLogcatScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+                .padding(horizontal = Spacing.lg, vertical = Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             // ── 1. 连接状态与概览 ──────────────────────────────────────────
             RuntimeCard(Modifier.fillMaxWidth()) {
                 Row(
                     Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.md),
                 ) {
                     IconTile(
                         icon = RuntimeIconName.Terminal,
                         color = if (connected != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                         Text("内置无线 ADB 客户端", style = MaterialTheme.typography.titleMedium)
                         Text(
                             when (val current = adbState) {
@@ -151,18 +152,18 @@ fun AdbLogcatScreen(
                 }
 
                 if (adbBusy || adbState == EmbeddedAdbManager.ConnectionState.Discovering || adbState == EmbeddedAdbManager.ConnectionState.Connecting) {
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(Spacing.sm))
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 }
 
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(Spacing.sm))
                 Text(
                     "mDNS 自动探测：发现配对端点 ${adbDiscovery.pairingEndpoints.size} 个 · 连接端点 ${adbDiscovery.connectEndpoints.size} 个",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(Spacing.md))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -193,7 +194,7 @@ fun AdbLogcatScreen(
                     text = "💡 通知栏快捷配对推荐：Android 系统在开启「使用配对码配对设备」弹窗时，切出设置会关闭弹窗并使配对码失效。开启上方「通知栏配对助手」后，可在系统开发者选项弹窗中直接下拉通知栏输入 6 位配对码并提交，无需切屏！",
                     isError = false,
                 )
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(Spacing.sm))
 
                 OutlinedButton(
                     onClick = {
@@ -211,9 +212,9 @@ fun AdbLogcatScreen(
                     Text("前往系统开发者选项（开启无线调试）")
                 }
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(Spacing.md))
 
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     OutlinedTextField(
                         value = pairingCode,
                         onValueChange = { value -> pairingCode = value.filter(Char::isDigit).take(6) },
@@ -233,9 +234,9 @@ fun AdbLogcatScreen(
                         singleLine = true,
                     )
                 }
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(Spacing.sm))
 
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     Button(
                         onClick = { viewModel.pairWirelessAdb(pairingCode, explicitPort.toIntOrNull()) },
                         enabled = !adbBusy && pairingCode.length == 6 && (adbDiscovery.pairingEndpoints.isNotEmpty() || explicitPort.isNotBlank()),
@@ -252,19 +253,19 @@ fun AdbLogcatScreen(
                     }
                 }
 
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(Spacing.sm))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     FilledTonalButton(
                         onClick = viewModel::restartAdbDiscovery,
                         enabled = !adbBusy,
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs),
                     ) {
                         Text("重新探测端口", style = MaterialTheme.typography.labelSmall)
                     }
                 }
 
                 adbMessage?.let {
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(Spacing.sm))
                     Text(
                         it,
                         style = MaterialTheme.typography.bodySmall,
@@ -283,24 +284,24 @@ fun AdbLogcatScreen(
                     label = { Text("目标应用包名（留空抓取全系统）") },
                     singleLine = true,
                 )
-                Spacer(Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Spacer(Modifier.height(Spacing.sm))
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     FilledTonalButton(
                         onClick = { logcatPackage = "top.tianyan.app" },
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs),
                     ) {
                         Text("填入天衍", style = MaterialTheme.typography.labelSmall)
                     }
                     OutlinedButton(
                         onClick = { logcatPackage = "" },
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs),
                     ) {
                         Text("全系统日志", style = MaterialTheme.typography.labelSmall)
                     }
                 }
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(Spacing.sm))
 
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     OutlinedTextField(
                         value = logcatTag,
                         onValueChange = { logcatTag = it },
@@ -316,7 +317,7 @@ fun AdbLogcatScreen(
                         singleLine = true,
                     )
                 }
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(Spacing.sm))
 
                 OutlinedTextField(
                     value = logcatKeyword,
@@ -325,17 +326,17 @@ fun AdbLogcatScreen(
                     label = { Text("关键词过滤（可选，忽略大小写）") },
                     singleLine = true,
                 )
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(Spacing.sm))
 
                 Text("日志等级", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(4.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Spacer(Modifier.height(Spacing.xs))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     listOf('V' to "Verbose", 'D' to "Debug", 'I' to "Info", 'W' to "Warn", 'E' to "Error", 'F' to "Fatal").forEach { (priority, _) ->
                         if (priority == logcatPriority) {
                             Button(
                                 onClick = { logcatPriority = priority },
                                 modifier = Modifier.weight(1f),
-                                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 6.dp),
+                                contentPadding = PaddingValues(horizontal = Spacing.xs, vertical = Spacing.sm),
                             ) {
                                 Text(priority.toString())
                             }
@@ -343,16 +344,16 @@ fun AdbLogcatScreen(
                             OutlinedButton(
                                 onClick = { logcatPriority = priority },
                                 modifier = Modifier.weight(1f),
-                                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 6.dp),
+                                contentPadding = PaddingValues(horizontal = Spacing.xs, vertical = Spacing.sm),
                             ) {
                                 Text(priority.toString())
                             }
                         }
                     }
                 }
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(Spacing.md))
 
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     Button(
                         onClick = {
                             viewModel.captureLogcat(
@@ -377,9 +378,9 @@ fun AdbLogcatScreen(
                 }
 
                 if (logcatOutput.isNotBlank()) {
-                    Spacer(Modifier.height(14.dp))
+                    Spacer(Modifier.height(Spacing.md))
                     Text("抓取结果", style = MaterialTheme.typography.labelLarge)
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(Spacing.sm))
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -390,7 +391,7 @@ fun AdbLogcatScreen(
                         SelectionContainer {
                             Column(
                                 modifier = Modifier
-                                    .padding(10.dp)
+                                    .padding(Spacing.sm)
                                     .verticalScroll(rememberScrollState()),
                             ) {
                                 Text(
@@ -401,7 +402,7 @@ fun AdbLogcatScreen(
                             }
                         }
                     }
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(Spacing.sm))
                     OutlinedButton(
                         onClick = {
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager

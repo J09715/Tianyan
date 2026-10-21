@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -52,6 +51,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.tianyan.app.ui.components.RuntimeIcon
+import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.theme.Radius
+import top.tianyan.app.ui.theme.TianyanTheme
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeIconButton
 import top.tianyan.app.ui.components.RuntimeTopBar
@@ -203,12 +205,14 @@ private fun BrowserStatusBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 10.dp, vertical = 3.dp),
+                .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.Start),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.xs, Alignment.Start),
         ) {
             // 1. 共浏览状态：AI 是否与用户共享浏览（点击切换）
-            val coTint = if (coBrowsingEnabled) Color(0xFF3F8FFF) else Color(0xFFFF8F3F)
+            // 共浏览开=蓝（进行中）、关=橙（已暂停）：这两个是「浏览器自身的
+            // 状态指示色」，取语义色 info / warning，深浅主题都有对比度保证。
+            val coTint = if (coBrowsingEnabled) TianyanTheme.colors.info else TianyanTheme.colors.warning
             BrowserStatusItem(
                 icon = if (coBrowsingEnabled) RuntimeIconName.Visibility else RuntimeIconName.VisibilityOff,
                 label = if (coBrowsingEnabled) "共浏览中" else "已暂停",
@@ -275,13 +279,13 @@ private fun BrowserTabChip(
     val tint = if (tab.active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
     Surface(
         onClick = onSelect,
-        shape = RoundedCornerShape(4.dp),
+        shape = Radius.xsShape,
         color = if (tab.active) tint.copy(alpha = 0.14f) else Color.Transparent,
     ) {
         Row(
-            modifier = Modifier.padding(start = 4.dp, top = 1.dp, bottom = 1.dp, end = 1.dp),
+            modifier = Modifier.padding(start = Spacing.xs, top = Spacing.xs, bottom = Spacing.xs, end = Spacing.xs),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
             RuntimeIcon(RuntimeIconName.Globe, Modifier.size(11.dp), tint = tint)
             Text(
@@ -307,7 +311,7 @@ private fun BrowserTabChip(
 private fun StatusDivider() {
     Box(
         modifier = Modifier
-            .padding(horizontal = 2.dp)
+            .padding(horizontal = Spacing.xs)
             .size(width = 1.dp, height = 9.dp)
             .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
     )
@@ -327,17 +331,19 @@ private fun DebugPausedBanner(
     val location = frame?.let {
         "${it.functionName.ifEmpty { "<anonymous>" }} @ ${it.url.substringAfterLast('/')}:${it.lineNumber + 1}"
     } ?: "无调用栈"
+    // 调试暂停横幅是「盖在浏览器之上的告警条」：琥珀底 + 白字必须成立，
+    // 因此固定色值，不随主题走（深色主题的 warning 是浅黄，白字压不住）。
     Surface(
         color = Color(0xCCB45309),
-        shape = RoundedCornerShape(10.dp),
+        shape = Radius.smShape,
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = Spacing.md, vertical = Spacing.sm),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             RuntimeIcon(RuntimeIconName.Alert, Modifier.size(16.dp), tint = Color.White)
             Column(modifier = Modifier.weight(1f)) {
@@ -358,13 +364,13 @@ private fun DebugPausedBanner(
             }
             Surface(
                 onClick = onResume,
-                shape = RoundedCornerShape(14.dp),
+                shape = Radius.mdShape,
                 color = Color.White,
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                 ) {
                     RuntimeIcon(RuntimeIconName.Play, Modifier.size(12.dp), tint = Color(0xFFB45309))
                     Text(
@@ -389,13 +395,13 @@ private fun BrowserStatusItem(
 ) {
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(4.dp),
+        shape = Radius.xsShape,
         color = if (highlight) tint.copy(alpha = 0.14f) else Color.Transparent,
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+            modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
             RuntimeIcon(
                 name = icon,
@@ -439,9 +445,9 @@ private fun BrowserUrlBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 6.dp, vertical = 6.dp),
+                .padding(horizontal = Spacing.sm, vertical = Spacing.sm),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
             RuntimeIconButton(onClick = onBack, enabled = canGoBack, contentDescription = "后退") {
                 RuntimeIcon(RuntimeIconName.Back, Modifier.size(17.dp))
@@ -454,15 +460,15 @@ private fun BrowserUrlBar(
             }
             // URL 输入胶囊：占满剩余宽度，右侧内嵌跳转圆钮
             Surface(
-                shape = RoundedCornerShape(18.dp),
+                shape = Radius.lgShape,
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
                 modifier = Modifier.weight(1f),
             ) {
                 Row(
-                    modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                    modifier = Modifier.padding(start = Spacing.md, end = Spacing.xs, top = Spacing.xs, bottom = Spacing.xs),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     BasicTextField(
                         value = input,
