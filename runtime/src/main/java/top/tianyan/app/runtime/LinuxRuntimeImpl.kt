@@ -25,6 +25,9 @@ import top.tianyan.app.runtime.shell.ProcessRegistry
 import top.tianyan.app.runtime.shell.SessionConfig
 import top.tianyan.app.runtime.shell.ShellCommand
 import top.tianyan.app.runtime.shell.ShellExecutor
+import top.tianyan.app.runtime.uml.EngineType
+import top.tianyan.app.runtime.uml.UmlEngine
+import top.tianyan.app.runtime.uml.UmlEngineSelector
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -60,6 +63,8 @@ class LinuxRuntimeImpl @Inject constructor(
     private val hostBridge: HostBridge,
     private val assetSynchronizer: top.tianyan.app.runtime.scripts.RuntimeAssetSynchronizer,
     private val logger: AppLogger,
+    private val engineSelector: UmlEngineSelector,
+    private val umlEngine: UmlEngine,
 ) : LinuxRuntime {
 
     private val _state = MutableStateFlow<RuntimeState>(RuntimeState.NotInitialized)
@@ -497,6 +502,25 @@ class LinuxRuntimeImpl @Inject constructor(
 
     override suspend fun healthCheck(distroId: String?): RuntimeHealth = withContext(Dispatchers.IO) {
         healthChecker.check()
+    }
+
+    /** 当前生效的运行时引擎：默认 PRoot，用户在设置里开启 UML 且探测通过时切到 UML。 */
+    suspend fun activeEngine(): EngineType = engineSelector.activeEngine()
+
+    /** UML guest 是否在跑 / 可引导；UI 与终端入口用它判断要不要先拉起 guest。 */
+    suspend fun umlStatus(): top.tianyan.app.runtime.uml.UmlEngine.State =
+        if (engineSelector.isUmlPreferred()) umlEngine.status() else top.tianyan.app.runtime.uml.UmlEngine.State.STOPPED
+
+    /** 若偏好 UML 且未就绪，则尝试非阻塞拉起 guest。返回是否处于可用状态。 */
+    suspend fun ensurePreferredEngine(): Boolean {
+        if (!engineSelector.isUmlPreferred()) return true
+        return when (umlEngine.status()) {
+            top.tianyan.app.runtime.uml.UmlEngine.State.READY -> true
+            else -> {
+                umlEngine.startAsync()
+                true // 异步引导中，调用方按状态轮询
+            }
+        }
     }
 
     override suspend fun execute(command: ShellCommand, distroId: String?): CommandResult {

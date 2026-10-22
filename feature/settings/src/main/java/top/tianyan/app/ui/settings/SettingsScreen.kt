@@ -432,6 +432,7 @@ fun LinuxEnvironmentSettingsScreen(
     onOpenEnvironmentVariables: () -> Unit,
     onOpenSshSettings: () -> Unit,
     onOpenFtpSettings: () -> Unit,
+    onOpenUmlEngine: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val executionMode by viewModel.executionMode.collectAsStateWithLifecycle()
@@ -543,6 +544,13 @@ fun LinuxEnvironmentSettingsScreen(
                         title = "SSH 远程访问",
                         subtitle = "公钥认证 · 端口与局域网监听 · 随运行时启动",
                         onClick = onOpenSshSettings,
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    SettingsRow(
+                        icon = RuntimeIconName.Cpu,
+                        title = "运行引擎",
+                        subtitle = "PRoot 默认 · UML 无仿真快引擎可切换",
+                        onClick = onOpenUmlEngine,
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     SettingsRow(

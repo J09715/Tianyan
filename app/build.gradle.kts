@@ -148,6 +148,12 @@ extensions.configure<ApplicationExtension> {
             // The PRoot tracee loader is an executable payload, not a JNI library.
             // Preserve the official package bytes instead of running AGP's strip tool.
             keepDebugSymbols += "**/libproot-loader.so"
+            // UML 引擎的四个产物都是「独立可执行体」而非 JNI 库（内核/stub/passt/umnet），
+            // 与 PRoot loader 同样不能被 AGP strip，保持官方字节原样。
+            keepDebugSymbols += "**/libuml.so"
+            keepDebugSymbols += "**/libstub.so"
+            keepDebugSymbols += "**/libumnet.so"
+            keepDebugSymbols += "**/libpasst.so"
         }
         resources {
             excludes += listOf(
@@ -220,9 +226,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.ktor.client.core)
     // Android must use the AAR; the default JVM JAR does not package Android JNI libraries.
-    implementation(libs.zstd) {
-        artifact { type = "aar" }
-    }
+    implementation(libs.zstd)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
@@ -243,6 +247,13 @@ val bundledProotLoader = layout.projectDirectory.file(
 val bundledPtyNative = layout.projectDirectory.file(
     "src/main/jniLibs/arm64-v8a/libpty_native.so",
 )
+// UML（User Mode Linux）引擎的四个 native 产物。与 PRoot 一样：必须从 APK 的
+// nativeLibraryDir 解压执行（Android 10+ 禁执行 filesDir 代码），所以走 jniLibs 打包。
+// 它们是可选引擎——缺了只影响 UML 可用性，不阻断 PRoot 主链路，因此这里只打 warn 不 check。
+val bundledUmlKernel = layout.projectDirectory.file("src/main/jniLibs/arm64-v8a/libuml.so")
+val bundledUmlStub = layout.projectDirectory.file("src/main/jniLibs/arm64-v8a/libstub.so")
+val bundledUmlUmnet = layout.projectDirectory.file("src/main/jniLibs/arm64-v8a/libumnet.so")
+val bundledUmlPasst = layout.projectDirectory.file("src/main/jniLibs/arm64-v8a/libpasst.so")
 val bundledRtk = layout.projectDirectory.file("src/main/assets/bin/rtk")
 val bundledRtkSha256 = "ce9a4847940ea26169df818d6907cd99bac0257a59ed4cc6c4b647e41277ad94"
 
@@ -293,6 +304,17 @@ tasks.configureEach {
                 task.name.startsWith("merge") && task.name.endsWith("JniLibFolders")
             }
             if (packagingApk) {
+                // UML 引擎产物是可选的：缺失只意味着 UML 不可用，不阻断 APK 打包。
+                // 用 warn 而非 check，保持 PRoot 主链路不受影响。
+                val umlArtifacts = listOf(bundledUmlKernel, bundledUmlStub, bundledUmlUmnet, bundledUmlPasst)
+                val missingUml = umlArtifacts.filter { !it.asFile.isFile }
+                if (missingUml.isNotEmpty()) {
+                    logger.warn(
+                        "UML engine binaries not bundled (UMI engine will be unavailable): " +
+                            missingUml.joinToString { it.asFile.name } +
+                            ". Run tools/prepare-proot-runtime.ps1 or the UML binary prep to include them.",
+                    )
+                }
                 check(bundledPtyNative.asFile.isFile) {
                     "Missing libpty_native.so. Build it with the NDK clang before assembling " +
                         "(aarch64-linux-android30-clang -shared -fPIC -O2 -o <out> app/src/main/cpp/pty_native.c). " +

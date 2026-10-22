@@ -27,6 +27,7 @@ coroutines = "1.11.0"
 coreKtx = "1.19.1"
 appcompat = "1.8.0"
 junit = "4.13.2"
+jsch = "0.2.21"
 xz = "1.12"
 zstd = "1.5.7-24"
 shizuku = "13.1.5"
@@ -97,6 +98,7 @@ kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
+jsch = { group = "com.github.mwiede", name = "jsch", version.ref = "jsch" }
 xz = { group = "org.tukaani", name = "xz", version.ref = "xz" }
 zstd = { group = "com.github.luben", name = "zstd-jni", version.ref = "zstd" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxJunit" }

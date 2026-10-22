@@ -82,6 +82,7 @@ sealed interface AppDestination : NavKey
 @Serializable data object AppManagementDestination : AppDestination
 @Serializable data object EnvironmentVariableSettingsDestination : AppDestination
 @Serializable data object SshSettingsDestination : AppDestination
+@Serializable data object UmlEngineSettingsDestination : AppDestination
 @Serializable data object FtpSettingsDestination : AppDestination
 @Serializable data object ModelProfilesDestination : AppDestination
 @Serializable data object LocalLlmDestination : AppDestination
@@ -374,8 +375,14 @@ fun TianyanNavHost(
                         onOpenEnvironmentVariables = { settingsStack.push(LinuxEnvSettingsDestination, EnvironmentVariableSettingsDestination) },
                         onOpenSshSettings = { settingsStack.push(LinuxEnvSettingsDestination, SshSettingsDestination) },
                         onOpenFtpSettings = { settingsStack.push(LinuxEnvSettingsDestination, FtpSettingsDestination) },
+                        onOpenUmlEngine = { settingsStack.push(LinuxEnvSettingsDestination, UmlEngineSettingsDestination) },
                         viewModel = settingsViewModel,
                     )
+                }
+            }
+            entry<UmlEngineSettingsDestination> {
+                GuardedEntry(UmlEngineSettingsDestination) {
+                    top.tianyan.app.ui.settings.UmlEngineSettingsScreen(onBack = ::popBack)
                 }
             }
             entry<SystemDevSettingsDestination> {

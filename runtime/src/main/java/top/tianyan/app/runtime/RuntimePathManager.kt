@@ -14,7 +14,7 @@ class RuntimePathManager @Inject constructor(
 ) {
     private val appFilesDir: File = context.filesDir
     val bundledProotFile: File = File(context.applicationInfo.nativeLibraryDir, "libproot.so")
-    private val nativeLibraryDir: File = File(context.applicationInfo.nativeLibraryDir)
+    val nativeLibraryDir: File = File(context.applicationInfo.nativeLibraryDir)
     val bundledProotLoaderFile: File = File(nativeLibraryDir, "libproot-loader.so")
     val bundledProotLoader32File: File = File(nativeLibraryDir, "libproot-loader32.so")
 

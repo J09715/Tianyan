@@ -58,6 +58,12 @@ dependencyResolutionManagement {
             url = uri("https://jitpack.io")
             content { includeGroup("com.github.Flyfish233") }
         }
+        // zstd-jni aar 在阿里云 central 镜像的 Gradle AIDL 属性转换下反复「找不到 aar」。
+        // 把 com.github.luben 钉到官方 maven central，限定 group 不扩大解析面。
+        maven {
+            url = uri("https://repo1.maven.org/maven2")
+            content { includeGroup("com.github.luben") }
+        }
     }
 }
 

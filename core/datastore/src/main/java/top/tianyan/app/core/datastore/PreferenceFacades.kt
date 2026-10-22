@@ -39,6 +39,7 @@ class RuntimePreferences @Inject constructor(private val store: SettingsDataStor
     val preferredExecutionMode get() = store.preferredExecutionMode
     val effectiveExecutionMode get() = store.effectiveExecutionMode
     val qemuCompatibilityEnabled get() = store.qemuCompatibilityEnabled
+    val umlEngineEnabled get() = store.umlEngineEnabled
     val adbWirelessPort get() = store.adbWirelessPort
     val adbPairedOnce get() = store.adbPairedOnce
     val adbNotificationEnabled get() = store.adbNotificationEnabled
@@ -54,6 +55,7 @@ class RuntimePreferences @Inject constructor(private val store: SettingsDataStor
         effective: top.tianyan.app.core.model.ExecutionMode,
     ) = store.setExecutionModes(preferred, effective)
     suspend fun setQemuCompatibilityEnabled(value: Boolean) = store.setQemuCompatibilityEnabled(value)
+    suspend fun setUmlEngineEnabled(value: Boolean) = store.setUmlEngineEnabled(value)
     suspend fun setAdbWirelessPort(value: Int) = store.setAdbWirelessPort(value)
     suspend fun setAdbPairedOnce(value: Boolean) = store.setAdbPairedOnce(value)
     suspend fun setAdbNotificationEnabled(value: Boolean) = store.setAdbNotificationEnabled(value)

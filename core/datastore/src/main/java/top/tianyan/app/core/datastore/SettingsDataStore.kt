@@ -186,6 +186,7 @@ class SettingsDataStore @Inject constructor(
     }
     private val developerModeKey = booleanPreferencesKey("developer_mode")
     private val qemuCompatibilityEnabledKey = booleanPreferencesKey("qemu_compatibility_enabled")
+    private val umlEngineEnabledKey = booleanPreferencesKey("uml_engine_enabled")
     private val themeModeKey = stringPreferencesKey("theme_mode")
     private val themeStyleKey = stringPreferencesKey("theme_style")
     private val chengmingBackgroundUriKey = stringPreferencesKey("chengming_background_uri")
@@ -467,6 +468,20 @@ class SettingsDataStore @Inject constructor(
     /** Optional x86_64 compatibility mode; ARM64 remains the default. */
     val qemuCompatibilityEnabled: Flow<Boolean> = context.settingsDataStore.data.map { preferences ->
         preferences[qemuCompatibilityEnabledKey] ?: false
+    }
+
+    /**
+     * UML（User Mode Linux）引擎开关：开启后 runtime 用「普通进程起内核」代替 PRoot 仿真，
+     * guest 代码在本机 Cortex 上原生执行，流畅度远高于 TCG/QEMU。默认关。
+     */
+    val umlEngineEnabled: Flow<Boolean> = context.settingsDataStore.data.map { preferences ->
+        preferences[umlEngineEnabledKey] ?: false
+    }
+
+    suspend fun setUmlEngineEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[umlEngineEnabledKey] = enabled
+        }
     }
 
     val onboardingCompleted: Flow<Boolean> = context.settingsDataStore.data.map { it[onboardingCompletedKey] ?: false }

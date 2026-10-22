@@ -1,0 +1,80 @@
+#!/bin/bash
+# 天衍 UML guest 的 init 脚本。
+#
+# 由 UmlEngine 通过内核参数 init=/host/tianyan-uml-init 拉起（share 目录 hostfs 挂到 /host）。
+# 职责：挂 proc/sys/dev、配网络、起 sshd，并支持「单次命令模式」（/host/cmd 存在则执行完关机）。
+# 移植自 Stryker stryker-init，裁剪掉 Wi-Fi/USB 分支，保留 sshd + 单命令两种入口。
+exec </dev/console >/dev/console 2>&1
+
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export HOME=/root
+export TERM=${TERM:-linux}
+
+mark() { printf 'TIANYAN_UML_BOOT %s\n' "$*"; }
+
+mount -t proc     proc     /proc     2>/dev/null
+mount -t sysfs    sysfs    /sys      2>/dev/null
+mount -t devtmpfs devtmpfs /dev      2>/dev/null
+mkdir -p /dev/pts /dev/shm 2>/dev/null
+mount -t devpts   devpts   /dev/pts  2>/dev/null
+mount -t tmpfs    tmpfs    /dev/shm  2>/dev/null
+mount -t tmpfs    tmpfs    /tmp      2>/dev/null
+mount -t tmpfs    tmpfs    /run      2>/dev/null
+mount -o remount,rw / 2>/dev/null
+hostname tianyan-uml 2>/dev/null
+mark mounted
+
+# passt 网络：guest 侧是 vec0，默认走 10.0.2.x 的 user 模式网段
+if ip link show vec0 >/dev/null 2>&1; then
+    ip addr add 10.0.2.15/24 dev vec0 2>/dev/null
+    ip link set vec0 up 2>/dev/null
+    ip route add default via 10.0.2.2 2>/dev/null
+    printf 'nameserver %s\n' "${TIANYAN_UML_DNS:-1.1.1.1}" > /etc/resolv.conf
+    mark network
+fi
+ip link set lo up 2>/dev/null
+
+# hostfs 共享目录：init 脚本里读不到内核 cmdline 的 share 值，靠内核把它挂到 /host
+if [ -d /host ]; then
+    mountpoint -q /host 2>/dev/null || mount -t hostfs none /host 2>/dev/null
+    # 应用把公钥丢进 /host/.ssh/authorized_keys，这里把它落到 guest 的 /root/.ssh
+    if [ -d /host/.ssh ]; then
+        mkdir -p /root/.ssh
+        chmod 700 /root/.ssh
+        cp /host/.ssh/authorized_keys /root/.ssh/authorized_keys 2>/dev/null
+        chmod 600 /root/.ssh/authorized_keys
+        mark sshkeys
+    fi
+fi
+
+mkdir -p /run/sshd 2>/dev/null
+if [ -x /usr/sbin/sshd ]; then
+    /usr/sbin/sshd -D -e &
+    sshd_pid=$!
+    mark sshd
+else
+    echo "tianyan-uml-init: no sshd in this image - the app cannot reach the guest"
+    sshd_pid=
+fi
+
+# 单次命令模式：/host/cmd 存在则执行完关机（对应 UmlEngine.exec()）
+if [ -s /host/cmd ]; then
+    echo "TIANYAN_UML_OUTPUT_BEGIN"
+    bash /host/cmd
+    echo "TIANYAN_UML_EXIT=$?"
+fi
+
+power_off() {
+    sync
+    /sbin/halt -f >/dev/null 2>&1
+    /sbin/poweroff -f >/dev/null 2>&1
+    exit 0
+}
+trap power_off TERM INT
+
+mark ready
+
+if [ -n "$sshd_pid" ]; then
+    wait "$sshd_pid"
+fi
+power_off
