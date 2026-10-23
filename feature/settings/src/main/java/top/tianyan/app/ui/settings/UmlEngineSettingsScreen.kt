@@ -138,6 +138,14 @@ fun UmlEngineSettingsScreen(
                                     "guest 镜像已就位（完整 root Linux 系统）。",
                                     style = MaterialTheme.typography.bodyMedium,
                                 )
+                                ui.rootfsSource?.let {
+                                    Spacer(Modifier.height(Spacing.xs))
+                                    Text(
+                                        "来源：$it",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                             }
                             ui.rootfsPreparing -> {
                                 Text("正在下载 guest 镜像…", style = MaterialTheme.typography.bodyMedium)

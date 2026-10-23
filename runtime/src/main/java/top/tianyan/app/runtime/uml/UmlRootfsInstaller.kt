@@ -34,6 +34,8 @@ class UmlRootfsInstaller @Inject constructor(
     @ApplicationContext private val context: Context,
     private val layout: UmlRuntimeLayout,
     private val fileDownloader: FileDownloader,
+    private val artifactRepository: UmlArtifactRepository,
+    private val logger: top.tianyan.app.core.common.logging.AppLogger,
 ) {
     /** 下载进度：0..1。 */
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -47,6 +49,9 @@ class UmlRootfsInstaller @Inject constructor(
     @Volatile var lastError: String = ""
         private set
     @Volatile var progress: Float = 0f
+        private set
+    /** 当前使用的产物来源（manifest / 内置回退），供 UI 说明。 */
+    @Volatile var artifactSource: String = ""
         private set
 
     fun isInstalled(): Boolean = layout.rootfs.isFile
@@ -66,13 +71,17 @@ class UmlRootfsInstaller @Inject constructor(
                 layout.ensureDirectories()
                 val part = layout.rootfsArchivePart
                 part.parentFile?.mkdirs()
+                // 清单驱动：manifest 给 url + sha256 + size；拉不到清单则降级内置回退地址。
+                val asset = artifactRepository.resolveRootfsAsset()
+                artifactSource = asset.source
+                logger.i("UML rootfs source: ${asset.source} (${asset.url})")
                 fileDownloader.download(
                     DownloadRequest(
-                        url = ROOTFS_IMAGE_URL,
+                        url = asset.url,
                         destination = part,
                         partialFile = File(part.absolutePath + ".part"),
-                        sha256 = ROOTFS_IMAGE_SHA256,
-                        maxBytes = DEFAULT_DOWNLOAD_MAX_BYTES,
+                        sha256 = asset.sha256,
+                        maxBytes = maxOf(asset.size, MIN_ROOTFS_BYTES),
                         timeoutMs = DEFAULT_DOWNLOAD_TIMEOUT_MS,
                     ),
                 ).collect { event ->
@@ -121,13 +130,6 @@ class UmlRootfsInstaller @Inject constructor(
     fun isReady(): Boolean = isInstalled()
 
     companion object {
-        // Stryker rootless-650 release 的 guest 磁盘镜像（Debian root Linux，gzip 压缩 ext4）。
-        // rootless-650 是 immutable release tag，资产不可被替换；拿到稳定 hash 后
-        // 回填 ROOTFS_IMAGE_SHA256 即启用强校验。
-        const val ROOTFS_IMAGE_URL =
-            "https://github.com/zalexdev/strykerapp/releases/download/rootless-650/rootfs.imgz"
-        val ROOTFS_IMAGE_SHA256: String? = null
-
         private const val DEFAULT_DOWNLOAD_MAX_BYTES = 512L * 1024 * 1024
         private const val DEFAULT_DOWNLOAD_TIMEOUT_MS = 10 * 60 * 1000L
         private const val MIN_ROOTFS_BYTES = 64L * 1024 * 1024

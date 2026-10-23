@@ -45,6 +45,8 @@ class UmlEngineSettingsViewModel @Inject constructor(
         val rootfsPreparing: Boolean = false,
         val rootfsProgress: Float = 0f,
         val rootfsError: String? = null,
+        /** 产物来源（manifest / 内置回退）——用户能看出用的是清单版本还是回退。 */
+        val rootfsSource: String? = null,
     )
 
     private val _ui = MutableStateFlow(Ui())
@@ -136,6 +138,7 @@ class UmlEngineSettingsViewModel @Inject constructor(
                 rootfsPreparing = s.state == UmlRootfsInstaller.State.INSTALLING,
                 rootfsProgress = s.progress,
                 rootfsError = if (s.state == UmlRootfsInstaller.State.FAILED) s.lastError else null,
+                rootfsSource = s.artifactSource.ifBlank { null },
             )
         }
     }

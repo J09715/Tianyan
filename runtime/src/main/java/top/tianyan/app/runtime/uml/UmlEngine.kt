@@ -256,7 +256,7 @@ class UmlEngine @Inject constructor(
             val sentinel = EXIT_SENTINEL + System.nanoTime()
             val wrapped = buildString {
                 append("export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:\$PATH; ")
-                append("export HOME=/root LANG=C.UTF-8; ")
+                append("export HOME=").append(GUEST_HOME).append(" LANG=C.UTF-8; ")
                 append("cd '").append(command.workingDirectory).append("' 2>/dev/null; ")
                 append(command.commandLine)
                 append("\nprintf '\\n").append(sentinel).append("%s\\n' \"\$?\"\n")
@@ -325,7 +325,7 @@ class UmlEngine @Inject constructor(
         withContext(Dispatchers.IO) {
             val wrapped = buildString {
                 append("export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:\$PATH; ")
-                append("export HOME=/root LANG=C.UTF-8; ")
+                append("export HOME=").append(GUEST_HOME).append(" LANG=C.UTF-8; ")
                 append("cd '").append(command.workingDirectory).append("' 2>/dev/null; ")
                 append(command.commandLine)
                 append("\n")
@@ -342,6 +342,18 @@ class UmlEngine @Inject constructor(
 
     /** guest 是否已就绪（可直接执行命令）。 */
     fun isGuestReady(): Boolean = isRunning() && guestSsh.ping(READY_PING_TIMEOUT_MS)
+
+    /**
+     * 校验 guest 里确实是 root（uid=0）。
+     * 「没有完整 root 权限」是最容易含糊过去的故障——这里把它变成一条明确结论：
+     * 返回 uid/uname/gid，非 0 时调用方能直接告诉用户 guest 没给 root，而不是静默降级。
+     */
+    fun guestIdentity(): String =
+        runCatching { guestSsh.run("id -u; id -un; id -g").joinToString(" ") }
+            .getOrElse { "unreachable" }
+            .trim()
+
+    fun isGuestRoot(): Boolean = guestIdentity().startsWith("0 ")
 
     private fun startConsolePump(p: Process) {
         val thread = Thread({
@@ -475,6 +487,8 @@ class UmlEngine @Inject constructor(
         const val MIN_RAM_MB = 512
         /** 一次性命令的退出码哨兵前缀（拼上纳秒时间戳，避免与命令自身输出撞名）。 */
         private const val EXIT_SENTINEL = "__TIANYAN_UML_EXIT__"
+        /** guest 里会话的 HOME：挂进来的用户工作区（不是 guest 镜像自带的 /root）。 */
+        private const val GUEST_HOME = "/workspace"
         private const val BOOT_TIMEOUT_MS = 150_000L
         private const val BOOT_PING_TIMEOUT_MS = 30_000
         private const val READY_PING_TIMEOUT_MS = 3_000

@@ -59,6 +59,11 @@ fi
 
 # 用户工作区：宿主 filesDir/linux-runtime/workspace 挂进 guest 的 /workspace，
 # UML 会话的默认 cwd 就是它——用户的项目文件因此对 guest 可见。
+#
+# 注意：不要动 guest 的 /root。SSH 公钥认证依赖 /root/.ssh/authorized_keys，
+# 而上面的 share 段刚把它建好；一旦 rm -rf /root 再软链，密钥就没了，
+# 应用会连不上 guest（表现为「没有 root / 起不来」）。
+# 要让用户落在工作区，靠会话侧设 HOME=/workspace 即可，不动 /root。
 workspace=$(sed -n 's/.*stryker\.workspace=\([^ ]*\).*/\1/p' /proc/cmdline 2>/dev/null)
 if [ -n "$workspace" ]; then
     mkdir -p /workspace 2>/dev/null
@@ -67,11 +72,9 @@ if [ -n "$workspace" ]; then
             mount -t hostfs none /workspace -o "$workspace" 2>/dev/null
         mountpoint -q /workspace 2>/dev/null && mark workspace
     fi
-    # guest 的 /root 默认无用户数据：软链到 /workspace，让 cd ~ 也落在工作区
-    if [ ! -L /root ]; then
-        rm -rf /root 2>/dev/null
-        ln -s /workspace /root 2>/dev/null
-    fi
+    # 工作区权限归 root（guest 里我们以 root 跑），并确保可写
+    chown -R root:root /workspace 2>/dev/null
+    chmod 755 /workspace 2>/dev/null
 fi
 
 mkdir -p /run/sshd 2>/dev/null

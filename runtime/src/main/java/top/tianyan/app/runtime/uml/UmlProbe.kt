@@ -65,8 +65,17 @@ class UmlProbe @Inject constructor(
 
         val scan = Scan()
         val pump = Thread({
-            BufferedReader(InputStreamReader(process.inputStream)).useLines { lines ->
-                lines.forEach { raw -> scan.accept(raw.trim().takeIf { it.isNotEmpty() }) }
+            // process.destroy() 会从另一线程关掉输入流，阻塞在 readLine() 的读端会抛
+            // InterruptedIOException —— 这是「探测结束」的正常收尾，不是错误。
+            // 线程未捕获异常会直接崩掉整个进程，所以必须吞掉。
+            try {
+                BufferedReader(InputStreamReader(process.inputStream)).useLines { lines ->
+                    lines.forEach { raw -> runCatching { scan.accept(raw.trim().takeIf { it.isNotEmpty() }) } }
+                }
+            } catch (_: java.io.InterruptedIOException) {
+                // 正常收尾：探测超时/判定完成，进程被 destroy
+            } catch (_: Exception) {
+                // 读端被关、流中断等，同样视为 EOF
             }
         }, "tianyan-uml-probe")
         pump.isDaemon = true

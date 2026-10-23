@@ -150,8 +150,15 @@ class UmlGuestSsh @Inject constructor(
             channel.setCommand(command)
             val out = channel.inputStream
             channel.connect()
-            val bytes = out.readBytes()
-            channel.disconnect()
+            // readBytes() 在通道被关/连接中断时会抛 IOException；调用方按「无输出」处理，
+            // 不能让它冒泡出去。
+            val bytes = try {
+                out.readBytes()
+            } catch (_: Exception) {
+                ByteArray(0)
+            } finally {
+                runCatching { channel.disconnect() }
+            }
             return String(bytes, Charsets.UTF_8).split('\n')
         }
     }
