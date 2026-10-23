@@ -543,7 +543,27 @@ class LinuxRuntimeImpl @Inject constructor(
         }
     }
 
+    /**
+     * 执行一条命令。UML 是默认引擎：命令直接跑在 guest 的完整 root Linux 里；
+     * 用户显式切回 PRoot、或 UML 起不来时走 PRoot 兜底。
+     */
     override suspend fun execute(command: ShellCommand, distroId: String?): CommandResult {
+        if (engineSelector.isUmlPreferred()) {
+            if (umlEngine.isGuestReady()) {
+                return umlEngine.exec(command)
+            }
+            // guest 未起：短超时试拉一次；仍不行则本次会话回退 PRoot
+            logger.w("UML preferred but guest not ready; attempting boot, falling back to PRoot on failure")
+            if (umlEngine.startBlocking(UML_COMMAND_BOOT_TIMEOUT_MS)) {
+                return umlEngine.exec(command)
+            }
+            logger.w("UML boot failed (${umlEngine.lastError()}); this command runs on PRoot")
+        }
+        return executeViaProot(command, distroId)
+    }
+
+    /** PRoot 执行路径（兼容/兜底引擎）。 */
+    private suspend fun executeViaProot(command: ShellCommand, distroId: String?): CommandResult {
         ensureReady()
         val safeDistro = distroId?.lowercase()?.trim()?.takeIf { it.isNotBlank() } ?: _activeDistroId.value
         val mounts = storageMounts()
@@ -610,6 +630,21 @@ class LinuxRuntimeImpl @Inject constructor(
         }.getOrElse { emptyList() }
 
     override suspend fun startSession(config: SessionConfig, distroId: String?): LinuxSession {
+        // UML 默认引擎：交互式终端直接进 guest 的 root Linux（带内核 + root）
+        if (engineSelector.isUmlPreferred()) {
+            if (umlEngine.isGuestReady()) {
+                return umlEngine.openSession(config)
+            }
+            if (umlEngine.startBlocking(UML_SESSION_BOOT_TIMEOUT_MS)) {
+                return umlEngine.openSession(config)
+            }
+            logger.w("UML boot failed (${umlEngine.lastError()}); session falls back to PRoot")
+        }
+        return startProotSession(config, distroId)
+    }
+
+    /** PRoot 交互式会话路径（兼容/兜底引擎）。 */
+    private suspend fun startProotSession(config: SessionConfig, distroId: String?): LinuxSession {
         ensureReady()
         val safeDistro = distroId?.lowercase()?.trim()?.takeIf { it.isNotBlank() } ?: _activeDistroId.value
         val markerId = UUID.randomUUID().toString()
@@ -727,6 +762,16 @@ class LinuxRuntimeImpl @Inject constructor(
         type: ProcessType,
         distroId: String?,
     ): ManagedProcess {
+        // UML 默认引擎：后台进程跑在 guest 里
+        if (engineSelector.isUmlPreferred()) {
+            if (umlEngine.isGuestReady()) {
+                return processRegistry.startUml(id, command, toolId, type, umlEngine)
+            }
+            if (umlEngine.startBlocking(UML_SESSION_BOOT_TIMEOUT_MS)) {
+                return processRegistry.startUml(id, command, toolId, type, umlEngine)
+            }
+            logger.w("UML boot failed (${umlEngine.lastError()}); background process falls back to PRoot")
+        }
         ensureReady()
         val mounts = storageMounts()
         return processRegistry.start(
@@ -1341,6 +1386,14 @@ class LinuxRuntimeImpl @Inject constructor(
 
     companion object {
         const val MIN_FREE_BYTES = 600L * 1024L * 1024L
+
+        /**
+         * UML guest 的引导超时。
+         * - 命令路径给短超时：一条命令不该等 150s 的整颗引导，超时就回退 PRoot；
+         * - 会话路径给长超时：交互式终端用户能接受一次稍久的等待。
+         */
+        private const val UML_COMMAND_BOOT_TIMEOUT_MS = 45_000L
+        private const val UML_SESSION_BOOT_TIMEOUT_MS = 150_000L
 
         val TIANYAN_HOST_SCRIPT = listOf(
             "#!/bin/sh",

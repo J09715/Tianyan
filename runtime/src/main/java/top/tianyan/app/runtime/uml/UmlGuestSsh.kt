@@ -2,6 +2,7 @@ package top.tianyan.app.runtime.uml
 
 import android.content.Context
 import com.jcraft.jsch.ChannelExec
+import com.jcraft.jsch.ChannelShell
 import com.jcraft.jsch.JSch
 import com.jcraft.jsch.Session
 import top.tianyan.app.core.common.logging.AppLogger
@@ -114,6 +115,25 @@ class UmlGuestSsh @Inject constructor(
     fun ping(timeoutMs: Int): Boolean = runSentinel("echo __TING__\n") { it == "__TING__" }
 
     fun run(command: String): List<String> = openExec(command) ?: emptyList()
+
+    /** 打开 guest 的交互式 shell channel（带 PTY，供终端会话用）。 */
+    fun openShellChannel(columns: Int, rows: Int): ChannelShell {
+        val s = synchronized(sessionLock) { ensureSession() }
+            ?: throw IllegalStateException("no ssh session to the UML guest on :$hostPort")
+        val channel = s.openChannel("shell") as ChannelShell
+        channel.setPtyType("xterm-256color")
+        channel.setPtySize(columns, rows, columns * 8, rows * 16)
+        return channel
+    }
+
+    /** 打开 guest 的一次性 exec channel（无 PTY，供后台进程 / 协议会话用）。 */
+    fun openExecChannel(command: String): ChannelExec {
+        val s = synchronized(sessionLock) { ensureSession() }
+            ?: throw IllegalStateException("no ssh session to the UML guest on :$hostPort")
+        val channel = s.openChannel("exec") as ChannelExec
+        channel.setCommand(command)
+        return channel
+    }
 
     /** 执行命令，检查输出最后一行是否匹配（退出码哨兵协议）。 */
     fun runSentinel(command: String, check: (String) -> Boolean): Boolean {

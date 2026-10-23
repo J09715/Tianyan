@@ -44,6 +44,16 @@ interface ProcessRegistry {
         distroId: String? = null,
         mounts: List<StorageMountBinding> = emptyList(),
     ): ManagedProcess
+
+    /** UML 引擎的后台进程：会话跑在 guest 里（exec channel，无 PTY）。 */
+    suspend fun startUml(
+        id: String,
+        command: ShellCommand,
+        toolId: String?,
+        type: ProcessType,
+        engine: top.tianyan.app.runtime.uml.UmlEngine,
+    ): ManagedProcess
+
     suspend fun stop(id: String): Boolean
     suspend fun stopAll()
     suspend fun cleanupDeadProcesses(): Int
@@ -149,6 +159,60 @@ class ProcessRegistryImpl @Inject constructor(
                 appendLog(logKey, exitNotice)
                 if (toolId != null && toolId != id) {
                     appendLog(id, exitNotice)
+                }
+            }
+        }
+
+        ManagedProcess(
+            id = id,
+            startedAt = System.currentTimeMillis(),
+            session = session,
+            toolId = toolId,
+            pid = session.pid,
+            type = type,
+        ).also { processes[id] = it }
+    }
+
+    /**
+     * UML 引擎的后台进程：会话在 guest 里跑（exec channel）。
+     * 进程表、日志聚合、停止/清理与 PRoot 路径完全一致——调用方无需区分引擎。
+     */
+    override suspend fun startUml(
+        id: String,
+        command: ShellCommand,
+        toolId: String?,
+        type: ProcessType,
+        engine: top.tianyan.app.runtime.uml.UmlEngine,
+    ): ManagedProcess = mutex.withLock {
+        processes.remove(id)?.session?.close()
+        val session = engine.openExecSession(command)
+
+        val logKey = toolId ?: id
+        appendLog(logKey, "[Tianyan] 正在启动 UML 服务进程...")
+        if (toolId != null && toolId != id) {
+            appendLog(id, "[Tianyan] 正在启动 UML 服务进程...")
+        }
+
+        scope.launch {
+            try {
+                session.output.collect { terminalOutput ->
+                    terminalOutput.text.lineSequence()
+                        .filter { it.isNotBlank() }
+                        .forEach { line ->
+                            appendLog(logKey, line)
+                            if (toolId != null && toolId != id) {
+                                appendLog(id, line)
+                            }
+                        }
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (e: Exception) {
+                appendLog(logKey, "[Tianyan] UML 输出流中断：${e.message ?: e::class.simpleName}")
+            } finally {
+                appendLog(logKey, "[Tianyan] UML 服务进程已停止")
+                if (toolId != null && toolId != id) {
+                    appendLog(id, "[Tianyan] UML 服务进程已停止")
                 }
             }
         }

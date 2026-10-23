@@ -3,6 +3,7 @@ package top.tianyan.app.runtime.uml
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import top.tianyan.app.core.common.logging.AppLogger
+import top.tianyan.app.runtime.shell.LinuxSession
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
@@ -10,6 +11,10 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runInterruptible
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 
 /**
  * UML（User Mode Linux）引擎：把一颗 guest 内核作为普通用户态进程直接拉起，
@@ -109,7 +114,15 @@ class UmlEngine @Inject constructor(
     }
 
     /** 同步启动并阻塞直到 guest SSH 应答或超时。 */
-    fun startBlocking(onBootLine: ((String) -> Unit)? = null, onBooted: (() -> Unit)? = null): Boolean {
+    fun startBlocking(onBootLine: ((String) -> Unit)? = null, onBooted: (() -> Unit)? = null): Boolean =
+        startBlocking(BOOT_TIMEOUT_MS, onBootLine, onBooted)
+
+    /** 同步启动，带自定义超时（命令路径用短超时，避免一次命令等 150s）。 */
+    fun startBlocking(
+        timeoutMs: Long,
+        onBootLine: ((String) -> Unit)? = null,
+        onBooted: (() -> Unit)? = null,
+    ): Boolean {
         stopRequested = false
         return try {
             if (isRunning() && guestSsh.ping(BOOT_PING_TIMEOUT_MS)) {
@@ -133,7 +146,7 @@ class UmlEngine @Inject constructor(
             start(ramMb, cpus, seccomp = true)
             onBootLine?.invoke("UML kernel started (${ramMb}MB / ${cpus}vCPU)")
 
-            val deadline = System.currentTimeMillis() + BOOT_TIMEOUT_MS
+            val deadline = System.currentTimeMillis() + timeoutMs
             while (!stopRequested && System.currentTimeMillis() < deadline) {
                 if (!isRunning()) {
                     val code = process?.let { runCatching { it.exitValue() }.getOrNull() }
@@ -148,7 +161,7 @@ class UmlEngine @Inject constructor(
                 }
                 Thread.sleep(1000)
             }
-            fail(if (stopRequested) "boot cancelled" else "guest did not answer in ${BOOT_TIMEOUT_MS / 1000}s", onBooted)
+            fail(if (stopRequested) "boot cancelled" else "guest did not answer in ${timeoutMs / 1000}s", onBooted)
         } catch (e: Exception) {
             logger.w("UML start failed", e)
             fail(e.message ?: e.javaClass.simpleName, onBooted)
@@ -196,6 +209,8 @@ class UmlEngine @Inject constructor(
         cmd += "init=/host/tianyan-uml-init"
         // hostfs 共享目录：guest 里挂在 /host，应用把公钥/init 丢进去、把 host key 取出来
         cmd += "stryker.share=${share.absolutePath}"
+        // 用户工作区：宿主 filesDir/linux-runtime/workspace 挂进 guest 的 /workspace
+        cmd += "stryker.workspace=${layout.workspaceDir.absolutePath}"
         cmd += "firmware_class.path=/host/firmware"
         return cmd
     }
@@ -226,6 +241,107 @@ class UmlEngine @Inject constructor(
         base.mkdirs()
         return base.absolutePath
     }
+
+    // ==================== 执行入口：UML 作为沙箱引擎 ====================
+
+    /**
+     * 一次性命令：在 UML guest 里执行，带退出码哨兵。
+     *
+     * 这是 UML 成为「执行引擎」的核心——上层（工具、MCP、脚本）调 execute() 时，
+     * 只要 UML 生效就走这里，命令直接跑在 guest 的完整 root Linux 里。
+     */
+    suspend fun exec(command: top.tianyan.app.runtime.shell.ShellCommand): top.tianyan.app.runtime.shell.CommandResult =
+        withContext(Dispatchers.IO) {
+            val started = System.currentTimeMillis()
+            val sentinel = EXIT_SENTINEL + System.nanoTime()
+            val wrapped = buildString {
+                append("export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:\$PATH; ")
+                append("export HOME=/root LANG=C.UTF-8; ")
+                append("cd '").append(command.workingDirectory).append("' 2>/dev/null; ")
+                append(command.commandLine)
+                append("\nprintf '\\n").append(sentinel).append("%s\\n' \"\$?\"\n")
+            }
+
+            val channel = try {
+                guestSsh.openExecChannel(wrapped)
+            } catch (e: Exception) {
+                logger.w("UML exec: no guest session", e)
+                return@withContext top.tianyan.app.runtime.shell.CommandResult(
+                    exitCode = -1,
+                    stdout = "",
+                    stderr = "UML guest unavailable: ${e.message}",
+                    durationMs = System.currentTimeMillis() - started,
+                )
+            }
+
+            val stdout = StringBuilder()
+            var exit = -1
+            try {
+                channel.connect()
+                val reader = BufferedReader(InputStreamReader(channel.inputStream, Charsets.UTF_8))
+                withTimeout(command.timeoutMs) {
+                    runInterruptible {
+                        while (true) {
+                            val line = reader.readLine() ?: break
+                            if (line.startsWith(sentinel)) {
+                                exit = line.substring(sentinel.length).trim().toIntOrNull() ?: -1
+                                break
+                            }
+                            stdout.append(line).append('\n')
+                        }
+                    }
+                }
+            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                logger.w("UML exec timed out after ${command.timeoutMs}ms")
+            } catch (e: Exception) {
+                logger.w("UML exec failed: ${e.message}")
+            } finally {
+                runCatching { channel.disconnect() }
+            }
+
+            top.tianyan.app.runtime.shell.CommandResult(
+                exitCode = exit,
+                stdout = stdout.toString(),
+                stderr = "",
+                durationMs = System.currentTimeMillis() - started,
+            )
+        }
+
+    /** 交互式终端会话：guest 里的 shell channel（带 PTY，可 resize）。 */
+    suspend fun openSession(config: top.tianyan.app.runtime.shell.SessionConfig): LinuxSession =
+        withContext(Dispatchers.IO) {
+            val channel = guestSsh.openShellChannel(config.columns, config.rows)
+            channel.connect()
+            UmlSandboxSession(
+                channel = channel,
+                input = channel.inputStream,
+                out = channel.outputStream,
+                label = "shell",
+            )
+        }
+
+    /** 后台进程 / 协议会话：guest 里的 exec channel（无 PTY，按行分帧）。 */
+    suspend fun openExecSession(command: top.tianyan.app.runtime.shell.ShellCommand): LinuxSession =
+        withContext(Dispatchers.IO) {
+            val wrapped = buildString {
+                append("export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:\$PATH; ")
+                append("export HOME=/root LANG=C.UTF-8; ")
+                append("cd '").append(command.workingDirectory).append("' 2>/dev/null; ")
+                append(command.commandLine)
+                append("\n")
+            }
+            val channel = guestSsh.openExecChannel(wrapped)
+            channel.connect()
+            UmlSandboxSession(
+                channel = channel,
+                input = channel.inputStream,
+                out = channel.outputStream,
+                label = "exec",
+            )
+        }
+
+    /** guest 是否已就绪（可直接执行命令）。 */
+    fun isGuestReady(): Boolean = isRunning() && guestSsh.ping(READY_PING_TIMEOUT_MS)
 
     private fun startConsolePump(p: Process) {
         val thread = Thread({
@@ -357,6 +473,8 @@ class UmlEngine @Inject constructor(
         const val DEFAULT_RAM_MB = 2048
         const val DEFAULT_CPUS = 4
         const val MIN_RAM_MB = 512
+        /** 一次性命令的退出码哨兵前缀（拼上纳秒时间戳，避免与命令自身输出撞名）。 */
+        private const val EXIT_SENTINEL = "__TIANYAN_UML_EXIT__"
         private const val BOOT_TIMEOUT_MS = 150_000L
         private const val BOOT_PING_TIMEOUT_MS = 30_000
         private const val READY_PING_TIMEOUT_MS = 3_000

@@ -28,6 +28,11 @@ class UmlRuntimeLayout @Inject constructor(
     val rootfs: File = File(baseDir, UML_ROOTFS_NAME)
     /** 下载中的压缩镜像归档（gunzip 进 [rootfs] 后删除）。 */
     val rootfsArchivePart: File = File(baseDir, UML_ROOTFS_ARCHIVE_NAME)
+    /**
+     * 宿主侧用户工作区（filesDir/linux-runtime/workspace）。
+     * UML 引擎把它通过 hostfs 挂进 guest 的 /workspace，让 guest 内的命令能直接看到用户项目文件。
+     */
+    val workspaceDir: File = pathManager.workspaceDir
     val console: File = File(baseDir, "console.log")
     val shareDir: File = File(baseDir, "share")
 

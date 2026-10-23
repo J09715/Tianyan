@@ -34,16 +34,43 @@ if ip link show vec0 >/dev/null 2>&1; then
 fi
 ip link set lo up 2>/dev/null
 
-# hostfs 共享目录：init 脚本里读不到内核 cmdline 的 share 值，靠内核把它挂到 /host
-if [ -d /host ]; then
-    mountpoint -q /host 2>/dev/null || mount -t hostfs none /host 2>/dev/null
-    # 应用把公钥丢进 /host/.ssh/authorized_keys，这里把它落到 guest 的 /root/.ssh
-    if [ -d /host/.ssh ]; then
-        mkdir -p /root/.ssh
-        chmod 700 /root/.ssh
-        cp /host/.ssh/authorized_keys /root/.ssh/authorized_keys 2>/dev/null
-        chmod 600 /root/.ssh/authorized_keys
-        mark sshkeys
+# hostfs 共享目录：从内核 cmdline 读 stryker.share / stryker.workspace。
+#
+# hostfs 必须用 `-o "hostfs=<宿主路径>"` 指定宿主根，否则挂的是内核编译期的默认根
+# （通常 /tmp），share 与 workspace 都会指向错的地方——这是移植时最容易踩的坑。
+share=$(sed -n 's/.*stryker\.share=\([^ ]*\).*/\1/p' /proc/cmdline 2>/dev/null)
+if [ -n "$share" ]; then
+    mkdir -p /host 2>/dev/null
+    mountpoint -q /host 2>/dev/null ||
+        mount -t hostfs none /host -o "hostfs=$share" 2>/dev/null ||
+        mount -t hostfs none /host -o "$share" 2>/dev/null
+    if mountpoint -q /host 2>/dev/null; then
+        mark share
+        # 应用把公钥丢进 /host/.ssh/authorized_keys，这里落到 guest 的 /root/.ssh
+        if [ -d /host/.ssh ]; then
+            mkdir -p /root/.ssh
+            chmod 700 /root/.ssh
+            cp /host/.ssh/authorized_keys /root/.ssh/authorized_keys 2>/dev/null
+            chmod 600 /root/.ssh/authorized_keys
+            mark sshkeys
+        fi
+    fi
+fi
+
+# 用户工作区：宿主 filesDir/linux-runtime/workspace 挂进 guest 的 /workspace，
+# UML 会话的默认 cwd 就是它——用户的项目文件因此对 guest 可见。
+workspace=$(sed -n 's/.*stryker\.workspace=\([^ ]*\).*/\1/p' /proc/cmdline 2>/dev/null)
+if [ -n "$workspace" ]; then
+    mkdir -p /workspace 2>/dev/null
+    if ! mountpoint -q /workspace 2>/dev/null; then
+        mount -t hostfs none /workspace -o "hostfs=$workspace" 2>/dev/null ||
+            mount -t hostfs none /workspace -o "$workspace" 2>/dev/null
+        mountpoint -q /workspace 2>/dev/null && mark workspace
+    fi
+    # guest 的 /root 默认无用户数据：软链到 /workspace，让 cd ~ 也落在工作区
+    if [ ! -L /root ]; then
+        rm -rf /root 2>/dev/null
+        ln -s /workspace /root 2>/dev/null
     fi
 fi
 
