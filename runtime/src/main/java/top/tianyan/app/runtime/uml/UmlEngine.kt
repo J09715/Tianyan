@@ -13,6 +13,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
@@ -34,6 +35,7 @@ class UmlEngine @Inject constructor(
     @ApplicationContext private val context: Context,
     private val layout: UmlRuntimeLayout,
     private val guestSsh: UmlGuestSsh,
+    private val rootfsInstaller: UmlRootfsInstaller,
     private val logger: AppLogger,
 ) {
     private val executor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
@@ -132,6 +134,14 @@ class UmlEngine @Inject constructor(
             }
             val gaps = layout.missing()
             if (gaps.isNotEmpty()) return fail(gaps.joinToString(", "), onBooted)
+
+            // 自愈：镜像在但缺 guest init 就补写（早期镜像没有它，见 UmlRootfsInstaller）。
+            // 内核 init= 指向镜像内路径，缺了就是 panic —— 启动前必须确保它在。
+            // 本函数跑在 executor 线程上（非协程），用 runBlocking 桥接 IO 挂起调用。
+            val initReady = runBlocking(Dispatchers.IO) { rootfsInstaller.ensureGuestInit() }
+            if (!initReady) {
+                return fail("guest init missing from the rootfs image", onBooted)
+            }
 
             layout.ensureDirectories()
             guestSsh.configure(context, layout.shareDir, hostSshPort)

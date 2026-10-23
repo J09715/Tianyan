@@ -457,6 +457,25 @@ object Ext4InlineWriter {
         return null
     }
 
+    /**
+     * 根目录里是否已存在名为 [entryName] 的非目录条目。
+     *
+     * 给安装器做幂等判断用：镜像可能是早前下载的（那时还没有 init 注入），
+     * 用它在启动前判断「需不需要补写」，避免每次都全量重写。
+     */
+    fun containsEntry(image: File, entryName: String): Boolean = runCatching {
+        if (!image.isFile) return false
+        RandomAccessFile(image, "r").use { f ->
+            val sb = readSuperblock(f)
+            val blockSize = 1024 shl sb.logBlockSize
+            val firstDataBlock = readFirstDataBlock(f)
+            val groupDescBlock = if (firstDataBlock == 0L) 1L else firstDataBlock + 1L
+            val groupDescOff = groupDescBlock * blockSize
+            val inodeTableBlock = readInodeTableBlock(f, groupDescOff)
+            findEntryInRoot(f, blockSize, inodeTableBlock, sb.inodeSize, entryName) != null
+        }
+    }.getOrDefault(false)
+
     private fun findEntryInRoot(
         f: RandomAccessFile,
         blockSize: Int,

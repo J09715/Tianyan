@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.zip.GZIPInputStream
 import javax.inject.Inject
@@ -134,6 +135,22 @@ class UmlRootfsInstaller @Inject constructor(
     fun isReady(): Boolean = isInstalled()
 
     /**
+     * 启动前自愈：镜像在、但缺 `/tianyan-uml-init` 就补写。
+     *
+     * 存在的理由：早期下载的镜像没有 init（那时路径还是错的 `/host/...`），
+     * 而 [ensure] 只在镜像**缺失**时才跑 —— 镜像在就不会触发注入，
+     * 结果是老用户永远起不来。这里在每次启动前兜一次。
+     *
+     * @return true = 镜像已含 init，可以直接启动。
+     */
+    suspend fun ensureGuestInit(): Boolean = withContext(Dispatchers.IO) {
+        if (!layout.rootfs.isFile) return@withContext false
+        if (Ext4InlineWriter.containsEntry(layout.rootfs, GUEST_INIT_NAME)) return@withContext true
+        embedGuestInit()
+        Ext4InlineWriter.containsEntry(layout.rootfs, GUEST_INIT_NAME)
+    }
+
+    /**
      * 把 APK 资源里的 guest init 写进 rootfs 镜像根目录（`/tianyan-uml-init`）。
      *
      * 为什么必须写进镜像：内核参数 `init=` 在内核挂载 rootfs 后**立即**执行，
@@ -165,5 +182,7 @@ class UmlRootfsInstaller @Inject constructor(
         private const val DEFAULT_DOWNLOAD_MAX_BYTES = 512L * 1024 * 1024
         private const val DEFAULT_DOWNLOAD_TIMEOUT_MS = 10 * 60 * 1000L
         private const val MIN_ROOTFS_BYTES = 64L * 1024 * 1024
+        /** guest init 在镜像内的文件名（内核参数 init= 指向它）。 */
+        const val GUEST_INIT_NAME = "tianyan-uml-init"
     }
 }
