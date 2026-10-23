@@ -14,6 +14,8 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -43,6 +45,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import top.tianyan.app.ui.components.RuntimeTextButton as TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -126,6 +129,8 @@ fun HomeScreen(
     onNavigate: (MainDestination) -> Unit,
     onOpenTerminal: () -> Unit,
     onOpenToolCenter: () -> Unit = {},
+    /** 把体检报告交给 Agent 排查：prompt 由 EnvironmentHealingPrompt 构造。 */
+    onStartAiHealing: (String) -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -134,6 +139,11 @@ fun HomeScreen(
 
     val state by viewModel.runtimeState.collectAsStateWithLifecycle()
     val metrics by viewModel.metrics.collectAsStateWithLifecycle()
+    // metrics 每 3 秒变一次（内存/存储数字），但 distro/arch/版本这些几乎恒定。
+    // 顶栏与系统信息区只依赖稳定字段，用 derivedStateOf 隔开，避免每 3 秒整条顶栏重组。
+    val metricsIdentity by remember {
+        derivedStateOf { "${metrics.linuxDistro} · ${metrics.cpuArch}" }
+    }
     val doctorReport by viewModel.doctorReport.collectAsStateWithLifecycle()
     val isCheckingDoctor by viewModel.isCheckingDoctor.collectAsStateWithLifecycle()
     val repairProgress by viewModel.repairProgress.collectAsStateWithLifecycle()
@@ -216,7 +226,7 @@ fun HomeScreen(
         topBar = {
             RuntimeTopBar(
                 title = stringResource(R.string.home_dashboard_title),
-                statusText = "${metrics.linuxDistro} · ${metrics.cpuArch}",
+                statusText = metricsIdentity,
                 actions = {
                     IconButton(
                         onClick = {
@@ -251,18 +261,23 @@ fun HomeScreen(
             }
         },
     ) { innerPadding ->
-        Column(
+        // LazyColumn 而非 Column+verticalScroll：首页有 5 个重量级卡片（引擎状态、
+        // 体检自愈、任务监控、规格详情），Column 会在首帧把它们全部组合并持续持有，
+        // 滚动时每帧都要参与布局；Lazy 只组合可见项，首帧与滚动都轻得多。
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .liquidGlassContent()
                 .padding(top = innerPadding.calculateTopPadding())
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = Spacing.lg, vertical = Spacing.md)
-                .padding(bottom = if (isLiquidGlassTheme) 104.dp else innerPadding.calculateBottomPadding() + Spacing.lg),
+                .padding(horizontal = Spacing.lg),
+            contentPadding = PaddingValues(
+                top = Spacing.md,
+                bottom = if (isLiquidGlassTheme) 104.dp else innerPadding.calculateBottomPadding() + Spacing.lg,
+            ),
             verticalArrangement = Arrangement.spacedBy(Spacing.lg),
         ) {
             // 1. 运行时引擎主状态卡片 (Status Banner)
-            RuntimeEngineStatusCard(
+            item { RuntimeEngineStatusCard(
                 state = state,
                 metrics = metrics,
                 installedDistros = installedDistros,
@@ -274,8 +289,9 @@ fun HomeScreen(
                 onCancel = viewModel::cancelInitialization,
                 onOpenTerminal = onOpenTerminal,
                 onOpenModeSettings = { onNavigate(MainDestination.Settings) },
-            )
+            ) }
 
+            item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.Bottom,
@@ -331,10 +347,10 @@ fun HomeScreen(
                     icon = RuntimeIconName.Storage,
                 )
             }
-
+            }
 
             // 3. 运行与开发环境体检自愈中心 (Tianyan Doctor & Auto-Fix)
-            EnvironmentDoctorCard(
+            item { EnvironmentDoctorCard(
                 report = doctorReport,
                 isChecking = isCheckingDoctor,
                 isRepairing = isRepairing,
@@ -347,26 +363,31 @@ fun HomeScreen(
                     }
                     viewModel.startAutoRepair()
                 },
+                onStartAiHealing = { report ->
+                    top.tianyan.app.runtime.doctor.EnvironmentHealingPrompt.build(report)?.let(onStartAiHealing)
+                },
                 onCancelRepair = viewModel::cancelAutoRepair,
                 onRequestAllFilesAccess = requestAllFilesAccess,
                 onOpenToolCenter = onOpenToolCenter,
-            )
+            ) }
 
+            item {
             WebChatDashboardCard(
                 status = webChatStatus,
                 onToggle = viewModel::toggleWebChat,
             )
+            }
 
             // 4. 活跃任务与服务监控卡片
-            ActiveTasksStatusCard(
-                metrics = metrics,
-                onOpenTerminal = onOpenTerminal,
-            )
+            item {
+                ActiveTasksStatusCard(
+                    metrics = metrics,
+                    onOpenTerminal = onOpenTerminal,
+                )
+            }
 
             // 5. 运行环境与规格详情
-            SystemSpecsCard(metrics = metrics, modeStatus = modeStatus)
-
-            Spacer(Modifier.height(Spacing.lg))
+            item { SystemSpecsCard(metrics = metrics, modeStatus = modeStatus) }
         }
     }
 }
@@ -382,6 +403,7 @@ private fun EnvironmentDoctorCard(
     runtimeReady: Boolean,
     onRunCheck: () -> Unit,
     onStartAutoRepair: () -> Unit,
+    onStartAiHealing: (DoctorReport) -> Unit,
     onCancelRepair: () -> Unit,
     onRequestAllFilesAccess: () -> Unit = {},
     onOpenToolCenter: () -> Unit = {},
@@ -631,6 +653,25 @@ private fun EnvironmentDoctorCard(
 
                         // 一键修复按钮或就绪横幅
                         if (report.needsFix) {
+                            // AI 自愈：把体检报告里**实际失败项 + detail** 交给 Agent 排查，
+                            // 而不是跑固定 5 步脚本。脚本修复保留为快速通道（DNS/镜像这类
+                            // 高频问题一步到位），AI 自愈负责脚本覆盖不到的真实报错。
+                            OutlinedButton(
+                                onClick = { onStartAiHealing(report) },
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = PaddingValues(vertical = Spacing.md),
+                            ) {
+                                RuntimeIcon(
+                                    name = RuntimeIconName.Brain,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(Modifier.width(Spacing.sm))
+                                Text(
+                                    text = "交给 AI 智能体自愈",
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                            }
+                            Spacer(Modifier.height(Spacing.sm))
                             RuntimeButton(
                                 onClick = onStartAutoRepair,
                                 modifier = Modifier.fillMaxWidth(),

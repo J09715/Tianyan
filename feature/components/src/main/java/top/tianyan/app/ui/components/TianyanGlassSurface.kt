@@ -42,16 +42,18 @@ fun TianyanGlassPanel(
     content: @Composable BoxScope.() -> Unit,
 ) {
     val isDark = forceDark || isSystemInDarkTheme()
+    // 用户可调的通透度：暗色按 1:0.55 衰减，亮色直接取偏好值（亮底需要更高不透明度才压得住流光）
+    val opacity = top.tianyan.app.ui.theme.LocalGlassOpacity.current.coerceIn(0.2f, 1.0f)
 
     val topTint = if (isDark) {
-        MaterialTheme.colorScheme.surface.copy(alpha = 0.45f)
+        MaterialTheme.colorScheme.surface.copy(alpha = opacity)
     } else {
-        Color.White.copy(alpha = 0.75f)
+        Color.White.copy(alpha = (opacity + 0.3f).coerceAtMost(1f))
     }
     val bottomTint = if (isDark) {
-        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.25f)
+        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = (opacity * 0.55f).coerceAtLeast(0.12f))
     } else {
-        Color.White.copy(alpha = 0.50f)
+        Color.White.copy(alpha = (opacity + 0.05f).coerceAtMost(1f))
     }
 
     val borderColor = if (isDark) {

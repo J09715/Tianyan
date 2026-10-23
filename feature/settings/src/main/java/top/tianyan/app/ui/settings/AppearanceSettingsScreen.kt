@@ -80,6 +80,7 @@ fun AppearanceSettingsScreen(
     val terminalHapticsEnabled by viewModel.terminalHapticsEnabled.collectAsStateWithLifecycle()
     val appFontScale by viewModel.appFontScale.collectAsStateWithLifecycle()
     val backgroundUri by viewModel.chengmingBackgroundUri.collectAsStateWithLifecycle()
+    val glassOpacity by viewModel.glassOpacity.collectAsStateWithLifecycle()
     val context = LocalContext.current
     LocalConfiguration.current // Recompose after AppCompat applies a locale change.
     val requestedLocales = AppCompatDelegate.getApplicationLocales()
@@ -91,6 +92,10 @@ fun AppearanceSettingsScreen(
     }
     LaunchedEffect(appFontScale) {
         pageScaleSlider = appFontScale
+    }
+    var glassOpacitySlider by androidx.compose.runtime.saveable.rememberSaveable { mutableFloatStateOf(glassOpacity) }
+    LaunchedEffect(glassOpacity) {
+        glassOpacitySlider = glassOpacity
     }
     val backgroundPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
@@ -296,6 +301,52 @@ fun AppearanceSettingsScreen(
                                     onClick = { viewModel.setChengmingBackgroundUri(null) },
                                 ) { Text(stringResource(R.string.settings_background_remove)) }
                             }
+                        }
+                    }
+                }
+            }
+
+            // 液态玻璃通透度：此前面板底色写死，用户无法调节。仅澄明主题有意义，
+            // 玄同主题下隐藏以免给出无效开关。
+            if (themeStyle == "chengming") {
+                item {
+                    Text(
+                        text = "面板通透度",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = Spacing.xs, bottom = Spacing.xs),
+                    )
+                    SettingsGroup {
+                        Column(
+                            Modifier.fillMaxWidth().padding(Spacing.md),
+                            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+                        ) {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(
+                                    text = if (glassOpacitySlider <= 0.3f) "极通透" else if (glassOpacitySlider >= 0.8f) "接近实心" else "通透",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                                )
+                                Text(
+                                    text = "${(glassOpacitySlider * 100).roundToInt()}%",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                            Slider(
+                                value = glassOpacitySlider,
+                                onValueChange = { glassOpacitySlider = it },
+                                onValueChangeFinished = { viewModel.setGlassOpacity(glassOpacitySlider) },
+                                valueRange = 0.2f..1.0f,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Text(
+                                text = "数值越低，流光与背景越明显；设备渲染吃力时调高可提升可读性。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     }
                 }

@@ -190,6 +190,8 @@ class SettingsDataStore @Inject constructor(
     private val themeModeKey = stringPreferencesKey("theme_mode")
     private val themeStyleKey = stringPreferencesKey("theme_style")
     private val chengmingBackgroundUriKey = stringPreferencesKey("chengming_background_uri")
+    // 液态玻璃面板不透明度（0.2 = 极通透，1.0 = 接近实心）。此前是硬编码常量，用户无法调节。
+    private val glassOpacityKey = androidx.datastore.preferences.core.floatPreferencesKey("glass_opacity")
     private val onboardingCompletedKey = booleanPreferencesKey("onboarding_completed")
     private val selectedDistributionKey = stringPreferencesKey("selected_distribution")
     private val mirrorPolicyKey = stringPreferencesKey("mirror_policy")
@@ -343,6 +345,7 @@ class SettingsDataStore @Inject constructor(
             themeStyle = prefs?.get(themeStyleKey) ?: "xuantong",
             chengmingBackgroundUri = prefs?.get(chengmingBackgroundUriKey),
             appFontScale = (prefs?.get(appFontScaleKey) ?: 1.0f).coerceIn(0.8f, 1.3f),
+            glassOpacity = (prefs?.get(glassOpacityKey) ?: DEFAULT_GLASS_OPACITY).coerceIn(0.2f, 1.0f),
         )
     }
 
@@ -352,6 +355,7 @@ class SettingsDataStore @Inject constructor(
         val themeStyle: String,
         val chengmingBackgroundUri: String?,
         val appFontScale: Float,
+        val glassOpacity: Float = DEFAULT_GLASS_OPACITY,
     )
 
     val themeMode: Flow<String> = context.settingsDataStore.data.map { preferences ->
@@ -383,6 +387,23 @@ class SettingsDataStore @Inject constructor(
         context.settingsDataStore.edit { preferences ->
             if (uri.isNullOrBlank()) preferences.remove(chengmingBackgroundUriKey)
             else preferences[chengmingBackgroundUriKey] = uri
+        }
+    }
+
+    /**
+     * 液态玻璃面板不透明度。
+     *
+     * 澄明主题的面板底色原本写死成 0.45f / 0.25f，用户没法调通透程度 ——
+     * 这里把它提成偏好，范围 [0.2, 1.0]：0.2 极通透（流光明显），1.0 接近实心
+     * （弱设备上关掉折射后的可读性兜底）。
+     */
+    val glassOpacity: Flow<Float> = context.settingsDataStore.data.map { preferences ->
+        (preferences[glassOpacityKey] ?: DEFAULT_GLASS_OPACITY).coerceIn(0.2f, 1.0f)
+    }
+
+    suspend fun setGlassOpacity(value: Float) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[glassOpacityKey] = value.coerceIn(0.2f, 1.0f)
         }
     }
 
@@ -966,6 +987,8 @@ class SettingsDataStore @Inject constructor(
 
     companion object {
         private const val PROTECTED_VALUE_PREFIX = "enc:v1:"
+        /** 液态玻璃面板默认不透明度（与旧硬编码 0.45f 接近，保持视觉基线）。 */
+        const val DEFAULT_GLASS_OPACITY = 0.45f
         const val DEFAULT_BASE_COMMAND_TIMEOUT_SECONDS = 10 * 60
         const val MIN_BASE_COMMAND_TIMEOUT_SECONDS = 60
         const val MAX_BASE_COMMAND_TIMEOUT_SECONDS = 60 * 60

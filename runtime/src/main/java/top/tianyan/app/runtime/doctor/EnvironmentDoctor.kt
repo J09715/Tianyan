@@ -17,6 +17,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 
 @Singleton
 class EnvironmentDoctor @Inject constructor(
@@ -49,32 +52,34 @@ class EnvironmentDoctor @Inject constructor(
             )
         }
 
-        val items = mutableListOf<DoctorItem>()
-
-        // 1. 沙箱与存储检查
-        items.add(checkSandboxStorage())
-        items.add(allFilesAccessItem)
-
-        // 2. DNS 与网络连通性检查
-        items.add(checkDnsAndNetwork())
-
-        // 2.5 沙箱代理健康：配置了 in-app/系统代理但代理本身不可达 → 全链 apt/curl 都会被拖死
-        items.add(checkSandboxProxy())
-
-        // 3. CA 根证书检查
-        items.add(checkCaCertificates())
-
-        // 4. APT 软件源与镜像加速检查
-        items.add(checkAptMirrors())
-
-        // 5. 基础开发工具链检查 (git/curl/tar/xz)
-        items.add(checkBaseDevTools())
-
-        // 6. Node.js 运行时检查
-        items.add(checkNodeRuntime())
-
-        // 7. Android 开发环境检查（可选插件，未安装时引导获取离线/在线插件包）
-        items.add(checkAndroidEnvironment())
+        // 并行跑各项检查：每项都是「往沙箱发 shell 命令 + 等超时」，彼此独立。
+        // 串行时最坏要等 8 项 × (超时 + 重试) 累加（实测几十秒），首页每次 ON_RESUME
+        // 都触发体检，串行就是用户看到的「切回首页卡一下」。并行后总耗时≈最慢那一项。
+        //
+        // 用 supervisorScope：单项抛异常不连坐其它项，缺项按 UNKNOWN 记，
+        // 与「探测拿不到结果如实标注」的既有口径一致。
+        val items = coroutineScope {
+            val deferred = listOf(
+                // 1. 沙箱与存储
+                async { checkSandboxStorage() },
+                // 2. DNS 与网络连通性
+                async { checkDnsAndNetwork() },
+                // 2.5 沙箱代理健康：配置了代理但不可达 → 全链 apt/curl 都会被拖死
+                async { checkSandboxProxy() },
+                // 3. CA 根证书
+                async { checkCaCertificates() },
+                // 4. APT 软件源与镜像加速
+                async { checkAptMirrors() },
+                // 5. 基础开发工具链 (git/curl/tar/xz)
+                async { checkBaseDevTools() },
+                // 6. Node.js 运行时
+                async { checkNodeRuntime() },
+                // 7. Android 开发环境（可选插件）
+                async { checkAndroidEnvironment() },
+            )
+            // allFilesAccess 是纯宿主侧检查，直接插在首位
+            listOf(allFilesAccessItem) + deferred.awaitAll()
+        }
 
         val healthyCount = items.count { it.status == DoctorStatus.HEALTHY }
         val warningCount = items.count { it.status == DoctorStatus.WARNING }

@@ -214,6 +214,8 @@ fun TianyanTheme(
     style: ThemeStyle = ThemeStyle.XUANTONG,
     darkTheme: Boolean = isSystemInDarkTheme(),
     backgroundUri: String? = null,
+    /** 液态玻璃面板通透度（0.2 极通透 ~ 1.0 接近实心），由用户偏好驱动。 */
+    glassOpacity: Float = 0.45f,
     content: @Composable () -> Unit,
 ) {
     val view = LocalView.current
@@ -241,10 +243,14 @@ fun TianyanTheme(
             typography = AppTypography,
             shapes = TianyanShapes,
         ) {
-            if (style == ThemeStyle.CHENGMING) {
-                LiquidGlassRoot(content, darkTheme, backgroundUri)
-            } else {
-                content()
+            androidx.compose.runtime.CompositionLocalProvider(
+                LocalGlassOpacity provides glassOpacity,
+            ) {
+                if (style == ThemeStyle.CHENGMING) {
+                    LiquidGlassRoot(content, darkTheme, backgroundUri)
+                } else {
+                    content()
+                }
             }
         }
     }
@@ -257,6 +263,14 @@ fun TianyanTheme(
  * 底部导航等"液态玻璃"组件可通过 [LocalLiquidGlassBackdrop] 读取并叠加毛玻璃折射。
  */
 val LocalLiquidGlassBackdrop = staticCompositionLocalOf<LayerBackdrop?> { null }
+
+/**
+ * 液态玻璃面板不透明度（0.2 极通透 ~ 1.0 接近实心）。
+ *
+ * 定义在 theme 模块：components 依赖 theme（反向不成立），
+ * 由 [TianyanTheme] 从用户偏好注入，[TianyanGlassPanel] 等消费。
+ */
+val LocalGlassOpacity = staticCompositionLocalOf { 0.45f }
 
 /**
  * 澄明组件使用的稳定背景折射源。

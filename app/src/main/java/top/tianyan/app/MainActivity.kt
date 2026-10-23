@@ -99,6 +99,12 @@ class MainActivity : AppCompatActivity() {
                 .collectAsStateWithLifecycle(initialValue = initialAppearance?.chengmingBackgroundUri)
             val pageScale by settingsDataStore.appFontScale
                 .collectAsStateWithLifecycle(initialValue = initialAppearance?.appFontScale ?: 1f)
+            // 液态玻璃通透度：用户可在「外观设置」里调，这里读偏好并在首帧用快照值兜底
+            val glassOpacity by settingsDataStore.glassOpacity
+                .collectAsStateWithLifecycle(
+                    initialValue = initialAppearance?.glassOpacity
+                        ?: top.tianyan.app.core.datastore.SettingsDataStore.DEFAULT_GLASS_OPACITY,
+                )
             val systemDark = isSystemInDarkTheme()
             val systemDensity = LocalDensity.current
             val isDark = when (themeMode) {
@@ -117,6 +123,7 @@ class MainActivity : AppCompatActivity() {
                     style = top.tianyan.app.ui.theme.ThemeStyle.fromId(themeStyle),
                     darkTheme = isDark,
                     backgroundUri = chengmingBackgroundUri,
+                    glassOpacity = glassOpacity,
                 ) {
                 val onboardingViewModel: OnboardingViewModel = hiltViewModel()
                 val onboarding by onboardingViewModel.status.collectAsStateWithLifecycle()

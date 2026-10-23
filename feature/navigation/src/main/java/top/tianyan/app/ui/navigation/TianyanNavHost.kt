@@ -217,6 +217,13 @@ fun TianyanNavHost(
                         onNavigate = ::navigateMain,
                         onOpenTerminal = { homeStack.push(HomeDestination, TerminalDestination()) },
                         onOpenToolCenter = { homeStack.push(HomeDestination, ToolCenterDestination) },
+                        // 环境体检的 AI 自愈走与工具中心同一条 HealingTask 通路：
+                        // prompt 已在 HomeScreen 里由体检报告构造好（含每项 detail），
+                        // 这里只负责把任务挂上并切到 Agent 页。
+                        onStartAiHealing = { prompt ->
+                            pendingHealingTask = HealingTask("🧠 环境自愈", prompt)
+                            selectedMain = MainDestination.Agent
+                        },
                     )
                 }
             }

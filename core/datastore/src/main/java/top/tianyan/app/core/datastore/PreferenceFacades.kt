@@ -10,6 +10,9 @@ class AppearancePreferences @Inject constructor(private val store: SettingsDataS
     val themeStyle get() = store.themeStyle
     val chengmingBackgroundUri get() = store.chengmingBackgroundUri
     val appFontScale get() = store.appFontScale
+    val glassOpacity get() = store.glassOpacity
+
+    suspend fun setGlassOpacity(value: Float) = store.setGlassOpacity(value)
 
     /**
      * 冷启动时同步读一次外观设置，供首帧直接使用。

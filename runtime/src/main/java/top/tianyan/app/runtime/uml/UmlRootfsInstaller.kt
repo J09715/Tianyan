@@ -106,36 +106,16 @@ class UmlRootfsInstaller @Inject constructor(
     /**
      * 拿到镜像并解压进 [tmp]。
      *
-     * **内置优先**：APK assets 里带一份裁剪过的完整 Debian（sshd + bash + apt，
-     * gzip 后约 34MB），解压即用，不碰网络。这是供应链的彻底解法 ——
-     * 完整 Stryker 镜像 428MB 且托管在 GitHub releases，国内网络实测 90s 超时，
-     * 下不下来就会静默回退 PRoot，用户看到的就是「装了还是 PRoot」。
+     * **引导安装**：与 Stryker 一致 —— 首次启动时下载完整 guest 镜像（含 Debian
+     * + sshd + bash + apt），不在 APK 里内置。内置会让安装包从 47MB 涨到 96MB，
+     * 且镜像更新必须跟着发版，成本远高于一次下载。
      *
-     * 内置不可用（老 APK / 资源被裁剪）才走下载，下载失败也不回退 PRoot，
-     * 而是明确报错让设置页显示原因。
+     * 下载失败不回退 PRoot，而是把原因写进 [lastError]，让引导页显示可重试的错误。
      *
      * @return true = [tmp] 已写入可用的 ext4 镜像。
      */
     private suspend fun obtainImage(tmp: File, onProgress: ((Float) -> Unit)?): Boolean =
-        withContext(Dispatchers.IO) {
-            if (assetAvailable(BUNDLED_ROOTFS_ASSET)) {
-                artifactSource = "bundled asset"
-                logger.i("UML rootfs: extracting bundled asset $BUNDLED_ROOTFS_ASSET")
-                runCatching {
-                    context.assets.open(BUNDLED_ROOTFS_ASSET).use { stream ->
-                        GZIPInputStream(stream.buffered(1 shl 16), 1 shl 16).use { gz ->
-                            tmp.outputStream().use { out -> gz.copyTo(out, 64 * 1024) }
-                        }
-                    }
-                }.onFailure {
-                    logger.w("bundled rootfs extraction failed: ${it.message}")
-                    return@withContext false
-                }
-                onProgress?.invoke(1f)
-                return@withContext true
-            }
-            downloadRootfs(tmp, onProgress)
-        }
+        downloadRootfs(tmp, onProgress)
 
     /** 下载路径（内置不可用时）。 */
     private suspend fun downloadRootfs(tmp: File, onProgress: ((Float) -> Unit)?): Boolean =
@@ -180,10 +160,6 @@ class UmlRootfsInstaller @Inject constructor(
             onProgress?.invoke(1f)
             true
         }
-
-    private fun assetAvailable(path: String): Boolean = runCatching {
-        context.assets.open(path).use { true }
-    }.getOrDefault(false)
 
     /** rootfs.img 已就位时返回 true；否则要求调用方走 [ensure]。 */
     fun isReady(): Boolean = isInstalled()
@@ -238,7 +214,5 @@ class UmlRootfsInstaller @Inject constructor(
         private const val MIN_ROOTFS_BYTES = 64L * 1024 * 1024
         /** guest init 在镜像内的文件名（内核参数 init= 指向它）。 */
         const val GUEST_INIT_NAME = "tianyan-uml-init"
-        /** 内置 rootfs 镜像（裁剪 Debian + sshd，gzip 后约 34MB）。 */
-        const val BUNDLED_ROOTFS_ASSET = "tianyan-uml/rootfs.imgz"
     }
 }

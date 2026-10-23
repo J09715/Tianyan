@@ -300,6 +300,17 @@ class LinuxRuntimeImpl @Inject constructor(
                 pathManager.ensureDirectories()
                 pathManager.cleanupStalePtyMarkers(request.distributionId)
 
+                // 引擎分派（对齐 Stryker 的 runPlan）：
+                // UML 是默认引擎 —— 首次引导要装的是「完整 Linux 系统」：
+                // 四件套已随 APK 打包（libuml/libstub/libumnet/libpasst），
+                // 只差 guest 镜像，由 UmlRootfsInstaller 下载完整 Debian（含 sshd/bash/apt）。
+                //
+                // 早期实现无条件先装 PRoot、再下 Ubuntu OCI 镜像 —— 引导装出来的
+                // 就是 PRoot 沙箱，用户要的完整 Linux 环境根本没进流程。
+                if (engineSelector.preference() == top.tianyan.app.runtime.uml.EngineType.UML) {
+                    return@withContext initializeUml(request)
+                }
+
                 updateInitializing("校验运行引擎", 0.15f, "校验 PRoot 主程序、外置 loader 与 ARM64 架构")
                 val prootResult = prootInstaller.install()
                 val prootError = prootResult.errorOrNull()
@@ -1356,6 +1367,84 @@ class LinuxRuntimeImpl @Inject constructor(
             progress = progress.coerceIn(0f, 1f),
             detail = detail,
         )
+    }
+
+    /**
+     * UML 引擎的「安装」：装配完整 Linux 系统，对齐 Stryker 的引导流程。
+     *
+     * 四件套（内核 / stub / umnet / passt）随 APK 打包，不需要下载；
+     * 唯一缺的是 guest 镜像 —— 完整 Debian（含 sshd、bash、apt），
+     * 由 [umlRootfsInstaller] 下载、解压、注入 guest init。
+     *
+     * 装完立刻引导一次做验证：能进 guest 才算 Ready。失败不回退 PRoot，
+     * 而是把原因抛给引导页重试（回退会让用户以为「装好了」其实跑的是 PRoot）。
+     */
+    private suspend fun initializeUml(request: RuntimeInstallRequest): AppResult<Unit> {
+        updateInitializing("检查运行环境", 0.08f, "校验内核、地址空间 stub、网络组件")
+        val missing = umlEngine.missing().filterNot {
+            it == top.tianyan.app.runtime.uml.UmlRuntimeLayout.UML_ROOTFS_NAME
+        }
+        if (missing.isNotEmpty()) {
+            val message = "运行组件缺失：${missing.joinToString(", ")}（APK 打包不完整）"
+            logger.e("UML initialize failed: $message")
+            val error = AppError(ErrorCode.INSTALLATION_FAILED, message)
+            failInitialization(error)
+            return AppResult.Failure(error)
+        }
+
+        // 下载完整 guest 镜像（非阻塞入口 + 轮询进度）
+        if (!umlRootfsInstaller.isInstalled()) {
+            updateInitializing("下载完整 Linux 系统", 0.15f, "Debian · 含 sshd / bash / apt")
+            val done = kotlinx.coroutines.CompletableDeferred<Unit>()
+            val started = umlRootfsInstaller.ensure(
+                onDone = { done.complete(Unit) },
+                onProgress = { p ->
+                    updateInitializing(
+                        "下载完整 Linux 系统",
+                        0.15f + p.coerceIn(0f, 1f) * 0.55f,
+                        "Debian · 含 sshd / bash / apt",
+                    )
+                },
+            )
+            if (started) {
+                // 已装齐
+            } else {
+                done.await()
+            }
+            if (!umlRootfsInstaller.isInstalled()) {
+                val message = "下载完整 Linux 系统失败：${umlRootfsInstaller.lastError.ifBlank { "未知原因" }}"
+                logger.e("UML rootfs install failed: $message")
+                val error = AppError(ErrorCode.INSTALLATION_FAILED, message)
+                failInitialization(error)
+                return AppResult.Failure(error)
+            }
+        }
+
+        updateInitializing("准备系统镜像", 0.72f, "注入 guest init 并校验镜像")
+        if (!umlRootfsInstaller.ensureGuestInit()) {
+            val message = "系统镜像缺少 guest init，无法引导"
+            logger.e("UML initialize failed: $message")
+            val error = AppError(ErrorCode.INSTALLATION_FAILED, message)
+            failInitialization(error)
+            return AppResult.Failure(error)
+        }
+
+        updateInitializing("启动 Linux 系统", 0.82f, "引导 guest 内核")
+        val booted = umlEngine.startBlocking(UML_SESSION_BOOT_TIMEOUT_MS)
+        if (!booted) {
+            val message = "Linux 系统启动失败：${umlEngine.lastError()}"
+            logger.e("UML boot failed during onboarding: $message")
+            val error = AppError(ErrorCode.INSTALLATION_FAILED, message)
+            failInitialization(error)
+            return AppResult.Failure(error)
+        }
+
+        updateInitializing("完成", 0.95f)
+        _activeDistroId.value = "debian"
+        hostBridge.start()
+        _state.value = RuntimeState.Ready
+        logger.i("Linux runtime initialized on UML engine (complete Debian guest)")
+        return AppResult.Success(Unit)
     }
 
     private fun updateDownloadProgress(

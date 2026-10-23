@@ -192,6 +192,14 @@ class SettingsViewModel @Inject constructor(
     val chengmingBackgroundUri: StateFlow<String?> = settingsDataStore.chengmingBackgroundUri
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    /** 液态玻璃面板通透度（0.2 ~ 1.0），此前写死在组件里不可调。 */
+    val glassOpacity: StateFlow<Float> = settingsDataStore.glassOpacity
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 0.45f)
+
+    fun setGlassOpacity(value: Float) {
+        viewModelScope.launch { settingsDataStore.setGlassOpacity(value) }
+    }
+
     fun setTerminalFontSize(sizeSp: Int) {
         viewModelScope.launch { settingsDataStore.setTerminalFontSize(sizeSp) }
     }
