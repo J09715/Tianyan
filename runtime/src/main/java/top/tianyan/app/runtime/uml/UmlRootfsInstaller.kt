@@ -57,7 +57,7 @@ class UmlRootfsInstaller @Inject constructor(
 
     fun isInstalled(): Boolean = layout.rootfs.isFile
 
-    /** 非阻塞安装入口：已装齐直接 true；否则启动后台下载+解压，调用方轮询 [state]/[progress]。 */
+    /** 非阻塞安装入口：已装齐直接 true；否则后台补齐镜像，调用方轮询 [state]/[progress]。 */
     fun ensure(onDone: (() -> Unit)? = null, onProgress: ((Float) -> Unit)? = null): Boolean {
         if (isInstalled()) {
             onDone?.invoke()
@@ -70,12 +70,82 @@ class UmlRootfsInstaller @Inject constructor(
             progress = 0f
             try {
                 layout.ensureDirectories()
-                val part = layout.rootfsArchivePart
-                part.parentFile?.mkdirs()
-                // 清单驱动：manifest 给 url + sha256 + size；拉不到清单则降级内置回退地址。
-                val asset = artifactRepository.resolveRootfsAsset()
-                artifactSource = asset.source
-                logger.i("UML rootfs source: ${asset.source} (${asset.url})")
+                val tmp = File(layout.rootfs.absolutePath + ".tmp")
+                val obtained = obtainImage(tmp, onProgress)
+                if (!obtained) throw IllegalStateException("no rootfs image available (bundled asset missing and download failed)")
+                if (tmp.length() < MIN_ROOTFS_BYTES) {
+                    tmp.delete()
+                    throw IllegalStateException("rootfs image too small after extraction (${tmp.length()}B)")
+                }
+                layout.rootfs.delete()
+                if (!tmp.renameTo(layout.rootfs)) {
+                    tmp.copyTo(layout.rootfs)
+                    tmp.delete()
+                }
+                // 把 guest init 写进镜像：内核执行 init= 时 /host 还没挂载（/host 正是
+                // init 自己挂的），指向 /host 必然 panic（实测 error -2）。init 必须在
+                // rootfs 内部 —— 用纯 Kotlin 的 ext4 写入器注入，无需 root / debugfs。
+                // 内置镜像已含 init，这一步是幂等的（见 ensureGuestInit）。
+                embedGuestInit()
+                progress = 1f
+                onProgress?.invoke(1f)
+                state = State.READY
+                lastError = ""
+                onDone?.invoke()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                state = State.FAILED
+                lastError = e.message ?: e.javaClass.simpleName
+                onDone?.invoke()
+            }
+        }
+        return false
+    }
+
+    /**
+     * 拿到镜像并解压进 [tmp]。
+     *
+     * **内置优先**：APK assets 里带一份裁剪过的完整 Debian（sshd + bash + apt，
+     * gzip 后约 34MB），解压即用，不碰网络。这是供应链的彻底解法 ——
+     * 完整 Stryker 镜像 428MB 且托管在 GitHub releases，国内网络实测 90s 超时，
+     * 下不下来就会静默回退 PRoot，用户看到的就是「装了还是 PRoot」。
+     *
+     * 内置不可用（老 APK / 资源被裁剪）才走下载，下载失败也不回退 PRoot，
+     * 而是明确报错让设置页显示原因。
+     *
+     * @return true = [tmp] 已写入可用的 ext4 镜像。
+     */
+    private suspend fun obtainImage(tmp: File, onProgress: ((Float) -> Unit)?): Boolean =
+        withContext(Dispatchers.IO) {
+            if (assetAvailable(BUNDLED_ROOTFS_ASSET)) {
+                artifactSource = "bundled asset"
+                logger.i("UML rootfs: extracting bundled asset $BUNDLED_ROOTFS_ASSET")
+                runCatching {
+                    context.assets.open(BUNDLED_ROOTFS_ASSET).use { stream ->
+                        GZIPInputStream(stream.buffered(1 shl 16), 1 shl 16).use { gz ->
+                            tmp.outputStream().use { out -> gz.copyTo(out, 64 * 1024) }
+                        }
+                    }
+                }.onFailure {
+                    logger.w("bundled rootfs extraction failed: ${it.message}")
+                    return@withContext false
+                }
+                onProgress?.invoke(1f)
+                return@withContext true
+            }
+            downloadRootfs(tmp, onProgress)
+        }
+
+    /** 下载路径（内置不可用时）。 */
+    private suspend fun downloadRootfs(tmp: File, onProgress: ((Float) -> Unit)?): Boolean =
+        withContext(Dispatchers.IO) {
+            val part = layout.rootfsArchivePart
+            part.parentFile?.mkdirs()
+            val asset = artifactRepository.resolveRootfsAsset()
+            artifactSource = asset.source
+            logger.i("UML rootfs source: ${asset.source} (${asset.url})")
+            val ok = runCatching {
                 fileDownloader.download(
                     DownloadRequest(
                         url = asset.url,
@@ -96,40 +166,24 @@ class UmlRootfsInstaller @Inject constructor(
                         else -> Unit
                     }
                 }
-                // 解压：ext4 镜像 gzip 包 → rootfs.img（先解到 .tmp 再原子 rename，防半截）
-                val tmp = File(layout.rootfs.absolutePath + ".tmp")
+            }.isSuccess
+            if (!ok) return@withContext false
+            runCatching {
                 GZIPInputStream(part.inputStream().buffered(1 shl 16), 1 shl 16).use { input ->
                     tmp.outputStream().use { output -> input.copyTo(output, 64 * 1024) }
                 }
-                if (tmp.length() < MIN_ROOTFS_BYTES) {
-                    tmp.delete()
-                    throw IllegalStateException("rootfs image too small after gunzip (${tmp.length()}B)")
-                }
-                layout.rootfs.delete()
-                if (!tmp.renameTo(layout.rootfs)) {
-                    tmp.copyTo(layout.rootfs)
-                    tmp.delete()
-                }
                 part.delete()
-                // 把 guest init 写进镜像：内核执行 init= 时 /host 还没挂载（/host 正是
-                // init 自己挂的），指向 /host 必然 panic（实测 error -2）。init 必须在
-                // rootfs 内部 —— 用纯 Kotlin 的 ext4 写入器注入，无需 root / debugfs。
-                embedGuestInit()
-                progress = 1f
-                onProgress?.invoke(1f)
-                state = State.READY
-                lastError = ""
-                onDone?.invoke()
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                state = State.FAILED
-                lastError = e.message ?: e.javaClass.simpleName
-                onDone?.invoke()
+            }.onFailure {
+                logger.w("downloaded rootfs gunzip failed: ${it.message}")
+                return@withContext false
             }
+            onProgress?.invoke(1f)
+            true
         }
-        return false
-    }
+
+    private fun assetAvailable(path: String): Boolean = runCatching {
+        context.assets.open(path).use { true }
+    }.getOrDefault(false)
 
     /** rootfs.img 已就位时返回 true；否则要求调用方走 [ensure]。 */
     fun isReady(): Boolean = isInstalled()
@@ -184,5 +238,7 @@ class UmlRootfsInstaller @Inject constructor(
         private const val MIN_ROOTFS_BYTES = 64L * 1024 * 1024
         /** guest init 在镜像内的文件名（内核参数 init= 指向它）。 */
         const val GUEST_INIT_NAME = "tianyan-uml-init"
+        /** 内置 rootfs 镜像（裁剪 Debian + sshd，gzip 后约 34MB）。 */
+        const val BUNDLED_ROOTFS_ASSET = "tianyan-uml/rootfs.imgz"
     }
 }
