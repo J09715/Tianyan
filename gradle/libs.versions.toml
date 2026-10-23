@@ -39,6 +39,10 @@ robolectric = "4.17"
 androidxTestCore = "1.7.0"
 # AndroidLiquidGlass (Kyant0) — Compose 液态玻璃效果库，澄明主题的渲染核心
 backdrop = "2.0.1"
+# Vico — 声明式 Compose 图表库。统计页的用量柱状图/趋势图原本手写了 892 行
+# Canvas 代码（StatsUsageChart / StatsHeatmap / StatsRankSection），改用 Vico 后
+# 坐标轴、刻度、动画、无障碍标签都由库负责，包装层仍走 Runtime* 契约。
+vico = "2.1.0"
 coil = "3.6.3"
 coreSplashscreen = "1.2.0"
 # Baseline Profile：启动时预编译热点方法，治首次冷启动 JIT 现场编译慢
@@ -117,6 +121,8 @@ androidx-benchmark-macro-junit4 = { group = "androidx.benchmark", name = "benchm
 androidx-profileinstaller = { group = "androidx.profileinstaller", name = "profileinstaller", version.ref = "profileinstaller" }
 androidx-test-uiautomator = { group = "androidx.test.uiautomator", name = "uiautomator", version.ref = "uiautomator" }
 backdrop = { group = "io.github.kyant0", name = "backdrop", version.ref = "backdrop" }
+vico-compose = { group = "com.patrykandpatrick.vico", name = "compose", version.ref = "vico" }
+vico-compose-m3 = { group = "com.patrykandpatrick.vico", name = "compose-m3", version.ref = "vico" }
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
 

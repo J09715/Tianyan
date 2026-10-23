@@ -110,6 +110,10 @@ class UmlRootfsInstaller @Inject constructor(
                     tmp.delete()
                 }
                 part.delete()
+                // 把 guest init 写进镜像：内核执行 init= 时 /host 还没挂载（/host 正是
+                // init 自己挂的），指向 /host 必然 panic（实测 error -2）。init 必须在
+                // rootfs 内部 —— 用纯 Kotlin 的 ext4 写入器注入，无需 root / debugfs。
+                embedGuestInit()
                 progress = 1f
                 onProgress?.invoke(1f)
                 state = State.READY
@@ -128,6 +132,34 @@ class UmlRootfsInstaller @Inject constructor(
 
     /** rootfs.img 已就位时返回 true；否则要求调用方走 [ensure]。 */
     fun isReady(): Boolean = isInstalled()
+
+    /**
+     * 把 APK 资源里的 guest init 写进 rootfs 镜像根目录（`/tianyan-uml-init`）。
+     *
+     * 为什么必须写进镜像：内核参数 `init=` 在内核挂载 rootfs 后**立即**执行，
+     * 而 `/host` 这个挂载点是 init 自己创建的 —— 内核找 `/host/tianyan-uml-init`
+     * 时它还不存在，实测 `Kernel panic: Requested init /host/tianyan-uml-init failed (error -2)`。
+     * 写入镜像内部后路径变成 `/tianyan-uml-init`，内核直接可读（实测能启动）。
+     *
+     * 幂等：内容一致时写入器会跳过；失败不阻断安装（下次启动仍会重试）。
+     */
+    private fun embedGuestInit() {
+        val script = context.assets.open("tianyan-uml/tianyan-uml-init").use { it.readBytes() }
+        when (val result = Ext4InlineWriter.writeRootEntry(layout.rootfs, "tianyan-uml-init", script)) {
+            is Ext4InlineWriter.Result.Ok -> {
+                logger.i("guest init embedded into rootfs image (inode ${result.inode})")
+            }
+            is Ext4InlineWriter.Result.TooLarge -> {
+                logger.w("guest init too large for image: need ${result.needed}, have ${result.available}")
+            }
+            is Ext4InlineWriter.Result.NoFreeInode -> {
+                logger.w("no free inode in rootfs image to embed guest init")
+            }
+            is Ext4InlineWriter.Result.Io -> {
+                logger.w("failed to embed guest init: ${result.message}")
+            }
+        }
+    }
 
     companion object {
         private const val DEFAULT_DOWNLOAD_MAX_BYTES = 512L * 1024 * 1024

@@ -1,42 +1,45 @@
 package top.tianyan.app.ui.settings.stats.widgets
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
+import com.patrykandpatrick.vico.compose.cartesian.axis.rememberBottom
+import com.patrykandpatrick.vico.compose.cartesian.axis.rememberStart
+import com.patrykandpatrick.vico.compose.cartesian.layer.rememberColumnCartesianLayer
+import com.patrykandpatrick.vico.compose.common.component.rememberLineComponent
+import com.patrykandpatrick.vico.compose.common.component.rememberTextComponent
+import com.patrykandpatrick.vico.core.cartesian.CartesianChart
+import com.patrykandpatrick.vico.core.cartesian.data.CartesianChartModelProducer
+import com.patrykandpatrick.vico.core.cartesian.data.columnSeries
+import com.patrykandpatrick.vico.core.cartesian.layer.ColumnCartesianLayer
+import com.patrykandpatrick.vico.core.cartesian.axis.HorizontalAxis
+import com.patrykandpatrick.vico.core.cartesian.axis.VerticalAxis
+import com.patrykandpatrick.vico.core.common.Fill
 import top.tianyan.app.core.model.StatsTrendDay
+import top.tianyan.app.ui.components.RuntimeCard
 import top.tianyan.app.ui.theme.Spacing
-import top.tianyan.app.ui.theme.Radius
-import java.util.Locale
 
+/**
+ * 用量趋势柱状图。
+ *
+ * 原本手写 199 行 Canvas（柱宽/间距自适应、点击选中、浮动详情卡），
+ * 改用 Vico 后坐标轴、刻度、动画、无障碍标签全由库负责，
+ * 这里只保留「数据 → 模型」映射与主题色接入。
+ */
 @Composable
 fun StatsUsageChart(
     days: List<StatsTrendDay>,
@@ -44,9 +47,7 @@ fun StatsUsageChart(
 ) {
     if (days.isEmpty()) {
         Box(
-            modifier = modifier
-                .fillMaxWidth()
-                .height(140.dp),
+            modifier = modifier.fillMaxWidth().height(160.dp),
             contentAlignment = Alignment.Center,
         ) {
             Text(
@@ -59,141 +60,55 @@ fun StatsUsageChart(
         return
     }
 
-    var selectedDayIndex by remember { mutableStateOf<Int?>(null) }
-    val scrollState = rememberScrollState()
-
-    val maxDayTokens = remember(days) {
-        days.maxOfOrNull { day ->
-            day.providerTokens.values.sumOf { it.totalTokens }
-        }?.coerceAtLeast(1L) ?: 1L
+    val scheme = MaterialTheme.colorScheme
+    val totals = remember(days) {
+        days.map { day -> day.providerTokens.values.sumOf { it.totalTokens }.toDouble() }
     }
+    val modelProducer = remember { CartesianChartModelProducer() }
 
-    LaunchedEffect(days.size) {
-        if (days.isNotEmpty()) {
-            scrollState.scrollTo(scrollState.maxValue)
+    // runTransaction 是 suspend，且模型更新不需要跟随重组，放 LaunchedEffect 里跑一次
+    LaunchedEffect(totals) {
+        modelProducer.runTransaction {
+            columnSeries { series(totals) }
         }
     }
 
-    val selectedDay = selectedDayIndex?.let { days.getOrNull(it) }
-
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
-    ) {
-        // 浮动详情指示卡片
-        if (selectedDay != null) {
-            val totalTokens = selectedDay.providerTokens.values.sumOf { it.totalTokens }
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(Radius.xsShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f))
-                    .padding(horizontal = Spacing.md, vertical = Spacing.sm),
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(
-                            text = selectedDay.date.toString(),
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            ),
-                        )
-                        Text(
-                            text = "总计: ${formatTokens(totalTokens)}",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary,
-                            ),
-                        )
-                    }
-
-                    for ((provider, bucket) in selectedDay.providerTokens) {
-                        if (bucket.totalTokens > 0) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                            ) {
-                                Text(
-                                    text = "• $provider",
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        fontSize = 11.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    ),
-                                    modifier = Modifier.weight(1f).padding(end = Spacing.sm),
-                                    maxLines = 1,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                )
-                                Text(
-                                    text = formatTokens(bucket.totalTokens),
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                    ),
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // 柱状图展示区域
-        val barWidth = if (days.size > 45) 8.dp else 12.dp
-        val barGap = if (days.size > 45) 3.dp else 5.dp
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(130.dp)
-                .horizontalScroll(scrollState),
+    RuntimeCard(modifier = modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
-            Row(
-                modifier = Modifier.fillMaxHeight(),
-                horizontalArrangement = Arrangement.spacedBy(barGap),
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                days.forEachIndexed { index, day ->
-                    val dayTotal = day.providerTokens.values.sumOf { it.totalTokens }
-                    val heightFactor = if (maxDayTokens > 0) (dayTotal.toFloat() / maxDayTokens).coerceIn(0.04f, 1f) else 0.04f
-                    val isSelected = selectedDayIndex == index
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .width(barWidth)
-                            .clickable {
-                                selectedDayIndex = if (selectedDayIndex == index) null else index
-                            },
-                        verticalArrangement = Arrangement.Bottom,
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .fillMaxHeight(heightFactor)
-                                .clip(RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp))
-                                .background(
-                                    if (isSelected) MaterialTheme.colorScheme.primary
-                                    else if (dayTotal > 0) MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
-                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
-                                ),
-                        )
-                    }
-                }
-            }
+            Text(
+                text = "近 ${days.size} 天 Token 用量",
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+            )
+            CartesianChartHost(
+                chart = rememberUsageChart(scheme),
+                modelProducer = modelProducer,
+                modifier = Modifier.fillMaxWidth().height(180.dp),
+            )
         }
     }
 }
 
-private fun formatTokens(value: Long): String {
-    if (value < 1000) return "$value Tokens"
-    if (value < 1_000_000) {
-        return String.format(Locale.US, "%.1fk Tokens", value / 1000.0)
-    }
-    return String.format(Locale.US, "%.2fM Tokens", value / 1_000_000.0)
+/** 图表本体：层 + 两轴。抽成独立 composable 才能调用 remember* 系列。 */
+@Composable
+private fun rememberUsageChart(scheme: ColorScheme): CartesianChart {
+    val column = rememberColumnCartesianLayer(
+        columnProvider = ColumnCartesianLayer.ColumnProvider.series(
+            rememberLineComponent(
+                fill = Fill(scheme.primary.toArgb()),
+                thickness = 12.dp,
+            ),
+        ),
+    )
+    val startAxis = VerticalAxis.rememberStart(
+        line = rememberLineComponent(fill = Fill(scheme.outlineVariant.toArgb())),
+        label = rememberTextComponent(color = scheme.onSurfaceVariant),
+    )
+    val bottomAxis = HorizontalAxis.rememberBottom(
+        line = rememberLineComponent(fill = Fill(scheme.outlineVariant.toArgb())),
+        label = rememberTextComponent(color = scheme.onSurfaceVariant),
+    )
+    return remember(scheme) { CartesianChart(column, startAxis = startAxis, bottomAxis = bottomAxis) }
 }

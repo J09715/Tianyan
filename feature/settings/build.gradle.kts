@@ -43,6 +43,9 @@ dependencies {
     implementation(project(":feature:theme"))
     // LocalLiquidGlassBackdrop 的类型 LayerBackdrop 来自该库，类型推断需要它在 classpath 上
     implementation(libs.backdrop)
+    // Vico：统计页图表改用声明式图表库（替代手写 Canvas 柱状图/热力图）
+    implementation(libs.vico.compose)
+    implementation(libs.vico.compose.m3)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
     implementation(project(":core:datastore"))

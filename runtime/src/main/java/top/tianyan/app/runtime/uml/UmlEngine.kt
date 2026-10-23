@@ -204,9 +204,12 @@ class UmlEngine @Inject constructor(
         cmd += "root=/dev/ubda"
         cmd += "rw"
         // 用天衍自己的 guest init：挂 proc/dev、配 passt 网络、起 sshd、支持单命令模式。
-        // 内核参数 init= 指向 share 目录里的脚本（guest 把 share 挂到 /host）。
+        // init 必须写在 **rootfs 镜像内部**：内核挂载 rootfs 后立刻执行 init=，而 /host
+        // 这个挂载点是 init 自己创建的 —— 指向 /host/tianyan-uml-init 时内核必然
+        // panic（实测 `Requested init /host/tianyan-uml-init failed (error -2)`）。
+        // UmlRootfsInstaller 下载镜像后会用 Ext4InlineWriter 把它注入根目录。
         stageInit(share)
-        cmd += "init=/host/tianyan-uml-init"
+        cmd += "init=/tianyan-uml-init"
         // hostfs 共享目录：guest 里挂在 /host，应用把公钥/init 丢进去、把 host key 取出来
         cmd += "stryker.share=${share.absolutePath}"
         // 用户工作区：宿主 filesDir/linux-runtime/workspace 挂进 guest 的 /workspace
