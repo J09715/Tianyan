@@ -17,6 +17,13 @@ interface LinuxRuntime {
     val activeDistroId: StateFlow<String>
     val installedDistros: StateFlow<List<InstalledDistro>>
 
+    /**
+     * 当前会话实际使用的引擎。引导页据此决定展示什么：
+     * UML 是「安装完整 Linux 系统」，PRoot 才需要选发行版与镜像源。
+     */
+    suspend fun activeEngine(): top.tianyan.app.runtime.uml.EngineType =
+        top.tianyan.app.runtime.uml.EngineType.PROOT
+
     suspend fun initialize(request: RuntimeInstallRequest = RuntimeInstallRequest("ubuntu")): AppResult<Unit>
     suspend fun restoreInstalledState(): Boolean
     suspend fun updateRootfs(distroId: String? = null): AppResult<Unit>

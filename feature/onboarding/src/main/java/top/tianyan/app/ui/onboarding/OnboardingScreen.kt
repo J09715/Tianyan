@@ -116,6 +116,10 @@ private fun SystemSetupPage(viewModel: OnboardingViewModel, modifier: Modifier) 
     val state by viewModel.runtimeState.collectAsStateWithLifecycle()
     val importing by viewModel.isImporting.collectAsStateWithLifecycle()
     val importError by viewModel.importError.collectAsStateWithLifecycle()
+    val engineType by viewModel.engineType.collectAsStateWithLifecycle()
+    // UML 是完整 Linux 系统：镜像是固定的 Debian（含 sshd/bash/apt），
+    // 不需要用户选发行版，也没有 PRoot 那套镜像加速线路。
+    val isUml = engineType == top.tianyan.app.runtime.uml.EngineType.UML
     val installing = state is RuntimeState.Initializing || importing
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -137,23 +141,56 @@ private fun SystemSetupPage(viewModel: OnboardingViewModel, modifier: Modifier) 
                 description = stringResource(R.string.onboarding_description),
             )
         }
-        item {
-            SetupDropdown(
-                label = stringResource(R.string.onboarding_distribution),
-                selectedId = distribution,
-                options = distributionOptions,
-                enabled = !installing,
-                onSelected = viewModel::selectDistribution,
-            )
-        }
-        item {
-            SetupDropdown(
-                label = stringResource(R.string.onboarding_mirror),
-                selectedId = mirror,
-                options = mirrorOptions,
-                enabled = !installing,
-                onSelected = viewModel::selectMirror,
-            )
+        if (isUml) {
+            // UML：展示将要安装的系统内容，让用户清楚装的是什么
+            item {
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    shape = Radius.smShape,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                ) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(Spacing.lg),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    ) {
+                        Text(
+                            text = "Debian GNU/Linux 12 (bookworm)",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        )
+                        listOf(
+                            "完整用户空间 · 真内核（User Mode Linux）",
+                            "openssh-server · 可 SSH 登录",
+                            "bash / coreutils / apt · 可自行装包",
+                            "root 权限 · 与宿主隔离",
+                        ).forEach { line ->
+                            Text(
+                                text = "· $line",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+        } else {
+            item {
+                SetupDropdown(
+                    label = stringResource(R.string.onboarding_distribution),
+                    selectedId = distribution,
+                    options = distributionOptions,
+                    enabled = !installing,
+                    onSelected = viewModel::selectDistribution,
+                )
+            }
+            item {
+                SetupDropdown(
+                    label = stringResource(R.string.onboarding_mirror),
+                    selectedId = mirror,
+                    options = mirrorOptions,
+                    enabled = !installing,
+                    onSelected = viewModel::selectMirror,
+                )
+            }
         }
         if (state is RuntimeState.Initializing) {
             val progress = state as RuntimeState.Initializing
@@ -238,21 +275,32 @@ private fun SystemSetupPage(viewModel: OnboardingViewModel, modifier: Modifier) 
                 )
             }
         }
-        item {
-            RuntimeTextButton(
-                onClick = { importLauncher.launch(arrayOf("application/gzip", "application/x-gzip", "application/x-tar", "application/x-xz", "application/octet-stream")) },
-                enabled = !installing,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(stringResource(R.string.onboarding_import))
+        // 「从文件导入」是 PRoot 的 rootfs tar 包路径；UML 用固定镜像，没有这个入口。
+        if (!isUml) {
+            item {
+                RuntimeTextButton(
+                    onClick = { importLauncher.launch(arrayOf("application/gzip", "application/x-gzip", "application/x-tar", "application/x-xz", "application/octet-stream")) },
+                    enabled = !installing,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.onboarding_import))
+                }
             }
-        }
-        item {
-            Text(
-                stringResource(R.string.onboarding_import_hint),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            item {
+                Text(
+                    stringResource(R.string.onboarding_import_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        } else {
+            item {
+                Text(
+                    text = "安装包约 400 MB，请保持网络连接。装好后即可在终端里使用完整的 Debian 系统。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
         if (state is RuntimeState.Error) {
             item {

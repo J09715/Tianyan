@@ -61,6 +61,13 @@ class OnboardingViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.Eagerly, OnboardingStatus())
     val runtimeState: StateFlow<RuntimeState> = linuxRuntime.state
 
+    /**
+     * 引导页要装的引擎：UML = 完整 Linux 系统（固定 Debian 镜像，无需选发行版/镜像源）；
+     * PRoot = 需要用户选发行版与加速线路。默认 UML。
+     */
+    private val _engineType = MutableStateFlow(top.tianyan.app.runtime.uml.EngineType.UML)
+    val engineType: StateFlow<top.tianyan.app.runtime.uml.EngineType> = _engineType.asStateFlow()
+
     val devSuites: List<top.tianyan.app.core.model.PluginBundle> = top.tianyan.app.core.model.BuiltinPluginBundles.bundles
 
     private val _selectedSuites = MutableStateFlow<Set<String>>(
@@ -111,6 +118,8 @@ class OnboardingViewModel @Inject constructor(
         viewModelScope.launch {
             _distribution.value = settings.selectedDistribution.first()
             _mirror.value = settings.mirrorPolicy.first()
+            _engineType.value = runCatching { linuxRuntime.activeEngine() }
+                .getOrDefault(top.tianyan.app.runtime.uml.EngineType.UML)
             prefsLoaded.value = true
         }
         // APK 自带的插件包先落盘，再恢复沙箱。

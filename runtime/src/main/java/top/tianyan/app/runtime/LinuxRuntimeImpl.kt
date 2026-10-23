@@ -525,7 +525,7 @@ class LinuxRuntimeImpl @Inject constructor(
     }
 
     /** 当前生效的运行时引擎：默认 UML（完整 root Linux），用户显式关闭或镜像未就位时回退 PRoot。 */
-    suspend fun activeEngine(): EngineType = engineSelector.activeEngine()
+    override suspend fun activeEngine(): EngineType = engineSelector.activeEngine()
 
     /** UML guest 是否在跑 / 可引导；UI 与终端入口用它判断要不要先拉起 guest。 */
     suspend fun umlStatus(): top.tianyan.app.runtime.uml.UmlEngine.State =
