@@ -26,6 +26,8 @@ class UmlRuntimeLayout @Inject constructor(
 
     val baseDir: File = File(pathManager.baseDir, UML_BASE_NAME)
     val rootfs: File = File(baseDir, UML_ROOTFS_NAME)
+    /** 下载中的压缩镜像归档（gunzip 进 [rootfs] 后删除）。 */
+    val rootfsArchivePart: File = File(baseDir, UML_ROOTFS_ARCHIVE_NAME)
     val console: File = File(baseDir, "console.log")
     val shareDir: File = File(baseDir, "share")
 
@@ -36,6 +38,7 @@ class UmlRuntimeLayout @Inject constructor(
         const val UML_PASST_NAME = "libpasst.so"
         const val UML_BASE_NAME = "uml"
         const val UML_ROOTFS_NAME = "rootfs.img"
+        const val UML_ROOTFS_ARCHIVE_NAME = "rootfs.img.gz"
 
         const val GUEST_SSH_PORT = 22
         const val HOST_SSH_PORT = 2222

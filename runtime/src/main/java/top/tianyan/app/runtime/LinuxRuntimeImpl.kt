@@ -65,6 +65,7 @@ class LinuxRuntimeImpl @Inject constructor(
     private val logger: AppLogger,
     private val engineSelector: UmlEngineSelector,
     private val umlEngine: UmlEngine,
+    private val umlRootfsInstaller: top.tianyan.app.runtime.uml.UmlRootfsInstaller,
 ) : LinuxRuntime {
 
     private val _state = MutableStateFlow<RuntimeState>(RuntimeState.NotInitialized)
@@ -347,6 +348,10 @@ class LinuxRuntimeImpl @Inject constructor(
                 refreshInstalledDistros()
 
                 hostBridge.start()
+                // UML 是默认引擎：初始化完成后后台准备（拉镜像/起 guest），不阻塞 onboarding；
+                // PRoot 主链路不受影响。
+                runCatching { ensurePreferredEngine() }
+                    .onFailure { logger.w("ensurePreferredEngine on initialize failed: ${it.message}", it) }
                 _state.value = RuntimeState.Ready
                 logger.i("Linux runtime initialized and ready with distro: $distroId")
                 AppResult.Success(Unit)
@@ -416,6 +421,10 @@ class LinuxRuntimeImpl @Inject constructor(
         runCatching { assetSynchronizer.syncAssetsToDistro(effectiveDistro) }
             .onFailure { logger.w("Restore asset synchronization failed for $effectiveDistro: ${it.message}", it) }
         hostBridge.start()
+        // UML 是默认引擎：恢复时就地检查偏好——镜像没就位就后台拉取，就位了就拉起 guest；
+        // 全程非阻塞，PRoot 主链路不受影响。
+        runCatching { ensurePreferredEngine() }
+            .onFailure { logger.w("ensurePreferredEngine on restore failed: ${it.message}", it) }
         _state.value = RuntimeState.Ready
         logger.i("Linux runtime restored from disk and ready with distro: $effectiveDistro")
         true
@@ -504,16 +513,27 @@ class LinuxRuntimeImpl @Inject constructor(
         healthChecker.check()
     }
 
-    /** 当前生效的运行时引擎：默认 PRoot，用户在设置里开启 UML 且探测通过时切到 UML。 */
+    /** 当前生效的运行时引擎：默认 UML（完整 root Linux），用户显式关闭或镜像未就位时回退 PRoot。 */
     suspend fun activeEngine(): EngineType = engineSelector.activeEngine()
 
     /** UML guest 是否在跑 / 可引导；UI 与终端入口用它判断要不要先拉起 guest。 */
     suspend fun umlStatus(): top.tianyan.app.runtime.uml.UmlEngine.State =
         if (engineSelector.isUmlPreferred()) umlEngine.status() else top.tianyan.app.runtime.uml.UmlEngine.State.STOPPED
 
-    /** 若偏好 UML 且未就绪，则尝试非阻塞拉起 guest。返回是否处于可用状态。 */
+    /**
+     * 引擎准备：UML 是默认偏好引擎。
+     * - 镜像(rootfs)未就位 → 后台下载+解压（幂等，不阻塞），本次会话走 PRoot 兜底，镜像就绪后的下次会话自动用 UML；
+     * - 镜像已就位但 guest 未起 → 非阻塞拉起 guest。
+     * 按「偏好值」（设置里的 UML 开关，默认开）决定是否准备；按「解析结果」决定本次会话用谁。
+     * 返回是否「当前会话已可用 UML」。
+     */
     suspend fun ensurePreferredEngine(): Boolean {
-        if (!engineSelector.isUmlPreferred()) return true
+        if (engineSelector.preference() != top.tianyan.app.runtime.uml.EngineType.UML) return true
+        val gaps = umlEngine.missing()
+        if (gaps.contains(top.tianyan.app.runtime.uml.UmlRuntimeLayout.UML_ROOTFS_NAME)) {
+            umlRootfsInstaller.ensure() // 后台安装 guest 镜像；本次会话 PRoot 兜底
+            return false
+        }
         return when (umlEngine.status()) {
             top.tianyan.app.runtime.uml.UmlEngine.State.READY -> true
             else -> {

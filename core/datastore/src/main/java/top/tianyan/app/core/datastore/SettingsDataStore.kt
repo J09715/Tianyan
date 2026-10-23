@@ -472,10 +472,14 @@ class SettingsDataStore @Inject constructor(
 
     /**
      * UML（User Mode Linux）引擎开关：开启后 runtime 用「普通进程起内核」代替 PRoot 仿真，
-     * guest 代码在本机 Cortex 上原生执行，流畅度远高于 TCG/QEMU。默认关。
+     * guest 代码在本机 Cortex 上原生执行，流畅度远高于 TCG/QEMU。
+     *
+     * 默认开 —— UML 是默认执行引擎（完整的 root Linux 系统：自带内核与 root）；
+     * 设备跑不了 UML 时（持久探测判定 BLOCKED）由 UmlEngineSelector 自动回退 PRoot，
+     * 用户显式关闭则直接走 PRoot。
      */
     val umlEngineEnabled: Flow<Boolean> = context.settingsDataStore.data.map { preferences ->
-        preferences[umlEngineEnabledKey] ?: false
+        preferences[umlEngineEnabledKey] ?: true
     }
 
     suspend fun setUmlEngineEnabled(enabled: Boolean) {

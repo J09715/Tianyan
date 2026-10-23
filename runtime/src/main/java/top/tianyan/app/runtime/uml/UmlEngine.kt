@@ -366,5 +366,5 @@ class UmlEngine @Inject constructor(
     }
 }
 
-/** 引擎抽象：天衍目前 PRoot 为默认，UML 为可切换的无仿真快引擎。 */
+/** 引擎抽象：UML 为默认执行引擎（完整 root Linux 系统，自带内核 + root）；PRoot 为兼容/兜底引擎。 */
 enum class EngineType { PROOT, UML, QEMU_ROOTLESS }

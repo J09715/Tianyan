@@ -27,17 +27,19 @@ import top.tianyan.app.ui.components.StateTone
 import top.tianyan.app.ui.components.RuntimeIconButton
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
+import top.tianyan.app.ui.components.RuntimeLinearProgressIndicator
 import top.tianyan.app.ui.components.RuntimeLoadingState
 import top.tianyan.app.ui.components.RuntimeSwitch
 import top.tianyan.app.ui.components.RuntimeTopBar
 import top.tianyan.app.ui.theme.Spacing
 
 /**
- * 运行引擎设置页：PRoot（默认，全兼容）与 UML（无仿真，快）二选一切换。
+ * 运行引擎设置页：UML（默认，完整 root Linux：自带内核 + root，无仿真）与
+ * PRoot（兼容/兜底）。开关是 opt-out——默认 UML，关掉才切回 PRoot。
  *
  * 全部控件走 feature/components 的 Runtime* 包装，不自写 Material 组件。
- * 探测未通过（本机跑不了 UML，如无可写 tmpfs / 16KB 页）时给空态 + 回退 PRoot 的出路，
- * 不让用户点一个永远起不来的开关。
+ * guest 镜像未下载完时显示安装进度；探测未通过（本机跑不了 UML，如无可写 tmpfs / 16KB 页）
+ * 时给空态 + 已自动回退 PRoot 的说明。
  */
 @Composable
 fun UmlEngineSettingsScreen(
@@ -85,9 +87,9 @@ fun UmlEngineSettingsScreen(
                             )
                             Spacer(Modifier.width(Spacing.md))
                             Column(Modifier.weight(1f)) {
-                                Text("UML 引擎", style = MaterialTheme.typography.titleMedium)
+                                Text("UML 引擎（默认）", style = MaterialTheme.typography.titleMedium)
                                 Text(
-                                    "无 CPU 仿真，guest 代码在本机内核上原生执行，流畅度远高于 PRoot/QEMU。",
+                                    "完整 root Linux：自带内核 + root，无 CPU 仿真，guest 代码在本机内核上原生执行。关闭后显式切回 PRoot 兜底引擎。",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -107,7 +109,7 @@ fun UmlEngineSettingsScreen(
                         }
                     }
 
-                    // 引擎产物检查
+                    // 引擎产物检查：四件套（随 APK 打包）+ guest 镜像（后台下载）
                     RuntimeCard(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -128,6 +130,53 @@ fun UmlEngineSettingsScreen(
                             )
                         }
                         Spacer(Modifier.height(Spacing.md))
+
+                        // guest 镜像（完整 root Linux 系统）安装状态
+                        when {
+                            ui.rootfsInstalled -> {
+                                Text(
+                                    "guest 镜像已就位（完整 root Linux 系统）。",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
+                            ui.rootfsPreparing -> {
+                                Text("正在下载 guest 镜像…", style = MaterialTheme.typography.bodyMedium)
+                                Spacer(Modifier.height(Spacing.sm))
+                                RuntimeLinearProgressIndicator(
+                                    progress = { ui.rootfsProgress },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                            ui.rootfsError != null -> {
+                                Text(
+                                    "guest 镜像下载失败：${ui.rootfsError}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                                Spacer(Modifier.height(Spacing.md))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    RuntimeIconButton(onClick = { viewModel.retryRootfsInstall() }) {
+                                        RuntimeIcon(name = RuntimeIconName.Refresh)
+                                    }
+                                    Text("重试", style = MaterialTheme.typography.bodyMedium)
+                                }
+                            }
+                            else -> {
+                                Text(
+                                    "guest 镜像未下载。开始下载：",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                                Spacer(Modifier.height(Spacing.md))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    RuntimeIconButton(onClick = { viewModel.retryRootfsInstall() }) {
+                                        RuntimeIcon(name = RuntimeIconName.Refresh)
+                                    }
+                                    Text("开始下载", style = MaterialTheme.typography.bodyMedium)
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(Spacing.md))
                         if (ui.missingBinaries.isEmpty()) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 RuntimeIconButton(onClick = { viewModel.refreshProbe() }) {
@@ -143,7 +192,7 @@ fun UmlEngineSettingsScreen(
                     RuntimeEmptyState(
                         icon = RuntimeIconName.Package,
                         title = "UML 引擎未安装",
-                        description = "内核等四件套缺失，先运行 tools/prepare-uml-runtime.sh 预取再开此开关。",
+                        description = "内核等四件套缺失，先运行 tools/prepare-uml-runtime.sh 预取再开此引擎。缺 guest 镜像的情况会在上方「引擎产物」里自动下载，不在此处拦截。",
                         tone = StateTone.Warning,
                         fillHeight = false,
                         modifier = Modifier.padding(horizontal = Spacing.lg),
@@ -154,7 +203,7 @@ fun UmlEngineSettingsScreen(
                     RuntimeEmptyState(
                         icon = RuntimeIconName.Alert,
                         title = "本设备无法运行 UML",
-                        description = ui.blockReason ?: "缺少可写 tmpfs 或内核页大小不为 4KB，建议保持 PRoot。",
+                        description = ui.blockReason ?: "缺少可写 tmpfs 或内核页大小不为 4KB。运行时已自动回退 PRoot，也可在上方把 UML 开关关掉。",
                         tone = StateTone.Danger,
                         fillHeight = false,
                         modifier = Modifier.padding(horizontal = Spacing.lg),
