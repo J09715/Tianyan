@@ -82,11 +82,6 @@ class UmlRootfsInstaller @Inject constructor(
                     tmp.copyTo(layout.rootfs)
                     tmp.delete()
                 }
-                // 把 guest init 写进镜像：内核执行 init= 时 /host 还没挂载（/host 正是
-                // init 自己挂的），指向 /host 必然 panic（实测 error -2）。init 必须在
-                // rootfs 内部 —— 用纯 Kotlin 的 ext4 写入器注入，无需 root / debugfs。
-                // 内置镜像已含 init，这一步是幂等的（见 ensureGuestInit）。
-                embedGuestInit()
                 progress = 1f
                 onProgress?.invoke(1f)
                 state = State.READY
@@ -106,16 +101,41 @@ class UmlRootfsInstaller @Inject constructor(
     /**
      * 拿到镜像并解压进 [tmp]。
      *
-     * **引导安装**：与 Stryker 一致 —— 首次启动时下载完整 guest 镜像（含 Debian
-     * + sshd + bash + apt），不在 APK 里内置。内置会让安装包从 47MB 涨到 96MB，
-     * 且镜像更新必须跟着发版，成本远高于一次下载。
+     * **内置优先**：APK assets 里带一份构建好的完整 Debian 镜像（含 sshd/bash/apt
+     * 与注入的 guest init），解压即用，不碰网络。
      *
-     * 下载失败不回退 PRoot，而是把原因写进 [lastError]，让引导页显示可重试的错误。
+     * 为什么改为内置：完整 Stryker 镜像托管在 GitHub releases，实测从国内网络
+     * 下载 90s 超时（curl exit 28），用户没有代理时根本拿不到镜像，
+     * 于是永远起不来 —— 与其依赖一个不可达的源，不如内置。
+     *
+     * 内置不可用（老 APK）才走下载；下载失败写进 [lastError] 供引导页重试。
      *
      * @return true = [tmp] 已写入可用的 ext4 镜像。
      */
     private suspend fun obtainImage(tmp: File, onProgress: ((Float) -> Unit)?): Boolean =
-        downloadRootfs(tmp, onProgress)
+        withContext(Dispatchers.IO) {
+            if (assetAvailable(BUNDLED_ROOTFS_ASSET)) {
+                artifactSource = "bundled asset"
+                logger.i("UML rootfs: extracting bundled asset $BUNDLED_ROOTFS_ASSET")
+                runCatching {
+                    context.assets.open(BUNDLED_ROOTFS_ASSET).use { stream ->
+                        GZIPInputStream(stream.buffered(1 shl 16), 1 shl 16).use { gz ->
+                            tmp.outputStream().use { out -> gz.copyTo(out, 64 * 1024) }
+                        }
+                    }
+                }.onFailure {
+                    logger.w("bundled rootfs extraction failed: ${it.message}")
+                    return@withContext false
+                }
+                onProgress?.invoke(1f)
+                return@withContext true
+            }
+            downloadRootfs(tmp, onProgress)
+        }
+
+    private fun assetAvailable(path: String): Boolean = runCatching {
+        context.assets.open(path).use { true }
+    }.getOrDefault(false)
 
     /** 下载路径（内置不可用时）。 */
     private suspend fun downloadRootfs(tmp: File, onProgress: ((Float) -> Unit)?): Boolean =
@@ -165,13 +185,13 @@ class UmlRootfsInstaller @Inject constructor(
     fun isReady(): Boolean = isInstalled()
 
     /**
-     * 启动前自愈：镜像在、但缺 `/tianyan-uml-init` 就补写。
+     * 确保镜像里有天衍自己的 guest init（`/tianyan-uml-init`）。
      *
-     * 存在的理由：早期下载的镜像没有 init（那时路径还是错的 `/host/...`），
-     * 而 [ensure] 只在镜像**缺失**时才跑 —— 镜像在就不会触发注入，
-     * 结果是老用户永远起不来。这里在每次启动前兜一次。
+     * 内核参数 `init=` 指向它。用自己的一份而不是镜像自带的 `/stryker-init`：
+     * 后者依赖 `/usr/local/sbin/stryker-guest-init` 处理公钥，那个脚本不在镜像里时
+     * sshd 能起来但公钥进不去 → 应用 150s 连不上。天衍的 init 自包含，不依赖它。
      *
-     * @return true = 镜像已含 init，可以直接启动。
+     * 幂等：已存在同内容条目直接返回 true。
      */
     suspend fun ensureGuestInit(): Boolean = withContext(Dispatchers.IO) {
         if (!layout.rootfs.isFile) return@withContext false
@@ -180,32 +200,21 @@ class UmlRootfsInstaller @Inject constructor(
         Ext4InlineWriter.containsEntry(layout.rootfs, GUEST_INIT_NAME)
     }
 
-    /**
-     * 把 APK 资源里的 guest init 写进 rootfs 镜像根目录（`/tianyan-uml-init`）。
-     *
-     * 为什么必须写进镜像：内核参数 `init=` 在内核挂载 rootfs 后**立即**执行，
-     * 而 `/host` 这个挂载点是 init 自己创建的 —— 内核找 `/host/tianyan-uml-init`
-     * 时它还不存在，实测 `Kernel panic: Requested init /host/tianyan-uml-init failed (error -2)`。
-     * 写入镜像内部后路径变成 `/tianyan-uml-init`，内核直接可读（实测能启动）。
-     *
-     * 幂等：内容一致时写入器会跳过；失败不阻断安装（下次启动仍会重试）。
-     */
+    /** 把 APK 资源里的 init 脚本写进镜像根目录。 */
     private fun embedGuestInit() {
-        val script = context.assets.open("tianyan-uml/tianyan-uml-init").use { it.readBytes() }
-        when (val result = Ext4InlineWriter.writeRootEntry(layout.rootfs, "tianyan-uml-init", script)) {
-            is Ext4InlineWriter.Result.Ok -> {
-                logger.i("guest init embedded into rootfs image (inode ${result.inode})")
+        runCatching {
+            val script = context.assets.open("tianyan-uml/$GUEST_INIT_NAME").use { it.readBytes() }
+            when (val result = Ext4InlineWriter.writeRootEntry(layout.rootfs, GUEST_INIT_NAME, script)) {
+                is Ext4InlineWriter.Result.Ok ->
+                    logger.i("guest init embedded into rootfs (inode ${result.inode})")
+                is Ext4InlineWriter.Result.TooLarge ->
+                    logger.w("guest init too large: need ${result.needed}, have ${result.available}")
+                is Ext4InlineWriter.Result.NoFreeInode ->
+                    logger.w("no free inode in rootfs to embed guest init")
+                is Ext4InlineWriter.Result.Io ->
+                    logger.w("failed to embed guest init: ${result.message}")
             }
-            is Ext4InlineWriter.Result.TooLarge -> {
-                logger.w("guest init too large for image: need ${result.needed}, have ${result.available}")
-            }
-            is Ext4InlineWriter.Result.NoFreeInode -> {
-                logger.w("no free inode in rootfs image to embed guest init")
-            }
-            is Ext4InlineWriter.Result.Io -> {
-                logger.w("failed to embed guest init: ${result.message}")
-            }
-        }
+        }.onFailure { logger.w("embedGuestInit failed: ${it.message}") }
     }
 
     companion object {
@@ -214,5 +223,7 @@ class UmlRootfsInstaller @Inject constructor(
         private const val MIN_ROOTFS_BYTES = 64L * 1024 * 1024
         /** guest init 在镜像内的文件名（内核参数 init= 指向它）。 */
         const val GUEST_INIT_NAME = "tianyan-uml-init"
+        /** 内置 rootfs 镜像（完整 Debian + sshd + 注入的 guest init，gzip 后约 34MB）。 */
+        const val BUNDLED_ROOTFS_ASSET = "tianyan-uml/rootfs.imgz"
     }
 }

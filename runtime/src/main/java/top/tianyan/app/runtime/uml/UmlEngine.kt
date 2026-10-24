@@ -135,14 +135,6 @@ class UmlEngine @Inject constructor(
             val gaps = layout.missing()
             if (gaps.isNotEmpty()) return fail(gaps.joinToString(", "), onBooted)
 
-            // 自愈：镜像在但缺 guest init 就补写（早期镜像没有它，见 UmlRootfsInstaller）。
-            // 内核 init= 指向镜像内路径，缺了就是 panic —— 启动前必须确保它在。
-            // 本函数跑在 executor 线程上（非协程），用 runBlocking 桥接 IO 挂起调用。
-            val initReady = runBlocking(Dispatchers.IO) { rootfsInstaller.ensureGuestInit() }
-            if (!initReady) {
-                return fail("guest init missing from the rootfs image", onBooted)
-            }
-
             layout.ensureDirectories()
             guestSsh.configure(context, layout.shareDir, hostSshPort)
             runCatching { guestSsh.publishPublicKey() }
@@ -171,7 +163,21 @@ class UmlEngine @Inject constructor(
                 }
                 Thread.sleep(1000)
             }
-            fail(if (stopRequested) "boot cancelled" else "guest did not answer in ${timeoutMs / 1000}s", onBooted)
+            // 超时时把 console 尾部一起报出来：只写「150s 没应答」等于什么都没说，
+            // 用户与日志都看不出是 init 没跑、sshd 没起、还是 SSH 认证失败。
+            val why = if (stopRequested) {
+                "boot cancelled"
+            } else {
+                val tail = consoleTail(40).filter { it.isNotBlank() }
+                val stage = tail.lastOrNull { it.contains("TIANYAN_UML_BOOT") || it.contains("STRYKER_BOOT") }
+                val hint = when {
+                    stage != null -> "guest init reached: $stage"
+                    tail.isEmpty() -> "kernel produced no console output"
+                    else -> "last: ${tail.last().trim().take(160)}"
+                }
+                "guest did not answer in ${timeoutMs / 1000}s ($hint)"
+            }
+            fail(why, onBooted)
         } catch (e: Exception) {
             logger.w("UML start failed", e)
             fail(e.message ?: e.javaClass.simpleName, onBooted)
@@ -180,6 +186,17 @@ class UmlEngine @Inject constructor(
 
     private fun start(memoryMb: Int, cpus: Int, seccomp: Boolean) {
         val share = layout.shareDir
+        // 起进程前先清残留 guest。对齐 Stryker 的 reapStrayGuests-on-start：
+        // 上一轮若被强杀（应用崩溃 / 用户划掉），内核进程会留在后台继续占着
+        // 2222 端口和 ubd0 镜像文件，新一轮启动就绑不上端口 → umnet abort
+        // （signal 6），或者镜像被占用读到脏数据。
+        reapStrayGuests()
+        // 清空上一轮 console：consoleTail 只取最后 N 行，若不清空，
+        // 本轮启动失败时可能读到上一轮的 panic/Aborted，把诊断带偏。
+        runCatching { layout.console.writeText("") }
+        // 端口必须在起进程**之前**选定：umnet 绑定失败会直接 abort（signal 6），
+        // 表现为「kernel killed by signal 6 (Aborted)」，看不出是端口冲突。
+        hostSshPort = claimHostPort(UmlRuntimeLayout.HOST_SSH_PORT)
         val cmd = buildCommand(share, memoryMb, cpus, seccomp)
         logger.i("UML starting: ${cmd.joinToString(" ")}")
         val pb = ProcessBuilder(cmd)
@@ -213,13 +230,35 @@ class UmlEngine @Inject constructor(
         cmd += "ubd0=${layout.rootfs.absolutePath}"
         cmd += "root=/dev/ubda"
         cmd += "rw"
-        // 用天衍自己的 guest init：挂 proc/dev、配 passt 网络、起 sshd、支持单命令模式。
-        // init 必须写在 **rootfs 镜像内部**：内核挂载 rootfs 后立刻执行 init=，而 /host
-        // 这个挂载点是 init 自己创建的 —— 指向 /host/tianyan-uml-init 时内核必然
-        // panic（实测 `Requested init /host/tianyan-uml-init failed (error -2)`）。
-        // UmlRootfsInstaller 下载镜像后会用 Ext4InlineWriter 把它注入根目录。
-        stageInit(share)
-        cmd += "init=/tianyan-uml-init"
+        // init 解析：**镜像自带的优先**，注入只作后备。
+        //
+        // 为什么不再强制注入：纯 Kotlin 的 ext4 写入器在我用 mkfs 造的小镜像上
+        // 验证过，但在真实 Stryker 镜像（321MB、可能带 metadata_csum/flex_bg/
+        // 目录索引）上写不进去 —— 强制注入会让安装直接失败，比不注入更糟。
+        //
+        // 镜像自带的 init 能跑就用它（Stryker 自己也是 init=/stryker-init），
+        // 只是公钥要放到 $SHARE/.ssh/authorized_keys（已修）。
+        // 一个都探测不到时才尝试注入天衍自己的那份。
+        // 探测（读 ext4 根目录）在真实镜像上可能失败（大镜像 / flex_bg / 目录索引），
+        // 所以探测不到时**不注入、也不放弃**，直接用 Stryker 的 /stryker-init ——
+        // 那是 Stryker 自己在同一镜像上验证过的路径，最可能可用。
+        // 注入只作为最后手段，且永不阻断启动。
+        val imageInit = detectGuestInit()
+        val initPath = imageInit ?: run {
+            stageInit(share)
+            val injected = runCatching {
+                runBlocking(Dispatchers.IO) { rootfsInstaller.ensureGuestInit() }
+            }.getOrDefault(false)
+            if (injected) {
+                logger.i("UML injected its own init (image had none detectable)")
+                "/${UmlRootfsInstaller.GUEST_INIT_NAME}"
+            } else {
+                logger.i("UML falling back to /stryker-init (probe and injection both unavailable)")
+                "/stryker-init"
+            }
+        }
+        logger.i("UML guest init resolved to: $initPath")
+        cmd += "init=$initPath"
         // hostfs 共享目录：guest 里挂在 /host，应用把公钥/init 丢进去、把 host key 取出来
         cmd += "stryker.share=${share.absolutePath}"
         // 用户工作区：宿主 filesDir/linux-runtime/workspace 挂进 guest 的 /workspace
@@ -240,6 +279,61 @@ class UmlEngine @Inject constructor(
             logger.w("failed to stage UML init into share dir: ${it.message}")
         }
     }
+
+    /**
+     * 探测 rootfs 里实际存在的 init。
+     *
+     * 优先级：Stryker 的 stryker-init（会挂 hostfs + 起 sshd，功能最全）
+     * → /sbin/init（systemd/传统 init）→ /init。
+     * 都不存在时退回 stryker-init，让内核报的错与镜像实际内容对应得上。
+     */
+    private fun detectGuestInit(): String? {
+        // 只列根目录下的候选：子路径（/sbin/init）需要两级目录解析，不在探测范围
+        val candidates = listOf("stryker-init", "tianyan-uml-init", "init")
+        val found = runCatching {
+            Ext4InlineWriter.pickExistingRootEntry(layout.rootfs, candidates)
+        }.getOrNull()
+        if (found == null) {
+            // 探测不到就把镜像根目录列出来记进日志：两个版本分别踩过
+            // 「镜像没有 stryker-init」和「init 在但依赖脚本缺失」，
+            // 靠猜会反复出错，列出真实内容最省事（日志面板可直接复制）。
+            val listing = runCatching { Ext4InlineWriter.listRootEntries(layout.rootfs) }
+                .getOrDefault(emptyList())
+            logger.w(
+                "no known guest init found; rootfs ${layout.rootfs.name} contains: " +
+                    listing.take(40).joinToString(", ") +
+                    (if (listing.size > 40) " …(+${listing.size - 40})" else ""),
+            )
+        }
+        return found?.let { "/$it" }
+    }
+
+    /**
+     * 挑一个可用回环端口。
+     *
+     * 对齐 Stryker 的 GuestPort.claim：首选端口被占（上一轮 guest 没退干净、
+     * 或别的应用占了 2222）就向后找，而不是硬绑 —— 硬绑时 umnet 会 abort，
+     * 用户只看到 signal 6，根本不知道是端口冲突。
+     */
+    private fun claimHostPort(preferred: Int): Int {
+        if (isLoopbackPortFree(preferred)) return preferred
+        for (port in (preferred + 1)..(preferred + PORT_SEARCH_SPAN).coerceAtMost(65535)) {
+            if (isLoopbackPortFree(port)) {
+                logger.w("UML host port $preferred is taken, using $port instead")
+                return port
+            }
+        }
+        logger.w("no free loopback port near $preferred; falling back to it anyway")
+        return preferred
+    }
+
+    private fun isLoopbackPortFree(port: Int): Boolean = runCatching {
+        java.net.ServerSocket().use { socket ->
+            socket.reuseAddress = false
+            socket.bind(java.net.InetSocketAddress(UmlRuntimeLayout.HOST_LOOPBACK, port), 1)
+        }
+        true
+    }.getOrDefault(false)
 
     /** 给 guest 内存找一个可写 tmpfs；找不到就回退 filesDir（UML 会告警但不致命）。 */
     private fun fallbackTempDir(): String? {
@@ -483,19 +577,44 @@ class UmlEngine @Inject constructor(
         return false
     }
 
+    /**
+     * 从 console 尾部提炼失败原因。
+     *
+     * 只取「最后一条匹配行」信息量太低（实测只报 `signal 6`，看不出是端口冲突
+     * 还是镜像问题）。这里按严重度排序取最能说明问题的一条，并附上最后几行
+     * 原始输出，让用户/日志能直接定位。
+     */
     private fun consoleProblem(): String {
-        val tail = consoleTail(200)
-        val problems = tail.filter { line ->
-            line.contains("Kernel panic") || line.contains("Aborted") ||
-                line.contains("cannot") || line.contains("could not") || line.contains("failed") ||
-                line.contains("Permission denied") || line.contains("Exec format error") ||
-                line.contains("MADV_REMOVE")
+        val tail = consoleTail(200).filter { it.isNotBlank() }
+        if (tail.isEmpty()) return "console is empty — the kernel produced no output at all"
+        // 严重度：内核 panic > abort/信号 > 具体错误 > 泛泛的 failed
+        val ordered = listOf(
+            "Kernel panic",
+            "Aborted",
+            "killed by signal",
+            "Exec format error",
+            "Permission denied",
+            "MADV_REMOVE",
+            "address already in use",
+            "Address already in use",
+            "cannot",
+            "could not",
+            "couldn't",
+            "failed",
+        )
+        for (needle in ordered) {
+            tail.lastOrNull { it.contains(needle, ignoreCase = true) }?.let { hit ->
+                val context = tail.takeLast(6).joinToString(" | ") { it.trim().take(160) }
+                return "$hit  ‖ last: $context"
+            }
         }
-        return if (problems.isEmpty()) "see ${layout.console.name}" else problems.last()
+        return "no recognizable error; last lines: " + tail.takeLast(4).joinToString(" | ") { it.trim().take(160) }
     }
 
     companion object {
         const val DEFAULT_RAM_MB = 2048
+        /** 端口探测跨度：与 Stryker GuestPort.SEARCH_SPAN 同量级。 */
+        private const val PORT_SEARCH_SPAN = 32
         const val DEFAULT_CPUS = 4
         const val MIN_RAM_MB = 512
         /** 一次性命令的退出码哨兵前缀（拼上纳秒时间戳，避免与命令自身输出撞名）。 */

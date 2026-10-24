@@ -7,7 +7,6 @@ import com.jcraft.jsch.JSch
 import com.jcraft.jsch.Session
 import top.tianyan.app.core.common.logging.AppLogger
 import java.io.File
-import java.math.BigInteger
 import java.security.KeyPair
 import java.security.KeyPairGenerator
 import java.security.PublicKey
@@ -47,14 +46,12 @@ class UmlGuestSsh @Inject constructor(
 
     private val wantedForwards = ConcurrentHashMap<Int, Int>()
 
-    val privateKey: File
-        get() = File(keyDir(), "id_guest")
-    val publicKey: File
-        get() = File(keyDir(), "id_guest.pub")
-
-    private fun keyDir(): File = File(shareDir?.absolutePath ?: "/data/data/top.tianyan.app/.keys", "tianyan-uml")
-
-    /** 应用侧私钥存放目录（PEM 密钥对落盘处，keyDir + "-keys"）。 */
+    /**
+     * 应用侧密钥对落盘目录。
+     *
+     * 生成（[ensureKeypair]）、发布（[publishPublicKey]）、连接（[ensureSession]）
+     * 三处必须用同一处，否则会读不到刚生成的密钥。
+     */
     private fun keyStoreDir(): File = File(shareDir?.absolutePath ?: "/data/data/top.tianyan.app/.keys", "tianyan-uml-keys")
 
     fun configure(context: Context, share: File, sshPort: Int) {
@@ -65,51 +62,59 @@ class UmlGuestSsh @Inject constructor(
         ensureKeypair()
     }
 
-    /** 生成并落盘应用侧的 RSA 密钥对（PEM 形式，JSch IdentityRepository 可解析）。 */
+    /**
+     * 生成并落盘应用侧密钥对。
+     *
+     * 用 **JSch 自己生成并写出** RSA 密钥对。
+     *
+     * 为什么不用手写编码 / 不用 ed25519：
+     * - ed25519：JSch 0.2.21 的 `KeyPairEdDSA.getPrivateKey()` 抛
+     *   `UnsupportedOperationException`，私钥根本写不出来（实测），
+     *   异常被吞掉后静默 fallback，等于改动从未生效。
+     * - 手写 RSA 公钥：`BigInteger.toByteArray()` **已经**正确处理符号位
+     *   （最高位为 1 时带 0x00 前缀），手写时若再删掉这个前缀，mpint 就坏了 ——
+     *   sshd 报 `userauth_pubkey: parse key: invalid format`，
+     *   ssh-keygen 也报 "is not a public key file"。
+     *
+     * 交给 JSch：它写的 PKCS1 私钥 `addIdentity` 读得动，写的公钥格式标准。
+     * ssh-rsa 公钥类型在 OpenSSH 9.2 上仍可用（映射到 rsa-sha2-256/512 签名）。
+     */
     private fun ensureKeypair() {
         val dir = keyStoreDir()
         dir.mkdirs()
         val priv = File(dir, "id_guest")
         val pub = File(dir, "id_guest.pub")
-        if (priv.exists() && pub.exists()) return
-        val generator = KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }
-        val pair = generator.generateKeyPair()
-        val privPem = "-----BEGIN PRIVATE KEY-----\n" +
-            java.util.Base64.getEncoder().encodeToString((pair.private as java.security.PrivateKey).encoded) +
-            "\n-----END PRIVATE KEY-----\n"
-        File(dir, "id_guest").writeText(privPem)
-        val pubKey = pair.public as java.security.interfaces.RSAPublicKey
-        val blob = encodeOpenSshPublicKey(pubKey)
-        File(dir, "id_guest.pub").writeText(
-            "ssh-rsa " + java.util.Base64.getEncoder().encodeToString(blob) + " tianyan-uml\n",
-        )
+        if (priv.exists() && pub.exists() && pub.readText().startsWith("ssh-")) return
+        runCatching {
+            val jsch = com.jcraft.jsch.JSch()
+            val pair = com.jcraft.jsch.KeyPair.genKeyPair(jsch, com.jcraft.jsch.KeyPair.RSA)
+            pair.writePrivateKey(priv.absolutePath)
+            pair.writePublicKey(pub.absolutePath, "tianyan-uml")
+            pair.dispose()
+            logger.i("generated RSA keypair for UML guest (jsch-native format)")
+        }.onFailure {
+            logger.w("keypair generation failed: ${it.message}", it)
+        }
     }
 
-    private fun encodeOpenSshPublicKey(key: java.security.interfaces.RSAPublicKey): ByteArray {
-        val out = java.io.ByteArrayOutputStream()
-        fun writeString(data: ByteArray) {
-            out.write(intToBytes(data.size))
-            out.write(data)
-        }
-        fun writeMpi(value: BigInteger) {
-            var raw = value.toByteArray()
-            // BigInteger.toByteArray 带符号位，去掉前导 0x00
-            if (raw[0] == 0x00.toByte() && raw.size > 1) raw = raw.copyOfRange(1, raw.size)
-            writeString(raw)
-        }
-        writeString("ssh-rsa".toByteArray())
-        writeMpi(key.publicExponent)
-        writeMpi(key.modulus)
-        return out.toByteArray()
-    }
 
     /** 把应用公钥写进共享目录，guest 的 init 会挂到 /root/.ssh/authorized_keys。 */
     fun publishPublicKey() {
         val share = shareDir ?: throw IllegalStateException("no share directory configured")
         val sshDir = File(share, ".ssh")
         sshDir.mkdirs()
-        val pubText = File(keyDir(), "id_guest.pub").readText()
-        File(share, "authorized_keys").writeText(pubText)
+        // 必须与 ensureKeypair 的落盘位置一致（keyStoreDir）：
+        // 早先读的是 keyDir（tianyan-uml），而密钥写在 tianyan-uml-keys，
+        // 于是发布到 guest 的是旧文件内容或干脆读不到 —— 认证必然失败。
+        val pubFile = File(keyStoreDir(), "id_guest.pub")
+        val pubText = pubFile.takeIf { it.isFile }?.readText()
+            ?: throw IllegalStateException(
+                "guest public key missing at ${pubFile.absolutePath} — cannot authenticate",
+            )
+        // 必须写进 .ssh/ 子目录：guest 侧的 stryker-guest-init 读的是
+        // `$SHARE/.ssh/authorized_keys`（KEYDIR=$SHARE/.ssh），写到 share 根目录
+        // 它看不到 —— 表现就是 sshd 起来了但认证失败，应用一直 ping 不通。
+        File(sshDir, "authorized_keys").writeText(pubText)
     }
 
     fun ping(timeoutMs: Int): Boolean = runSentinel("echo __TING__\n") { it == "__TING__" }
@@ -220,14 +225,4 @@ class UmlGuestSsh @Inject constructor(
     }
 
     fun lastLossAt(): Long = lastLossAt
-
-    companion object {
-        private fun intToBytes(value: Int): ByteArray =
-            byteArrayOf(
-                (value ushr 24).toByte(),
-                (value ushr 16).toByte(),
-                (value ushr 8).toByte(),
-                value.toByte(),
-            )
-    }
 }

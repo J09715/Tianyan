@@ -476,6 +476,78 @@ object Ext4InlineWriter {
         }
     }.getOrDefault(false)
 
+    /**
+     * 在镜像**根目录**里挑一个实际存在的条目。
+     *
+     * 不同来源的 rootfs 里 init 名字不一样（Stryker 构建的带 stryker-init，
+     * 通用 Debian 可能只有 init）。写死任何一个都会在别的镜像上 panic
+     * （`Requested init /xxx failed (error -2)` = ENOENT），所以运行时探测再选。
+     *
+     * 注意：只查根目录。`sbin/init` 这类子路径需要解析两级目录，不在本方法范围。
+     *
+     * @return 第一个存在的候选名；都不存在返回 null。
+     */
+    fun pickExistingRootEntry(image: File, candidates: List<String>): String? = runCatching {
+        if (!image.isFile) return null
+        RandomAccessFile(image, "r").use { f ->
+            val sb = readSuperblock(f)
+            val blockSize = 1024 shl sb.logBlockSize
+            val firstDataBlock = readFirstDataBlock(f)
+            val groupDescBlock = if (firstDataBlock == 0L) 1L else firstDataBlock + 1L
+            val inodeTableBlock = readInodeTableBlock(f, groupDescBlock * blockSize)
+            candidates.firstOrNull { name ->
+                findEntryInRoot(f, blockSize, inodeTableBlock, sb.inodeSize, name) != null
+            }
+        }
+    }.getOrNull()
+
+    /**
+     * 列出镜像根目录下的所有条目名。
+     *
+     * 用于诊断：镜像里到底有没有 stryker-init / stryker-guest-init，
+     * 光靠猜会反复出错（实测两个版本分别踩了「镜像没有 init」和
+     * 「init 存在但依赖脚本缺失」两种坑）。列出真实内容最省事。
+     */
+    fun listRootEntries(image: File): List<String> = runCatching {
+        if (!image.isFile) return emptyList()
+        RandomAccessFile(image, "r").use { f ->
+            val sb = readSuperblock(f)
+            val blockSize = 1024 shl sb.logBlockSize
+            val firstDataBlock = readFirstDataBlock(f)
+            val groupDescBlock = if (firstDataBlock == 0L) 1L else firstDataBlock + 1L
+            val inodeTableBlock = readInodeTableBlock(f, groupDescBlock * blockSize)
+
+            // 读根目录 inode（ino=2）
+            val rootRaw = readInode(f, inodeOffset(inodeTableBlock, sb.inodeSize, INO_ROOT), sb.inodeSize)
+            val rootFlags = ByteBuffer.wrap(rootRaw).order(ByteOrder.LITTLE_ENDIAN).getInt(28)
+            val blocks = if (rootFlags and EXT4_INLINE_DATA_FL != 0) listOf(-1L) else parseExtentBlocks(rootRaw)
+
+            val names = mutableListOf<String>()
+            for (phys in blocks) {
+                if (phys < 0) continue
+                val data = ByteArray(blockSize)
+                f.seek(phys * blockSize)
+                f.readFully(data)
+                var pos = 0
+                while (pos + 8 <= blockSize) {
+                    val bb = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
+                    bb.position(pos)
+                    val ino = bb.int
+                    val reclen = bb.short.toInt() and 0xffff
+                    if (reclen < 8 || pos + reclen > blockSize) break
+                    val nameLen = bb.get(pos + 6).toInt() and 0xff
+                    val nameType = bb.get(pos + 7).toInt()
+                    if (ino != 0 && nameLen > 0 && nameLen < 255) {
+                        val name = String(data, pos + 8, nameLen, Charsets.UTF_8)
+                        if (nameType != 2 && name != "." && name != "..") names.add(name)
+                    }
+                    pos += reclen
+                }
+            }
+            names
+        }
+    }.getOrDefault(emptyList())
+
     private fun findEntryInRoot(
         f: RandomAccessFile,
         blockSize: Int,
