@@ -70,8 +70,9 @@ import top.tianyan.app.core.database.task.AgentTaskDao
         BudgetRequestEntity::class,
         BtwQueryEntity::class,
         AgentMessageFeedbackEntity::class,
+        RedTeamFactEntity::class,
     ],
-    version = 83,
+    version = 84,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -94,6 +95,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun agentApprovalDao(): AgentApprovalDao
     abstract fun agentApprovalAuditDao(): AgentApprovalAuditDao
     abstract fun agentMessageFeedbackDao(): AgentMessageFeedbackDao
+    abstract fun redTeamFactDao(): RedTeamFactDao
     abstract fun quickPhraseDao(): QuickPhraseDao
     abstract fun harnessRuntimeDao(): HarnessRuntimeDao
     abstract fun androidAppDao(): AndroidAppDao

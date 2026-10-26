@@ -34,6 +34,10 @@ internal fun ChatTopBar(
     onOpenRepository: (() -> Unit)? = null, repositoryHighlight: Boolean = false,
     toolchainHighlight: Boolean = false, onOpenToolchain: () -> Unit,
     onOpenReasoning: (() -> Unit)? = null, companion: ChatCompanionToggle? = null,
+    /** 红队入口：null 表示当前环境不提供（例如预览/无 ViewModel）。 */
+    onOpenRedTeam: (() -> Unit)? = null,
+    /** 当前会话是否已绑定红队，用于入口高亮。 */
+    redTeamActive: Boolean = false,
     speech: ChatSpeechToggle? = null,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
@@ -89,7 +93,8 @@ internal fun ChatTopBar(
                 }
                 ChatWorkspaceBar(
                     onOpenBrowser = onOpenBrowser?.let(closeThen), browserHighlight = browserHighlight,
-                    onOpenRepository = onOpenRepository?.let(closeThen), repositoryHighlight = repositoryHighlight)
+                    onOpenRepository = onOpenRepository?.let(closeThen), repositoryHighlight = repositoryHighlight,
+                    onOpenRedTeam = onOpenRedTeam?.let(closeThen), redTeamActive = redTeamActive)
                 Text(stringResource(R.string.chat_workbench_session), Modifier.padding(top = 8.dp),
                     style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 ChatWorkbenchControls(runMode, currentBranch, runtimeEvents, running,

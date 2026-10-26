@@ -528,7 +528,7 @@ class WorkspaceManager(
                     val info = File(directory, "apk-info.properties").takeIf { it.exists() }?.readText().orEmpty()
                     Regex("""packageName\s*=\s*(.+)""").find(info)?.groupValues?.get(1)?.trim() ?: ""
                 }
-                ProjectType.GENERAL, ProjectType.TIANYAN_PLUGIN -> ""
+                ProjectType.GENERAL, ProjectType.TIANYAN_PLUGIN, ProjectType.RED_TEAM -> ""
             }
         }.getOrDefault("")
     }

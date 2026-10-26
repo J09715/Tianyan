@@ -25,6 +25,8 @@ import top.tianyan.app.core.database.RoomDatabaseBackupRepository
 import top.tianyan.app.core.database.HarnessBlobStore
 import top.tianyan.app.core.database.HarnessRuntimeRepository
 import top.tianyan.app.core.database.HarnessSessionRepository
+import top.tianyan.app.core.database.RedTeamFactRepository
+import top.tianyan.app.core.database.RoomRedTeamFactRepository
 import top.tianyan.app.core.database.McpOAuthCredentialRepository
 import top.tianyan.app.core.database.McpServerRepository
 import top.tianyan.app.core.database.QuickPhraseRepository
@@ -102,6 +104,7 @@ val coreDatabaseModule = module {
     single<RoomAiModelRepository> { RoomAiModelRepository(dao = get()) }
 
     single<RoomHarnessSessionRepository> { RoomHarnessSessionRepository(dao = get()) }
+    single<RedTeamFactRepository> { RoomRedTeamFactRepository(dao = get()) }
 
     single<RoomWorkspaceRepository> { RoomWorkspaceRepository(dao = get()) }
 

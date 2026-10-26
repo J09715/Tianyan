@@ -856,16 +856,6 @@ object SettingsSearchRegistry {
             keywords = listOf("github", "open source", "issue", "开源", "仓库", "kaiyuan"),
             breadcrumb = "关于与官方社区 > GitHub 仓库",
         ),
-        SettingsSearchItem(
-            id = "about_sponsor",
-            title = "赞助天衍开发",
-            subtitle = "支持天衍开源项目持续迭代与移动端 Linux 沙箱生态演进",
-            category = SettingsSearchCategory.ABOUT,
-            target = SettingsSearchTarget.ABOUT_SPONSOR,
-            icon = RuntimeIconName.Sponsor,
-            keywords = listOf("sponsor", "donate", "赞助", "捐赠", "支持", "zanzhu"),
-            breadcrumb = "关于与官方社区 > 赞助开发者",
-        ),
     )
 
     /**

@@ -12,6 +12,8 @@ class RoomHarnessSessionRepository(private val dao: HarnessSessionDao) : Harness
     override suspend fun setRunMode(id: String, runMode: String, updatedAt: Long) = dao.setRunMode(id, runMode, updatedAt)
     override suspend fun setModelSelection(id: String, modelId: String?, modelVariant: String?, updatedAt: Long) =
         dao.setModelSelection(id, modelId, modelVariant, updatedAt)
+
+
     override suspend fun deleteSession(id: String) = dao.deleteSession(id)
     override suspend fun countInRange(start: Long?, end: Long?) = dao.countInRange(start, end)
     override suspend fun listAll() = dao.listAll()

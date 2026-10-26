@@ -76,7 +76,6 @@ enum class SettingsSearchTarget {
     // 关于与社区
     ABOUT_COMMUNITY,
     ABOUT_UPDATE,
-    ABOUT_SPONSOR,
 }
 
 /**

@@ -884,7 +884,7 @@ class WorkspaceBuildRunner(
                     )
                 )
             }
-            ProjectType.GENERAL, ProjectType.TIANYAN_PLUGIN -> {
+            ProjectType.GENERAL, ProjectType.TIANYAN_PLUGIN, ProjectType.RED_TEAM -> {
                 val guidance = nonApkBuildGuidance(project.projectType)
                 log("[Tianyan Build] $guidance")
                 send(BuildRunProgress(step = project.projectType.displayName, isRunning = false,

@@ -55,7 +55,6 @@ import top.tianyan.app.core.model.UpdateCheckState
 @Composable
 fun AboutCommunityScreen(
     onBack: () -> Unit,
-    onOpenSponsor: () -> Unit,
     viewModel: SettingsViewModel? = previewOrNull { koinViewModel() },
 ) {
     val autoCheckUpdates by viewModel?.autoCheckUpdates?.collectAsStateWithLifecycle() ?: previewStateOf(false)
@@ -225,21 +224,6 @@ fun AboutCommunityScreen(
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 SettingsRow(
-                    icon = RuntimeIconName.Qq,
-                    title = "官方 QQ 交流群",
-                    subtitle = "群号: 964382207 · 点击一键加群 / 复制群号",
-                    value = "964382207",
-                    onClick = { joinQqGroup(context, "964382207") },
-                )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                SettingsRow(
-                    icon = RuntimeIconName.Sponsor,
-                    title = "赞助支持",
-                    subtitle = "赞助天衍 · 助力开源持续开发",
-                    onClick = onOpenSponsor,
-                )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                SettingsRow(
                     icon = RuntimeIconName.Info,
                     title = "关于天衍 · Tianyan",
                     subtitle = "Android 原生 Linux PRoot 沙箱与 AI 结对中枢",
@@ -280,15 +264,6 @@ private fun AboutAppDialog(
                     RuntimeIcon(RuntimeIconName.Document, Modifier.size(16.dp), MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.width(8.dp))
                     Text("本版更新日志")
-                }
-                OutlinedButton(
-                    onClick = { joinQqGroup(context, "964382207") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp),
-                ) {
-                    RuntimeIcon(RuntimeIconName.Chat, Modifier.size(16.dp), MaterialTheme.colorScheme.primary)
-                    Spacer(Modifier.width(8.dp))
-                    Text("加入 QQ 交流群 (964382207)")
                 }
             }
         },

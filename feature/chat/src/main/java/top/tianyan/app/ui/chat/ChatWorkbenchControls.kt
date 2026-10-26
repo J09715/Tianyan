@@ -20,8 +20,14 @@ import top.tianyan.app.ui.components.*
 internal fun ChatWorkspaceBar(
     onOpenBrowser: (() -> Unit)?, browserHighlight: Boolean,
     onOpenRepository: (() -> Unit)?, repositoryHighlight: Boolean,
+    onOpenRedTeam: (() -> Unit)? = null, redTeamActive: Boolean = false,
 ) {
     val entries = buildList {
+        // 红队入口与浏览器/仓库同层：它同样是「进一个整页工作台」，不是会话内设置项。
+        if (onOpenRedTeam != null) add(WorkbenchAction(RuntimeIconName.Shield,
+            stringResource(R.string.chat_redteam_entry),
+            stringResource(if (redTeamActive) R.string.chat_redteam_active else R.string.chat_redteam_inactive),
+            onOpenRedTeam, highlighted = redTeamActive))
         if (onOpenBrowser != null) add(WorkbenchAction(RuntimeIconName.Globe,
             stringResource(R.string.chat_browser_entry), onClick = onOpenBrowser, highlighted = browserHighlight))
         if (onOpenRepository != null) add(WorkbenchAction(RuntimeIconName.GitBranch,

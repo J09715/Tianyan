@@ -353,6 +353,7 @@ fun ChatScreen(
     }
     val noProjectHint = stringResource(R.string.chat_repository_no_project)
     var toolchainGap by remember { mutableStateOf(false) }; var showToolchainPanel by remember { mutableStateOf(false) }
+    var showRedTeamPanel by rememberSaveable { mutableStateOf(false) }
 
     val chatTopBar: @Composable (onOpenBrowser: (() -> Unit)?, browserHighlight: Boolean, companion: ChatCompanionToggle?) -> Unit =
         { onOpenBrowser, browserHighlight, companion ->
@@ -380,6 +381,8 @@ fun ChatScreen(
                 },
                 repositoryHighlight = repositoryHighlight,
                 toolchainHighlight = toolchainGap, onOpenToolchain = { showToolchainPanel = true },
+                onOpenRedTeam = viewModel?.let { { showRedTeamPanel = true } },
+                redTeamActive = currentSession?.redTeamMode == top.tianyan.app.core.model.RedTeamMode.RED_TEAM.id,
                 onOpenReasoning = { showReasoningSlider = true }, companion = companion, speech = speech,
             )
         }
@@ -570,6 +573,10 @@ fun ChatScreen(
             onRefresh = { viewModel?.refreshSubagentResult() },
             onDismiss = { viewModel?.closeSubagentResult() },
         )
+    }
+
+    if (showRedTeamPanel && currentSession != null && viewModel != null) {
+        RedTeamWorkbenchSheet(currentSession, viewModel) { showRedTeamPanel = false }
     }
 
     ToolchainHost(showToolchainPanel, { showToolchainPanel = false }) { toolchainGap = it }

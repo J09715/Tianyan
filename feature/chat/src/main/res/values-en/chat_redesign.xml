@@ -24,4 +24,7 @@
     <string name="chat_workbench_workspace">Workspace</string>
     <string name="chat_workbench_session">Session controls</string>
     <string name="chat_workbench_tools_attention">Needs attention</string>
+    <string name="chat_redteam_entry">Red team</string>
+    <string name="chat_redteam_active">Engaged</string>
+    <string name="chat_redteam_inactive">No target bound</string>
 </resources>

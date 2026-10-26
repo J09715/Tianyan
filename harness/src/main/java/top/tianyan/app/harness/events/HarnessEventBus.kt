@@ -110,6 +110,23 @@ sealed interface HarnessEvent {
         val dependencies: List<String> = emptyList(),
         val resultSummary: String? = null,
     ) : HarnessEvent
+
+    /** 红队事实（资产/端口/漏洞/得分）发生变化，供作战面板增量刷新。 */
+    data class RedTeamFactChanged(
+        override val sessionId: String,
+        override val timestamp: Long,
+        val factId: String,
+        val kind: String,
+        val status: String,
+    ) : HarnessEvent
+
+    /** 红队阶段推进（侦察 → 验证 → 利用 → 报告），供面板与提示词同步当前阶段。 */
+    data class RedTeamPhaseChanged(
+        override val sessionId: String,
+        override val timestamp: Long,
+        val phase: String,
+        val detail: String? = null,
+    ) : HarnessEvent
 }
 
 /**

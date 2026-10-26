@@ -144,6 +144,7 @@ class ChatViewModel(
     private val sessionModelSwitcher: SessionModelSwitcher,
     private val quickPhraseRepository: QuickPhraseRepository,
     private val laneManager: LaneManager,
+    internal val redTeamFactsSource: top.tianyan.app.core.database.RedTeamFactRepository,
 
     private val eventBus: HarnessEventBus,
     private val proactiveWorkflowAdvisor: ProactiveWorkflowAdvisor,
@@ -375,6 +376,13 @@ class ChatViewModel(
 
     /** 当前选中的会话 ID */
     val currentSessionId: StateFlow<String> = harnessLoop.currentSessionId
+
+    /** 红队事实流：逻辑见 RedTeamSession.kt（拆出以避免本文件越过行数棘轮）。 */
+    val redTeamFacts: kotlinx.coroutines.flow.Flow<List<top.tianyan.app.core.database.RedTeamFactEntity>> =
+        redTeamFactStream()
+
+    /** 绑定红队目标与授权范围。 */
+    fun bindRedTeamTarget(target: String, scope: String) = bindRedTeam(sessionDao, target, scope)
     /** 所有会话的多 Agent 并发运行状态映射 (IDLE / RUNNING / COMPLETED / FAILED) */
     val sessionRunStates: StateFlow<Map<String, SessionRunState>> = harnessLoop.sessionRunStates
     @OptIn(ExperimentalCoroutinesApi::class)

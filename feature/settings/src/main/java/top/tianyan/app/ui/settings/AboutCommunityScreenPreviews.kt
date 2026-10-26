@@ -11,6 +11,6 @@ import top.tianyan.app.ui.components.RuntimePreview
 @Composable
 private fun AboutCommunityScreenPreview() {
     RuntimePreview {
-        AboutCommunityScreen(onBack = { }, onOpenSponsor = { })
+        AboutCommunityScreen(onBack = { })
     }
 }

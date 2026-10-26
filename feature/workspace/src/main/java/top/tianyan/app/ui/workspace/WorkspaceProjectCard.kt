@@ -66,6 +66,7 @@ internal fun ProjectCard(
         ProjectType.ANDROID -> MaterialTheme.colorScheme.primary
         ProjectType.FLUTTER -> MaterialTheme.colorScheme.secondary
         ProjectType.REVERSE -> MaterialTheme.colorScheme.tertiary
+        ProjectType.RED_TEAM -> MaterialTheme.colorScheme.error
         ProjectType.GENERAL, ProjectType.TIANYAN_PLUGIN -> MaterialTheme.colorScheme.primary
     }
 
@@ -73,6 +74,7 @@ internal fun ProjectCard(
         ProjectType.ANDROID -> RuntimeIconName.Android
         ProjectType.FLUTTER -> RuntimeIconName.Flutter
         ProjectType.REVERSE -> RuntimeIconName.Reverse
+        ProjectType.RED_TEAM -> RuntimeIconName.Shield
         ProjectType.GENERAL, ProjectType.TIANYAN_PLUGIN -> RuntimeIconName.Code
     }
 

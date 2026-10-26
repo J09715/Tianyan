@@ -67,7 +67,6 @@ import top.tianyan.app.ui.settings.LinuxEnvironmentSettingsScreen
 import top.tianyan.app.ui.settings.McpSettingsScreen
 import top.tianyan.app.ui.settings.PhoneAgentSettingsScreen
 import top.tianyan.app.ui.settings.QuickPhrasesScreen
-import top.tianyan.app.ui.settings.SponsorScreen
 import top.tianyan.app.ui.settings.SshSettingsScreen
 import top.tianyan.app.ui.settings.StorageMountSettingsScreen
 import top.tianyan.app.ui.settings.StorageUsageScreen
@@ -388,7 +387,6 @@ fun TianyanNavHost(
                                 }
                                 SettingsSearchTarget.ABOUT_COMMUNITY,
                                 SettingsSearchTarget.ABOUT_UPDATE -> activeStack.push(SettingsSearchDestination, AboutCommunityDestination)
-                                SettingsSearchTarget.ABOUT_SPONSOR -> activeStack.push(SettingsSearchDestination, SponsorDestination)
                             }
                         }
                     )
@@ -459,14 +457,8 @@ fun TianyanNavHost(
                 GuardedEntry(AboutCommunityDestination) {
                     AboutCommunityScreen(
                         onBack = ::popBack,
-                        onOpenSponsor = { activeStack.push(AboutCommunityDestination, SponsorDestination) },
                         viewModel = settingsViewModel,
                     )
-                }
-            }
-            entry<SponsorDestination> {
-                GuardedEntry(SponsorDestination) {
-                    SponsorScreen(onBack = ::popBack)
                 }
             }
             entry<DistroManagementDestination> {

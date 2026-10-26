@@ -24,4 +24,7 @@
     <string name="chat_workbench_workspace">工作空间</string>
     <string name="chat_workbench_session">会话控制</string>
     <string name="chat_workbench_tools_attention">有待处理项</string>
+    <string name="chat_redteam_entry">红队模式</string>
+    <string name="chat_redteam_active">作战中</string>
+    <string name="chat_redteam_inactive">未绑定目标</string>
 </resources>
