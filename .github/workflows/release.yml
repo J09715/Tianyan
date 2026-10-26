@@ -86,7 +86,7 @@ jobs:
         env:
           TIANYAN_RELEASE_STORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD || secrets.RELEASE_STORE_PASSWORD }}
           TIANYAN_RELEASE_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS || secrets.RELEASE_KEY_ALIAS }}
-          TIANYAN_RELEASE_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD || secrets.RELEASE_KEY_PASSWORD }}
+          TIANYAN_RELEASE_KEY_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD || secrets.RELEASE_STORE_PASSWORD }}
         run: |
           set -euo pipefail
           for variable in \
