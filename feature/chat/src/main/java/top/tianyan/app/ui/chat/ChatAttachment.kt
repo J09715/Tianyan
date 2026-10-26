@@ -59,6 +59,8 @@ data class ChatAttachment(
     val hostFilePath: String? = null,
     val guestFilePath: String? = null,
     val base64DataUrl: String? = null,
+    /** 源 MIME 类型，供宿主侧 ACTION_VIEW 播放（视频/音频）与模型侧区分文件类型。 */
+    val mimeType: String? = null,
 ) {
     val localFilePath: String get() = guestFilePath ?: hostFilePath.orEmpty()
 }
@@ -118,7 +120,8 @@ object AttachmentHelper {
             if (size == 0L) size = targetFile.length()
 
             val guestPath = "/attachments/${targetFile.name}"
-            val sourceMimeType = contentResolver.getType(uri)
+            val rawMimeType = contentResolver.getType(uri)
+            val sourceMimeType = rawMimeType
                 ?.takeIf { it.startsWith("image/", ignoreCase = true) }
                 ?: "image/jpeg"
             val base64 = if (isImage) {
@@ -172,6 +175,7 @@ object AttachmentHelper {
                     hostFilePath = targetFile.absolutePath,
                     guestFilePath = guestPath,
                     base64DataUrl = base64,
+                    mimeType = rawMimeType,
                 ),
             )
         } catch (e: PayloadTooLargeException) {

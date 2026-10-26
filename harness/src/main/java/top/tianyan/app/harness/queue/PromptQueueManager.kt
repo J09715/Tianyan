@@ -165,6 +165,7 @@ class PromptQueueManager(
                 createdAt = System.currentTimeMillis(),
                 text = prompt.text,
                 imageUrls = prompt.imageUrls,
+                attachments = prompt.attachments,
             )
             val entry = HarnessEntryEntity(
                 id = message.id,

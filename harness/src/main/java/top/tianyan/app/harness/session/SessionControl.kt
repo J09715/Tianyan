@@ -27,11 +27,33 @@ interface SessionControl {
         text: String,
         imageUrls: List<String> = emptyList(),
         queue: PromptQueue = PromptQueue.NEXT_RUN,
+        attachments: List<top.tianyan.app.harness.MessageAttachment> = emptyList(),
     ): PromptSubmission
 
-    fun send(text: String, targetSessionId: String? = null, imageUrls: List<String> = emptyList())
-    fun steer(text: String, targetSessionId: String? = null, imageUrls: List<String> = emptyList())
-    fun followUp(text: String, targetSessionId: String? = null, imageUrls: List<String> = emptyList())
+    /**
+     * 发送一条消息。
+     *
+     * [attachments] 是**结构化**附件元信息，不拼进 [text]：气泡据此渲染文件卡片，
+     * 附件清单由 HarnessApiMapper.renderUserContent 在发给模型时展开。
+     */
+    fun send(
+        text: String,
+        targetSessionId: String? = null,
+        imageUrls: List<String> = emptyList(),
+        attachments: List<top.tianyan.app.harness.MessageAttachment> = emptyList(),
+    )
+    fun steer(
+        text: String,
+        targetSessionId: String? = null,
+        imageUrls: List<String> = emptyList(),
+        attachments: List<top.tianyan.app.harness.MessageAttachment> = emptyList(),
+    )
+    fun followUp(
+        text: String,
+        targetSessionId: String? = null,
+        imageUrls: List<String> = emptyList(),
+        attachments: List<top.tianyan.app.harness.MessageAttachment> = emptyList(),
+    )
     /** Requests cancellation; state streams report settlement asynchronously. */
     fun cancel(targetSessionId: String? = null)
     fun resolveApproval(requestId: String, approved: Boolean, rememberForSession: Boolean = false)

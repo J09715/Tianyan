@@ -583,7 +583,7 @@ class HarnessLoop(
             override suspend fun enqueue(sessionId: String, queue: PromptQueue, input: PendingMessage) =
                 promptQueueManager.enqueue(sessionId, queue, input)
             override suspend fun start(sessionId: String, input: PendingMessage): Boolean = withContext(NonCancellable) {
-                val operationId = acceptUserInput(sessionId, input.text, input.imageUrls, input.taskId, claimTask = true)
+                val operationId = acceptUserInput(sessionId, input.text, input.imageUrls, input.taskId, claimTask = true, attachments = input.attachments)
                 launchSessionJobLocked(sessionId, input.taskId, operationId, taskAlreadyRunning = true) {
                     runLoopInternal(sessionId, now(), operationId, input.taskId)
                 }
@@ -593,21 +593,21 @@ class HarnessLoop(
             override fun refreshFailed(sessionId: String, failure: Exception) { logger.e("Accepted input projection refresh failed for $sessionId", failure) }
         },
     )
-    override suspend fun submit(sessionId: String, text: String, imageUrls: List<String>, queue: PromptQueue):
-        PromptSubmission = inputController.submit(sessionId, text, imageUrls, queue).also {
+    override suspend fun submit(sessionId: String, text: String, imageUrls: List<String>, queue: PromptQueue, attachments: List<MessageAttachment>): PromptSubmission =
+        inputController.submit(sessionId, text, imageUrls, queue, attachments).also {
             if (it is PromptSubmission.Accepted) foregroundLauncher.start()
         }
-    override fun send(text: String, targetSessionId: String?, imageUrls: List<String>) =
-        submitAsync(PromptQueue.NEXT_RUN, text, targetSessionId, imageUrls)
-    override fun steer(text: String, targetSessionId: String?, imageUrls: List<String>) =
-        submitAsync(PromptQueue.STEER, text, targetSessionId, imageUrls)
-    override fun followUp(text: String, targetSessionId: String?, imageUrls: List<String>) =
-        submitAsync(PromptQueue.FOLLOW_UP, text, targetSessionId, imageUrls)
-    private fun submitAsync(queue: PromptQueue, text: String, targetSessionId: String?, imageUrls: List<String>) {
+    override fun send(text: String, targetSessionId: String?, imageUrls: List<String>, attachments: List<MessageAttachment>) =
+        submitAsync(PromptQueue.NEXT_RUN, text, targetSessionId, imageUrls, attachments)
+    override fun steer(text: String, targetSessionId: String?, imageUrls: List<String>, attachments: List<MessageAttachment>) =
+        submitAsync(PromptQueue.STEER, text, targetSessionId, imageUrls, attachments)
+    override fun followUp(text: String, targetSessionId: String?, imageUrls: List<String>, attachments: List<MessageAttachment>) =
+        submitAsync(PromptQueue.FOLLOW_UP, text, targetSessionId, imageUrls, attachments)
+    private fun submitAsync(queue: PromptQueue, text: String, targetSessionId: String?, imageUrls: List<String>, attachments: List<MessageAttachment>) {
         val sessId = targetSessionId?.ifBlank { null } ?: currentSessionId.value
         val images = imageUrls.toList()
         loopScope.launch {
-            try { submit(sessId, text, images, queue) }
+            try { submit(sessId, text, images, queue, attachments) }
             catch (cancellation: CancellationException) { throw cancellation }
             catch (failure: Exception) {
                 logger.e("Session input admission failed for $sessId", failure)
@@ -860,7 +860,7 @@ class HarnessLoop(
         val taskId = next.taskId ?: newId().also { generated ->
             queuedInstructions.record(sessId, next.copy(taskId = generated))
         }
-        val userMessage = UserMessage(newId(), now(), next.text, next.imageUrls)
+        val userMessage = UserMessage(newId(), now(), next.text, next.imageUrls, next.attachments)
         val operationId = operationCoordinator.acceptQueuedRun(sessId, queueItemId, userMessage, taskId)
         messageProjector.publishPersisted(sessId, userMessage)
         return launchSessionJobLocked(sessId, taskId, operationId = operationId, taskAlreadyRunning = true) {
@@ -1123,10 +1123,10 @@ class HarnessLoop(
         return runLoopInternal(sessId, startedAt = now(), operationId = operationId, taskId = taskId)
     }
 
-    private suspend fun acceptUserInput(sessId: String, userText: String, imageUrls: List<String>, taskId: String?, claimTask: Boolean = false): String {
+    private suspend fun acceptUserInput(sessId: String, userText: String, imageUrls: List<String>, taskId: String?, claimTask: Boolean = false, attachments: List<MessageAttachment> = emptyList()): String {
         // 拦截器重置已移至 runLoopInternal 入口（覆盖 regenerate/retry/branch 等直达路径）。
         agentEventLogger.log(sessId, "UserPrompt", userText)
-        val userMessage = UserMessage(id = newId(), createdAt = now(), text = userText, imageUrls = imageUrls)
+        val userMessage = UserMessage(id = newId(), createdAt = now(), text = userText, imageUrls = imageUrls, attachments = attachments)
         // 上一轮在此关闭：补发其文件改动卡片（完成路径已发过则跳过，见 TurnChangeCards）。
         TurnChangeCards.publishClosedTurn(sessId, rewindController.beginTurn(sessId, userText, userMessage.id), messageStore, messageProjector)
         val operationId = operationCoordinator.acceptRun(sessId, userMessage, taskId = taskId.takeIf { claimTask })

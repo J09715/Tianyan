@@ -165,7 +165,7 @@ class GroupReplyTaskOwnershipTest {
         }
         override suspend fun persistedMessages(sessionId: String) = durable
         override suspend fun deleteSession(id: String) = Unit
-        override suspend fun submit(sessionId: String, text: String, imageUrls: List<String>, queue: PromptQueue): PromptSubmission {
+        override suspend fun submit(sessionId: String, text: String, imageUrls: List<String>, queue: PromptQueue, attachments: List<top.tianyan.app.harness.MessageAttachment>): PromptSubmission {
             val count = submissions.value + 1
             val now = System.currentTimeMillis()
             tasks.upsert(task("task-$count", if (count == 1) AgentTaskStatus.RUNNING else AgentTaskStatus.QUEUED,
@@ -196,9 +196,9 @@ class GroupReplyTaskOwnershipTest {
             sessionRunStates.value = mapOf("session" to SessionRunState.RUNNING)
             tasks.upsert(requireNotNull(tasks.find(id)).copy(status = AgentTaskStatus.COMPLETED, completedAt = now))
         }
-        override fun send(text: String, targetSessionId: String?, imageUrls: List<String>) = Unit
-        override fun steer(text: String, targetSessionId: String?, imageUrls: List<String>) = Unit
-        override fun followUp(text: String, targetSessionId: String?, imageUrls: List<String>) = Unit
+        override fun send(text: String, targetSessionId: String?, imageUrls: List<String>, attachments: List<top.tianyan.app.harness.MessageAttachment>) = Unit
+        override fun steer(text: String, targetSessionId: String?, imageUrls: List<String>, attachments: List<top.tianyan.app.harness.MessageAttachment>) = Unit
+        override fun followUp(text: String, targetSessionId: String?, imageUrls: List<String>, attachments: List<top.tianyan.app.harness.MessageAttachment>) = Unit
         override fun cancel(targetSessionId: String?) { cancellations += targetSessionId; sessionRunStates.value = mapOf("session" to SessionRunState.IDLE) }
         override fun resolveApproval(requestId: String, approved: Boolean, rememberForSession: Boolean) = Unit
         override fun resolveQuestion(requestId: String, answersJson: String) = Unit

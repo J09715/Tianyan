@@ -159,12 +159,7 @@ class ScriptedGroupOrchestrationTest {
         override suspend fun persistedMessages(sessionId: String) = flowOf(sessionId).value
         override suspend fun deleteSession(id: String) = Unit
 
-        override suspend fun submit(
-            sessionId: String,
-            text: String,
-            imageUrls: List<String>,
-            queue: PromptQueue,
-        ): PromptSubmission {
+        override suspend fun submit(sessionId: String, text: String, imageUrls: List<String>, queue: PromptQueue, attachments: List<top.tianyan.app.harness.MessageAttachment>): PromptSubmission {
             prompts += sessionId to text
             val reply = scripts[sessionId]?.removeFirstOrNull() ?: "done"
             flowOf(sessionId).value = listOf(AssistantText("final", System.currentTimeMillis(), reply, totalMs = 1))
@@ -172,9 +167,9 @@ class ScriptedGroupOrchestrationTest {
             return PromptSubmission.Accepted(PromptSubmission.Disposition.STARTED, "native-task")
         }
 
-        override fun send(text: String, targetSessionId: String?, imageUrls: List<String>) = Unit
-        override fun steer(text: String, targetSessionId: String?, imageUrls: List<String>) = Unit
-        override fun followUp(text: String, targetSessionId: String?, imageUrls: List<String>) = Unit
+        override fun send(text: String, targetSessionId: String?, imageUrls: List<String>, attachments: List<top.tianyan.app.harness.MessageAttachment>) = Unit
+        override fun steer(text: String, targetSessionId: String?, imageUrls: List<String>, attachments: List<top.tianyan.app.harness.MessageAttachment>) = Unit
+        override fun followUp(text: String, targetSessionId: String?, imageUrls: List<String>, attachments: List<top.tianyan.app.harness.MessageAttachment>) = Unit
         override fun cancel(targetSessionId: String?) = Unit
         override fun resolveApproval(requestId: String, approved: Boolean, rememberForSession: Boolean) = Unit
         override fun resolveQuestion(requestId: String, answersJson: String) = Unit

@@ -1,5 +1,6 @@
 package top.tianyan.app.ui.chat
 
+import top.tianyan.app.harness.MessageAttachment
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import top.tianyan.app.ui.components.RuntimeAlertDialog
@@ -142,9 +143,8 @@ internal fun UserBubble(
                     }
                 }
             }
-
-            // 🌟 2. 用户文字气泡
-            if (message.text.isNotBlank()) {
+            UserAttachmentCards(message.attachments, context) // 文件附件卡片，见 AttachmentFileCard.kt
+            if (message.text.isNotBlank()) { // 🌟 2. 用户文字气泡
                 Surface(
                     color = MaterialTheme.colorScheme.secondaryContainer,
                     shape = RoundedCornerShape(24.dp, 8.dp, 24.dp, 24.dp),

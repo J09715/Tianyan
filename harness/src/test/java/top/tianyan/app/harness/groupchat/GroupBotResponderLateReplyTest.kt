@@ -226,12 +226,7 @@ class GroupBotResponderLateReplyTest {
         override suspend fun persistedMessages(sessionId: String) = messages.value
         override suspend fun deleteSession(id: String) = Unit
 
-        override suspend fun submit(
-            sessionId: String,
-            text: String,
-            imageUrls: List<String>,
-            queue: PromptQueue,
-        ): PromptSubmission {
+        override suspend fun submit(sessionId: String, text: String, imageUrls: List<String>, queue: PromptQueue, attachments: List<top.tianyan.app.harness.MessageAttachment>): PromptSubmission {
             submittedPrompt = text
             val reply = replyOnSubmit
             if (reply != null) {
@@ -255,9 +250,9 @@ class GroupBotResponderLateReplyTest {
             sessionRunStates.value = mapOf("session" to SessionRunState.COMPLETED)
         }
 
-        override fun send(text: String, targetSessionId: String?, imageUrls: List<String>) = Unit
-        override fun steer(text: String, targetSessionId: String?, imageUrls: List<String>) = Unit
-        override fun followUp(text: String, targetSessionId: String?, imageUrls: List<String>) = Unit
+        override fun send(text: String, targetSessionId: String?, imageUrls: List<String>, attachments: List<top.tianyan.app.harness.MessageAttachment>) = Unit
+        override fun steer(text: String, targetSessionId: String?, imageUrls: List<String>, attachments: List<top.tianyan.app.harness.MessageAttachment>) = Unit
+        override fun followUp(text: String, targetSessionId: String?, imageUrls: List<String>, attachments: List<top.tianyan.app.harness.MessageAttachment>) = Unit
         override fun cancel(targetSessionId: String?) {
             sessionRunStates.value = mapOf("session" to SessionRunState.IDLE)
         }

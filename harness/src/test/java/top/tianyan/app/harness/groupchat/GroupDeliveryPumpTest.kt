@@ -202,7 +202,7 @@ class GroupDeliveryPumpTest {
         override suspend fun prepareRemoteSession(sessionId: String) = messages.value
         override suspend fun persistedMessages(sessionId: String) = messages.value
         override suspend fun deleteSession(id: String) = Unit
-        override suspend fun submit(sessionId: String, text: String, imageUrls: List<String>, queue: PromptQueue): PromptSubmission {
+        override suspend fun submit(sessionId: String, text: String, imageUrls: List<String>, queue: PromptQueue, attachments: List<top.tianyan.app.harness.MessageAttachment>): PromptSubmission {
             submissions++
             sessionRunStates.value = mapOf(sessionId to SessionRunState.WAITING_APPROVAL)
             if (throwOnSubmit) error("native receipt lost after acceptance")
@@ -212,9 +212,9 @@ class GroupDeliveryPumpTest {
             messages.value = listOf(AssistantText("answer", System.currentTimeMillis(), "done after approval", totalMs = 1))
             sessionRunStates.value = mapOf("session" to SessionRunState.COMPLETED)
         }
-        override fun send(text: String, targetSessionId: String?, imageUrls: List<String>) = Unit
-        override fun steer(text: String, targetSessionId: String?, imageUrls: List<String>) = Unit
-        override fun followUp(text: String, targetSessionId: String?, imageUrls: List<String>) = Unit
+        override fun send(text: String, targetSessionId: String?, imageUrls: List<String>, attachments: List<top.tianyan.app.harness.MessageAttachment>) = Unit
+        override fun steer(text: String, targetSessionId: String?, imageUrls: List<String>, attachments: List<top.tianyan.app.harness.MessageAttachment>) = Unit
+        override fun followUp(text: String, targetSessionId: String?, imageUrls: List<String>, attachments: List<top.tianyan.app.harness.MessageAttachment>) = Unit
         override fun cancel(targetSessionId: String?) { cancellations += targetSessionId; sessionRunStates.value = mapOf("session" to SessionRunState.IDLE) }
         override fun resolveQuestion(requestId: String, answersJson: String) = Unit
     }

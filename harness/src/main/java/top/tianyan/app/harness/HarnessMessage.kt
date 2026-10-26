@@ -117,7 +117,41 @@ data class UserMessage(
     override val createdAt: Long,
     val text: String,
     val imageUrls: List<String> = emptyList(),
+    /**
+     * 本条消息附带的附件元信息，**持久化**。
+     *
+     * 为什么必须独立存下来：用户气泡要把它渲染成可点击的文件卡片，而不是把附件
+     * 塞进提示词里变成一行文字。若只在发送时拼进 text，气泡层无法区分「用户写的
+     * 正文」与「附件」，只能整段当文本渲染 —— 这正是覆盖前那版的问题。
+     *
+     * 只存渲染与复用所需的最小信息（名字/大小/是否图片/沙箱内路径/MIME），
+     * 不存 Android content:// Uri：它是进程内临时句柄，序列化后不可靠，
+     * 且 harness 层不应依赖 Android 类型。
+     *
+     * 默认空列表保证旧数据可读，历史消息渲染结果不变。
+     */
+    val attachments: List<MessageAttachment> = emptyList(),
 ) : HarnessMessage
+
+/**
+ * 消息附件的持久化元信息。与 UI 层 ChatAttachment 对应，但不含 Android 类型。
+ *
+ * 附件说明文本（给模型看的挂载路径清单）**不在这里**，而是由
+ * [HarnessApiMapper.renderUserContent] 在发给模型时展开 —— 这样存储的正文保持干净，
+ * 气泡能分离「正文」与「附件」，而模型仍拿得到沙箱绝对路径去读文件。
+ */
+@Serializable
+data class MessageAttachment(
+    val name: String,
+    val isImage: Boolean,
+    val sizeBytes: Long,
+    /** 沙箱内绝对路径（如 /attachments/xxx.zip）；模型用 base 读它就在这里。 */
+    val guestPath: String = "",
+    /** 图片的数据 URL（仅图片），供气泡内直接渲染缩略图。 */
+    val imageUrl: String? = null,
+    /** Source MIME type, retained for native ACTION_VIEW playback when available. */
+    val mimeType: String? = null,
+)
 
 @Serializable
 @SerialName("assistant")

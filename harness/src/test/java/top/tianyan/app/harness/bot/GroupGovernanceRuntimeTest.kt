@@ -111,14 +111,14 @@ class GroupGovernanceRuntimeTest {
         override suspend fun prepareRemoteSession(sessionId: String) = messages.value
         override suspend fun persistedMessages(sessionId: String) = messages.value
         override suspend fun deleteSession(id: String) = Unit
-        override suspend fun submit(sessionId: String, text: String, imageUrls: List<String>, queue: PromptQueue): PromptSubmission {
+        override suspend fun submit(sessionId: String, text: String, imageUrls: List<String>, queue: PromptQueue, attachments: List<top.tianyan.app.harness.MessageAttachment>): PromptSubmission {
             setState(sessionId, SessionRunState.RUNNING)
             return PromptSubmission.Accepted(PromptSubmission.Disposition.STARTED, "native-$sessionId")
         }
         override fun cancel(targetSessionId: String?) { targetSessionId?.let { setState(it, SessionRunState.IDLE) } }
-        override fun send(text: String, targetSessionId: String?, imageUrls: List<String>) = Unit
-        override fun steer(text: String, targetSessionId: String?, imageUrls: List<String>) = Unit
-        override fun followUp(text: String, targetSessionId: String?, imageUrls: List<String>) = Unit
+        override fun send(text: String, targetSessionId: String?, imageUrls: List<String>, attachments: List<top.tianyan.app.harness.MessageAttachment>) = Unit
+        override fun steer(text: String, targetSessionId: String?, imageUrls: List<String>, attachments: List<top.tianyan.app.harness.MessageAttachment>) = Unit
+        override fun followUp(text: String, targetSessionId: String?, imageUrls: List<String>, attachments: List<top.tianyan.app.harness.MessageAttachment>) = Unit
         override fun resolveApproval(requestId: String, approved: Boolean, rememberForSession: Boolean) = Unit
         override fun resolveQuestion(requestId: String, answersJson: String) = Unit
     }

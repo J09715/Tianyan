@@ -35,6 +35,7 @@ internal class SessionInputController(
         text: String,
         imageUrls: List<String>,
         queue: PromptQueue,
+        attachments: List<top.tianyan.app.harness.MessageAttachment> = emptyList(),
     ): PromptSubmission = checked {
         if (sessionId.isBlank()) return@checked Rejected(Rejection.INVALID_SESSION)
         val trimmed = text.trim()
@@ -53,7 +54,8 @@ internal class SessionInputController(
             val work = currentCoroutineContext()[top.tianyan.app.harness.groupchat.GroupWorkContext]
             val pending = PendingMessage(trimmed, images, taskId =
                 if (!busy || queue == PromptQueue.NEXT_RUN) UUID.randomUUID().toString() else null,
-                groupWorkId = work?.workId, groupId = work?.groupId)
+                groupWorkId = work?.workId, groupId = work?.groupId,
+                attachments = attachments)
             if (pending.taskId != null) {
                 runtime.record(sessionId, pending)
                 currentCoroutineContext().ensureActive()

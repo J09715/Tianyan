@@ -27,4 +27,5 @@
     <string name="chat_redteam_entry">Red team</string>
     <string name="chat_redteam_active">Engaged</string>
     <string name="chat_redteam_inactive">No target bound</string>
+    <string name="chat_attachment_missing">Attachment unavailable: %1$s</string>
 </resources>
