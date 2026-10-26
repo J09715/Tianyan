@@ -60,18 +60,28 @@ def check(root, base_ref=None):
         if result.returncode:
             raise ValueError("Trusted base is not an available Git commit")
         base_ref = result.stdout.strip()
-        base_policy = load_json(git_text(root, base_ref, "architecture-policy.json"))
-        if limit > base_policy["global"]["maxFileLines"]:
-            errors.append("global.maxFileLines increased relative to trusted base")
-        base_path = base_policy["global"]["baselineFile"]
-        if base_path != baseline_path:
-            raise ValueError("Trusted base uses a different baseline file")
-        base = entries(load_json(git_text(root, base_ref, base_path)))
-        for path, ceiling in baseline.items():
-            if path not in base:
-                errors.append(f"{path}: new baseline exemption is forbidden")
-            elif ceiling > base[path]:
-                errors.append(f"{path}: baseline increased {base[path]} -> {ceiling}")
+        base_policy_text = git_text(root, base_ref, "architecture-policy.json", required=False)
+        if base_policy_text is None:
+            # 目标分支还没有治理策略 —— 这是策略首次引入，不存在可比基准。
+            # 跳过与基准的棘轮比对（否则第一次引入策略的 PR 永远过不了），
+            # 但当前策略自身的校验、以及 maxFileLines 上限仍然照常执行。
+            hints.append(
+                "trusted base has no architecture-policy.json: "
+                "ratchet comparison skipped for this policy introduction"
+            )
+        else:
+            base_policy = load_json(base_policy_text)
+            if limit > base_policy["global"]["maxFileLines"]:
+                errors.append("global.maxFileLines increased relative to trusted base")
+            base_path = base_policy["global"]["baselineFile"]
+            if base_path != baseline_path:
+                raise ValueError("Trusted base uses a different baseline file")
+            base = entries(load_json(git_text(root, base_ref, base_path)))
+            for path, ceiling in baseline.items():
+                if path not in base:
+                    errors.append(f"{path}: new baseline exemption is forbidden")
+                elif ceiling > base[path]:
+                    errors.append(f"{path}: baseline increased {base[path]} -> {ceiling}")
 
     actual = {}
     for module in policy["modules"]:
