@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 84,
-    "identityHash": "126c08ec2e8e0e1a4ad16b505557e10d",
+    "identityHash": "956a00989e4a5b23906e4d6ceabe4a6b",
     "entities": [
       {
         "tableName": "tools",
@@ -275,7 +275,7 @@
       },
       {
         "tableName": "harness_sessions",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `title` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `modelId` TEXT, `modelVariant` TEXT, `workspace` TEXT NOT NULL, `projectType` TEXT NOT NULL, `approvalMode` TEXT NOT NULL, `runMode` TEXT NOT NULL DEFAULT 'build', `executionTargetJson` TEXT DEFAULT 'unbound', `redTeamMode` TEXT NOT NULL DEFAULT 'off', `redTeamTarget` TEXT, `redTeamScope` TEXT NOT NULL DEFAULT '', `redTeamPhase` TEXT NOT NULL DEFAULT 'idle', PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `title` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `modelId` TEXT, `modelVariant` TEXT, `workspace` TEXT NOT NULL, `projectType` TEXT NOT NULL, `approvalMode` TEXT NOT NULL, `runMode` TEXT NOT NULL DEFAULT 'build', `executionTargetJson` TEXT DEFAULT 'unbound', `redTeamMode` TEXT NOT NULL DEFAULT 'off', `redTeamTarget` TEXT DEFAULT NULL, `redTeamScope` TEXT NOT NULL DEFAULT '', `redTeamPhase` TEXT NOT NULL DEFAULT 'idle', PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -352,7 +352,8 @@
           {
             "fieldPath": "redTeamTarget",
             "columnName": "redTeamTarget",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "defaultValue": "NULL"
           },
           {
             "fieldPath": "redTeamScope",
@@ -5375,7 +5376,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '126c08ec2e8e0e1a4ad16b505557e10d')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '956a00989e4a5b23906e4d6ceabe4a6b')"
     ]
   }
 }

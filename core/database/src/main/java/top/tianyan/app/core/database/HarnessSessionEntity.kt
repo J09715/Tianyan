@@ -42,7 +42,7 @@ data class HarnessSessionEntity(
      */
     @ColumnInfo(defaultValue = "off") val redTeamMode: String = RedTeamMode.OFF.id,
     /** 用户确认过的目标单元、主机、URL 或 CIDR，仅对本会话生效。 */
-    val redTeamTarget: String? = null,
+    @ColumnInfo(defaultValue = "NULL") val redTeamTarget: String? = null,
     /** 换行分隔的授权范围条目；为空表示仍需用户确认范围。 */
     @ColumnInfo(defaultValue = "") val redTeamScope: String = "",
     @ColumnInfo(defaultValue = "idle") val redTeamPhase: String = RedTeamPhase.IDLE.id,
