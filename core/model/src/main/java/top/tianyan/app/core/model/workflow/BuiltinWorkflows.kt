@@ -14,7 +14,7 @@ object BuiltinWorkflows {
             atomicCommit,
             hostAutomationLab,
             hostBroadcastDemo,
-            hostAgentGuiPilot,
+            hostAgentGuiPilot, VirtualScreenWorkflowActions.template(), MorningReportSentinel.definition,
         ).map(WorkflowLayout::arrange)
 
     fun find(id: String): WorkflowDefinition? = all.firstOrNull { it.id == id }
@@ -162,7 +162,7 @@ object BuiltinWorkflows {
         nodes = listOf(
             WorkflowNode("start", WorkflowNodeType.TRIGGER, "开始", canvasX = 40f, canvasY = 80f),
             WorkflowNode("git", WorkflowNodeType.BASH_COMMAND, "检查 Git 状态", config = mapOf("command" to "git status --short"), canvasX = 260f, canvasY = 80f),
-            WorkflowNode("build", WorkflowNodeType.TAIXU_BUILD, "构建 Release APK", config = mapOf("projectType" to "android", "task" to "assembleRelease"), timeoutSeconds = 3600, canvasX = 500f, canvasY = 80f),
+            WorkflowNode("build", WorkflowNodeType.TIANYAN_BUILD, "构建 Release APK", config = mapOf("projectType" to "android", "task" to "assembleRelease"), timeoutSeconds = 3600, canvasX = 500f, canvasY = 80f),
             WorkflowNode("approve", WorkflowNodeType.HUMAN_APPROVAL, "确认安装", description = "构建完成后确认是否安装到宿主设备。", canvasX = 740f, canvasY = 80f),
             WorkflowNode("install", WorkflowNodeType.HOST_ACTION, "安装 APK", config = mapOf("action" to "install-apk", "artifactFrom" to "build"), timeoutSeconds = 600, canvasX = 980f, canvasY = 80f),
             WorkflowNode("done", WorkflowNodeType.TERMINAL_OUTPUT, "完成", canvasX = 1220f, canvasY = 80f),
@@ -173,14 +173,14 @@ object BuiltinWorkflows {
     val buildDoctor = WorkflowDefinition(
         id = "mobile_build_doctor",
         name = "移动构建环境诊断",
-        description = "运行 taixu-build doctor 与 analyze，输出可操作的兼容性报告。",
+        description = "运行 tianyan-build doctor 与 analyze，输出可操作的兼容性报告。",
         category = "诊断",
         isBuiltin = true,
         trigger = WorkflowTrigger.Proactive("BUILD_FAILED", suggestionLabel = "诊断构建失败"),
         nodes = listOf(
             WorkflowNode("start", WorkflowNodeType.TRIGGER, "开始"),
-            WorkflowNode("doctor", WorkflowNodeType.TAIXU_BUILD, "环境诊断", config = mapOf("mode" to "doctor"), timeoutSeconds = 900),
-            WorkflowNode("analyze", WorkflowNodeType.TAIXU_BUILD, "分析工程", config = mapOf("mode" to "analyze"), timeoutSeconds = 900),
+            WorkflowNode("doctor", WorkflowNodeType.TIANYAN_BUILD, "环境诊断", config = mapOf("mode" to "doctor"), timeoutSeconds = 900),
+            WorkflowNode("analyze", WorkflowNodeType.TIANYAN_BUILD, "分析工程", config = mapOf("mode" to "analyze"), timeoutSeconds = 900),
             WorkflowNode("done", WorkflowNodeType.TERMINAL_OUTPUT, "查看诊断结果"),
         ),
         edges = chain("start", "doctor", "analyze", "done"),
@@ -252,7 +252,7 @@ object BuiltinWorkflows {
             WorkflowNode("repair", WorkflowNodeType.SUBAGENT_DELEGATE, "实施最小修复", config = mapOf("writePaths" to ".", "prompt" to "按以下诊断实施最小构建修复，保留用户已有修改；禁止删除项目、重置 Git、提交或推送。不能确定时停止并说明。诊断：\n${'$'}{diagnose.output}\n原错误：\n${'$'}{BUILD_ERROR}"), timeoutSeconds = 1800),
             WorkflowNode("diff", WorkflowNodeType.BASH_COMMAND, "检查修复 Diff", config = mapOf("command" to "git status --short && git diff && git diff --cached")),
             WorkflowNode("rebuildApproval", WorkflowNodeType.HUMAN_APPROVAL, "确认重新构建", description = "审阅修复后启动构建验证。拒绝不会回滚已完成的修改。"),
-            WorkflowNode("build", WorkflowNodeType.TAIXU_BUILD, "验证构建", config = mapOf("task" to "assembleDebug"), timeoutSeconds = 3600),
+            WorkflowNode("build", WorkflowNodeType.TIANYAN_BUILD, "验证构建", config = mapOf("task" to "assembleDebug"), timeoutSeconds = 3600),
             WorkflowNode("done", WorkflowNodeType.TERMINAL_OUTPUT, "修复验证结果"),
         ),
         edges = chain("start", "diagnose", "approve", "repair", "diff", "rebuildApproval", "build", "done"),
@@ -353,7 +353,7 @@ object BuiltinWorkflows {
         category = "宿主",
         isBuiltin = true,
         trigger = WorkflowTrigger.Manual("/wf host_broadcast_and_settings"),
-        defaultVariables = mapOf("DEMO_FLAG" to "taixu-workflow"),
+        defaultVariables = mapOf("DEMO_FLAG" to "tianyan-workflow"),
         nodes = listOf(
             WorkflowNode("start", WorkflowNodeType.TRIGGER, "开始"),
             WorkflowNode(
@@ -438,12 +438,12 @@ object BuiltinWorkflows {
     val hostAgentGuiPilot = WorkflowDefinition(
         id = "host_agent_gui_pilot",
         name = "智能体 GUI 试飞",
-        description = "Shizuku/Root 下本地循环「感知屏幕 → 模型决策一步 → 点击/输入」完成 GUI 目标。默认：打开 QQ → 天衍群(905971993) → 发送试飞文案。请盯屏审批后再跑。",
+        description = "Shizuku/Root 下本地循环「感知屏幕 → 模型决策一步 → 点击/输入」完成 GUI 目标。默认：打开 QQ → 天衍群 → 发送试飞文案。请盯屏审批后再跑。",
         category = "宿主",
         isBuiltin = true,
         trigger = WorkflowTrigger.Manual("/wf host_agent_gui_pilot"),
         defaultVariables = mapOf(
-            "GUI_GOAL" to "打开 QQ，优先在搜索框输入群号 905971993 进入「天衍」群；搜不到再找群名含「天衍」的群。在输入框发送一句：「天衍牛逼（来自工作流）」。不要发红包、不要转账、不要改群设置。若找不到群，停止并说明当前看到的会话列表。",
+            "GUI_GOAL" to "打开 QQ，进入「天衍」相关 QQ 群聊，在输入框发送一句：「天衍牛逼（来自工作流）」。不要发红包、不要转账、不要改群设置。若找不到群名含「天衍」的群，停止并说明当前看到的会话列表。",
             "TARGET_PACKAGE" to "com.tencent.mobileqq",
         ),
         nodes = listOf(
@@ -480,7 +480,7 @@ object BuiltinWorkflows {
                 WorkflowNodeType.HUMAN_APPROVAL,
                 "确认让智能体操控屏幕",
                 description = "智能体将使用 host(screen_observe/click/swipe/input_text/key/app_launch) 自动操作手机界面以完成 GUI_GOAL。\n\n" +
-                    "默认目标会打开 QQ、进入天衍群(905971993)并发送「天衍牛逼（来自工作流）」。请本人盯屏；若界面跳到支付/红包，应拒绝或立刻打断。\n\n" +
+                    "默认目标会打开 QQ、进入天衍群并发送「天衍牛逼（来自工作流）」。请本人盯屏；若界面跳到支付/红包，应拒绝或立刻打断。\n\n" +
                     "拒绝则结束，不会启动操控。",
                 failurePolicy = FailurePolicy.CONTINUE,
             ),

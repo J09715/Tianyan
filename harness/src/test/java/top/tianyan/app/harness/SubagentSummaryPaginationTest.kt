@@ -9,6 +9,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import top.tianyan.app.core.model.SubagentTaskSpec
+import top.tianyan.app.core.common.result.AppResult
 
 internal class SubagentSummaryPaginationTest {
 
@@ -52,6 +53,30 @@ internal class SubagentSummaryPaginationTest {
         val spillFile = File(root, ".tianyan-subagent/subagent-coder-abc123.md")
         assertTrue(spillFile.isFile)
         assertEquals(longSummary, spillFile.readText())
+    }
+
+    /**
+     * 回归：落盘基准必须与 ToolExecutor 的 read 一致。
+     * 汇总里给父智能体的是工作区相对路径，两边基准不同就会"提示有完整报告、实际读不到"。
+     */
+    @Test
+    fun `spill lands where the workspace scoped read tool looks for it`() = runBlocking {
+        val root = temporaryFolder.newFolder("ws")
+        val workspace = "/workspace/proj"
+        val longSummary = buildString { repeat(20_000) { append('x') } }
+        val big = outcome("大任务", longSummary, subSessionId = "subagent:coder:abc123")
+        val scoped = WorkspaceFileAccess(root).withBase(workspace)
+
+        val rendered = paginateSubagentSummary(listOf(big), workspace, scoped)
+
+        val relativePath = ".tianyan-subagent/subagent-coder-abc123.md"
+        assertTrue(rendered.contains(relativePath))
+        // read 用同一个 withBase 基准解析同一相对路径，必须命中刚写出的文件。
+        val readBack = scoped.read(relativePath, null, null)
+        assertTrue(
+            "read 应能取回落盘内容，实际=$readBack",
+            readBack is AppResult.Success,
+        )
     }
 
     @Test

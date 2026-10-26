@@ -1,4 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="iteration_error_bootstrap">Failed to prepare the iteration workspace. Check your network and storage, then try again.</string>
+    <string name="iteration_build_section_title">Cloud-build TianyanDev</string>
+    <string name="iteration_build_section_subtitle">Trigger GitHub Actions to compile a standalone APK</string>
+    <string name="iteration_build_branch_label">Feature branch</string>
+    <string name="iteration_build_idle">No cloud build yet. The artifact stays side by side with the release app (top.tianyan.app.dev).</string>
+    <string name="iteration_build_dispatching">Triggering tianyandev-build.yml (branch %1$s)…</string>
+    <string name="iteration_build_running">Build running (run #%1$s · %2$s). The phone can sleep while it finishes.</string>
+    <string name="iteration_build_downloading">Build succeeded. Downloading TianyanDev-arm64-debug.apk…</string>
+    <string name="iteration_build_success">Build finished: %1$s\nSHA-256 verified: %2$s…</string>
+    <string name="iteration_build_failed">Build failed: %1$s</string>
+    <string name="iteration_build_in_progress">Build pipeline running…</string>
+    <string name="iteration_build_trigger">Trigger cloud build</string>
 </resources>

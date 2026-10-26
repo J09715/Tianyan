@@ -1,5 +1,7 @@
 package top.tianyan.app.ui.workspace
-
+import top.tianyan.app.ui.components.previewOrNull
+import top.tianyan.app.ui.components.previewStateOf
+import org.koin.compose.viewmodel.koinViewModel
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -27,6 +29,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.input.OutputTransformation
 import androidx.compose.foundation.text.input.TextFieldLineLimits
@@ -44,6 +47,7 @@ import androidx.compose.material3.Text
 import top.tianyan.app.ui.components.RuntimeTextButton as TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -64,26 +68,22 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.sp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withContext
 import top.tianyan.app.ui.components.NoticeBanner
-import top.tianyan.app.ui.theme.Spacing
-import top.tianyan.app.ui.theme.Radius
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeTopBar
 import top.tianyan.app.ui.components.RuntimeAlertDialog
-
 private val EditorBackground = Color(0xFF0F1117)
 private val EditorGutterBackground = Color(0xFF181A22)
 private val EditorText = Color(0xFFE2E2E9)
@@ -99,21 +99,35 @@ fun CodeEditorScreen(
     projectName: String,
     relativePath: String,
     onBack: () -> Unit,
-    viewModel: WorkspaceViewModel = hiltViewModel(),
+    viewModel: WorkspaceViewModel? = previewOrNull { koinViewModel() },
 ) {
-    val fileContent by viewModel.fileContent.collectAsStateWithLifecycle()
-    val isDirty by viewModel.isDirty.collectAsStateWithLifecycle()
-    val isSaving by viewModel.isSaving.collectAsStateWithLifecycle()
-    val loading by viewModel.loadingFiles.collectAsStateWithLifecycle()
-    val message by viewModel.message.collectAsStateWithLifecycle()
-    val messageIsError by viewModel.messageIsError.collectAsStateWithLifecycle()
+    val contentRevision by viewModel?.contentRevision?.collectAsStateWithLifecycle() ?: previewStateOf(0L)
+    val isDirty by viewModel?.isDirty?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val isSaving by viewModel?.isSaving?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val loading by viewModel?.loadingFiles?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val message by viewModel?.message?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val messageIsError by viewModel?.messageIsError?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val saveConflict by viewModel?.saveConflict?.collectAsStateWithLifecycle() ?: previewStateOf(false)
     val context = LocalContext.current
 
-    var showUnsavedDialog by remember { mutableStateOf(false) }
-    var showDiscardDialog by remember { mutableStateOf(false) }
+    var showUnsavedDialog by rememberSaveable(projectName, relativePath) { mutableStateOf(false) }
+    var showDiscardDialog by rememberSaveable(projectName, relativePath) { mutableStateOf(false) }
     var wordWrap by rememberSaveable { mutableStateOf(false) }
     var editorFontSizeSp by rememberSaveable { mutableStateOf(13f) }
-    val editorState = remember { TextFieldState() }
+    val editorState = remember(projectName, relativePath) { TextFieldState(viewModel?.editorText(projectName, relativePath).orEmpty()) }
+    val lineCount by remember(editorState) {
+        derivedStateOf {
+            val text = editorState.text
+            var count = 1
+            for (i in 0 until text.length) {
+                if (text[i] == '\n') count++
+            }
+            count
+        }
+    }
+    val charCount by remember(editorState) {
+        derivedStateOf { editorState.text.length }
+    }
 
     val fileName = relativePath.substringAfterLast('/')
     val extension = relativePath.substringAfterLast('.', "")
@@ -122,23 +136,36 @@ fun CodeEditorScreen(
     }
 
     LaunchedEffect(projectName, relativePath) {
-        viewModel.openFile(projectName, relativePath)
+        viewModel?.openFile(projectName, relativePath)
     }
 
-    LaunchedEffect(fileContent) {
-        if (editorState.text.toString() != fileContent) {
-            editorState.setTextAndPlaceCursorAtEnd(fileContent)
+    // 仅在整文加载或重置时同步文本，避免打字期间因异步流转导致光标重置和软键盘闪烁
+    LaunchedEffect(contentRevision) {
+        if (contentRevision > 0L) {
+            val target = viewModel?.editorText(projectName, relativePath).orEmpty()
+            if (editorState.text.toString() != target) {
+                editorState.setTextAndPlaceCursorAtEnd(target)
+            }
         }
     }
 
     LaunchedEffect(editorState) {
         snapshotFlow { editorState.text.toString() }.collect { editedText ->
-            if (editedText != fileContent) viewModel.onContentChanged(editedText)
+            viewModel?.onContentChanged(editedText)
         }
     }
 
+    // 语法高亮防抖：首次载入立即高亮，打字输入期间防抖 500ms，输入停顿/完毕后再统一着色
+    var isInitialHighlight by remember(projectName, relativePath) { mutableStateOf(true) }
     LaunchedEffect(editorState, extension) {
         snapshotFlow { editorState.text.toString() }.collectLatest { text ->
+            if (isInitialHighlight) {
+                if (text.isNotEmpty()) {
+                    isInitialHighlight = false
+                }
+            } else {
+                delay(500)
+            }
             highlightedRanges = withContext(Dispatchers.Default) {
                 SyntaxHighlighter.highlight(text, extension).spanStyles
             }
@@ -149,7 +176,7 @@ fun CodeEditorScreen(
         if (isDirty) {
             showUnsavedDialog = true
         } else {
-            viewModel.closeFile()
+            viewModel?.closeFile()
             onBack()
         }
     }
@@ -158,7 +185,7 @@ fun CodeEditorScreen(
 
     val copyAll = {
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboard.setPrimaryClip(ClipData.newPlainText(fileName, fileContent))
+        clipboard.setPrimaryClip(ClipData.newPlainText(fileName, editorState.text.toString()))
         Toast.makeText(context, context.getString(R.string.workspace_code_copied), Toast.LENGTH_SHORT).show()
     }
 
@@ -182,7 +209,7 @@ fun CodeEditorScreen(
                         }
                     }
                     IconButton(
-                        onClick = { viewModel.saveFile() },
+                        onClick = { viewModel?.saveFile(content = editorState.text.toString()) },
                         enabled = isDirty && !isSaving,
                         contentDescription = stringResource(R.string.workspace_cd_save),
                     ) {
@@ -201,7 +228,7 @@ fun CodeEditorScreen(
         ) {
             // 提示信息
             message?.let { notice ->
-                Box(Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs)) {
+                Box(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
                     NoticeBanner(text = notice, isError = messageIsError)
                 }
             }
@@ -212,16 +239,17 @@ fun CodeEditorScreen(
                 }
             } else {
                 // 代码编辑核心区域
-                val lines = remember(fileContent) { fileContent.split('\n') }
-                val lineCount = lines.size
                 val scrollState = rememberScrollState()
                 val horizontalScrollState = rememberScrollState()
 
-                // 高亮语法生成
-                val syntaxTransformation = remember(extension, highlightedRanges) {
+                // 高亮语法生成：key 仅依赖 extension，避免每次高亮区间更新都生成新的 OutputTransformation 实例
+                // 导致 BasicTextField 重置 InputConnection 和软键盘闪烁
+                val syntaxTransformation = remember(extension) {
                     OutputTransformation {
-                        val currentLength = toString().length
-                        highlightedRanges.forEach { range ->
+                        val currentLength = length
+                        val ranges = highlightedRanges
+                        for (i in ranges.indices) {
+                            val range = ranges[i]
                             if (range.start < currentLength && range.end <= currentLength) {
                                 addStyle(range.item, range.start, range.end)
                             }
@@ -265,18 +293,23 @@ fun CodeEditorScreen(
                         },
                 ) {
                     // 行号列
-                    val gutterWidth = (lineCount.toString().length * 10 + 24).dp.coerceAtLeast(42.dp)
+                    val gutterWidth = remember(lineCount) {
+                        (lineCount.toString().length * 10 + 24).dp.coerceAtLeast(42.dp)
+                    }
+                    val lineNumbersText = remember(lineCount) {
+                        (1..lineCount).joinToString("\n")
+                    }
                     val editorLineHeight = (editorFontSizeSp * 1.54f).sp
                     val editorPlatformStyle = PlatformTextStyle(includeFontPadding = false)
                     Column(
                         modifier = Modifier
                             .width(gutterWidth)
                             .background(EditorGutterBackground)
-                            .padding(vertical = Spacing.md, horizontal = Spacing.sm),
+                            .padding(vertical = 12.dp, horizontal = 6.dp),
                         horizontalAlignment = Alignment.End,
                     ) {
                         Text(
-                            text = (1..lineCount).joinToString("\n"),
+                            text = lineNumbersText,
                             style = TextStyle(
                                 color = EditorGutterText,
                                 fontSize = editorFontSizeSp.sp,
@@ -304,7 +337,7 @@ fun CodeEditorScreen(
                                 if (!wordWrap) Modifier.horizontalScroll(horizontalScrollState)
                                 else Modifier,
                             )
-                            .padding(horizontal = Spacing.md, vertical = Spacing.md),
+                            .padding(horizontal = 12.dp, vertical = 12.dp),
                     ) {
                         BasicTextField(
                             state = editorState,
@@ -340,8 +373,8 @@ fun CodeEditorScreen(
             // 底部状态栏
             EditorStatusBar(
                 extension = extension,
-                lineCount = remember(fileContent) { fileContent.count { it == '\n' } + 1 },
-                charCount = fileContent.length,
+                lineCount = lineCount,
+                charCount = charCount,
                 isDirty = isDirty,
                 wordWrap = wordWrap,
                 onToggleWrap = { wordWrap = !wordWrap },
@@ -352,51 +385,54 @@ fun CodeEditorScreen(
     // 未保存退出提示
     if (showUnsavedDialog) {
         RuntimeAlertDialog(
-            onDismissRequest = { showUnsavedDialog = false },
+            onDismissRequest = { if (!isSaving) showUnsavedDialog = false },
             title = { Text(stringResource(R.string.workspace_unsaved_title)) },
             text = { Text(stringResource(R.string.workspace_unsaved_message)) },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        viewModel.saveFile(onSuccess = {
-                            showUnsavedDialog = false
-                            viewModel.closeFile()
-                            onBack()
-                        })
+                        viewModel?.saveFile(
+                            content = editorState.text.toString(),
+                            onSuccess = {
+                                showUnsavedDialog = false
+                                viewModel?.closeFile()
+                                onBack()
+                            },
+                        )
                     },
+                    enabled = !isSaving && !loading,
                 ) { Text(stringResource(R.string.workspace_save_and_exit)) }
             },
             dismissButton = {
                 TextButton(
                     onClick = {
                         showUnsavedDialog = false
-                        viewModel.closeFile()
+                        viewModel?.closeFile()
                         onBack()
                     },
+                    enabled = !isSaving,
                 ) { Text(stringResource(R.string.workspace_discard_changes), color = MaterialTheme.colorScheme.error) }
             },
         )
     }
 
-    // 顶栏「放弃修改」二次确认：撤销全部未保存编辑属于破坏性操作
     if (showDiscardDialog) {
-        RuntimeAlertDialog(
-            onDismissRequest = { showDiscardDialog = false },
-            title = { Text(stringResource(R.string.workspace_discard_edits_title)) },
-            text = { Text(stringResource(R.string.workspace_discard_edits_message)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showDiscardDialog = false
-                        viewModel.resetContent()
-                    },
-                ) { Text(stringResource(R.string.workspace_discard_edits_confirm), color = MaterialTheme.colorScheme.error) }
+        DiscardEditsDialog(
+            onConfirm = {
+                showDiscardDialog = false
+                viewModel?.resetContent()
             },
-            dismissButton = {
-                TextButton(onClick = { showDiscardDialog = false }) {
-                    Text(stringResource(R.string.workspace_keep_editing))
-                }
-            },
+            onDismiss = { showDiscardDialog = false },
+        )
+    }
+
+    if (saveConflict) {
+        SaveConflictDialog(
+            isSaving = isSaving,
+            isLoading = loading,
+            onOverwrite = { viewModel?.overwriteSaveConflict() },
+            onReload = { viewModel?.reloadSaveConflict() },
+            onDismiss = { viewModel?.dismissSaveConflict() },
         )
     }
 }
@@ -417,9 +453,9 @@ private fun EditorStatusBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                .padding(horizontal = 14.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // 语言类型
             Text(
@@ -447,7 +483,7 @@ private fun EditorStatusBar(
 
             // 自动换行切换
             Surface(
-                shape = Radius.xsShape,
+                shape = RoundedCornerShape(4.dp),
                 color = if (wordWrap) EditorAccent.copy(alpha = 0.2f) else Color.Transparent,
                 modifier = Modifier
                     .minimumInteractiveComponentSize()
@@ -457,7 +493,7 @@ private fun EditorStatusBar(
                     text = stringResource(if (wordWrap) R.string.workspace_word_wrap_on else R.string.workspace_word_wrap_off),
                     style = MaterialTheme.typography.labelSmall,
                     color = if (wordWrap) EditorAccent else EditorGutterText,
-                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                 )
             }
 

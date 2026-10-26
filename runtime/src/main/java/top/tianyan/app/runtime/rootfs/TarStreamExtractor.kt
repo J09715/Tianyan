@@ -4,10 +4,9 @@ import android.system.Os
 import top.tianyan.app.core.common.logging.AppLogger
 import java.io.File
 import java.io.InputStream
+import java.io.OutputStream
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -39,13 +38,11 @@ internal class AndroidFileSystemOps : FileSystemOps {
     }
 }
 
-@Singleton
 class TarStreamExtractor internal constructor(
     private val logWarning: (String, Throwable?) -> Unit,
     private val fsOps: FileSystemOps,
 ) : RootfsExtractor {
 
-    @Inject
     constructor(logger: AppLogger) : this({ msg, err -> logger.w(msg, err) }, AndroidFileSystemOps())
 
     override suspend fun extract(
@@ -315,7 +312,7 @@ class TarStreamExtractor internal constructor(
         return result
     }
 
-    private fun copyData(input: InputStream, size: Long, output: java.io.OutputStream) {
+    private fun copyData(input: InputStream, size: Long, output: OutputStream) {
         var remaining = size
         val buffer = ByteArray(BUFFER_SIZE)
         while (remaining > 0) {

@@ -1,4 +1,4 @@
-package top.tianyan.app.runtime.tools
+﻿package top.tianyan.app.runtime.tools
 
 import top.tianyan.app.core.common.files.SafeFileTree
 import top.tianyan.app.core.network.ChecksumVerifier
@@ -8,16 +8,13 @@ import top.tianyan.app.runtime.LinuxRuntime
 import top.tianyan.app.runtime.RuntimePathManager
 import top.tianyan.app.runtime.rootfs.TarStreamExtractor
 import java.io.File
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.withContext
 import org.tukaani.xz.XZInputStream
 
 /** Installs pinned official ARM64 runtime archives outside the replaceable rootfs. */
-@Singleton
-class RuntimeBinaryInstaller @Inject constructor(
+class RuntimeBinaryInstaller(
     private val pathManager: RuntimePathManager,
     private val linuxRuntime: LinuxRuntime,
     private val fileDownloader: FileDownloader,
@@ -42,7 +39,6 @@ class RuntimeBinaryInstaller @Inject constructor(
                         destination = archive,
                         partialFile = File("${archive.absolutePath}.part"),
                         sha256 = NODE_SHA256,
-                        timeoutMs = 10 * 60 * 1000L, // 10 分钟超时，Node.js ~30MB
                     ),
                 ).collect { }
             }

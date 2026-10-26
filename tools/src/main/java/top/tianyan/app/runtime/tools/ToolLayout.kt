@@ -1,4 +1,4 @@
-package top.tianyan.app.runtime.tools
+﻿package top.tianyan.app.runtime.tools
 
 /** Stable Linux-side layout for installed tool code and command shims. */
 object ToolLayout {

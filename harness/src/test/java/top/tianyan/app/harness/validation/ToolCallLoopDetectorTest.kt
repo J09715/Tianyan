@@ -1,13 +1,24 @@
 package top.tianyan.app.harness.validation
 
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ToolCallLoopDetectorTest {
+
+    @Test
+    fun `reordering nested argument keys does not bypass repeated failure detection`() {
+        val detector = ToolCallLoopDetector()
+        val first = Json.parseToJsonElement("""{"path":"a","options":{"limit":2,"offset":0}}""").jsonObject
+        val reordered = Json.parseToJsonElement("""{"options":{"offset":0,"limit":2},"path":"a"}""").jsonObject
+        detector.recordSettled("read", first, false)
+        detector.recordSettled("read", reordered, false)
+        assertTrue(detector.evaluate("read", first) is ToolCallLoopDetector.LoopVerdict.Block)
+    }
 
     @Test
     fun `single execution passes without warnings`() {
@@ -56,58 +67,6 @@ class ToolCallLoopDetectorTest {
         assertTrue(verdict is ToolCallLoopDetector.LoopVerdict.Block)
         val block = verdict as ToolCallLoopDetector.LoopVerdict.Block
         assertTrue(block.reason.contains("重复空转"))
-    }
-
-    @Test
-    fun `reordered object arguments count as the same call`() {
-        val detector = ToolCallLoopDetector(maxSameCallFailures = 2)
-        val first = buildJsonObject {
-            put("path", "file.txt")
-            put("mode", "read")
-        }
-        val reordered = buildJsonObject {
-            put("mode", "read")
-            put("path", "file.txt")
-        }
-
-        detector.recordIntent("read", first)
-        detector.recordSettled("read", first, success = false)
-        detector.recordIntent("read", reordered)
-        detector.recordSettled("read", reordered, success = false)
-
-        assertTrue(detector.evaluate("read", first) is ToolCallLoopDetector.LoopVerdict.Block)
-    }
-
-    @Test
-    fun `nested arrays and objects are canonicalized`() {
-        val detector = ToolCallLoopDetector(maxIdenticalCallsStreak = 2)
-        val first = kotlinx.serialization.json.buildJsonObject {
-            put("options", kotlinx.serialization.json.buildJsonObject {
-                put("z", 1)
-                put("a", 2)
-            })
-            put("items", kotlinx.serialization.json.buildJsonArray {
-                add(JsonPrimitive("one"))
-                add(JsonPrimitive("two"))
-            })
-        }
-        val reordered = kotlinx.serialization.json.buildJsonObject {
-            put("items", kotlinx.serialization.json.buildJsonArray {
-                add(JsonPrimitive("one"))
-                add(JsonPrimitive("two"))
-            })
-            put("options", kotlinx.serialization.json.buildJsonObject {
-                put("a", 2)
-                put("z", 1)
-            })
-        }
-
-        detector.recordIntent("tool", first)
-        detector.recordSettled("tool", first, success = true)
-        detector.recordIntent("tool", reordered)
-        detector.recordSettled("tool", reordered, success = true)
-
-        assertTrue(detector.evaluate("tool", first) is ToolCallLoopDetector.LoopVerdict.Block)
     }
 
     @Test

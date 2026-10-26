@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="onboarding_title">Tianyan · Getting started</string>
-    <string name="onboarding_description">Preparing a rootless Linux PRoot sandbox and code workspace.</string>
+    <string name="onboarding_title">Make Linux yours</string>
+    <string name="onboarding_description">Choose a distribution. Tianyan will download and prepare your environment.</string>
     <string name="onboarding_distribution">Linux distribution</string>
     <string name="onboarding_mirror">Download mirror</string>
     <string name="onboarding_mirror_auto">Automatic mirror selection (Recommended)</string>
@@ -14,8 +14,8 @@
     <string name="onboarding_recheck">Already installed? Recheck without downloading again</string>
     <string name="onboarding_import">Import a Linux distribution from a file</string>
     <string name="onboarding_import_hint">Supports ARM64 RootFS archives: .tar, .tar.gz, .tgz, .tar.xz, and .tar.zst. Bash, /bin/sh, and os-release are required.</string>
-    <string name="onboarding_connect_model">Connect an AI model</string>
-    <string name="onboarding_connect_model_description">Configure your preferred model provider and API key to start AI pair programming.</string>
+    <string name="onboarding_connect_model">Connect your AI</string>
+    <string name="onboarding_connect_model_description">Connect a model provider to start collaborating with AI. You can also set this up later in Settings.</string>
     <string name="onboarding_base_url">Base URL</string>
     <string name="onboarding_api_key">API key (optional)</string>
     <string name="onboarding_model_selection">Model / recommended preset</string>
@@ -24,12 +24,4 @@
     <string name="onboarding_later">Configure later</string>
     <string name="onboarding_enter">Enter Tianyan</string>
     <string name="onboarding_provider_preset">Provider preset</string>
-    <string name="onboarding_suite_title">Choose dev suites</string>
-    <string name="onboarding_suite_description">Install what you need now, add or remove them later in Tool Center. Core CLI tools are always provisioned.</string>
-    <string name="onboarding_suite_selected">%1$d / %2$d selected</string>
-    <string name="onboarding_suite_components">%1$d components</string>
-    <string name="onboarding_suite_installing">Installing selected suites\u2026</string>
-    <string name="onboarding_suite_install">Install and continue</string>
-    <string name="onboarding_suite_skip">Skip for now</string>
-    <string name="onboarding_suite_error">Suite install did not finish: %1$s. Retry later in Tool Center.</string>
 </resources>

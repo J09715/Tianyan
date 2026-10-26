@@ -14,7 +14,6 @@ Logcat Grabber — 应用日志抓取工具（内置无线 ADB 优先，自动 m
   -p, --priority LEVEL  按优先级过滤 (V/D/I/W/E/F)
   -k, --keyword KW      按关键词过滤
   -n, --lines N         行数 (默认 200)
-  -P, --port PORT       指定无线调试端口 (默认自动发现)
   --clear               先清空 logcat 缓冲区
   -o, --output FILE     输出到文件
   -h, --help            显示帮助
@@ -26,7 +25,6 @@ TAG=""
 PRIORITY="V"
 KEYWORD=""
 LINES=200
-PORT=""
 CLEAR=false
 OUTPUT=""
 
@@ -37,7 +35,6 @@ while [ $# -gt 0 ]; do
         -p|--priority) PRIORITY="$2"; shift 2 ;;
         -k|--keyword) KEYWORD="$2"; shift 2 ;;
         -n|--lines) LINES="$2"; shift 2 ;;
-        -P|--port) PORT="$2"; shift 2 ;;
         --clear) CLEAR=true; shift ;;
         -o|--output) OUTPUT="$2"; shift 2 ;;
         *)
@@ -49,25 +46,23 @@ while [ $# -gt 0 ]; do
 done
 
 BRIDGE_URL="http://127.0.0.1:7980"
-KEY_FILE="/opt/tianyan/.bridge-key"
-AUTH=""
-if [ -f "$KEY_FILE" ]; then
-    AUTH="Authorization: Bearer $(cat "$KEY_FILE" 2>/dev/null | tr -d '[:space:]')"
+# 桥接凭据由宿主签发并经 PRoot 命令环境注入；沙箱内不再有共享密钥文件。
+if [ -z "${TIANYAN_BRIDGE_TOKEN:-}" ]; then
+    echo "错误: 缺少宿主凭据 TIANYAN_BRIDGE_TOKEN，请重启终端会话以刷新凭据" >&2
+    exit 1
 fi
+AUTH="Authorization: Bearer ${TIANYAN_BRIDGE_TOKEN}"
 
 if [ "$CLEAR" = "true" ]; then
-    curl -s -X POST "$BRIDGE_URL/api/logcat" -H 'Content-Type: application/json' ${AUTH:+-H "$AUTH"} -d '{"clear":true}' >/dev/null 2>&1 || true
+    curl -s -X POST "$BRIDGE_URL/api/logcat" -H 'Content-Type: application/json' -H "$AUTH" -d '{"clear":true}' >/dev/null 2>&1 || true
 fi
 
-if [ -n "$PORT" ]; then
-    BODY=$(printf '{"package":"%s","tag":"%s","priority":"%s","keyword":"%s","lines":%s,"port":%s}' "$PACKAGE" "$TAG" "$PRIORITY" "$KEYWORD" "$LINES" "$PORT")
-else
-    BODY=$(printf '{"package":"%s","tag":"%s","priority":"%s","keyword":"%s","lines":%s}' "$PACKAGE" "$TAG" "$PRIORITY" "$KEYWORD" "$LINES")
-fi
+# 无线调试端口由宿主内置 ADB 管理器持有，不由沙箱指定。
+BODY=$(printf '{"package":"%s","tag":"%s","priority":"%s","keyword":"%s","lines":%s}' "$PACKAGE" "$TAG" "$PRIORITY" "$KEYWORD" "$LINES")
 
 if [ -n "$OUTPUT" ]; then
     mkdir -p "$(dirname "$OUTPUT")" 2>/dev/null || true
-    RESPONSE=$(curl -s -X POST "$BRIDGE_URL/api/logcat" -H 'Content-Type: application/json' ${AUTH:+-H "$AUTH"} -d "$BODY")
+    RESPONSE=$(curl -s -X POST "$BRIDGE_URL/api/logcat" -H 'Content-Type: application/json' -H "$AUTH" -d "$BODY")
     if command -v jq >/dev/null 2>&1; then
         echo "$RESPONSE" | jq -r '.output // .error // empty' > "$OUTPUT"
     else
@@ -75,7 +70,7 @@ if [ -n "$OUTPUT" ]; then
     fi
     echo "日志已保存到 $OUTPUT"
 else
-    RESPONSE=$(curl -s -X POST "$BRIDGE_URL/api/logcat" -H 'Content-Type: application/json' ${AUTH:+-H "$AUTH"} -d "$BODY")
+    RESPONSE=$(curl -s -X POST "$BRIDGE_URL/api/logcat" -H 'Content-Type: application/json' -H "$AUTH" -d "$BODY")
     if command -v jq >/dev/null 2>&1; then
         echo "$RESPONSE" | jq -r '.output // .error // empty'
     else

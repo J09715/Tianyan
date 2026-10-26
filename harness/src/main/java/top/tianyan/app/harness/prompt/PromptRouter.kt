@@ -1,8 +1,5 @@
 package top.tianyan.app.harness.prompt
 
-import javax.inject.Inject
-import kotlinx.coroutines.flow.first
-import javax.inject.Singleton
 
 /**
  * 系统提示词分层路由器（L2 任务规则选择）。
@@ -13,15 +10,8 @@ import javax.inject.Singleton
  * 路由判断保守宁滥勿缺：多注入一个块的成本远小于模型在缺少规则时犯错；
  * 若代码层判断不确定，模型仍可通过 load_rule 工具按需自取。
  */
-@Singleton
-class PromptRouter @Inject constructor(
+class PromptRouter(
     private val promptAssets: PromptAssetLoader,
-    /**
-     * 技能仓库：仅供 load_rule 按需读取技能正文（渐进式披露 Tier 2）。
-     *
-     * 可空以保持既有测试的构造方式不变（它们只关心规则块路由）。
-     */
-    private val skillRepository: top.tianyan.app.core.database.AgentSkillRepository? = null,
 ) {
     /** 可按需加载的规则块。[assetPath] 为 assets 内路径，[loadName] 为 load_rule 工具使用的标识。 */
     enum class RuleBlock(val assetPath: String, val loadName: String) {
@@ -31,6 +21,8 @@ class PromptRouter @Inject constructor(
         CODE_NAVIGATION("prompts/system/code-navigation.md", "code-navigation"),
         SECURITY("prompts/system/security.md", "security"),
         MEMORY("prompts/system/memory.md", "memory"),
+        IMAGE_DELIVERY("prompts/system/image-delivery.md", "image-delivery"),
+        BROWSER_REVERSE("prompts/system/browser-reverse.md", "browser-reverse"),
     }
 
     /** 每轮常驻注入的规则块（L0 工具说明 + L1 PRoot 约束）。 */
@@ -40,7 +32,7 @@ class PromptRouter @Inject constructor(
      * 根据当前任务上下文选择本轮需要注入的 L2 规则块（不含常驻块）。
      *
      * @param latestUserMessage 最新一条用户消息文本（用于启发式判断）
-     * @param projectType 检测到的项目类型（Android / Flutter / Android APK 逆向 / 红队演练 / 通用工程）
+     * @param projectType 检测到的项目类型（Android / Flutter / Android APK 逆向 / 通用工程）
      * @param hasWorkspace 是否关联了工作区
      * @param activePlanExists 当前是否已有进行中的 plan
      */
@@ -59,12 +51,6 @@ class PromptRouter @Inject constructor(
             blocks.add(RuleBlock.CODE_NAVIGATION)
         }
 
-        // 红队演练常驻注入风险操作确认：演练里不可逆动作密度最高，
-        // 不能指望用户消息里恰好出现「删除」这类信号词才把规则挂上。
-        if (projectType == "红队演练") {
-            blocks.add(RuleBlock.SECURITY)
-        }
-
         // 复杂任务信号或已有活动 plan 时注入工作流规则。
         if (activePlanExists || WORKFLOW_SIGNALS.any { it in text }) {
             blocks.add(RuleBlock.WORKFLOW)
@@ -80,44 +66,30 @@ class PromptRouter @Inject constructor(
             blocks.add(RuleBlock.MEMORY)
         }
 
+        // 图片查找 / 展示 / 下载任务注入交付规范（Markdown 图片语法、图床反爬规避）。
+        if (IMAGE_DELIVERY_SIGNALS.any { it in text }) {
+            blocks.add(RuleBlock.IMAGE_DELIVERY)
+        }
+
+        // 浏览器逆向 / 调试任务注入 hook 与 CDP 准则；信号刻意偏宽：
+        // 漏掉「调试结束必须 debug_resume」铁律会让页面永久冻结，多注入 1.5KB 的代价远小于此。
+        if (BROWSER_REVERSE_SIGNALS.any { it in text }) {
+            blocks.add(RuleBlock.BROWSER_REVERSE)
+        }
+
         return blocks
     }
 
     /** load_rule 工具入口：按名称读取规则块正文；未知名称返回 null。 */
-    /**
-     * 按需加载规则块正文。
-     *
-     * 支持两类 key：
-     *  · 内置规则块：`workflow` / `code-navigation` / `security` / `memory` /
-     *    `environment-proot` / `tools`；
-     *  · 技能正文（渐进式披露 Tier 2）：`skill:<id>`。
-     *
-     * 技能之所以要按需取而不是逐轮整段注入：正文长度没有上限（用户可导入任意
-     * 大小的 SKILL.md），逐轮注入会让每轮都为用不到的技能付 token，且超预算被
-     * 截断时模型拿到的是残缺规则却不自知。发现块里只给 id + 摘要。
-     */
-    suspend fun loadRule(name: String): String? {
-        val key = name.trim()
-        if (key.startsWith(SKILL_PREFIX, ignoreCase = true)) {
-            val id = key.removePrefix(SKILL_PREFIX).removePrefix(SKILL_PREFIX.uppercase()).trim()
-            if (id.isBlank()) return null
-            val repo = skillRepository ?: return null
-            val skill = runCatching { repo.allSkills.first() }.getOrNull()
-                ?.firstOrNull { it.id == id || it.name.equals(id, ignoreCase = true) }
-                ?: return null
-            return "【专精技能：${skill.name}】\n${skill.systemPrompt.trim()}"
-        }
-        val block = RuleBlock.entries.firstOrNull { it.loadName == key.lowercase() } ?: return null
+    fun loadRule(name: String): String? {
+        val block = RuleBlock.entries.firstOrNull { it.loadName == name.trim().lowercase() } ?: return null
         return runCatching { promptAssets.read(block.assetPath) }.getOrNull()
     }
 
-    /** 判断某个 load_rule 的 key 是否是技能正文请求。 */
-    fun isSkillKey(name: String): Boolean = name.trim().startsWith(SKILL_PREFIX, ignoreCase = true)
+    /** 可用规则块名单（供错误提示动态生成，避免硬编码清单随枚举漂移）。 */
+    fun availableRuleNames(): String = RuleBlock.entries.joinToString(" / ") { it.loadName }
 
     companion object {
-        /** 技能正文的 load_rule 前缀：`skill:<id>`。 */
-        const val SKILL_PREFIX = "skill:"
-
         private val CODE_SIGNALS = listOf(
             "重构", "调用链", "调用方", "被调用", "callee", "caller", "影响面", "符号",
             "函数", "方法", "类定义", "接口定义", "定义在哪", "代码分析", "架构", "源码",
@@ -145,6 +117,19 @@ class PromptRouter @Inject constructor(
         private val MEMORY_SIGNALS = listOf(
             "记住", "记一下", "以后都", "以后默认", "我的偏好", "这是规范",
             "remember", "my preference",
+        )
+
+        private val IMAGE_DELIVERY_SIGNALS = listOf(
+            "图片", "照片", "壁纸", "头像", "海报", "封面", "配图", "发我", "发张", "来张",
+            "保存到本地", "下载到本地", "留存", "美图", "表情包",
+            "image", "picture", "photo", "pic",
+        )
+
+        private val BROWSER_REVERSE_SIGNALS = listOf(
+            "逆向", "反编译", "抓包", "抓接口", "hook", "断点", "加密", "签名",
+            "mock", "拦截", "worker", "爬虫", "爬取",
+            "网页", "页面", "网站", "浏览器", "网址",
+            "browser", "web page", "debug",
         )
     }
 }

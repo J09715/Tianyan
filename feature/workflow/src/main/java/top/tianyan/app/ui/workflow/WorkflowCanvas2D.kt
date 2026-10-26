@@ -27,8 +27,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.ui.text.font.FontFamily
 import top.tianyan.app.ui.components.RuntimeIcon
-import top.tianyan.app.ui.theme.Spacing
-import top.tianyan.app.ui.theme.Radius
 import top.tianyan.app.ui.components.RuntimeIconButton
 import top.tianyan.app.ui.components.RuntimeIconName
 import androidx.compose.runtime.Composable
@@ -108,6 +106,8 @@ fun WorkflowCanvas2D(
     onRemoveNode: (String) -> Unit = {},
     onConfigureNode: (String) -> Unit = {},
 ) {
+    val expandedRun = !editable && state?.baseDefinition != null && state.definition == definition
+    val renderedDefinition = remember(definition, expandedRun) { workflowRunGraphPresentation(definition, expandedRun) }
     val density = LocalDensity.current
     val nodeWidthPx = with(density) { NodeWidth.toPx() }
     val nodeHeightPx = with(density) { NodeHeight.toPx() }
@@ -115,24 +115,9 @@ fun WorkflowCanvas2D(
     val fitPaddingPx = with(density) { 40.dp.toPx() }
     val viewConfiguration = LocalViewConfiguration.current
     val touchSlop = viewConfiguration.touchSlop
-    val positions = remember(definition.id, density) {
-        mutableStateMapOf<String, Offset>().apply {
-            definition.nodes.forEachIndexed { index, node ->
-                this[node.id] = nodePosition(node, index, density.density)
-            }
-        }
-    }
-    // 同步保证 positions 包含当前 definition 中的所有节点（无需等待异步 LaunchedEffect）
-    definition.nodes.forEachIndexed { index, node ->
-        if (!positions.containsKey(node.id)) {
-            positions[node.id] = nodePosition(node, index, density.density)
-        }
-    }
-    LaunchedEffect(definition.nodes, density) {
-        positions.keys.retainAll(definition.nodes.mapTo(mutableSetOf()) { it.id })
-    }
+    val positions = rememberWorkflowCanvasPositions(renderedDefinition, density.density)
 
-    val resolvedPositions = resolveNodePositions(definition.nodes, positions, density.density)
+    val resolvedPositions = resolveNodePositions(renderedDefinition.nodes, positions, density.density)
     val bounds = contentBounds(resolvedPositions.values, nodeWidthPx, nodeHeightPx)
 
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
@@ -209,7 +194,7 @@ fun WorkflowCanvas2D(
 
         // 连线层：在视口屏幕坐标系中渲染，绝无纹理尺寸超限问题
         WorkflowEdges(
-            definition = definition,
+            definition = renderedDefinition,
             state = state,
             positions = resolvedPositions,
             scale = scale,
@@ -223,7 +208,7 @@ fun WorkflowCanvas2D(
         )
 
         // 节点层：卡片在视口屏幕坐标系中精确定位与缩放
-        definition.nodes.forEachIndexed { index, node ->
+        renderedDefinition.nodes.forEachIndexed { index, node ->
             key(node.id) {
                 val run = state?.nodeStates?.get(node.id)
                 WorkflowNodeCard(
@@ -325,14 +310,14 @@ fun WorkflowCanvas2D(
             onZoomIn = { zoomBy(1.22f) },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = Spacing.md, bottom = Spacing.md),
+                .padding(end = 12.dp, bottom = 12.dp),
         )
 
         Text(
             text = "双指缩放 · 拖动画布 · 双击适配",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.align(Alignment.BottomStart).padding(start = Spacing.md, bottom = Spacing.sm),
+            modifier = Modifier.align(Alignment.BottomStart).padding(start = 14.dp, bottom = 10.dp),
         )
     }
 }
@@ -432,75 +417,6 @@ private fun WorkflowEdges(
     }
 }
 
-data class NodeVisualTheme(
-    val accentColor: Color,
-    val icon: RuntimeIconName,
-    val tag: String,
-)
-
-fun WorkflowNodeType.visualTheme(): NodeVisualTheme = when (this) {
-    WorkflowNodeType.TRIGGER -> NodeVisualTheme(
-        accentColor = Color(0xFF10B981), // 翡翠绿
-        icon = RuntimeIconName.Play,
-        tag = "触发器",
-    )
-    WorkflowNodeType.BASH_COMMAND -> NodeVisualTheme(
-        accentColor = Color(0xFF06B6D4), // 终端青
-        icon = RuntimeIconName.Terminal,
-        tag = "Shell 命令",
-    )
-    WorkflowNodeType.PROCESS_SERVICE -> NodeVisualTheme(
-        accentColor = Color(0xFF818CF8), // 守护紫
-        icon = RuntimeIconName.Settings,
-        tag = "常驻服务",
-    )
-    WorkflowNodeType.AGENT_INFERENCE -> NodeVisualTheme(
-        accentColor = Color(0xFFA855F7), // 智能紫
-        icon = RuntimeIconName.Sparkles,
-        tag = "AI 推理",
-    )
-    WorkflowNodeType.SUBAGENT_DELEGATE -> NodeVisualTheme(
-        accentColor = Color(0xFF3B82F6), // 协同蓝
-        icon = RuntimeIconName.Hub,
-        tag = "子智能体",
-    )
-    WorkflowNodeType.TAIXU_BUILD -> NodeVisualTheme(
-        accentColor = Color(0xFFF59E0B), // 构建琥珀
-        icon = RuntimeIconName.Package,
-        tag = "离线构建",
-    )
-    WorkflowNodeType.CONDITION_BRANCH -> NodeVisualTheme(
-        accentColor = Color(0xFFEAB308), // 分支黄
-        icon = RuntimeIconName.Link,
-        tag = "条件分支",
-    )
-    WorkflowNodeType.HUMAN_APPROVAL -> NodeVisualTheme(
-        accentColor = Color(0xFFF43F5E), // 审批红
-        icon = RuntimeIconName.Alert,
-        tag = "人工把关",
-    )
-    WorkflowNodeType.HOST_ACTION -> NodeVisualTheme(
-        accentColor = Color(0xFF14B8A6), // 宿主青
-        icon = RuntimeIconName.Android,
-        tag = "宿主系统",
-    )
-    WorkflowNodeType.DELAY -> NodeVisualTheme(
-        accentColor = Color(0xFF94A3B8),
-        icon = RuntimeIconName.Speed,
-        tag = "延时等待",
-    )
-    WorkflowNodeType.SET_VARIABLE -> NodeVisualTheme(
-        accentColor = Color(0xFF2DD4BF),
-        icon = RuntimeIconName.Tune,
-        tag = "设置变量",
-    )
-    WorkflowNodeType.TERMINAL_OUTPUT -> NodeVisualTheme(
-        accentColor = Color(0xFF0EA5E9), // 归档天蓝
-        icon = RuntimeIconName.Check,
-        tag = "结果输出",
-    )
-}
-
 /**
  * 节点卡片：专属色彩识别系统、左侧色彩状态条、动态代码/分流胶囊预览，
  * 并在选中时呈现 [调参 / 连线 / 删除] 快捷操作条。
@@ -526,7 +442,7 @@ private fun WorkflowNodeCard(
         else -> theme.accentColor.copy(alpha = 0.38f)
     }
     val borderWidth = if (selected || connecting) 2.5.dp else 1.2.dp
-    val shape = Radius.mdShape
+    val shape = RoundedCornerShape(14.dp)
 
     Surface(
         modifier = modifier.size(NodeWidth, NodeHeight),
@@ -548,18 +464,18 @@ private fun WorkflowNodeCard(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = Spacing.sm, vertical = Spacing.sm),
+                    .padding(horizontal = 10.dp, vertical = 7.dp),
                 verticalArrangement = Arrangement.SpaceBetween,
             ) {
                 // 顶部行：类型图标 + 类型 Tag + 运行状态 Pill
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     Surface(
                         color = theme.accentColor.copy(alpha = 0.16f),
-                        shape = Radius.xsShape,
+                        shape = RoundedCornerShape(6.dp),
                         modifier = Modifier.size(20.dp),
                     ) {
                         Box(contentAlignment = Alignment.Center) {
@@ -582,7 +498,7 @@ private fun WorkflowNodeCard(
                             text = statusLabel(status),
                             style = MaterialTheme.typography.labelSmall,
                             color = statusClr,
-                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                             maxLines = 1,
                         )
                     }
@@ -601,36 +517,36 @@ private fun WorkflowNodeCard(
                 if (selected) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Surface(
                             onClick = onConfigure,
-                            shape = Radius.xsShape,
+                            shape = RoundedCornerShape(6.dp),
                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
                             modifier = Modifier.weight(1f),
                         ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = Spacing.xs)) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = 4.dp)) {
                                 Text("⚙ 调参", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, maxLines = 1)
                             }
                         }
                         Surface(
                             onClick = onBeginConnection,
-                            shape = Radius.xsShape,
+                            shape = RoundedCornerShape(6.dp),
                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
                             modifier = Modifier.weight(1f),
                         ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = Spacing.xs)) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = 4.dp)) {
                                 Text("🔗 连线", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, maxLines = 1)
                             }
                         }
                         Surface(
                             onClick = onRemove,
-                            shape = Radius.xsShape,
+                            shape = RoundedCornerShape(6.dp),
                             color = MaterialTheme.colorScheme.error.copy(alpha = 0.18f),
                             modifier = Modifier.weight(1f),
                         ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = Spacing.xs)) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = 4.dp)) {
                                 Text("🗑 删除", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error, maxLines = 1)
                             }
                         }
@@ -638,14 +554,14 @@ private fun WorkflowNodeCard(
                 } else {
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.65f),
-                        shape = Radius.xsShape,
+                        shape = RoundedCornerShape(6.dp),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         val previewText = when (node.type) {
                             WorkflowNodeType.BASH_COMMAND -> ">_ ${node.config["command"]?.trim() ?: "待配置命令"}"
                             WorkflowNodeType.CONDITION_BRANCH -> "🔀 ${node.config["expression"]?.trim() ?: "exitCode == 0"}"
                             WorkflowNodeType.AGENT_INFERENCE -> "✨ ${node.config["prompt"]?.trim()?.take(20) ?: "AI 提示词"}"
-                            WorkflowNodeType.TAIXU_BUILD -> "📦 ${node.config["projectType"] ?: "android"} · ${node.config["task"] ?: "assemble"}"
+                            WorkflowNodeType.TIANYAN_BUILD -> "📦 ${node.config["projectType"] ?: "android"} · ${node.config["task"] ?: "assemble"}"
                             WorkflowNodeType.HUMAN_APPROVAL -> "🛡️ 需要人工确认"
                             WorkflowNodeType.HOST_ACTION -> "📱 ${node.config["action"] ?: "status"}"
                             WorkflowNodeType.DELAY -> "⏱ ${node.config["seconds"] ?: "1"}s"
@@ -658,7 +574,7 @@ private fun WorkflowNodeCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                         )
                     }
                 }
@@ -676,8 +592,8 @@ private fun ViewportControls(
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = modifier.padding(Spacing.md),
-        shape = Radius.smShape,
+        modifier = modifier.padding(12.dp),
+        shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.94f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
         tonalElevation = 2.dp,
@@ -685,8 +601,8 @@ private fun ViewportControls(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
-            modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
         ) {
             RuntimeIconButton(
                 onClick = onZoomOut,
@@ -700,7 +616,7 @@ private fun ViewportControls(
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = Spacing.xs),
+                modifier = Modifier.padding(horizontal = 4.dp),
             )
             RuntimeIconButton(
                 onClick = onFit,
@@ -798,12 +714,13 @@ internal fun resolveNodePositions(
 }.toMap()
 
 private fun WorkflowNodeType.displayName(): String = when (this) {
+    WorkflowNodeType.PLUGIN_ACTION -> "插件动作"
     WorkflowNodeType.TRIGGER -> "触发器"
     WorkflowNodeType.BASH_COMMAND -> "命令"
     WorkflowNodeType.PROCESS_SERVICE -> "后台服务"
     WorkflowNodeType.AGENT_INFERENCE -> "智能体推理"
     WorkflowNodeType.SUBAGENT_DELEGATE -> "子智能体"
-    WorkflowNodeType.TAIXU_BUILD -> "天衍构建"
+    WorkflowNodeType.TIANYAN_BUILD -> "天衍构建"
     WorkflowNodeType.CONDITION_BRANCH -> "条件分支"
     WorkflowNodeType.HUMAN_APPROVAL -> "人工审批"
     WorkflowNodeType.HOST_ACTION -> "宿主动作"

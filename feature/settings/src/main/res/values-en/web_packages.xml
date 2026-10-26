@@ -1,0 +1,33 @@
+<resources>
+    <string name="web_packages_title">External Web plugins</string>
+    <string name="web_packages_scope">Import static page plugins. Ordinary pages need no Linux; PRoot static and tool-service sources require local Linux (PRoot static also needs Python 3). App capabilities require separate confirmation.</string>
+    <string name="web_packages_proot_label">PRoot static service</string>
+    <string name="web_packages_service_label">Tool service source · %1$s</string>
+    <string name="web_packages_service_source">The page is served by the local Web service of the installed tool “%1$s”. Port, path, command and environment are resolved natively; the package carries no address, credential, port or command. A read-only source requires the service to be running; a start source (PROOT_SERVICE) starts the tool’s own declared service on open and reaps only that instance on close. Requires ready local Linux.</string>
+    <string name="web_packages_proot_too_large">This package exceeds the PRoot startup capacity. Ask its author to reduce the assets or use the ordinary PACKAGE page source.</string>
+    <string name="web_packages_proot_source">Opening starts a host-managed static service in the current local distribution; closing releases it. Requires ready Linux and /usr/bin/python3; dependencies are not installed automatically. Compressed assets and authentication must fit a 4 KiB bootstrap packet or startup is refused.</string>
+    <string name="web_packages_import">Import</string>
+    <string name="web_packages_open">Open</string>
+    <string name="web_packages_remove">Remove</string>
+    <string name="web_packages_cancel">Cancel</string>
+    <string name="web_packages_retry">Retry</string>
+    <string name="web_packages_busy">Validating and processing plugin…</string>
+    <string name="web_packages_failed">Could not process the plugin. Check its format, integrity and version, then try again.</string>
+    <string name="web_packages_empty">No Web plugins imported</string>
+    <string name="web_packages_confirm_title">Import external Web plugin?</string>
+    <string name="web_packages_confirmation">Names and descriptions are supplied by the plugin, without official endorsement. Import verifies file integrity. It does not open the page or grant app capabilities.</string>
+    <string name="web_packages_no_capabilities">This package requests no app capabilities.</string>
+    <string name="web_packages_app_info">Requests the app package name, Android API and plugin API versions. No credentials, files or device logs are included.</string>
+    <string name="web_packages_permission_title">Allow plugin to read app information?</string>
+    <string name="web_packages_remove_title">Remove Web plugin?</string>
+    <string name="web_packages_remove_detail">Remove all imported versions of “%1$s” and invalidate permissions for its open pages.</string>
+    <string name="web_packages_unavailable">The plugin is loading, has been upgraded or has been removed. Return to the list and open it again.</string>
+    <string name="web_packages_clipboard_title">Allow plugin to copy this text?</string>
+    <string name="web_packages_clipboard_write">Requests plain-text clipboard writes, with confirmation of the exact text each time. Replaces the current clipboard without reading it.</string>
+    <string name="web_packages_install_apk_title">Allow plugin to install this APK?</string>
+    <string name="web_packages_install_apk_detail">Requests installation of an APK below a sandbox-resolvable directory. The path is confirmed each time and must end in .apk; the host resolves the real file itself and installs it silently over wireless ADB or through the system installer. This is a write action and is never cached as a session grant.</string>
+    <string name="web_packages_logcat_title">Allow plugin to read device logs?</string>
+    <string name="web_packages_logcat_detail">Requests one bounded system log snapshot (the last 200 lines, with no tag or keyword filtering). Logs can contain information about other apps; the page passes no parameters and cannot clear the log buffer.</string>
+    <string name="web_tool_service_open">Open as plugin page</string>
+    <string name="web_tool_service_scope">Opens the currently running local tool service as a read-only plugin page. The page reads only bounded static assets and pins each served path on first read; after confirmation it may also request or stream sub-paths of that same service (32768 characters per request, 65536 per stream). It never starts or stops the tool service, never receives the loopback address or any credential, and grants no other app capability.</string>
+</resources>

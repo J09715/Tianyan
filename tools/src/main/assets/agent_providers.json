@@ -3,7 +3,7 @@
   "providers": [
     {
       "id": "custom",
-      "name": "自定义 OpenAI 兼容接口",
+      "name": "OpenAI 兼容接口",
       "group": "CUSTOM",
       "baseUrl": "",
       "modelsUrl": "",
@@ -11,7 +11,7 @@
     },
     {
       "id": "custom_anthropic",
-      "name": "自定义 Anthropic 兼容接口",
+      "name": "Anthropic 兼容接口",
       "group": "CUSTOM",
       "baseUrl": "",
       "modelsUrl": "",

@@ -18,9 +18,17 @@ import top.tianyan.app.core.common.logging.AppLogger
 import top.tianyan.app.core.common.logging.SensitiveDataRedactor
 import top.tianyan.app.core.database.AppDatabase
 import top.tianyan.app.core.database.RoomHarnessRuntimeRepository
+import top.tianyan.app.core.database.HarnessQueueItemEntity
 import top.tianyan.app.harness.AssistantText
+import top.tianyan.app.harness.HarnessTool
+import top.tianyan.app.harness.ToolCall
+import top.tianyan.app.harness.ToolResult
 import top.tianyan.app.harness.UserMessage
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import top.tianyan.app.harness.session.SessionTreeStore
+import top.tianyan.app.harness.queue.PromptQueue
+import top.tianyan.app.harness.queue.PromptQueueManager
 
 /**
  * 会话消息投影器集成测试：真实 Room 持久化 + SessionTreeStore 全链路，
@@ -141,5 +149,142 @@ class SessionMessageProjectorTest {
         assertEquals(SessionTreeStore.MAX_LIVE_ENTRIES, live.size)
         assertEquals("m25", live.first().id)
         assertEquals(SessionTreeStore.MAX_LIVE_ENTRIES + 25, database.harnessRuntimeDao().listEntries("long").size)
+    }
+
+    @Test
+    fun `live window also honors a byte budget for heavy messages`() = runBlocking {
+        tracker.setCurrent("heavy")
+        projector.seedEmpty("heavy")
+
+        // 12 条各 1M 字符的 tool_result：条数远未到 MAX_LIVE_ENTRIES，但字符总量 12M 超过预算。
+        val big = "x".repeat(1024 * 1024)
+        val messages = (0 until 12).map { index ->
+            ToolResult(
+                id = "r$index",
+                createdAt = index.toLong(),
+                toolCallId = "c$index",
+                success = true,
+                output = big,
+            )
+        }
+        projector.replaceAll("heavy", messages)
+
+        val live = projector.snapshot("heavy")
+        assertTrue(live.size < messages.size)
+        // 永远保留最新一条，且窗口总量不超预算。
+        assertEquals("r11", live.last().id)
+        val retainedChars = live.sumOf { (it as ToolResult).output.length }
+        assertTrue(retainedChars <= SessionMessageProjector.MAX_LIVE_CHARS)
+    }
+
+    @Test
+    fun `history search matches unordered terms across a tool exchange`() = runBlocking {
+        store.append("history", ToolCall(
+            id = "call-install",
+            createdAt = 1L,
+            tool = HarnessTool.BASE,
+            args = buildJsonObject { put("command", "adb install RelayG.apk") },
+        ))
+        store.append("history", ToolResult(
+            id = "result-install",
+            createdAt = 2L,
+            toolCallId = "call-install",
+            success = true,
+            output = "Performing Streamed Install\nSuccess",
+        ))
+
+        val matches = store.search("history", "Success RelayG", limit = 8)
+
+        assertTrue(matches.any { it.id == "call-install" })
+        assertTrue(matches.any { it.id == "result-install" })
+    }
+
+    @Test
+    fun `history search indexes read the same messages including tool entries`() = runBlocking {
+        store.append("history-index", UserMessage(id = "first", createdAt = 1L, text = "needle first"))
+        store.append("history-index", AssistantText(id = "reply", createdAt = 2L, text = "other"))
+        store.append("history-index", ToolCall(
+            id = "call", createdAt = 3L, tool = HarnessTool.BASE,
+            args = buildJsonObject { put("command", "echo other") },
+        ))
+        store.append("history-index", ToolResult(
+            id = "result", createdAt = 4L, toolCallId = "call", success = true, output = "other",
+        ))
+        store.append("history-index", UserMessage(id = "last", createdAt = 5L, text = "needle last"))
+
+        val hits = store.searchIndexed("history-index", "needle")
+
+        assertEquals(listOf(4, 0), hits.map { it.index })
+        hits.forEach { hit ->
+            assertEquals(hit.message.id, store.read("history-index", index = hit.index)?.id)
+        }
+    }
+
+    @Test
+    fun `history read of a tool call also returns its result`() = runBlocking {
+        store.append("read-related", ToolCall(
+            id = "call",
+            createdAt = 1L,
+            tool = HarnessTool.BASE,
+            args = buildJsonObject { put("command", "adb install app.apk") },
+        ))
+        store.append("read-related", ToolResult(
+            id = "result",
+            createdAt = 2L,
+            toolCallId = "call",
+            success = true,
+            output = "Success",
+        ))
+
+        assertEquals(listOf("call", "result"), store.readWithRelated("read-related", messageId = "call").map { it.id })
+    }
+
+    @Test
+    fun `history read returns the same call-rooted group for call and result anchors`() = runBlocking {
+        store.append("read-related-groups", ToolCall(
+            id = "call",
+            createdAt = 1L,
+            tool = HarnessTool.WRITE,
+            args = buildJsonObject { put("path", "a.txt") },
+        ))
+        store.append("read-related-groups", ToolResult(
+            id = "pending",
+            createdAt = 2L,
+            toolCallId = "call",
+            success = false,
+            output = "等待用户批准",
+            awaitingApproval = true,
+        ))
+        store.append("read-related-groups", ToolResult(
+            id = "result",
+            createdAt = 3L,
+            toolCallId = "call",
+            success = true,
+            output = "ok",
+        ))
+
+        val expected = listOf("call", "pending", "result")
+        assertEquals(expected, store.readWithRelated("read-related-groups", messageId = "call").map { it.id })
+        assertEquals(expected, store.readWithRelated("read-related-groups", messageId = "pending").map { it.id })
+        assertEquals(expected, store.readWithRelated("read-related-groups", messageId = "result").map { it.id })
+    }
+
+    @Test
+    fun `invalid queued prompt is removed when listed or consumed`() = runBlocking {
+        val repository = RoomHarnessRuntimeRepository(database.harnessRuntimeDao())
+        val queue = PromptQueueManager(repository, Json, store)
+        repository.enqueue(HarnessQueueItemEntity(
+            id = "bad", sessionId = "queue", laneName = "main", operationId = null,
+            queueType = PromptQueue.FOLLOW_UP.id, createdAt = 1L, payloadJson = "{broken",
+        ))
+        assertTrue(queue.list("queue", PromptQueue.FOLLOW_UP).isEmpty())
+        assertTrue(repository.listQueue("queue", "main", PromptQueue.FOLLOW_UP.id).isEmpty())
+
+        repository.enqueue(HarnessQueueItemEntity(
+            id = "bad2", sessionId = "queue", laneName = "main", operationId = null,
+            queueType = PromptQueue.FOLLOW_UP.id, createdAt = 2L, payloadJson = "{broken",
+        ))
+        assertTrue(queue.consume("queue", PromptQueue.FOLLOW_UP).isEmpty())
+        assertTrue(repository.listQueue("queue", "main", PromptQueue.FOLLOW_UP.id).isEmpty())
     }
 }

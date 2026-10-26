@@ -1,14 +1,16 @@
 package top.tianyan.app.ui.workspace
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.Checkbox
+import top.tianyan.app.ui.components.RuntimeCheckbox as Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.IconButton
+import top.tianyan.app.ui.components.RuntimeIconButton as IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -26,9 +28,10 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import top.tianyan.app.feature.workspace.R
-import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.template.ProjectTemplateInputType
 import top.tianyan.app.template.ProjectTemplateVariable
+import top.tianyan.app.ui.components.RuntimeIcon
+import top.tianyan.app.ui.components.RuntimeIconName
 
 @Composable
 private fun VariableLabel(label: String, required: Boolean) {
@@ -51,14 +54,17 @@ internal fun TemplateVariableFields(
         val error = templateVariableError(variable, value)
         when (variable.inputType) {
             ProjectTemplateInputType.BOOLEAN -> Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onValueChange(variable.name, (!value.equals("true", ignoreCase = true)).toString()) }
+                    .padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Checkbox(
                     checked = value.equals("true", ignoreCase = true),
                     onCheckedChange = { onValueChange(variable.name, it.toString()) },
                 )
-                Column(Modifier.padding(start = Spacing.sm)) {
+                Column(Modifier.padding(start = 8.dp)) {
                     VariableLabel(variable.label, variable.required)
                     if (variable.description.isNotBlank()) {
                         Text(variable.description, style = MaterialTheme.typography.bodySmall)
@@ -78,7 +84,16 @@ internal fun TemplateVariableFields(
                             { Text(description) }
                         },
                         trailingIcon = {
-                            IconButton(onClick = { expanded = true }) { Text("▾") }
+                            IconButton(
+                                onClick = { expanded = true },
+                                contentDescription = variable.label,
+                            ) {
+                                RuntimeIcon(
+                                    RuntimeIconName.ChevronDown,
+                                    Modifier.size(18.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         },
                         modifier = Modifier.fillMaxWidth(),
                     )

@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Clipboard · 剪贴板</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="plugin.css"><script src="plugin.js" defer></script></head>
+<body><main>
+<p class="label">TIANYAN · WEB PLUGIN</p>
+<h1 id="title">复制文本</h1>
+<p id="description">应用会展示这次提交的内容，每次复制均需确认。不会读取剪贴板。</p>
+<label for="text" id="label">要复制的文本（最多 1024 字符）</label>
+<textarea id="text" maxlength="1024" rows="6">Hello from Tianyan</textarea>
+<button id="copy" type="button">请求复制</button>
+<pre id="result" role="status" aria-live="polite">等待请求</pre>
+</main></body></html>

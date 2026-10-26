@@ -1,261 +1,254 @@
 package top.tianyan.app.runtime.terminal
 
-import top.tianyan.app.core.database.TerminalSessionRepository
+import com.termux.terminal.TerminalSession
 import top.tianyan.app.core.database.TerminalSessionEntity
+import top.tianyan.app.core.database.TerminalSessionRepository
 import top.tianyan.app.runtime.LinuxRuntime
-import top.tianyan.app.runtime.shell.LinuxSession
+import top.tianyan.app.runtime.checkRuntimeDisposal
+import top.tianyan.app.runtime.withRuntimeDisposal
 import top.tianyan.app.runtime.shell.SessionConfig
+import top.tianyan.app.runtime.environment.ExecutionEnvironmentFactory
+import top.tianyan.app.runtime.environment.LocalTerminalLaunch
 import java.util.UUID
-import javax.inject.Inject
-import javax.inject.Singleton
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
-/** 一个活动的终端会话：真 PTY + 独立渲染缓冲。 */
 class TerminalSessionHandle internal constructor(
     val id: String,
     val label: String,
     val workingDirectory: String,
     val distributionId: String = "ubuntu",
-    internal val session: LinuxSession,
-    internal val buffer: AnsiTerminalBuffer,
+    internal val process: TerminalProcess,
+    /** 人类可读的环境标识（远程=主机名）；本地终端为 null。 */
+    val environmentLabel: String? = null,
 ) {
-    private val _screen = MutableStateFlow(buffer.snapshot())
-    val screen: StateFlow<List<TerminalLine>> = _screen.asStateFlow()
-
-    private val _cursor = MutableStateFlow(buffer.cursor())
-    val cursor: StateFlow<TerminalCursor> = _cursor.asStateFlow()
-
-    private val _revision = MutableStateFlow(0L)
-    val revision: StateFlow<Long> = _revision.asStateFlow()
-
-    internal fun publish(snapshot: List<TerminalLine>? = null) {
-        _screen.value = snapshot ?: buffer.snapshot()
-        _cursor.value = buffer.cursor()
-        _revision.value += 1
-    }
+    val termuxSession: TerminalSession get() = process.session
+    val isAlive: Boolean get() = process.isAlive
 }
 
-/**
- * 多会话终端管理器（单例，跨页面存活）。
- *
- * 每个会话 = 一个真 PTY（NativePtySession）+ 独立 AnsiTerminalBuffer。
- * 会话元数据（标签/工作目录/顺序/发行版）持久化到 Room，App 重启后重建同名会话壳；
- * 切换会话时原会话继续在后台运行（命令不中断）。
- */
-@Singleton
-class TerminalSessionManager @Inject constructor(
+data class TerminalRestoreFailure(val id: String, val label: String, val message: String)
+
+/** Multi-session Termux console; creation, rollback and disposal retain explicit resource ownership. */
+class TerminalSessionManager(
     private val linuxRuntime: LinuxRuntime,
     private val terminalSessionDao: TerminalSessionRepository,
+    private val sessionClientRouter: TerminalSessionClientRouter,
+    private val environmentFactory: ExecutionEnvironmentFactory? = null,
+    private val processFactory: TerminalProcessFactory = TermuxTerminalProcessFactory(),
+    private val remoteProcessFactory: RemoteTerminalProcessFactory = TermuxRemoteTerminalProcessFactory(),
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-
+    private val stateLock = Any()
+    private val resources = mutableMapOf<String, TerminalOwnedResources>()
+    private val closeAllMutex = Mutex()
+    private val restoreMutex = Mutex()
+    private var closingAll = false
+    private var generation = 0L
+    private var fallbackPending = false
     private val _handles = MutableStateFlow<List<TerminalSessionHandle>>(emptyList())
     val handles: StateFlow<List<TerminalSessionHandle>> = _handles.asStateFlow()
-
+    private val _restoreFailures = MutableStateFlow<List<TerminalRestoreFailure>>(emptyList())
+    val restoreFailures: StateFlow<List<TerminalRestoreFailure>> = _restoreFailures.asStateFlow()
     private val _activeId = MutableStateFlow<String?>(null)
     val activeId: StateFlow<String?> = _activeId.asStateFlow()
-
     val activeHandle: StateFlow<TerminalSessionHandle?> =
         combine(_handles, _activeId) { handles, id -> handles.firstOrNull { it.id == id } }
             .stateIn(scope, SharingStarted.Eagerly, null)
+    @Volatile private var restoredOnce = false
 
-    @Volatile
-    private var restoredOnce = false
-
-    /**
-     * 保证至少一个活动会话：首次调用时从 Room 恢复已有会话；没有则新建。
-     * 由终端页面在 Runtime 已就绪后调用。
-     */
-    suspend fun ensureActive(initialWorkingDirectory: String = DEFAULT_CWD) {
-        val aliveHandles = _handles.value.filter { it.session.isAlive }
-        if (aliveHandles.size != _handles.value.size) {
-            _handles.value = aliveHandles
-            _activeId.value = _activeId.value?.takeIf { id -> aliveHandles.any { it.id == id } }
-            if (aliveHandles.isEmpty()) restoredOnce = false
+    suspend fun ensureActive(initialWorkingDirectory: String = DEFAULT_CWD) = restoreMutex.withLock { ensureActiveInternal(initialWorkingDirectory) }
+    private suspend fun ensureActiveInternal(initialWorkingDirectory: String) {
+        val failures = mutableListOf<Throwable>()
+        _handles.value.filterNot { it.isAlive }.forEach { dead ->
+            val owned = synchronized(stateLock) { resources[dead.id] } ?: return@forEach
+            try { release(owned, deleteRow = false) } catch (t: Throwable) { failures += t }
         }
+        if (failures.isNotEmpty()) throw TerminalCleanupException(failures)
+        if (_handles.value.isEmpty()) restoredOnce = false
         if (!restoredOnce) {
-            restoredOnce = true
-            val rows = terminalSessionDao.listAll()
-            if (rows.isNotEmpty()) {
-                rows.forEach { row ->
-                    createSession(
-                        id = row.id,
-                        label = row.label,
-                        workingDirectory = row.workingDirectory,
-                        distributionId = row.distributionId,
-                    )
+            try {
+                val rows = terminalSessionDao.listAll()
+                _restoreFailures.value = emptyList()
+                for (row in rows) {
+                    if (_handles.value.any { it.id == row.id }) continue
+                    try {
+                        synchronized(stateLock) { resources[row.id] }?.takeIf { it.failedCreation }?.let { release(it, deleteRow = false) }
+                        check(!row.distributionId.startsWith("ssh:") || row.executionTargetJson != null) { "旧终端未记录主机身份，请移除记录后新建" }
+                        createSession(row.label, row.workingDirectory, row.distributionId, row.id)
+                    } catch (e: CancellationException) { throw e }
+                    catch (e: Exception) {
+                        _restoreFailures.update { it + TerminalRestoreFailure(row.id, row.label, e.message?.take(180) ?: "恢复失败") }
+                        // Unconfirmed disposal must remain blocking and reachable for retry.
+                        if (synchronized(stateLock) { resources.containsKey(row.id) }) throw e
+                    }
                 }
-                _activeId.value = _handles.value.firstOrNull()?.id ?: _activeId.value
-                return
-            }
+                restoredOnce = true
+                if (_handles.value.isNotEmpty()) {
+                    _activeId.value = _handles.value.firstOrNull()?.id ?: _activeId.value
+                    return
+                }
+            } catch (t: Throwable) { restoredOnce = false; throw t }
         }
-        if (_handles.value.isEmpty()) {
-            createSession(workingDirectory = initialWorkingDirectory)
-        }
+        if (_handles.value.isEmpty()) createSession(workingDirectory = initialWorkingDirectory)
     }
 
-    /** 新建会话并设为活动。会持久化元数据。 */
     suspend fun createSession(
         label: String = "会话 ${_handles.value.size + 1}",
         workingDirectory: String = DEFAULT_CWD,
         distributionId: String? = null,
         id: String = UUID.randomUUID().toString(),
-    ): TerminalSessionHandle {
-        val targetDistro = distributionId?.trim()?.takeIf { it.isNotBlank() } ?: linuxRuntime.activeDistroId.value
-        val session = linuxRuntime.startSession(
-            config = SessionConfig(workingDirectory = workingDirectory, showBanner = true),
-            distroId = targetDistro,
-        )
-        val handle = TerminalSessionHandle(
-            id = id,
-            label = label,
-            workingDirectory = workingDirectory,
-            distributionId = targetDistro,
-            session = session,
-            buffer = AnsiTerminalBuffer(),
-        )
-        terminalSessionDao.upsert(
-            TerminalSessionEntity(
-                id = id,
-                label = label,
-                workingDirectory = workingDirectory,
-                distributionId = targetDistro,
-                createdAt = System.currentTimeMillis(),
-                sortOrder = terminalSessionDao.nextOrder(),
-            ),
-        )
-        scope.launch {
-            val pending = StringBuilder()
-            var flushJob: Job? = null
-
-            suspend fun flushPending() {
-                val text = synchronized(pending) {
-                    if (pending.isEmpty()) "" else pending.toString().also { pending.setLength(0) }
-                }
-                if (text.isNotEmpty()) {
-                    // append already creates the immutable screen snapshot; do not snapshot twice.
-                    handle.publish(handle.buffer.append(text))
-                }
-            }
-
-            session.output.collect { output ->
-                synchronized(pending) { pending.append(output.text) }
-                if (flushJob?.isActive != true) {
-                    flushJob = launch {
-                        // Bound UI publication to roughly 30 FPS under bursty PTY output.
-                        delay(32L)
-                        flushPending()
-                    }
-                }
-            }
-            flushJob?.join()
-            flushPending()
+    ): TerminalSessionHandle = coroutineScope {
+        val capturedTarget = environmentFactory?.capture("", distributionId)
+        val owned = TerminalOwnedResources(id, currentCoroutineContext().job)
+        synchronized(stateLock) {
+            check(!closingAll) { "Terminal sessions are closing" }
+            require(id !in resources) { "Terminal session already exists or awaits cleanup: $id" }
+            resources[id] = owned
         }
-        _handles.value = _handles.value + handle
-        _activeId.value = handle.id
-        return handle
+        try {
+            val previous = terminalSessionDao.listAll().firstOrNull { it.id == id }
+            check(previous?.distributionId?.startsWith("ssh:") != true || previous.executionTargetJson != null) {
+                "旧远程终端未记录主机身份，请关闭后新建终端"
+            }
+            val targetJson = previous?.executionTargetJson ?: capturedTarget
+            if (targetJson != null) environmentFactory?.restore("terminal:$id", "", targetJson)
+            owned.environment = environmentFactory?.open("terminal:$id", "", distributionId)
+            checkCreation(owned)
+            val environment = owned.environment
+            val targetDistro = environment?.id?.distribution ?: distributionId ?: linuxRuntime.activeDistroId.value
+            val cwd = if (environment != null && environment !is LocalTerminalLaunch)
+                environment.workingDirectory(workingDirectory.takeUnless { it == DEFAULT_CWD }) else workingDirectory
+            val storedDirectory = if (workingDirectory == DEFAULT_CWD) cwd else workingDirectory
+            val config = SessionConfig(workingDirectory = cwd, showBanner = true)
+            checkCreation(owned)
+            owned.process = when (environment) {
+                null -> processFactory.create(linuxRuntime.buildInteractiveLaunch(config, targetDistro), sessionClientRouter)
+                is LocalTerminalLaunch -> processFactory.create(environment.terminalLaunch(config), sessionClientRouter)
+                else -> remoteProcessFactory.create(
+                    LinuxSessionTerminalBackend(environment.openTerminal(config), scope), label, sessionClientRouter)
+            }
+            checkCreation(owned)
+            owned.rollback = {
+                if (previous == null) terminalSessionDao.delete(id) else terminalSessionDao.upsert(previous)
+            }
+            terminalSessionDao.upsert(TerminalSessionEntity(id = id, label = label, workingDirectory = storedDirectory,
+                distributionId = targetDistro, createdAt = System.currentTimeMillis(), sortOrder = terminalSessionDao.nextOrder(),
+                executionTargetJson = targetJson))
+            checkCreation(owned)
+            val handle = TerminalSessionHandle(id, label, storedDirectory, targetDistro, owned.process!!,
+                environment?.takeUnless { it is LocalTerminalLaunch }?.label)
+            synchronized(stateLock) {
+                check(!owned.closing && !closingAll && resources[id] === owned) { "Terminal session was disposed during creation" }
+                _handles.update { it + handle }
+                _activeId.value = id
+                owned.published = true
+                owned.rollback = null
+            }
+            handle
+        } catch (t: Throwable) {
+            owned.failedCreation = true
+            try { owned.release(drainCreation = false); forget(owned) }
+            catch (cleanup: Throwable) { t.addSuppressed(cleanup) }
+            throw t
+        }
     }
 
-    /**
-     * 打开或切换到指定工作区的终端会话：
-     * 1. 若已有该工作目录的会话，直接切换为活动会话；
-     * 2. 若没有，创建以项目名称命名且处于该工作目录的新会话，并切换为活动。
-     */
+    private suspend fun checkCreation(owned: TerminalOwnedResources) {
+        currentCoroutineContext().ensureActive()
+        check(!owned.closing) { "Terminal session was disposed during creation" }
+    }
+
     suspend fun openOrSwitchToProject(project: String, workingDirectory: String, distributionId: String? = null): TerminalSessionHandle {
         ensureActive()
-        val existing = _handles.value.firstOrNull { it.workingDirectory == workingDirectory }
-        if (existing != null) {
-            _activeId.value = existing.id
-            return existing
-        }
-        val handle = createSession(
-            label = project.ifBlank { "工作区" },
-            workingDirectory = workingDirectory,
-            distributionId = distributionId,
-        )
-        _activeId.value = handle.id
-        return handle
+        val existing = _handles.value.firstOrNull { it.workingDirectory == workingDirectory &&
+            (distributionId == null || it.distributionId == distributionId) }
+        if (existing != null) { _activeId.value = existing.id; return existing }
+        return createSession(project.ifBlank { "工作区" }, workingDirectory, distributionId)
     }
 
     fun switchTo(id: String) {
-        if (_handles.value.any { it.id == id }) {
-            _activeId.value = id
-        }
+        if (_handles.value.any { it.id == id }) _activeId.value = id
     }
 
-    /** 关闭会话并从 Room 移除；若关闭的是活动会话，则切到相邻会话；若所有会话都已关闭，自动重建一个默认会话防止黑屏。 */
-    suspend fun closeSession(id: String) {
-        val handle = _handles.value.find { it.id == id } ?: return
-        runCatching { handle.session.close() }
+    suspend fun removeFailedRestoration(id: String) = restoreMutex.withLock {
+        require(_restoreFailures.value.any { it.id == id } && _handles.value.none { it.id == id }) { "此记录不是恢复失败的终端" }
+        closeSession(id)
         terminalSessionDao.delete(id)
-        val remaining = _handles.value.filterNot { it.id == id }
-        _handles.value = remaining
-        if (remaining.isEmpty()) {
-            val fallback = createSession(label = "主终端", workingDirectory = DEFAULT_CWD)
-            _activeId.value = fallback.id
-        } else if (_activeId.value == id) {
-            _activeId.value = remaining.lastOrNull()?.id ?: remaining.firstOrNull()?.id
+        _restoreFailures.update { failures -> failures.filterNot { it.id == id } }
+    }
+
+    suspend fun retryFailedRestorations() = restoreMutex.withLock {
+        restoredOnce = false
+        ensureActiveInternal(DEFAULT_CWD)
+    }
+
+    suspend fun closeSession(id: String) {
+        val (owned, version) = synchronized(stateLock) { resources[id] to generation }
+        if (owned == null) return
+        checkRuntimeDisposal(owned)
+        checkRuntimeDisposal(owned.disposalMutex)
+        check(!owned.owns(currentCoroutineContext().job)) { "Cannot close terminal from its own creation" }
+        release(owned, deleteRow = true)
+        val fallback = synchronized(stateLock) {
+            (owned.published && _handles.value.isEmpty() && !closingAll && generation == version && !fallbackPending)
+                .also { if (it) fallbackPending = true }
+        }
+        if (fallback) try { createSession(label = "主终端", workingDirectory = DEFAULT_CWD) }
+        finally { synchronized(stateLock) { fallbackPending = false } }
+    }
+
+    private suspend fun release(owned: TerminalOwnedResources, deleteRow: Boolean) = withRuntimeDisposal(owned.disposalMutex) {
+        owned.disposalMutex.withLock {
+            if (synchronized(stateLock) { resources[owned.id] !== owned }) return@withLock
+            owned.release()
+            if (deleteRow && !owned.failedCreation) terminalSessionDao.delete(owned.id)
+            forget(owned)
         }
     }
 
-    /**
-     * 关闭并销毁所有终端会话，清空 Room 记录与内存状态。
-     * 切换发行版前必须调用，防止旧系统 PTY 与新系统 Buffer 并发冲突。
-     * 调用后调用方应在新发行版就绪后再调用 [ensureActive] 重建默认会话。
-     */
-    suspend fun closeAllSessions() {
-        val snapshot = _handles.value.toList()
-        snapshot.forEach { handle ->
-            runCatching { handle.session.close() }
+    private fun forget(owned: TerminalOwnedResources) = synchronized(stateLock) {
+        if (resources[owned.id] === owned) {
+            resources.remove(owned.id)
+            _handles.update { handles -> handles.filterNot { it.id == owned.id } }
+            if (_activeId.value == owned.id) _activeId.value = _handles.value.lastOrNull()?.id
         }
-        terminalSessionDao.deleteAll()
-        _handles.value = emptyList()
-        _activeId.value = null
-        restoredOnce = false   // 下次 ensureActive 可重新从 Room 恢复（此时 Room 已空，会新建）
+    }
+
+    suspend fun closeAllSessions() {
+        synchronized(stateLock) { resources.values.toList() }.forEach {
+            checkRuntimeDisposal(it); checkRuntimeDisposal(it.disposalMutex)
+        }
+        val caller = currentCoroutineContext().job
+        synchronized(stateLock) {
+            check(resources.values.none { it.owns(caller) }) { "Cannot close terminals from their own creation" }
+        }
+        withContext(NonCancellable) { closeAllMutex.withLock {
+            val snapshot = synchronized(stateLock) {
+                closingAll = true; generation++
+                resources.values.toList().also { all -> all.forEach { it.closing = true; it.creation.cancel() } }
+            }
+            try {
+                val failures = mutableListOf<Throwable>()
+                for (owned in snapshot) {
+                    try { release(owned, deleteRow = true) } catch (t: Throwable) { failures += t }
+                }
+                if (failures.isNotEmpty()) throw TerminalCleanupException(failures)
+                terminalSessionDao.deleteAll()
+                _restoreFailures.value = emptyList()
+                _handles.value = emptyList(); _activeId.value = null; restoredOnce = false
+            } finally { synchronized(stateLock) { closingAll = false } }
+        } }
     }
 
     fun write(id: String, data: ByteArray) {
-        val handle = _handles.value.find { it.id == id } ?: return
-        scope.launch { runCatching { handle.session.write(data) } }
+        val owned = synchronized(stateLock) { resources[id] }
+        if (owned?.closing != false) return
+        _handles.value.firstOrNull { it.id == id }?.process?.write(data)
     }
+    fun paste(id: String, text: String) = write(id, text.toByteArray(Charsets.UTF_8))
+    fun interrupt(id: String) = write(id, byteArrayOf(3))
 
-    fun paste(id: String, text: String) {
-        val handle = _handles.value.find { it.id == id } ?: return
-        val payload = if (handle.buffer.isBracketedPasteEnabled()) {
-            "\u001B[200~$text\u001B[201~"
-        } else text
-        scope.launch { runCatching { handle.session.write(payload.toByteArray(Charsets.UTF_8)) } }
-    }
-
-    fun interrupt(id: String) {
-        write(id, byteArrayOf(3))
-    }
-
-    fun resizeSession(id: String, columns: Int, rows: Int) {
-        val handle = _handles.value.find { it.id == id } ?: return
-        scope.launch {
-            runCatching { handle.session.resize(columns.coerceIn(20, 400), rows.coerceIn(5, 200)) }
-        }
-    }
-
-    fun resizeBuffer(id: String, columns: Int) {
-        val handle = _handles.value.find { it.id == id } ?: return
-        handle.buffer.resize(columns)
-        handle.publish()
-    }
-
-    private companion object {
-        const val DEFAULT_CWD = "/root"
-    }
+    private companion object { const val DEFAULT_CWD = "/root" }
 }

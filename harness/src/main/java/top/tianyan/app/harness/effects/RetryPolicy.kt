@@ -21,6 +21,6 @@ data class RetryPolicy(
     }
 
     companion object {
-        val NETWORK_DEFAULT = RetryPolicy(enabled = true, maxRetries = 3, baseDelayMs = 1_500)
+        val NETWORK_DEFAULT = RetryPolicy(enabled = true, maxRetries = 5, baseDelayMs = 1_500)
     }
 }

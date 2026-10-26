@@ -35,4 +35,5 @@ data class OperationSnapshot(
     val attempt: Int = 0,
     val maxAttempts: Int = 1,
     val lastError: String? = null,
+    val failureMemory: FailureMemoryState? = null,
 )

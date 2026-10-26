@@ -1,11 +1,13 @@
 package top.tianyan.app.harness.effects
 
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import top.tianyan.app.harness.HarnessTool
 import top.tianyan.app.harness.ToolCall
+import top.tianyan.app.harness.ToolResult
 
 private fun call(id: String, tool: HarnessTool, raw: String? = null) =
     ToolCall(id = id, createdAt = 1L, tool = tool, args = buildJsonObject { }, rawToolName = raw)
@@ -44,25 +46,48 @@ class DanglingToolCallPlannerTest {
         val replayed = actions.filterIsInstance<DanglingToolCallPlanner.Replay>().map { it.call.id }.toSet()
         assertEquals(setOf("r1", "r2"), replayed)
         actions.filterIsInstance<DanglingToolCallPlanner.Stubbed>().forEach {
-            assertTrue(it.note.contains("不可自动重放"))
+            assertEquals(ToolRecoveryNotice.OUTCOME_UNKNOWN, it.errorCode)
+            assertTrue(it.note.contains("先通过只读查询核验"))
+            assertTrue(it.note.contains("禁止直接重新发起"))
         }
     }
 
     @Test
     fun `answered calls are ignored`() {
         val answered = ToolResultAnswered.stubOf(call("done", HarnessTool.READ))
-        val actions = DanglingToolCallPlanner.plan(listOf(answered), interrupted = false)
+        val actions = DanglingToolCallPlanner.plan(listOf(call("done", HarnessTool.READ), answered), interrupted = false)
         assertTrue(actions.isEmpty())
     }
 
+    @Test
+    fun `user stop distinguishes read-only interruption from unknown side effects`() {
+        val actions = DanglingToolCallPlanner.plan(
+            listOf(call("read", HarnessTool.READ), call("write", HarnessTool.WRITE)), interrupted = true,
+        ).filterIsInstance<DanglingToolCallPlanner.Stubbed>()
+        assertEquals(ToolRecoveryNotice.INTERRUPTED, actions[0].errorCode)
+        val result = actions[1].result("result", 3L)
+        assertEquals(ToolRecoveryNotice.OUTCOME_UNKNOWN, result.errorCode)
+        assertTrue(result.output.contains("可能已产生全部或部分副作用"))
+        assertEquals(false, result.success)
+    }
+
     private object ToolResultAnswered {
-        fun stubOf(call: ToolCall): top.tianyan.app.harness.ToolResult =
-            top.tianyan.app.harness.ToolResult(
+        fun stubOf(call: ToolCall): ToolResult =
+            ToolResult(
                 id = "res-${call.id}",
                 createdAt = 2L,
                 toolCallId = call.id,
                 success = true,
                 output = "",
             )
+    }
+
+    @Test
+    fun `old tool results decode without recovery code`() {
+        val result = Json.decodeFromString(ToolResult.serializer(),
+            """{"id":"old","createdAt":1,"toolCallId":"call","success":true,"output":"ok"}""")
+        assertEquals(null, result.errorCode)
+        val unknown = ToolRecoveryNotice.unknown().result("new", 2L, "call")
+        assertEquals(unknown, Json.decodeFromString(ToolResult.serializer(), Json.encodeToString(ToolResult.serializer(), unknown)))
     }
 }

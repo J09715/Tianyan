@@ -3,12 +3,9 @@ package top.tianyan.app.runtime.rootfs
 import top.tianyan.app.runtime.ElfInspector
 import java.io.File
 import java.nio.file.Files
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /** Validates the complete shell -> PT_INTERP -> dynamic-loader chain before PRoot is started. */
-@Singleton
-class RootfsValidator @Inject constructor(
+class RootfsValidator(
     private val elfInspector: ElfInspector,
 ) {
     fun validate(rootfs: File): RootfsValidation {

@@ -34,6 +34,8 @@ object SubagentArgsParser {
                 .map { it.trim() }
                 .filter { it.isNotBlank() }
                 .distinct()
+            val taskId = (candidate.string("task_id") ?: candidate.string("taskId"))
+                ?.trim()?.takeIf { it.isNotBlank() }
 
             SubagentTaskSpec(
                 taskName = candidate.string("taskName")?.trim()?.takeIf { it.isNotBlank() } ?: defaultTaskName,
@@ -43,6 +45,7 @@ object SubagentArgsParser {
                 agentQuery = agentQuery,
                 writePaths = writePaths,
                 model = model,
+                taskId = taskId,
             )
         }.take(maxTasks.coerceAtLeast(0))
 

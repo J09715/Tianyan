@@ -2,14 +2,10 @@ package top.tianyan.app.runtime
 
 import android.content.Context
 import top.tianyan.app.runtime.rootfs.RootfsValidator
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class RuntimePathManager @Inject constructor(
-    @ApplicationContext context: Context,
+class RuntimePathManager(
+    context: Context,
     private val rootfsValidator: RootfsValidator,
 ) {
     private val appFilesDir: File = context.filesDir
@@ -37,19 +33,11 @@ class RuntimePathManager @Inject constructor(
     val attachmentsDir: File = File(baseDir, "attachments")
     private val legacyAttachmentsDir: File = File(appFilesDir, "attachments")
     val cacheDir: File = File(baseDir, "cache")
+    /** Raw command spools are outside guest mounts and Android backup. */
+    val commandOutputCacheDir: File by lazy { File(context.cacheDir, "command-output") }
     val tmpDir: File = File(baseDir, "tmp")
     val logsDir: File = File(baseDir, "logs")
     val metadataDir: File = File(baseDir, "metadata")
-
-    /**
-     * Git 凭证 IPC 桥接目录：跨发行版共享，绑定到沙箱 `/tianyan-ipc`。
-     *
-     * 容器内 git 缺凭据时自定义 credential.helper 写 `cred-req-<id>` 到这里 → app FileObserver
-     * 捕获 → 全局弹窗让用户填 → 写 `cred-resp-<id>` → helper 读回喂 git → git 自动续跑。
-     * 同时 `git-credentials`（`credential.helper=store --file=...` 的目标）与 `git-credential-tianyan`
-     * 也放这里，UI 与容器 git 共用同一份文件真源。
-     */
-    val gitIpcDir: File = File(baseDir, "git-ipc")
 
     // ==================== 插件目录（按发行版隔离） ====================
     // v17 起插件本体/数据/命令与依赖 Runtime 均随发行版走：
@@ -189,7 +177,6 @@ class RuntimePathManager @Inject constructor(
             tmpDir,
             logsDir,
             metadataDir,
-            gitIpcDir,
         ).forEach { it.mkdirs() }
         migrateLegacyAttachments()
         listInstalledDistroIds().forEach(::ensureDistroDirectories)

@@ -57,4 +57,30 @@ class ToolStatusDescriberTest {
         assertEquals("正在更新任务执行规划：plan", ToolStatusDescriber.describe(HarnessTool.PLAN, buildJsonObject { }))
         assertEquals("正在记录工作草稿便签：scratchpad", ToolStatusDescriber.describe(HarnessTool.SCRATCHPAD, buildJsonObject { }))
     }
+
+    @Test
+    fun `host screen actions render the detailed variants`() {
+        val swipe = ToolStatusDescriber.describe(
+            HarnessTool.HOST,
+            args("action" to "screen_swipe", "x1" to "1", "y1" to "2", "x2" to "3", "y2" to "4"),
+        )
+        // 详细变体（带起止坐标）此前被前组简单分支遮蔽为不可达死代码
+        assertEquals("正在滑动屏幕 (1, 2) ➔ (3, 4)…", swipe)
+        assertEquals(
+            "正在向当前输入框打字：你好世界…",
+            ToolStatusDescriber.describe(HarnessTool.HOST, args("action" to "screen_input_text", "text" to "你好世界")),
+        )
+        assertEquals(
+            "正在触发系统按键：back…",
+            ToolStatusDescriber.describe(HarnessTool.HOST, args("action" to "screen_key", "key" to "back")),
+        )
+        assertEquals(
+            "正在粘贴文本到焦点控件…",
+            ToolStatusDescriber.describe(HarnessTool.HOST, args("action" to "paste_text")),
+        )
+        assertEquals(
+            "正在截取屏幕画面…",
+            ToolStatusDescriber.describe(HarnessTool.HOST, args("action" to "screen_capture")),
+        )
+    }
 }

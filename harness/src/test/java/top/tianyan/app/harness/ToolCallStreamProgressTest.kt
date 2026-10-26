@@ -32,4 +32,18 @@ class ToolCallStreamProgressTest {
     fun `returns null before field value starts`() {
         assertNull(countPartialJsonStringLines("""{"path":"a.kt","content""", "content"))
     }
+
+    @Test fun `all tool argument growth publishes progress including single line content`() {
+        for (tool in listOf("base", "write", "edit", "use_capability")) {
+            val accumulator = ToolCallAccumulator(name = tool)
+            val updates = mutableListOf<ToolCallStreamProgress>()
+            accumulator.arguments.append("{\"command\":\"echo first")
+            accumulator.publishProgress(updates::add, force = true)
+            accumulator.arguments.append(" more")
+            accumulator.publishProgress(updates::add, force = true)
+            assertEquals(2, updates.size)
+            assertEquals(accumulator.arguments.length, updates.last().argumentChars)
+            assertEquals(tool, updates.last().name)
+        }
+    }
 }

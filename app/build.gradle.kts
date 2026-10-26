@@ -4,10 +4,9 @@ import java.io.FileInputStream
 import java.security.MessageDigest
 import java.util.Properties
 import org.gradle.kotlin.dsl.configure
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
-val appVersionName = "0.18.47"
-val appVersionCode = 115
+val appVersionName = "1.5.0"
+val appVersionCode = 42
 
 // TianyanDev 双包构建开关：CI（.github/workflows/tianyandev-build.yml）设 TIANYAN_DEV_BUILD=1 时，
 // 产出独立预览包 top.tianyan.app.dev / 应用名 TianyanDev / 版本后缀 -dev，
@@ -15,18 +14,15 @@ val appVersionCode = 115
 val tianyanDevBuild = System.getenv("TIANYAN_DEV_BUILD") == "1"
 
 plugins {
-    alias(libs.plugins.android.application)
+    alias(libs.plugins.tianyan.android.application)
+    alias(libs.plugins.tianyan.android.application.compose)
     alias(libs.plugins.kotlin.serialization)
-    alias(libs.plugins.ksp)
-    alias(libs.plugins.hilt)
-    alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.androidx.baselineprofile)
 }
 
 extensions.configure<ApplicationExtension> {
     namespace = "top.tianyan.app"
     resourcePrefix = "tianyan_"
-    compileSdk = 37
     ndkVersion = "30.0.15729638"
 
     defaultConfig {
@@ -99,8 +95,6 @@ extensions.configure<ApplicationExtension> {
                 applicationIdSuffix = ".debug"
             }
             versionNameSuffix = if (tianyanDevBuild) "-dev" else "-debug"
-            // CI supplies the same keystore for every preview/debug APK so upgrades
-            // remain installable instead of silently using the runner's ephemeral key.
             if (signingConfigured) {
                 signingConfig = signingConfigs.getByName("release")
             }
@@ -117,19 +111,6 @@ extensions.configure<ApplicationExtension> {
                 signingConfig = signingConfigs.getByName("release")
             }
         }
-    }
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_25
-        targetCompatibility = JavaVersion.VERSION_25
-    }
-
-    testOptions {
-        unitTests.isIncludeAndroidResources = true
-    }
-
-    buildFeatures {
-        compose = true
     }
 
     packaging {
@@ -155,19 +136,9 @@ extensions.configure<ApplicationExtension> {
                 "META-INF/LICENSE.md",
                 "META-INF/LICENSE-notice.md",
                 "META-INF/license.txt",
-                "META-INF/notice.txt",
+                "META-INF/notice.txt"
             )
-            // bcprov 被无线 ADB 密钥栈使用，但其后量子密码(pqc)子模块（含 picnic
-            // lowmc 表 ~1.2MB 二进制 .properties 资源，R8 不清理资源）全项目零引用，
-            // 参照 taixu 7526e16 减包思路剔除（对齐其"离线只留必需"策略）。
-            excludes += "org/bouncycastle/pqc/**"
         }
-    }
-}
-
-kotlin {
-    compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_25)
     }
 }
 
@@ -179,6 +150,7 @@ dependencies {
 }
 
 dependencies {
+    debugImplementation(libs.leakcanary.android)
     implementation(project(":core:common"))
     implementation(project(":core:model"))
     implementation(project(":core:database"))
@@ -186,34 +158,34 @@ dependencies {
     implementation(project(":core:security"))
     implementation(project(":core:datastore"))
     implementation(project(":runtime"))
+    implementation(project(":project-template"))
     implementation(project(":tools"))
     implementation(project(":harness"))
     implementation(project(":feature:components"))
     implementation(project(":feature:chat"))
     implementation(project(":feature:workspace"))
+    implementation(project(":feature:workflow"))
     implementation(project(":feature:navigation"))
     implementation(project(":feature:custom_iteration"))
     implementation(project(":feature:onboarding"))
     implementation(project(":feature:theme"))
+    implementation(project(":feature:git"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.activity.compose)
 
-    implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.compose.ui)
-    implementation(libs.androidx.compose.material3)
+    implementation(libs.bundles.compose.ui)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
 
-    implementation(libs.hilt.android)
-    ksp(libs.hilt.compiler)
-    implementation(libs.androidx.hilt.navigation.compose)
+    implementation(libs.bundles.koin.compose)
+    // 工作流定时计划：WorkManager 到点触发 + Koin Worker 注入
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.koin.workmanager)
 
-    implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.room.ktx)
-    ksp(libs.androidx.room.compiler)
+    implementation(libs.bundles.room)
 
     implementation(libs.shizuku.provider)
 
@@ -224,14 +196,15 @@ dependencies {
         artifact { type = "aar" }
     }
     implementation(libs.kotlinx.serialization.json)
-    implementation(libs.kotlinx.coroutines.core)
-    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.bundles.coroutines)
 
-    testImplementation(libs.junit)
-    testImplementation(libs.robolectric)
-    testImplementation(libs.androidx.test.core)
-
-    debugImplementation(libs.androidx.compose.ui.tooling)
+    testImplementation(libs.bundles.test.robolectric)
+    // Graph verification names the DataStore built by McpClientPreferences' Context constructor.
+    testImplementation(libs.androidx.datastore.preferences)
+    testImplementation(libs.koin.test)
+    testImplementation(libs.androidx.work.testing)
+    // Robolectric on Java 25 requires the same ASM override as core:database.
+    testImplementation(libs.bundles.asm.test)
 }
 
 val bundledProot = layout.projectDirectory.file(
@@ -278,35 +251,42 @@ tasks.configureEach {
             }
             // libpty_native 必须是 NDK/Bionic 构建：若依赖 glibc 的 libc.so.6，设备上
             // dlopen 必失败并静默回退到 script PTY 路径（PTY 回显问题会随之复发）。
-            //
-            // 但它是构建产物（.gitignore 不入库，由 NDK 从 app/src/main/cpp/pty_native.c
-            // 重建），所以只在真正产出 APK 的构建里强制要求。挂在 preBuild 上无条件
-            // 检查会让 `./gradlew test` 因为一个与测试无关的原生库缺失而整条失败，
-            // 本地根本跑不了单元测试。
-            // 用 AGP 的原生库合并任务作为"正在产出 APK"的判据。
-            // 不能靠任务名前缀猜：:app:testDebugUnitTest 的依赖里既有
-            // packageDebugUnitTestForUnitTest，也有 bundleDebugClassesToRuntimeJar
-            // 和 packageDebugResources，按 assemble/bundle/package 前缀判断会把跑测试
-            // 误判成打包，于是本地和 CI 的 `./gradlew test` 全部失败。
-            // merge<Variant>JniLibFolders 只在真正打包 APK 时才进入任务图。
-            val packagingApk = gradle.taskGraph.allTasks.any { task ->
-                task.name.startsWith("merge") && task.name.endsWith("JniLibFolders")
+            val ptyNativeBytes = bundledPtyNative.asFile.readBytes()
+            val ptyManifestFile = layout.projectDirectory.file("src/main/cpp/pty-native.properties").asFile
+            check(ptyManifestFile.isFile) { "Missing PTY build manifest. Run tools/build-pty-native.ps1." }
+            val ptyManifest = Properties().apply { ptyManifestFile.inputStream().use { load(it) } }
+            fun ptyHash(bytes: ByteArray) = MessageDigest.getInstance("SHA-256")
+                .digest(bytes).joinToString("") { "%02x".format(it) }
+            val ptySource = layout.projectDirectory.file("src/main/cpp/pty_native.c").asFile
+                .readText().replace("\r\n", "\n").toByteArray(Charsets.UTF_8)
+            check(ptyManifest.getProperty("format.version") == "1" &&
+                ptyManifest.getProperty("abi") == "arm64-v8a" && ptyManifest.getProperty("api.level") == "29") {
+                "Incompatible PTY build manifest. Run tools/build-pty-native.ps1."
             }
-            if (packagingApk) {
-                check(bundledPtyNative.asFile.isFile) {
-                    "Missing libpty_native.so. Build it with the NDK clang before assembling " +
-                        "(aarch64-linux-android30-clang -shared -fPIC -O2 -o <out> app/src/main/cpp/pty_native.c). " +
-                        "CI does this automatically."
+            check(ptyHash(ptySource) == ptyManifest.getProperty("source.sha256")) {
+                "PTY source changed since its last NDK build. Run tools/build-pty-native.ps1."
+            }
+            check(ptyHash(ptyNativeBytes) == ptyManifest.getProperty("binary.sha256")) {
+                "Bundled PTY library does not match its build manifest. Run tools/build-pty-native.ps1."
+            }
+            val ptyNativeSymbols = ptyNativeBytes.toString(Charsets.ISO_8859_1)
+            val ptyDeclarations = rootProject.file(
+                "runtime/src/main/java/top/tianyan/app/runtime/pty/NativePty.kt",
+            ).readText()
+            Regex("""external\s+fun\s+(\w+)\(""").findAll(ptyDeclarations).forEach { method ->
+                val symbol = "Java_top_tianyan_app_runtime_pty_NativePty_${method.groupValues[1]}\u0000"
+                check(symbol in ptyNativeSymbols) {
+                    "Bundled PTY library is missing ${method.groupValues[1]}. " +
+                        "Rebuild it with tools/build-pty-native.ps1 before packaging."
                 }
-                val ptyNativeBytes = bundledPtyNative.asFile.readBytes()
-                val glibcMarker = "libc.so.6".toByteArray()
-                check(ptyNativeBytes.size < glibcMarker.size ||
-                    (0..ptyNativeBytes.size - glibcMarker.size).none { offset ->
-                        glibcMarker.indices.all { ptyNativeBytes[offset + it] == glibcMarker[it] }
-                    }) {
-                    "libpty_native.so is linked against glibc (libc.so.6). Rebuild it with the NDK " +
-                        "aarch64-linux-android clang (see app/src/main/cpp/CMakeLists.txt)."
-                }
+            }
+            val glibcMarker = "libc.so.6".toByteArray()
+            check(ptyNativeBytes.size < glibcMarker.size ||
+                (0..ptyNativeBytes.size - glibcMarker.size).none { offset ->
+                    glibcMarker.indices.all { ptyNativeBytes[offset + it] == glibcMarker[it] }
+                }) {
+                "libpty_native.so is linked against glibc (libc.so.6). Rebuild it with the NDK " +
+                    "aarch64-linux-android clang (see app/src/main/cpp/CMakeLists.txt)."
             }
         }
     }

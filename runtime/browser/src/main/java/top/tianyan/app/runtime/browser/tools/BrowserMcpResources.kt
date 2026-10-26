@@ -1,6 +1,7 @@
 package top.tianyan.app.runtime.browser.tools
 
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import top.tianyan.app.runtime.browser.BrowserEngine
@@ -20,14 +21,14 @@ class BrowserMcpResources(private val engineProvider: () -> BrowserEngine?) {
         val engine = engineProvider() ?: return null
         return when (uri) {
             "browser://current-page" -> buildJsonObject {
-                put("url", kotlinx.serialization.json.JsonPrimitive(engine.eventBus.url.value))
-                put("title", kotlinx.serialization.json.JsonPrimitive(engine.eventBus.title.value))
+                put("url", JsonPrimitive(engine.eventBus.url.value))
+                put("title", JsonPrimitive(engine.eventBus.title.value))
             }.toString()
             "browser://dom" -> engine.eventBus.snapshot.value?.snapshot?.let {
                 buildJsonObject {
-                    put("url", kotlinx.serialization.json.JsonPrimitive(it.url))
-                    put("title", kotlinx.serialization.json.JsonPrimitive(it.title))
-                    put("interactiveCount", kotlinx.serialization.json.JsonPrimitive(it.interactiveRefs.size))
+                    put("url", JsonPrimitive(it.url))
+                    put("title", JsonPrimitive(it.title))
+                    put("interactiveCount", JsonPrimitive(it.interactiveRefs.size))
                 }.toString()
             }.orEmpty()
             "browser://console" -> engine.eventBus.console.value.joinToString("\n") { "[${it.level}] ${it.message}" }
@@ -36,8 +37,8 @@ class BrowserMcpResources(private val engineProvider: () -> BrowserEngine?) {
             "browser://storage" -> {
                 val tab = engine.activeTab() ?: BrowserSessionToken.defaultTab(engine.family)
                 buildJsonObject {
-                    put("cookies", kotlinx.serialization.json.JsonPrimitive(engine.cookiesGet(tab, null)))
-                    put("localKeys", kotlinx.serialization.json.JsonPrimitive(engine.localKeys(tab).joinToString(",")))
+                    put("cookies", JsonPrimitive(engine.cookiesGet(tab, null)))
+                    put("localKeys", JsonPrimitive(engine.localKeys(tab).joinToString(",")))
                 }.toString()
             }
             else -> null

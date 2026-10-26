@@ -11,10 +11,9 @@ import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import top.tianyan.app.core.model.AgentSubagent
+import top.tianyan.app.core.model.AgentSubagentLocalization
 import top.tianyan.app.core.model.AgentDepartmentCount
 import top.tianyan.app.core.model.AgentSubagentIndexEntry
-import javax.inject.Inject
-import javax.inject.Singleton
 
 @Entity(tableName = "agent_subagents")
 data class AgentSubagentEntity(
@@ -124,8 +123,7 @@ interface AgentSubagentDao {
     }
 }
 
-@Singleton
-class AgentSubagentRepository @Inject constructor(
+class AgentSubagentRepository(
     private val dao: AgentSubagentDao,
     private val catalogLoader: AgencyAgentCatalogLoader,
 ) {
@@ -148,6 +146,8 @@ class AgentSubagentRepository @Inject constructor(
         ensureInitialized()
         return dao.listEnabledIndex()
     }
+
+    suspend fun localization(): Map<String, AgentSubagentLocalization> = catalogLoader.localization()
 
     suspend fun enabledDepartmentCounts(): List<AgentDepartmentCount> {
         ensureInitialized()

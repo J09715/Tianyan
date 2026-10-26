@@ -1,5 +1,6 @@
 package top.tianyan.app.ui.chat.floating
 
+import org.koin.android.ext.android.inject
 import android.animation.ValueAnimator
 import android.app.Service
 import android.content.Context
@@ -10,6 +11,7 @@ import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
 import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
 import androidx.compose.runtime.collectAsState
@@ -18,31 +20,28 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
-import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import top.tianyan.app.core.database.HarnessSessionEntity
 import top.tianyan.app.core.database.HarnessSessionRepository
-import top.tianyan.app.harness.HarnessLoop
+import top.tianyan.app.harness.session.InteractiveSessionControl
 import top.tianyan.app.ui.theme.TianyanTheme
-import javax.inject.Inject
 import kotlin.math.roundToInt
 
 /**
  * 智枢 AI 桌面悬浮小窗后台服务。
  * 管理 WindowManager 智枢悬浮图层的创建、更新、对话发送与边缘自动吸附交互（纯净无底色遮罩）。
  */
-@AndroidEntryPoint
 class FloatingChatService : Service() {
 
-    @Inject
-    lateinit var harnessLoop: HarnessLoop
+    val harnessLoop: InteractiveSessionControl by inject()
 
-    @Inject
-    lateinit var sessionDao: HarnessSessionRepository
+    val sessionDao: HarnessSessionRepository by inject()
 
     private var windowManager: WindowManager? = null
     private var composeView: ComposeView? = null
@@ -50,8 +49,12 @@ class FloatingChatService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private var isExpanded by mutableStateOf(false)
+    private var isEdgeHidden by mutableStateOf(false)
+    private var dockedOnLeft by mutableStateOf(false)
     private var windowParams: WindowManager.LayoutParams? = null
     private var snapAnimator: ValueAnimator? = null
+    private var autoHideJob: Job? = null
+    private var pendingLayoutListener: View.OnLayoutChangeListener? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -91,9 +94,6 @@ class FloatingChatService : Service() {
             x = initialX
             y = initialY
             dimAmount = 0.0f
-            // SOFT_INPUT_ADJUST_RESIZE 自 API 30 弃用：新版由 WindowInsets 驱动，
-            // 悬浮窗仍需要它才能在旧版本正确避让输入法，故保留并显式压制警告。
-            @Suppress("DEPRECATION")
             softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
         }
         windowParams = params
@@ -121,12 +121,25 @@ class FloatingChatService : Service() {
                         running = running,
                         thinkingLive = thinkingLive,
                         isExpanded = isExpanded,
+                        isEdgeHidden = isEdgeHidden,
+                        dockedOnLeft = dockedOnLeft,
                         onToggleExpanded = {
+                            autoHideJob?.cancel()
                             val nextExpanded = !isExpanded
                             isExpanded = nextExpanded
+                            isEdgeHidden = false
+                            updateOverlaySize()
                             updateWindowFocusability(nextExpanded)
+                            if (!nextExpanded) scheduleAutoHide()
+                        },
+                        onReveal = {
+                            isEdgeHidden = false
+                            updateOverlaySize()
+                            snapToEdgeAfterLayout()
+                            scheduleAutoHide()
                         },
                         onDragBy = { dx, dy ->
+                            autoHideJob?.cancel()
                             snapAnimator?.cancel()
                             val currentParams = windowParams ?: return@FloatingChatView
                             currentParams.x += dx.roundToInt()
@@ -134,7 +147,19 @@ class FloatingChatService : Service() {
                             runCatching { windowManager?.updateViewLayout(this@apply, currentParams) }
                         },
                         onDragEnd = {
-                            snapToEdge()
+                            if (isExpanded) {
+                                snapToEdge()
+                            } else {
+                                val currentParams = windowParams
+                                val width = composeView?.width?.takeIf { it > 0 }
+                                    ?: ((if (isEdgeHidden) EDGE_HANDLE_TOUCH_WIDTH_DP else 150) * resources.displayMetrics.density).roundToInt()
+                                if (currentParams != null) {
+                                    dockedOnLeft = currentParams.x + width / 2 < resources.displayMetrics.widthPixels / 2
+                                }
+                                isEdgeHidden = true
+                                updateOverlaySize()
+                                snapToEdgeAfterLayout()
+                            }
                         },
                         onSendPrompt = { prompt ->
                             serviceScope.launch {
@@ -160,9 +185,54 @@ class FloatingChatService : Service() {
         runCatching {
             windowManager?.addView(view, params)
             owner.onStart()
+            snapToEdgeAfterLayout()
+            scheduleAutoHide()
         }.onFailure {
             stopSelf()
         }
+    }
+
+    private fun scheduleAutoHide() {
+        autoHideJob?.cancel()
+        if (isExpanded || isEdgeHidden) return
+        autoHideJob = serviceScope.launch {
+            delay(3_000)
+            if (!isExpanded && !isEdgeHidden) {
+                isEdgeHidden = true
+                updateOverlaySize()
+                snapToEdgeAfterLayout()
+            }
+        }
+    }
+
+    private fun updateOverlaySize() {
+        val params = windowParams ?: return
+        val view = composeView ?: return
+        val density = resources.displayMetrics.density
+        params.width = if (isEdgeHidden) (EDGE_HANDLE_TOUCH_WIDTH_DP * density).roundToInt()
+            else WindowManager.LayoutParams.WRAP_CONTENT
+        params.height = if (isEdgeHidden) (EDGE_HANDLE_TOUCH_HEIGHT_DP * density).roundToInt()
+            else WindowManager.LayoutParams.WRAP_CONTENT
+        runCatching { windowManager?.updateViewLayout(view, params) }
+    }
+
+    private fun snapToEdgeAfterLayout() {
+        val view = composeView ?: return
+        snapToEdge()
+        pendingLayoutListener?.let(view::removeOnLayoutChangeListener)
+        val listener = object : View.OnLayoutChangeListener {
+            override fun onLayoutChange(
+                changedView: View,
+                left: Int, top: Int, right: Int, bottom: Int,
+                oldLeft: Int, oldTop: Int, oldRight: Int, oldBottom: Int,
+            ) {
+                changedView.removeOnLayoutChangeListener(this)
+                pendingLayoutListener = null
+                snapToEdge()
+            }
+        }
+        pendingLayoutListener = listener
+        view.addOnLayoutChangeListener(listener)
     }
 
     /**
@@ -181,19 +251,30 @@ class FloatingChatService : Service() {
         val currentX = currentParams.x
         val currentY = currentParams.y
 
-        val viewWidth = currentView.width.takeIf { it > 0 }
-            ?: if (isExpanded) (310 * density).roundToInt() else (140 * density).roundToInt()
-        val viewHeight = currentView.height.takeIf { it > 0 }
-            ?: if (isExpanded) (410 * density).roundToInt() else (40 * density).roundToInt()
+        val viewWidth = when {
+            isEdgeHidden -> (EDGE_HANDLE_TOUCH_WIDTH_DP * density).roundToInt()
+            isExpanded -> (310 * density).roundToInt()
+            else -> currentView.width.takeIf { it > (EDGE_HANDLE_TOUCH_WIDTH_DP * density).roundToInt() }
+                ?: (150 * density).roundToInt()
+        }
+        val viewHeight = when {
+            isEdgeHidden -> (EDGE_HANDLE_TOUCH_HEIGHT_DP * density).roundToInt()
+            isExpanded -> (410 * density).roundToInt()
+            else -> currentView.height.takeIf { it > 0 } ?: (40 * density).roundToInt()
+        }
 
         val targetX = if (isExpanded) {
             // 面板态：限制在屏幕安全视口内
-            currentX.coerceIn((8 * density).roundToInt(), (screenWidth - viewWidth - 8 * density).roundToInt())
+            val margin = (8 * density).roundToInt()
+            currentX.coerceIn(margin, (screenWidth - viewWidth - margin).coerceAtLeast(margin))
         } else {
-            // 胶囊态：根据当前中线自动吸附至左边缘或右边缘
-            val centerX = currentX + viewWidth / 2
-            val margin = (10 * density).roundToInt()
-            if (centerX < screenWidth / 2) {
+            // 胶囊与边签态共用最近边缘；边签只露出 20dp 的小拉片。
+            if (!isEdgeHidden) {
+                val centerX = currentX + viewWidth / 2
+                dockedOnLeft = centerX < screenWidth / 2
+            }
+            val margin = if (isEdgeHidden) 0 else (10 * density).roundToInt()
+            if (dockedOnLeft) {
                 margin
             } else {
                 screenWidth - viewWidth - margin
@@ -230,7 +311,6 @@ class FloatingChatService : Service() {
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
                 WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED) and
                 WindowManager.LayoutParams.FLAG_DIM_BEHIND.inv()
-            @Suppress("DEPRECATION")
             currentParams.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
         } else {
             // 胶囊态：不拦截背景焦点
@@ -241,7 +321,7 @@ class FloatingChatService : Service() {
         }
         currentParams.dimAmount = 0.0f
         runCatching { windowManager?.updateViewLayout(currentView, currentParams) }
-        snapToEdge()
+        snapToEdgeAfterLayout()
     }
 
     private fun restoreAppToChat() {
@@ -258,6 +338,12 @@ class FloatingChatService : Service() {
         super.onDestroy()
         snapAnimator?.cancel()
         snapAnimator = null
+        autoHideJob?.cancel()
+        autoHideJob = null
+        pendingLayoutListener?.let { listener ->
+            composeView?.removeOnLayoutChangeListener(listener)
+        }
+        pendingLayoutListener = null
 
         lifecycleOwner?.onStop()
         lifecycleOwner?.onDestroy()

@@ -10,14 +10,16 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
+import top.tianyan.app.ui.components.RuntimeTab
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.ui.graphics.luminance
+import top.tianyan.app.ui.components.RuntimeAlertDialog
+import top.tianyan.app.ui.components.RuntimeTextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -33,8 +35,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.tianyan.app.runtime.browser.CapturedRequest
-import top.tianyan.app.ui.theme.Spacing
-import top.tianyan.app.ui.theme.Radius
 import top.tianyan.app.runtime.browser.hook.HookHitRecord
 
 /**
@@ -53,26 +53,36 @@ fun NetworkTimelineSheet(
     // 详情视图：非空时替换列表展示（返回列表按钮回到时间线）
     var detailId by remember { mutableStateOf<String?>(null) }
 
-    AlertDialog(
+    RuntimeAlertDialog(
         onDismissRequest = onDismiss,
         title = {
             if (detailId != null) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { detailId = null }) { Text("← 返回") }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    RuntimeTextButton(onClick = { detailId = null }) {
+                        Text("← 返回", color = MaterialTheme.colorScheme.primary)
+                    }
                     Text(
                         "请求详情",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        style = MaterialTheme.typography.titleMedium,
                     )
                 }
             } else {
                 Text(
                     "网络时间线",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.titleMedium,
                 )
             }
         },
         text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = 560.dp)
+                    .heightIn(max = 480.dp),
+            ) {
                 if (detailId != null) {
                     NetworkDetailBody(detail = detail)
                 } else {
@@ -81,12 +91,12 @@ fun NetworkTimelineSheet(
                         containerColor = Color.Transparent,
                         divider = {},
                     ) {
-                        Tab(
+                        RuntimeTab(
                             selected = selectedTab == 0,
                             onClick = { selectedTab = 0 },
                             text = { Text("请求 (${requests.size})", style = MaterialTheme.typography.labelMedium) },
                         )
-                        Tab(
+                        RuntimeTab(
                             selected = selectedTab == 1,
                             onClick = { selectedTab = 1 },
                             text = { Text("Hook 命中 (${hookHits.size})", style = MaterialTheme.typography.labelMedium) },
@@ -103,7 +113,11 @@ fun NetworkTimelineSheet(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
+        confirmButton = {
+            RuntimeTextButton(onClick = onDismiss) {
+                Text("关闭", color = MaterialTheme.colorScheme.primary)
+            }
+        },
     )
 }
 
@@ -129,14 +143,14 @@ private fun RequestList(requests: List<CapturedRequest>, onClick: (String) -> Un
 private fun RequestRow(req: CapturedRequest, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
-        shape = Radius.xsShape,
+        shape = RoundedCornerShape(8.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.xs),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
                 req.method,
@@ -167,7 +181,7 @@ private fun RequestRow(req: CapturedRequest, onClick: () -> Unit) {
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
                         listOfNotNull(
                             req.durationMs.takeIf { it > 0 }?.let { "${it}ms" },
@@ -190,8 +204,8 @@ private fun RequestRow(req: CapturedRequest, onClick: () -> Unit) {
 @Composable
 private fun NetworkDetailBody(detail: String?) {
     Surface(
-        shape = Radius.xsShape,
-        color = Color(0xFF1E1E1E),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Text(
@@ -201,9 +215,9 @@ private fun NetworkDetailBody(detail: String?) {
                 fontSize = 11.sp,
                 lineHeight = 15.sp,
             ),
-            color = Color(0xFFD4D4D4),
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier
-                .padding(Spacing.sm)
+                .padding(10.dp)
                 .heightIn(max = 460.dp)
                 .verticalScroll(rememberScrollState()),
         )
@@ -224,24 +238,24 @@ private fun HookHitList(hits: List<HookHitRecord>) {
     LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
         items(hits.asReversed(), key = { it.hookId + it.at.toString() + it.target }) { hit ->
             Surface(
-                shape = Radius.xsShape,
+                shape = RoundedCornerShape(8.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
-                modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.xs),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
             ) {
-                Column(modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs)) {
+                Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Surface(
-                            shape = Radius.xsShape,
+                            shape = RoundedCornerShape(4.dp),
                             color = MaterialTheme.colorScheme.tertiaryContainer,
                         ) {
                             Text(
                                 hit.type.name,
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
                                 maxLines = 1,
                             )
                         }
@@ -275,12 +289,16 @@ private fun HookHitList(hits: List<HookHitRecord>) {
 
 // ===== 颜色与格式化 =====
 
-private fun methodColor(method: String): Color = when (method.uppercase()) {
-    "GET" -> Color(0xFF3F8FFF)
-    "POST" -> Color(0xFF3FA66F)
-    "PUT", "PATCH" -> Color(0xFFC98A2B)
-    "DELETE" -> Color(0xFFD9534F)
-    else -> Color(0xFF8A8A9A)
+@Composable
+private fun methodColor(method: String): Color {
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    return when (method.uppercase()) {
+        "GET" -> if (isDark) Color(0xFF64B5F6) else Color(0xFF1976D2)
+        "POST" -> if (isDark) Color(0xFF81C784) else Color(0xFF2E7D32)
+        "PUT", "PATCH" -> if (isDark) Color(0xFFFFB74D) else Color(0xFFE65100)
+        "DELETE" -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
 }
 
 private fun statusText(req: CapturedRequest): String = when {
@@ -289,12 +307,16 @@ private fun statusText(req: CapturedRequest): String = when {
     else -> "✕"
 }
 
-private fun statusColor(req: CapturedRequest): Color = when {
-    req.statusCode in 200..299 -> Color(0xFF3FA66F)
-    req.statusCode in 300..399 -> Color(0xFFC98A2B)
-    req.statusCode >= 400 -> Color(0xFFD9534F)
-    req.statusCode == 0 && req.source != "native" -> Color(0xFFD9534F)
-    else -> Color(0xFF8A8A9A)
+@Composable
+private fun statusColor(req: CapturedRequest): Color {
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    return when {
+        req.statusCode in 200..299 -> if (isDark) Color(0xFF81C784) else Color(0xFF2E7D32)
+        req.statusCode in 300..399 -> if (isDark) Color(0xFFFFB74D) else Color(0xFFE65100)
+        req.statusCode >= 400 -> MaterialTheme.colorScheme.error
+        req.statusCode == 0 && req.source != "native" -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
 }
 
 private fun formatBytes(bytes: Long): String = when {

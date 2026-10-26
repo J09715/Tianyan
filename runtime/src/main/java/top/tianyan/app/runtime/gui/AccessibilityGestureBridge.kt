@@ -4,7 +4,11 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.graphics.Path
 import android.os.Build
+import android.os.Bundle
+import android.os.SystemClock
 import android.util.Log
+import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
 import java.lang.ref.WeakReference
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -80,8 +84,27 @@ object AccessibilityGestureBridge {
 }
 
 /**
+ * 最近的窗口状态变化时间戳（uptimeMillis），用作"界面是否已经变了"的轻量信号。
+ * 复用 service 已订阅的 typeWindowStateChanged，不额外订阅高频的 ContentChanged
+ * （滚动时事件量极大，会带来功耗与卡顿），也不抓取任何节点。
+ */
+internal object UiSettleSignal {
+    @Volatile
+    private var lastEventAt = 0L
+
+    fun mark() {
+        lastEventAt = SystemClock.uptimeMillis()
+    }
+
+    fun lastEventAt(): Long = lastEventAt
+
+    fun hasSignal(): Boolean = lastEventAt > 0L
+}
+
+/**
  * Thin accessibility service used only as a global gesture injector.
  * Does not scrape UI; screen observation still uses privileged uiautomator dump.
+ * 事件回调仅记录时间戳，供 [HostGuiController.awaitUiSettled] 判断界面稳定。
  */
 class TianyanGuiAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
@@ -91,7 +114,9 @@ class TianyanGuiAccessibilityService : AccessibilityService() {
         Log.i(TAG, "GUI accessibility gesture service connected")
     }
 
-    override fun onAccessibilityEvent(event: android.view.accessibility.AccessibilityEvent?) = Unit
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        UiSettleSignal.mark()
+    }
 
     override fun onInterrupt() = Unit
 
@@ -103,13 +128,45 @@ class TianyanGuiAccessibilityService : AccessibilityService() {
     }
 
     companion object {
-        private const val TAG = "TaiXu-GuiA11y"
+        private const val TAG = "Tianyan-GuiA11y"
         @Volatile
         private var instance: WeakReference<TianyanGuiAccessibilityService>? = null
 
         fun performGlobal(action: Int): Boolean {
             val service = instance?.get() ?: return false
             return runCatching { service.performGlobalAction(action) }.getOrDefault(false)
+        }
+
+        /**
+         * 对当前焦点输入框执行 ACTION_SET_TEXT，返回是否被目标控件接受。
+         * 与 input text 不同，它直接设值而非合成按键事件，因此支持任意 Unicode（中文/emoji），
+         * 也不依赖剪贴板与键盘快捷键。
+         */
+        fun setFocusedText(text: String): Boolean {
+            val service = instance?.get() ?: return false
+            return runCatching {
+                val focused = service.rootInActiveWindow
+                    ?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+                    ?: return@runCatching false
+                val args = Bundle().apply {
+                    putCharSequence(
+                        AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,
+                        text,
+                    )
+                }
+                focused.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+            }.getOrDefault(false)
+        }
+
+        /** 读回当前焦点输入框的文本，用于校验文本是否真的写入；读不到返回 null */
+        fun focusedText(): String? {
+            val service = instance?.get() ?: return null
+            return runCatching {
+                service.rootInActiveWindow
+                    ?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+                    ?.text
+                    ?.toString()
+            }.getOrNull()
         }
     }
 }

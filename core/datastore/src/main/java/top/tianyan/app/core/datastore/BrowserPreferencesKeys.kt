@@ -15,6 +15,7 @@ object BrowserPreferencesKeys {
     val AllowEvalJs = booleanPreferencesKey("browser_allow_eval_js")
     val AllowHooks = booleanPreferencesKey("browser_allow_hooks")
     val AllowCdp = booleanPreferencesKey("browser_allow_cdp")
+    val AllowVConsole = booleanPreferencesKey("browser_allow_v_console")
     val DesktopUserAgent = booleanPreferencesKey("browser_desktop_user_agent")
     val MaxCaptureBytes = intPreferencesKey("browser_max_capture_bytes")
 }

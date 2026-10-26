@@ -28,6 +28,9 @@ internal object McpToolApiName {
     fun matches(tool: McpToolInfo, apiName: String): Boolean =
         apiName == encode(tool) || apiName == legacy(tool)
 
+    fun isServerPrefix(apiName: String, serverId: String): Boolean =
+        apiName.startsWith("mcp__${safePart(serverId, SERVER_PART_LENGTH, "server")}__")
+
     fun isValid(apiName: String): Boolean = apiName.length <= MAX_LENGTH && allowedName.matches(apiName)
 
     private fun safePart(raw: String, maxLength: Int, fallback: String): String {

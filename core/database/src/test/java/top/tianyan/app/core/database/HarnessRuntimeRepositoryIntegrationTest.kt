@@ -3,6 +3,8 @@ package top.tianyan.app.core.database
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import top.tianyan.app.core.database.task.AgentTaskEntity
+import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -21,11 +23,71 @@ import org.robolectric.annotation.Config
 
 /**
  * 真实 Room（in-memory）上的持久化事务集成测试：
- * 覆盖 entry tree 事务原子性、并发 append 的 leaf 守卫、branch 投影与级联删除。
+ * 覆盖 entry tree 事务原子性、并发 append 的 leaf 重接、branch 投影与级联删除。
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class HarnessRuntimeRepositoryIntegrationTest {
+
+    private suspend fun queuedTask(sessionId: String = "s", status: String = "QUEUED") {
+        database.agentTaskDao().upsertTask(AgentTaskEntity(
+            id = "task", sessionId = sessionId, title = "input", description = "input",
+            status = status, createdAt = 1, updatedAt = 1))
+    }
+
+    @Test fun `task admission commits recovery state with input and operation`() = runBlocking {
+        queuedTask()
+        repository.acceptTaskOperation("task", entry("input", "s", null),
+            lane("s", leafId = "input", currentOperationId = "op"), operation("op", "s"))
+        val restored = database.agentTaskDao().getTaskById("task")!!
+        assertEquals("RUNNING", restored.status)
+        assertEquals("op", restored.operationId)
+        assertEquals(1, restored.attemptCount)
+        assertNotNull(repository.findEntry("s", "input"))
+        assertNotNull(repository.findOperation("op"))
+    }
+
+    @Test fun `queued task consumption commits its recovery state in the same transaction`() = runBlocking {
+        queuedTask()
+        repository.enqueue(HarnessQueueItemEntity("queue", "s", "main", null, "next_run", 1, "{}"))
+        repository.acceptTaskOperation("task", entry("input", "s", null),
+            lane("s", leafId = "input", currentOperationId = "op"), operation("op", "s"), "queue")
+        assertTrue(repository.listQueue("s", "main", "next_run").isEmpty())
+        assertEquals("RUNNING", database.agentTaskDao().getTaskById("task")!!.status)
+        assertEquals("op", database.agentTaskDao().getTaskById("task")!!.operationId)
+    }
+
+    @Test fun `failed entry commit rolls back task claim and preserves queued input`() = runBlocking {
+        queuedTask()
+        repository.enqueue(HarnessQueueItemEntity("queue", "s", "main", null, "next_run", 1, "{}"))
+        dao.insertEntry(entry("input", "other-session", null))
+        try {
+            dao.acceptTaskOperation("task", entry("input", "s", null),
+                lane("s", leafId = "input", currentOperationId = "op"), operation("op", "s"), "queue")
+            fail("must roll back")
+        } catch (_: IllegalStateException) { }
+        val task = database.agentTaskDao().getTaskById("task")!!
+        assertEquals("QUEUED", task.status)
+        assertEquals(0, task.attemptCount)
+        assertNull(task.operationId)
+        assertEquals(1, repository.listQueue("s", "main", "next_run").size)
+        assertNull(repository.findOperation("op"))
+        assertNull(repository.findLane("s", "main"))
+    }
+
+    @Test fun `cancelled or foreign task cannot accept input or create operation`() = runBlocking {
+        for ((owner, status) in listOf("s" to "CANCELLED", "other" to "QUEUED")) {
+            queuedTask(owner, status)
+            try {
+                repository.acceptTaskOperation("task", entry("input", "s", null),
+                    lane("s", leafId = "input", currentOperationId = "op"), operation("op", "s"))
+                fail("must reject")
+            } catch (_: IllegalStateException) { }
+            assertNull(repository.findEntry("s", "input"))
+            assertNull(repository.findOperation("op"))
+            assertEquals(status, database.agentTaskDao().getTaskById("task")!!.status)
+        }
+    }
 
     private lateinit var database: AppDatabase
     private lateinit var dao: HarnessRuntimeDao
@@ -103,11 +165,11 @@ class HarnessRuntimeRepositoryIntegrationTest {
     }
 
     @Test
-    fun `appendToLane rejects concurrent stale leaf writes`() = runBlocking {
+    fun `appendToLane rebases concurrent stale leaf writes into a chain`() = runBlocking {
         val sessionId = "s2"
         repository.ensureLane(sessionId, "main")
 
-        // 两个协程同时基于同一 leaf 追加：只有一个成功，另一个被 leaf 一致性守卫拒绝
+        // Two coroutines append from the same stale parent; both should succeed as a linear chain.
         val results = (1..2).map { index ->
             async(Dispatchers.IO) {
                 runCatching {
@@ -116,8 +178,14 @@ class HarnessRuntimeRepositoryIntegrationTest {
             }
         }.awaitAll()
 
-        val successes = results.count { it.isSuccess }
-        assertEquals("并发 append 只允许一个成功", 1, successes)
+        assertEquals("并发 append 都应成功（落后的 parent 会接到当前 leaf）", 2, results.count { it.isSuccess })
+        results.forEachIndexed { index, result ->
+            assertTrue("append #$index failed: ${result.exceptionOrNull()?.message}", result.isSuccess)
+        }
+        val leaf = repository.findLane(sessionId, "main")!!.leafId
+        val branch = repository.branch(sessionId, leaf)
+        assertEquals(2, branch.size)
+        assertEquals(branch[0].id, branch[1].parentId)
     }
 
     @Test
@@ -157,6 +225,28 @@ class HarnessRuntimeRepositoryIntegrationTest {
     }
 
     @Test
+    fun `branchWindow returns entries at or above sequence plus recall contexts`() = runBlocking {
+        val sessionId = "s-window"
+        var parentId: String? = null
+        repeat(10) { index ->
+            val type = when (index) {
+                1 -> "recall_context"
+                4 -> "compaction"
+                else -> "message"
+            }
+            val next = entry("e$index", sessionId, parentId).copy(entryType = type)
+            dao.insertEntry(next)
+            parentId = next.id
+        }
+
+        val all = repository.branch(sessionId, "e9")
+        val e4Seq = all.first { it.id == "e4" }.sequence
+        val window = repository.branchWindow(sessionId, "e9", e4Seq)
+
+        assertEquals(listOf("e1", "e4", "e5", "e6", "e7", "e8", "e9"), window.map { it.id })
+    }
+
+    @Test
     fun `branch search and indexed read stay on active branch and treat wildcards literally`() = runBlocking {
         val sessionId = "s-search"
         val root = entry("root", sessionId, null).copy(payloadJson = "literal 100% complete")
@@ -184,6 +274,59 @@ class HarnessRuntimeRepositoryIntegrationTest {
         assertNull(repository.findOperation("op-4"))
         assertNull(repository.findLane(sessionId, "main")!!.currentOperationId)
         assertTrue(repository.listActiveOperations(sessionId).isEmpty())
+    }
+
+    @Test
+    fun `finishOperation promotes leftover steer in order and drops follow-up`() = runBlocking {
+        val sessionId = "s-steer"
+        dao.acceptOperation(
+            entry("e1", sessionId, null),
+            lane(sessionId, leafId = "e1", currentOperationId = "op-steer"),
+            operation("op-steer", sessionId),
+        )
+        dao.insertQueueItem(HarnessQueueItemEntity("s-late", sessionId, "main", "op-steer", "steer", 30L, "late"))
+        dao.insertQueueItem(HarnessQueueItemEntity("s-early", sessionId, "main", "op-steer", "steer", 10L, "early"))
+        dao.insertQueueItem(HarnessQueueItemEntity("s-mid", sessionId, "main", null, "steer", 20L, "mid"))
+        dao.insertQueueItem(HarnessQueueItemEntity("f-up", sessionId, "main", "op-steer", "follow_up", 15L, "follow"))
+
+        repository.finishOperation(
+            HarnessLaneResultEntity(sessionId, "main", "op-steer", "failed", "e1", null, 2L),
+            lane(sessionId, leafId = "e1", currentOperationId = null),
+        )
+
+        val next = repository.listQueue(sessionId, "main", "next_run")
+        assertEquals(listOf("s-early", "s-late"), next.map { it.id })
+        assertEquals(listOf("early", "late"), next.map { it.payloadJson })
+        assertTrue(next.all { it.operationId == null })
+        val leftover = repository.listQueue(sessionId, "main", "steer")
+        assertEquals("s-mid", leftover.single().id)
+        assertNull(leftover.single().operationId)
+        assertTrue(repository.listQueue(sessionId, "main", "follow_up").isEmpty())
+        assertNull(repository.findOperation("op-steer"))
+    }
+
+    @Test
+    fun `finishOperation drops operation steer when a next run is already waiting`() = runBlocking {
+        val sessionId = "s-steer-keep"
+        dao.acceptOperation(
+            entry("e1", sessionId, null),
+            lane(sessionId, leafId = "e1", currentOperationId = "op-keep"),
+            operation("op-keep", sessionId),
+        )
+        dao.insertQueueItem(HarnessQueueItemEntity("n1", sessionId, "main", "op-keep", "next_run", 5L, "queued"))
+        dao.insertQueueItem(HarnessQueueItemEntity("s1", sessionId, "main", "op-keep", "steer", 10L, "steer"))
+        dao.insertQueueItem(HarnessQueueItemEntity("f1", sessionId, "main", "op-keep", "follow_up", 11L, "follow"))
+
+        repository.finishOperation(
+            HarnessLaneResultEntity(sessionId, "main", "op-keep", "completed", "e1", null, 2L),
+            lane(sessionId, leafId = "e1", currentOperationId = null),
+        )
+
+        val next = repository.listQueue(sessionId, "main", "next_run")
+        assertEquals(listOf("n1"), next.map { it.id })
+        assertNull(next.single().operationId)
+        assertTrue(repository.listQueue(sessionId, "main", "steer").isEmpty())
+        assertTrue(repository.listQueue(sessionId, "main", "follow_up").isEmpty())
     }
 
     @Test
@@ -252,5 +395,101 @@ class HarnessRuntimeRepositoryIntegrationTest {
         // 验证删除会话时级联清理外置沙箱文件
         repository.deleteSessionData(sessionId)
         assertTrue(repository.listEntries(sessionId).isEmpty())
+    }
+
+    @Test
+    fun `duplicate entry id does not throw UNIQUE constraint exception and safely resolves unique id`() = runBlocking {
+        val sessionId = "session-duplicate-id-test"
+        repository.ensureLane(sessionId, "main")
+
+        // 第一次追加 ID 为 "call_0" 的 entry
+        val entry1 = entry("call_0", sessionId, null).copy(payloadJson = "{\"call\":\"first\"}")
+        repository.appendToLane(sessionId, "main", entry1)
+
+        val laneAfterFirst = repository.findLane(sessionId, "main")!!
+        assertEquals("call_0", laneAfterFirst.leafId)
+
+        // 模拟另一轮再次生成同名 ID "call_0"，内容不同
+        val entry2 = entry("call_0", sessionId, laneAfterFirst.leafId).copy(payloadJson = "{\"call\":\"second\"}")
+        repository.appendToLane(sessionId, "main", entry2)
+
+        val laneAfterSecond = repository.findLane(sessionId, "main")!!
+        assertTrue("Second entry must have acquired a unique suffix", laneAfterSecond.leafId!!.startsWith("call_0_"))
+
+        // 两条记录均成功安全落库，树链接不断裂
+        val entries = repository.listEntries(sessionId)
+        assertEquals(2, entries.size)
+        assertEquals("call_0", entries[0].id)
+        assertEquals(laneAfterSecond.leafId, entries[1].id)
+        assertEquals("call_0", entries[1].parentId)
+    }
+
+    @Test
+    fun `idempotent identical entry write safely preserves single entry without crash`() = runBlocking {
+        val sessionId = "session-idempotent-test"
+        repository.ensureLane(sessionId, "main")
+
+        val entry = entry("idempotent_1", sessionId, null).copy(payloadJson = "{\"text\":\"hello\"}")
+        repository.appendToLane(sessionId, "main", entry)
+
+        // 重复插入完全相同的 entry（如恢复重试场景）
+        repository.appendToLane(sessionId, "main", entry)
+
+        val entries = repository.listEntries(sessionId)
+        assertEquals(1, entries.size)
+        assertEquals("idempotent_1", entries.first().id)
+    }
+
+    @Test
+    fun `appendEntry rolls back lane when insert is ignored for conflicting id`() = runBlocking {
+        val sessionId = "session-ignore-conflict"
+        repository.ensureLane(sessionId, "main")
+        repository.appendToLane(sessionId, "main", entry("root", sessionId, null).copy(payloadJson = "{\"a\":1}"))
+
+        // Simulate a race / missed rename: another row already owns this primary key.
+        dao.insertEntry(entry("child", "other-session", null).copy(payloadJson = "{\"hijacked\":true}"))
+
+        val leafBefore = repository.findLane(sessionId, "main")!!.leafId
+        val failed = runCatching {
+            dao.appendEntry(
+                entry("child", sessionId, leafBefore).copy(payloadJson = "{\"a\":2}"),
+                lane(sessionId, leafId = "child"),
+            )
+        }
+        assertTrue("Conflicting IGNORE must abort the transaction", failed.isFailure)
+        assertEquals(leafBefore, repository.findLane(sessionId, "main")!!.leafId)
+        assertEquals("other-session", dao.findEntry("child")!!.sessionId)
+    }
+
+    @Test
+    fun `local offset day buckets split a UTC day without loading payloads`() = runBlocking {
+        val sessionId = "stats-daily"
+        val shanghaiOffsetMs = 8L * 60 * 60 * 1000
+        // UTC 2026-09-17 15:00 → 上海 23:00（17 日）；UTC 16:00 → 上海次日 00:00。
+        val utcSep17Afternoon = Instant.parse("2026-09-17T15:00:00Z").toEpochMilli()
+        val utcSep17Evening = Instant.parse("2026-09-17T16:00:00Z").toEpochMilli()
+        assertEquals(utcSep17Afternoon / 86_400_000L, utcSep17Evening / 86_400_000L)
+
+        dao.insertEntry(entry("user-1", sessionId, null).copy(createdAt = utcSep17Afternoon))
+        dao.insertEntry(entry("asst-1", sessionId, "user-1").copy(createdAt = utcSep17Evening, customType = "assistant"))
+
+        // Robolectric SQLite 未编 JSON1，这里只验证与 DAO 相同的本地日切表达式。
+        val db = database.openHelper.readableDatabase
+        db.query(
+            "SELECT CAST((createdAt + ?) / 86400000 AS INTEGER) AS d, COUNT(*) FROM harness_entries GROUP BY d ORDER BY d",
+            arrayOf(shanghaiOffsetMs.toString()),
+        ).use { cursor ->
+            val days = mutableListOf<Long>()
+            while (cursor.moveToNext()) days += cursor.getLong(0)
+            assertEquals("Shanghai offset must split the UTC day", 2, days.size)
+            assertEquals((utcSep17Afternoon + shanghaiOffsetMs) / 86_400_000L, days[0])
+            assertEquals((utcSep17Evening + shanghaiOffsetMs) / 86_400_000L, days[1])
+        }
+        db.query(
+            "SELECT COUNT(DISTINCT CAST(createdAt / 86400000 AS INTEGER)) FROM harness_entries",
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("UTC grouping would keep both rows on one day", 1, cursor.getInt(0))
+        }
     }
 }

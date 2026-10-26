@@ -5,59 +5,34 @@ import android.content.ContextWrapper
 import android.net.Uri
 import android.os.Environment
 import android.provider.DocumentsContract
-import android.util.Log
-import dagger.hilt.android.qualifiers.ApplicationContext
 import top.tianyan.app.core.common.files.SafeFileTree
 import top.tianyan.app.core.common.result.AppError
 import top.tianyan.app.core.common.result.AppResult
 import top.tianyan.app.core.common.result.ErrorCode
+import top.tianyan.app.core.common.shell.ShellQuote
 import top.tianyan.app.core.database.WorkspaceRepository
 import top.tianyan.app.core.database.WorkspaceEntity
+import top.tianyan.app.core.database.BuildScriptRepository
 import top.tianyan.app.template.ProjectTemplateEngine
 import top.tianyan.app.template.TemplateProjectType
 import top.tianyan.app.runtime.shell.ShellCommand
 import java.io.File
-import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
+import java.nio.file.Files
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
-
-enum class ProjectType {
-    ANDROID,
-    FLUTTER,
-    REVERSE,
-    RED_TEAM,
-    GENERAL;
-
-    val displayName: String
-        get() = when (this) {
-            ANDROID -> "Android"
-            FLUTTER -> "Flutter"
-            REVERSE -> "APK 逆向"
-            RED_TEAM -> "红队演练"
-            GENERAL -> "通用"
-        }
-
-    /**
-     * 会话是否需要红队工作区（目标绑定、事实图谱、作战面板）。
-     *
-     * 这是红队模式唯一的事实来源：工程类型即模式。过去它由一个独立的
-     * 布尔开关承载，同一个会话存在两条互相矛盾的路径（类型说通用、开关说红队），
-     * 现在只剩一个字段，界面上也就不可能选出「红队 + 通用工程」这种组合。
-     */
-    val isRedTeam: Boolean get() = this == RED_TEAM
-}
 
 enum class ProjectImportSource {
     LOCAL_ARCHIVE,
@@ -133,15 +108,14 @@ data class WorkspaceFileItem(
 )
 
 /** 工作区：目录在 App 私有挂载点，元数据（路径/创建时间）存 Room。 */
-@Singleton
-class WorkspaceManager @Inject constructor(
-    @ApplicationContext private val context: Context,
+class WorkspaceManager(
+    private val context: Context,
     private val pathManager: RuntimePathManager,
     private val workspaceDao: WorkspaceRepository,
     private val fileService: WorkspaceFileService,
-    private val linuxRuntime: dagger.Lazy<LinuxRuntime>,
+    private val linuxRuntime: Lazy<LinuxRuntime>,
     private val projectTemplateEngine: ProjectTemplateEngine,
-    private val buildScriptRepository: dagger.Lazy<top.tianyan.app.core.database.BuildScriptRepository>? = null,
+    private val buildScriptRepository: Lazy<BuildScriptRepository>? = null,
 ) {
     constructor(
         pathManager: RuntimePathManager,
@@ -152,17 +126,19 @@ class WorkspaceManager @Inject constructor(
         pathManager,
         workspaceDao,
         WorkspaceFileService(pathManager, workspaceDao),
-        dagger.Lazy<LinuxRuntime> { error("Linux runtime is unavailable in this test constructor") },
+        lazy<LinuxRuntime> { error("Linux runtime is unavailable in this test constructor") },
         projectTemplateEngine,
         null,
     )
     fun observeProjects(): Flow<List<WorkspaceProject>> = workspaceDao.observeAll().map { entities ->
-        // 单项失败只丢这一项：单个项目目录的异常（路径越界 / 并发删除导致 lstat 抛错）不得让整页项目列表崩掉。
-        dropParentProjects(entities).mapNotNull { entity ->
-            runCatching { projectFromEntity(entity) }
-                .onFailure { Log.w(TAG, "skip workspace project ${entity.name}: ${it.message}") }
-                .getOrNull()
+        val projectPaths = entities.mapNotNull { runCatching { File(it.path).canonicalPath }.getOrNull() }.toSet()
+        val filtered = entities.filter { entity ->
+            val entityCanonical = runCatching { File(entity.path).canonicalPath }.getOrNull() ?: return@filter true
+            projectPaths.none { otherPath ->
+                otherPath != entityCanonical && otherPath.startsWith(entityCanonical + File.separator)
+            }
         }
+        filtered.mapNotNull(::projectFromEntity)
     }.flowOn(Dispatchers.IO)
 
     suspend fun listProjects(): List<WorkspaceProject> = withContext(Dispatchers.IO) {
@@ -173,51 +149,28 @@ class WorkspaceManager @Inject constructor(
         val directories = pathManager.workspaceDir.listFiles()
             .orEmpty()
             .filter { it.isDirectory && isValidProjectName(it.name) && !File(it, UNLINKED_MARKER).exists() }
-        val missing = directories.filter { directory ->
-            directory.name !in known && directory.canonicalPath !in knownPaths
-        }
-        // 补录集中写：逐条 upsert 会各自 invalidate workspaces 表，把 observeProjects 的全量投影
-        // 反复唤醒（每次唤醒都是一轮全项目 walk）。这里只补录，不再逐条触发投影重算。
-        if (missing.isNotEmpty()) {
-            val now = System.currentTimeMillis()
-            missing.forEach { directory ->
-                workspaceDao.upsert(WorkspaceEntity(directory.name, directory.absolutePath, now))
+        directories.forEach { directory ->
+            if (directory.name !in known && directory.canonicalPath !in knownPaths) {
+                workspaceDao.upsert(
+                    WorkspaceEntity(directory.name, directory.absolutePath, System.currentTimeMillis()),
+                )
             }
-            // 补录后直接用内存里的目录清单继续算，不回读 Room 再触发一次投影。
         }
         // 先收集所有有效实体，再过滤掉作为其他项目父目录的实体
         // （避免嵌套路径创建项目时，父目录被误注册为独立项目）
         val allEntities = workspaceDao.listAll().filter { it.name in known || File(it.path).isDirectory }
-        dropParentProjects(allEntities)
-            .filter { entity -> File(entity.path).isDirectory }
-            .sortedBy { it.name.lowercase() }
-            .mapNotNull { entity ->
-                runCatching { projectFromEntity(entity) }
-                    .onFailure { Log.w(TAG, "skip workspace project ${entity.name}: ${it.message}") }
-                    .getOrNull()
-            }
-    }
-
-    /**
-     * 过滤掉「作为其他项目父目录」的实体。
-     * 项目多时逐对比较是 O(N²) 次字符串拼接 + startsWith，这里按路径长度升序单趟处理，
-     * 复杂度降到 O(N log N)；canonicalPath 每个实体只解析一次。
-     */
-    private fun dropParentProjects(entities: List<WorkspaceEntity>): List<WorkspaceEntity> {
-        val sorted = entities
-            .map { it to runCatching { File(it.path).canonicalPath }.getOrNull() }
-            .filter { it.second != null }
-            .sortedBy { it.second!!.length }
-        val keptPaths = ArrayList<String>(sorted.size)
-        val kept = ArrayList<WorkspaceEntity>(sorted.size)
-        for ((entity, canonical) in sorted) {
-            val prefix = canonical!! + File.separator
-            if (keptPaths.none { it.startsWith(prefix) }) {
-                keptPaths.add(canonical)
-                kept.add(entity)
+        val projectPaths = allEntities.mapNotNull { runCatching { File(it.path).canonicalPath }.getOrNull() }.toSet()
+        val filtered = allEntities.filter { entity ->
+            val entityCanonical = runCatching { File(entity.path).canonicalPath }.getOrNull() ?: return@filter true
+            // 如果存在其他项目的路径以此实体路径为前缀，则此实体是父目录，应过滤掉
+            projectPaths.none { otherPath ->
+                otherPath != entityCanonical && otherPath.startsWith(entityCanonical + File.separator)
             }
         }
-        return kept
+        filtered
+            .filter { entity -> File(entity.path).isDirectory }
+            .sortedBy { it.name.lowercase() }
+            .mapNotNull(::projectFromEntity)
     }
 
     suspend fun createProject(
@@ -339,6 +292,7 @@ class WorkspaceManager @Inject constructor(
                         TemplateProjectType.ANDROID -> ProjectType.ANDROID
                         TemplateProjectType.FLUTTER -> ProjectType.FLUTTER
                         TemplateProjectType.GENERAL -> ProjectType.GENERAL
+                        TemplateProjectType.TIANYAN_PLUGIN -> ProjectType.TIANYAN_PLUGIN
                     },
                     source = ProjectImportSource.TEMPLATE,
                 )
@@ -366,7 +320,6 @@ class WorkspaceManager @Inject constructor(
                 if (created == null) {
                     AppResult.Failure(AppError(ErrorCode.IO, "项目数据转换失败", null))
                 } else {
-                    autoBindBuiltinRunScript(created)
                     AppResult.Success(created)
                 }
             }
@@ -455,7 +408,7 @@ class WorkspaceManager @Inject constructor(
                 File(directory, UNLINKED_MARKER).writeText("unlinkedAt=${System.currentTimeMillis()}\n")
             }
             workspaceDao.delete(name)
-            runCatching { buildScriptRepository?.get()?.unbind(name) }
+            runCatching { buildScriptRepository?.value?.unbind(name) }
             AppResult.Success(Unit)
         } catch (throwable: Throwable) {
             AppResult.Failure(AppError(ErrorCode.IO, throwable.message ?: "删除项目失败", throwable))
@@ -499,9 +452,9 @@ class WorkspaceManager @Inject constructor(
     suspend fun readFile(projectName: String, relativePath: String): AppResult<String> =
         fileService.readFile(projectName, relativePath)
 
-    /** 写入文件内容（原子临时文件替换）。 */
-    suspend fun writeFile(projectName: String, relativePath: String, content: String): AppResult<Unit> =
-        fileService.writeFile(projectName, relativePath, content)
+    /** 写入文件内容（原子临时文件替换）；传入 [expectedContent] 时先校验磁盘版本，被外部改动则返回 CONFLICT。 */
+    suspend fun writeFile(projectName: String, relativePath: String, content: String, expectedContent: String? = null): AppResult<Unit> =
+        fileService.writeFile(projectName, relativePath, content, expectedContent)
 
     /** 创建新文件（空文件）。 */
     suspend fun createFile(projectName: String, relativePath: String): AppResult<Unit> =
@@ -523,8 +476,7 @@ class WorkspaceManager @Inject constructor(
         candidate.absolutePath == root.absolutePath ||
             candidate.absolutePath.startsWith(root.absolutePath + File.separator)
 
-    private suspend fun projectFromEntity(entity: WorkspaceEntity): WorkspaceProject? {
-        currentCoroutineContext().ensureActive()
+    private fun projectFromEntity(entity: WorkspaceEntity): WorkspaceProject? {
         val directory = File(entity.path)
         if (!directory.isDirectory) return null
         val type = detectProjectType(directory)
@@ -532,11 +484,7 @@ class WorkspaceManager @Inject constructor(
         return WorkspaceProject(
             name = entity.name,
             path = entity.path,
-            linuxPath = runCatching { linuxPathFor(directory) }.getOrElse {
-                // 库中存在可关联空间之外的遗留路径：降级为不可用而不是让整页项目崩掉
-                Log.w(TAG, "workspace path outside assoc space: ${entity.path}")
-                ""
-            },
+            linuxPath = linuxPathFor(directory),
             sizeBytes = sizeOf(directory),
             ownsDirectory = entity.ownsDirectory,
             projectType = type,
@@ -544,23 +492,6 @@ class WorkspaceManager @Inject constructor(
         )
     }
 
-    /**
-     * 新建的 Android/Flutter 项目自动挂载内置运行模板（标准 Android / 标准 Flutter），
-     * 无需再到工坊设置手动绑定即可直接运行；已有绑定的项目不覆盖。
-     */
-    private suspend fun autoBindBuiltinRunScript(project: WorkspaceProject) {
-        val builtinId = when (project.projectType) {
-            ProjectType.ANDROID -> "builtin-android"
-            ProjectType.FLUTTER -> "builtin-flutter"
-            else -> return
-        }
-        val repository = buildScriptRepository?.get() ?: return
-        runCatching {
-            if (repository.findBinding(project.name) == null) {
-                repository.bind(project.name, builtinId)
-            }
-        }
-    }
 
     private fun detectProjectType(directory: File): ProjectType {
         readProjectTypeMetadata(directory)?.let { return it }
@@ -585,20 +516,19 @@ class WorkspaceManager @Inject constructor(
                     val appBuild = File(directory, "app/build.gradle.kts").takeIf { it.exists() }
                         ?: File(directory, "app/build.gradle").takeIf { it.exists() }
                     val content = appBuild?.readText()
-                    val namespaceMatch = ANDROID_NAMESPACE_REGEX.find(content ?: "")
+                    val namespaceMatch = Regex("""(?:namespace|applicationId)\s*=\s*["']([^"']+)["']""").find(content ?: "")
                     namespaceMatch?.groupValues?.get(1) ?: ""
                 }
                 ProjectType.FLUTTER -> {
                     val pubspec = File(directory, "pubspec.yaml").takeIf { it.exists() }
-                    val nameMatch = PUBSPEC_NAME_REGEX.find(pubspec?.readText() ?: "")
+                    val nameMatch = Regex("""name:\s*([a-zA-Z0-9_]+)""").find(pubspec?.readText() ?: "")
                     nameMatch?.groupValues?.get(1) ?: ""
                 }
                 ProjectType.REVERSE -> {
                     val info = File(directory, "apk-info.properties").takeIf { it.exists() }?.readText().orEmpty()
-                    APK_PACKAGE_REGEX.find(info)?.groupValues?.get(1)?.trim() ?: ""
+                    Regex("""packageName\s*=\s*(.+)""").find(info)?.groupValues?.get(1)?.trim() ?: ""
                 }
-                ProjectType.RED_TEAM -> ""
-                ProjectType.GENERAL -> ""
+                ProjectType.GENERAL, ProjectType.TIANYAN_PLUGIN -> ""
             }
         }.getOrDefault("")
     }
@@ -624,10 +554,10 @@ class WorkspaceManager @Inject constructor(
         cleanupOnFailure: Boolean,
         onProgress: ((String) -> Unit)? = null,
     ) {
-        val result = linuxRuntime.get().execute(
+        val result = linuxRuntime.value.execute(
             ShellCommand(
                 // --progress 让 git 在非 TTY 管道下也输出克隆进度（remote:/Receiving objects: 等）
-                commandLine = "git clone --depth 1 --progress -- ${shellQuote(url.trim())} ${shellQuote(linuxPathFor(directory))}",
+                commandLine = "git clone --depth 1 --progress -- ${ShellQuote.of(url.trim())} ${ShellQuote.of(linuxPathFor(directory))}",
                 timeoutMs = GIT_CLONE_TIMEOUT_SECONDS * 1_000L,
                 onOutput = onProgress,
             ),
@@ -681,7 +611,6 @@ class WorkspaceManager @Inject constructor(
                 if (created == null) {
                     AppResult.Failure(AppError(ErrorCode.IO, "项目数据转换失败", null))
                 } else {
-                    autoBindBuiltinRunScript(created)
                     AppResult.Success(created)
                 }
             }
@@ -697,7 +626,7 @@ class WorkspaceManager @Inject constructor(
         extractProjectArchive(input, source.fileName, directory)
     }
 
-    internal fun extractProjectArchive(input: java.io.InputStream, fileName: String, directory: File) {
+    internal fun extractProjectArchive(input: InputStream, fileName: String, directory: File) {
         require(fileName.endsWith(".zip", ignoreCase = true)) { "本地导入目前仅支持 ZIP 项目压缩包" }
         val staging = File(directory, IMPORT_STAGING_DIRECTORY).canonicalFile
         check(isInside(directory.canonicalFile, staging)) { "导入暂存目录越界" }
@@ -754,11 +683,11 @@ class WorkspaceManager @Inject constructor(
         }
     }
 
-    private fun writeProjectZip(projectDir: File, output: java.io.OutputStream) {
+    private fun writeProjectZip(projectDir: File, output: OutputStream) {
         ZipOutputStream(output.buffered()).use { zip ->
             projectDir.walkTopDown()
-                .onEnter { !java.nio.file.Files.isSymbolicLink(it.toPath()) }
-                .filter { it != projectDir && !java.nio.file.Files.isSymbolicLink(it.toPath()) }
+                .onEnter { !Files.isSymbolicLink(it.toPath()) }
+                .filter { it != projectDir && !Files.isSymbolicLink(it.toPath()) }
                 .forEach { file ->
                     val relative = file.toRelativeString(projectDir).replace(File.separatorChar, '/')
                     if (relative == UNLINKED_MARKER || relative == IMPORT_STAGING_DIRECTORY) return@forEach
@@ -786,8 +715,6 @@ class WorkspaceManager @Inject constructor(
         ProjectType.entries.firstOrNull { it.name == typeName }
     }.getOrNull()
 
-    private fun shellQuote(value: String): String = "'${value.replace("'", "'\\''")}'"
-
     private suspend fun executeTemplateHook(
         templateId: String,
         stage: String,
@@ -799,9 +726,9 @@ class WorkspaceManager @Inject constructor(
         try {
             hookFile.writeBytes(projectTemplateEngine.readHook(templateId, relativePath))
             hookFile.setExecutable(true)
-            val result = linuxRuntime.get().execute(
+            val result = linuxRuntime.value.execute(
                 ShellCommand(
-                    commandLine = "sh ${shellQuote(linuxPathFor(hookFile))}",
+                    commandLine = "sh ${ShellQuote.of(linuxPathFor(hookFile))}",
                     workingDirectory = linuxPathFor(projectDir),
                     environment = values.mapKeys { (name, _) -> "TIANYAN_VAR_${name.uppercase()}" } +
                         ("TIANYAN_PROJECT_DIR" to linuxPathFor(projectDir)),
@@ -871,7 +798,7 @@ class WorkspaceManager @Inject constructor(
                 source.copyTo(apkFile, overwrite = true)
             }
             is ApkImportSource.FromFileUri -> {
-                val uri = android.net.Uri.parse(apkSource.uri)
+                val uri = Uri.parse(apkSource.uri)
                 val safeBase = apkSource.fileName
                     .substringAfterLast('/')
                     .substringAfterLast('\\')
@@ -923,7 +850,7 @@ class WorkspaceManager @Inject constructor(
     /** 用标准 ZIP 读取器把 APK 逐条目解包到 [unpackedDir]（防 zip-slip 路径穿越）。 */
     private fun unpackApk(apkFile: File, unpackedDir: File) {
         val unpackedCanonical = unpackedDir.canonicalFile
-        java.util.zip.ZipFile(apkFile).use { zip ->
+        ZipFile(apkFile).use { zip ->
             zip.entries().asSequence().forEach { entry ->
                 if (entry.isDirectory) return@forEach
                 val rawName = entry.name.replace('\\', '/')
@@ -953,7 +880,7 @@ class WorkspaceManager @Inject constructor(
             # $name · APK 逆向工程
 
             > 来源：$sourceLabel
-            > 导入时间：${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}
+            > 导入时间：${SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date())}
 
             ## 工程结构
 
@@ -1052,51 +979,10 @@ class WorkspaceManager @Inject constructor(
         }.trimEnd('/')
     }
 
-    /**
-     * 项目体积：优先读 TTL 内的内存快照，否则做一次**有界**递归 walk。
-     *
-     * 三个约束缺一不可：
-     * - 快照：进工坊空间页会同时走 observeProjects 与补录索引两条链路，项目多时每次全量 walk
-     *   会把 IO 线程池打满，列表迟迟出不来；
-     * - 深度 / 条目双上限：build/、node_modules/、.git 这类目录动辄十万文件，无界 walk 单项目
-     *   就能卡住整页加载；
-     * - 可取消：ViewModel 重建时正在跑的 walk 必须能中断，否则并发 walk 叠加会抬高峰值堆、触发 OOM。
-     *
-     * 软链目录判断用 canonicalFile != absoluteFile 而不是 java.nio.file.Files.isSymbolicLink：
-     * 后者在文件被并发删除时抛 NoSuchFileException，而后台构建（WorkspaceBuildTaskCoordinator）
-     * 正在删除 build/ 目录时正好命中，异常逃逸到无 ExceptionHandler 的 viewModelScope 会直接杀进程。
-     */
-    private suspend fun sizeOf(file: File): Long {
-        sizeCache[file.absolutePath]?.let { (bytes, at) ->
-            if (System.currentTimeMillis() - at < SIZE_CACHE_TTL_MS) return bytes
-        }
-        val context = currentCoroutineContext()
-        var bytes = 0L
-        var visited = 0
-        runCatching {
-            val iterator = file.walkTopDown()
-                .maxDepth(MAX_SIZE_SCAN_DEPTH)
-                .onEnter { directory -> !isSymbolicLink(directory) }
-                .iterator()
-            while (iterator.hasNext()) {
-                context.ensureActive()
-                val node = iterator.next()
-                if (++visited > MAX_SIZE_SCAN_FILES) break
-                if (node.isFile) bytes += node.length()
-            }
-        }.onFailure { Log.w(TAG, "size scan failed for ${file.name}: ${it.message}") }
-        if (bytes > 0L) {
-            sizeCache[file.absolutePath] = bytes to System.currentTimeMillis()
-        }
-        return bytes
-    }
-
-    /** 目录是否经软链解析：canonical 与 absolute 不一致即说明路径含链接或软链。 */
-    private fun isSymbolicLink(directory: File): Boolean = try {
-        directory.canonicalFile != directory.absoluteFile
-    } catch (e: IOException) {
-        true
-    }
+    private fun sizeOf(file: File): Long = file.walkTopDown()
+        .onEnter { directory -> !Files.isSymbolicLink(directory.toPath()) }
+        .filter { it.isFile && !Files.isSymbolicLink(it.toPath()) }
+        .sumOf { it.length() }
 
     private fun isValidProjectName(name: String): Boolean {
         if (name.isEmpty() || name.length > MAX_PROJECT_NAME_LENGTH) return false
@@ -1105,7 +991,6 @@ class WorkspaceManager @Inject constructor(
     }
 
     companion object {
-        private const val TAG = "WorkspaceManager"
         private const val UNLINKED_MARKER = ".tianyan-unlinked-project"
         private const val PROJECT_METADATA_FILE = ".tianyan-project.properties"
         private const val IMPORT_STAGING_DIRECTORY = ".tianyan-import-staging"
@@ -1115,19 +1000,6 @@ class WorkspaceManager @Inject constructor(
         private const val GIT_CLONE_TIMEOUT_SECONDS = 15 * 60L
         private const val TEMPLATE_HOOK_TIMEOUT_MS = 60_000L
         private val PACKAGE_NAME = Regex("[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)+")
-
-        /** 体积 walk 的深度 / 条目上限：build/、node_modules/ 单目录就可能十万级文件，无界 walk 会拖死整页。 */
-        private const val MAX_SIZE_SCAN_DEPTH = 12
-        private const val MAX_SIZE_SCAN_FILES = 20_000
-        private const val SIZE_CACHE_TTL_MS = 5 * 60 * 1000L
-
-        // 正则提为常量：extractPackageName 对每个项目调用多次，运行期重复编译 Regex 是纯浪费。
-        private val ANDROID_NAMESPACE_REGEX = Regex("""(?:namespace|applicationId)\s*=\s*["']([^"']+)["']""")
-        private val PUBSPEC_NAME_REGEX = Regex("""name:\s*([a-zA-Z0-9_]+)""")
-        private val APK_PACKAGE_REGEX = Regex("""packageName\s*=\s*(.+)""")
-
-        /** 路径 → (体积字节, 采样时间)，避免同一批项目在一次进页链路里被重复 walk。 */
-        private val sizeCache = ConcurrentHashMap<String, Pair<Long, Long>>()
         const val MAX_PROJECT_NAME_LENGTH = 64
         const val MAX_FILE_READ_BYTES = 4 * 1024 * 1024L // 4 MB
         const val MAX_FILE_WRITE_CHARS = 4 * 1024 * 1024 // 4 M 字符

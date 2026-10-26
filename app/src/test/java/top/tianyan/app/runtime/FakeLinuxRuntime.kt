@@ -34,6 +34,9 @@ class FakeLinuxRuntime : LinuxRuntime {
     val backgroundProcesses = linkedMapOf<String, ManagedProcess>()
     val backgroundLogs = mutableMapOf<String, List<String>>()
 
+    /** 置为 true 时 execute 直接抛异常，模拟沙箱正忙/探测不可达（体检 UNKNOWN 路径）。 */
+    var executeFailure: Boolean = false
+
     override fun refreshInstalledDistros() = Unit
     override suspend fun switchActiveDistro(distroId: String): AppResult<Unit> {
         activeDistroId.value = distroId
@@ -69,6 +72,7 @@ class FakeLinuxRuntime : LinuxRuntime {
     override suspend fun execute(command: ShellCommand, distroId: String?): CommandResult {
         executedCommands += command.commandLine
         executedShellCommands += command
+        if (executeFailure) throw RuntimeException("sandbox busy (fake)")
         return commandResults[command.commandLine] ?: CommandResult(
             exitCode = 0,
             stdout = "",

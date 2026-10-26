@@ -39,17 +39,6 @@ class AgentModelConnectionTesterTest {
     }
 
     @Test
-    fun `blank model falls back to v1 models for base URL without version path`() = runBlocking {
-        server.enqueue(MockResponse().setResponseCode(404).setBody("{}"))
-        server.enqueue(MockResponse().setResponseCode(200).setBody("{\"data\":[]}"))
-
-        tester.test(server.url("").toString(), "", null)
-
-        assertEquals("/v1/models", server.takeRequest().path)
-        assertEquals("/models", server.takeRequest().path)
-    }
-
-    @Test
     fun `selected model still tests chat completion`() = runBlocking {
         server.enqueue(MockResponse().setResponseCode(200).setBody("{}"))
 

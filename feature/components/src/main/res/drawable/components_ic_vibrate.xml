@@ -1,14 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Material Symbols Outlined (Apache 2.0) via Google Fonts, converted to Android vector drawable -->
+<!-- Material Symbols Rounded, weight 300, optical size 24; Apache-2.0. Glyph: vibration.
+     Source: google/material-design-icons@49d4db35df873165d6bd6ba09b063c7dafbac2f4; converted from SVG. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp"
-    android:height="24dp"
-    android:viewportWidth="960"
-    android:viewportHeight="960">
-    <group
-        android:translateY="960">
-        <path
-            android:pathData="M320-120q-33 0-56.5-23.5T240-200v-560q0-33 23.5-56.5T320-840h320q33 0 56.5 23.5T720-760v560q0 33-23.5 56.5T640-120H320Zm320-80v-560H320v560h320ZM508.5-651.5Q520-663 520-680t-11.5-28.5Q497-720 480-720t-28.5 11.5Q440-697 440-680t11.5 28.5Q463-640 480-640t28.5-11.5ZM0-360v-240h80v240H0Zm120 80v-400h80v400h-80Zm760-80v-240h80v240h-80Zm-120 80v-400h80v400h-80Zm-440 80v-560 560Z"
-            android:fillColor="#FF000000" />
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="960" android:viewportHeight="960">
+    <group android:translateX="-0" android:translateY="960">
+        <path android:fillColor="#FF000000" android:pathData="M59.25-590q12.75 0 21.37 8.63 8.61 8.62 8.61 21.37v160q0 12.75-8.63 21.37Q71.97-370 59.22-370q-12.76 0-21.37-8.63-8.62-8.62-8.62-21.37v-160q0-12.75 8.63-21.37Q46.49-590 59.25-590Zm115.38-80q12.76 0 21.37 8.63 8.62 8.62 8.62 21.37v320q0 12.75-8.63 21.37-8.63 8.63-21.39 8.63-12.75 0-21.37-8.63-8.61-8.62-8.61-21.37v-320q0-12.75 8.63-21.37 8.62-8.63 21.38-8.63Zm726.15 80q12.76 0 21.37 8.63 8.62 8.62 8.62 21.37v160q0 12.75-8.63 21.37-8.63 8.63-21.39 8.63-12.75 0-21.37-8.63-8.61-8.62-8.61-21.37v-160q0-12.75 8.63-21.37 8.63-8.63 21.38-8.63ZM785.4-670q12.75 0 21.37 8.63 8.61 8.62 8.61 21.37v320q0 12.75-8.63 21.37-8.62 8.63-21.38 8.63T764-298.63q-8.62-8.62-8.62-21.37v-320q0-12.75 8.63-21.37 8.63-8.63 21.39-8.63ZM332.31-140q-29.83 0-51.07-21.24Q260-182.48 260-212.31v-535.38q0-29.83 21.24-51.07Q302.48-820 332.31-820h295.38q29.83 0 51.07 21.24Q700-777.52 700-747.69v535.38q0 29.83-21.24 51.07Q657.52-140 627.69-140H332.31Zm0-60h295.38q5.39 0 8.85-3.46t3.46-8.85v-535.38q0-5.39-3.46-8.85t-8.85-3.46H332.31q-5.39 0-8.85 3.46t-3.46 8.85v535.38q0 5.39 3.46 8.85t8.85 3.46ZM320-200v-560 560Z" />
     </group>
 </vector>

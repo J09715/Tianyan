@@ -1,5 +1,9 @@
 package top.tianyan.app.ui.settings
-
+import top.tianyan.app.ui.components.previewOrNull
+import top.tianyan.app.ui.components.previewStateOf
+import androidx.compose.ui.res.stringResource
+import top.tianyan.app.feature.settings.R
+import org.koin.compose.viewmodel.koinViewModel
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -14,6 +18,8 @@ import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,26 +31,29 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenu
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ExposedDropdownMenu
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.TextFieldDefaults
+import top.tianyan.app.ui.components.RuntimeFilledTextField
+import top.tianyan.app.ui.components.RuntimeProviderCard
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -71,16 +80,14 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import top.tianyan.app.core.database.AiModelEntity
 import top.tianyan.app.core.model.AiModelProfileExport
 import top.tianyan.app.core.tools.AgentProviderDefinition
 import top.tianyan.app.core.tools.ProviderGroup
+import top.tianyan.app.harness.ModelContextWindows
 import top.tianyan.app.ui.components.ProviderBadge
-import top.tianyan.app.ui.theme.Spacing
-import top.tianyan.app.ui.theme.Radius
 import top.tianyan.app.ui.components.RuntimeAlertDialog
 import top.tianyan.app.ui.components.RuntimeButton
 import top.tianyan.app.ui.components.RuntimeCard
@@ -92,7 +99,10 @@ import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeOutlinedButton
 import top.tianyan.app.ui.components.RuntimeSlider
 import top.tianyan.app.ui.components.RuntimeSwitch
+import top.tianyan.app.ui.components.RuntimeTextButton
 import top.tianyan.app.ui.components.RuntimeTopBar
+import java.util.Locale
+import top.tianyan.app.core.tools.ProviderProtocol
 
 /**
  * 模型编辑与连接测试全屏独立页面
@@ -102,14 +112,14 @@ fun ModelEditorScreen(
     modelId: String?,
     onBack: () -> Unit,
     onSaved: () -> Unit,
-    viewModel: SettingsViewModel = hiltViewModel(),
+    viewModel: SettingsViewModel? = previewOrNull { koinViewModel() },
 ) {
-    val models by viewModel.models.collectAsStateWithLifecycle()
-    val discovered by viewModel.discoveredModels.collectAsStateWithLifecycle()
-    val discovering by viewModel.discoveringModels.collectAsStateWithLifecycle()
-    val discoveryError by viewModel.modelDiscoveryError.collectAsStateWithLifecycle()
-    val testing by viewModel.testingConnection.collectAsStateWithLifecycle()
-    val testResult by viewModel.connectionResult.collectAsStateWithLifecycle()
+    val models by viewModel?.models?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val discovered by viewModel?.discoveredModels?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val discovering by viewModel?.discoveringModels?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val discoveryError by viewModel?.modelDiscoveryError?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val testing by viewModel?.testingConnection?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val testResult by viewModel?.connectionResult?.collectAsStateWithLifecycle() ?: previewStateOf(null)
     val existing = models.firstOrNull { it.id == modelId }
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -118,7 +128,15 @@ fun ModelEditorScreen(
     LaunchedEffect(modelId, existing?.secretRef) {
         val secretRef = existing?.secretRef
         if (!secretRef.isNullOrBlank()) {
-            initialApiKey = viewModel.readModelApiKey(secretRef)
+            initialApiKey = viewModel?.readModelApiKey(secretRef).orEmpty()
+        }
+    }
+    // 保存被端点策略拒绝时留在编辑页并提示，避免静默丢档
+    LaunchedEffect(Unit) {
+        viewModel?.profileSaveError?.collect { error ->
+            if (!error.isNullOrBlank()) {
+                Toast.makeText(context, error, Toast.LENGTH_LONG).show()
+            }
         }
     }
 
@@ -146,20 +164,20 @@ fun ModelEditorScreen(
         },
     ) { padding ->
         ModelEditorContent(
-            modifier = Modifier.padding(padding),
+            modifier = top.tianyan.app.ui.components.runtimeScrollViewport(padding), bottomPadding = padding.calculateBottomPadding(),
             modelId = modelId,
             existing = existing,
             initialApiKey = initialApiKey,
-            providers = viewModel.providerCatalog,
+            providers = livePluginProviders(viewModel?.providerCatalog.orEmpty(), existing?.provider),
             discovered = discovered,
             discovering = discovering,
             discoveryError = discoveryError,
             testing = testing,
             testResult = testResult,
-            discover = { provider, url, key -> viewModel.discoverModels(provider, url, key) },
-            test = { url, model, key, respApi, providerId -> viewModel.testConnection(url, model, key, respApi, providerId) },
-            save = { name, provider, modelsList, url, key, rpmLimit, temperature, maxTokens, topP, reasoningMode, reasoningEffort, toolCallMode, contextTokens, customHeaders, pureChatMode, visionEnabled, imageGenerationEnabled, responseApiEnabled ->
-                viewModel.saveModels(
+            discover = { provider, url, key -> viewModel?.discoverModels(provider, url, key) },
+            test = { url, model, key, respApi, providerId -> viewModel?.testConnection(url, model, key, respApi, providerId) },
+            save = { name, provider, modelsList, url, key, rpmLimit, temperature, maxTokens, topP, reasoningMode, reasoningEffort, toolCallMode, contextTokens, compactionKeepRecent, compactionReserve, customHeaders, pureChatMode, visionEnabled, imageGenerationEnabled, responseApiEnabled, promptCachingEnabled, promptCacheTtl1h ->
+                val saved = viewModel?.saveModels(
                     id = modelId,
                     models = modelsList,
                     name = name,
@@ -174,17 +192,21 @@ fun ModelEditorScreen(
                     reasoningEffort = reasoningEffort,
                     toolCallMode = toolCallMode,
                     contextTokens = contextTokens,
+                    compactionKeepRecentTokens = compactionKeepRecent,
+                    compactionReserveTokens = compactionReserve,
                     customHeaders = customHeaders,
                     pureChatMode = pureChatMode,
                     visionEnabled = visionEnabled,
                     imageGenerationEnabled = imageGenerationEnabled,
                     responseApiEnabled = responseApiEnabled,
+                    promptCachingEnabled = promptCachingEnabled,
+                    promptCacheTtl1h = promptCacheTtl1h,
                 )
-                onSaved()
+                if (saved == true) onSaved()
             },
             onFillFromJson = { jsonStr ->
-                val result = viewModel.parseProfilesFromJson(jsonStr)
-                result.fold(
+                val result = viewModel?.parseProfilesFromJson(jsonStr)
+                result?.fold(
                     onSuccess = { list ->
                         val item = list.firstOrNull()
                         if (item != null) {
@@ -210,7 +232,7 @@ fun ModelEditorScreen(
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun ModelEditorContent(
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier, bottomPadding: androidx.compose.ui.unit.Dp = 0.dp,
     modelId: String?,
     existing: AiModelEntity?,
     initialApiKey: String = "",
@@ -222,7 +244,7 @@ private fun ModelEditorContent(
     testResult: String?,
     discover: (String, String, String) -> Unit,
     test: (String, String, String, Boolean, String?) -> Unit,
-    save: (String, String, List<String>, String, String, Int, Float?, Int?, Float?, String?, String?, String?, Int?, String, Boolean, Boolean, Boolean, Boolean) -> Unit,
+    save: (String, String, List<String>, String, String, Int, Float?, Int?, Float?, String?, String?, String?, Int?, Int?, Int?, String, Boolean, Boolean, Boolean, Boolean, Boolean, Boolean) -> Unit,
     onFillFromJson: (String) -> AiModelProfileExport?,
     showImportDialog: Boolean,
     onDismissImportDialog: () -> Unit,
@@ -284,11 +306,20 @@ private fun ModelEditorContent(
         keyList.map { it.trim() }.filter { it.isNotEmpty() }.joinToString("\n")
     }
 
-    val candidateModels = remember(discovered, provider) {
-        (discovered + provider.recommendedModels).distinct().filter { it.isNotBlank() }
+    // 已选模型必须始终出现在候选列表中：否则厂商下架后刷新接口与预设都拿不到该模型，
+    // 它会隐身存在于 selectedModels 里，既看不到也无法取消
+    val candidateModels = remember(discovered, provider, selectedModels) {
+        (selectedModels + discovered + provider.recommendedModels).distinct().filter { it.isNotBlank() }
     }
     val filteredCandidateModels = remember(candidateModels, modelSearchQuery) {
         filterCandidateModels(candidateModels, modelSearchQuery)
+    }
+
+    /** 主流模型自动适配值；用户在输入框里填写的值仍然优先。 */
+    val autoContextTokens = remember(selectedModels, customModelInput, provider.id) {
+        val selected = selectedModels.firstOrNull()
+            ?: customModelInput.substringBefore(',').trim().takeIf { it.isNotBlank() }
+        selected?.let { modelId -> ModelContextWindows.resolve(modelId, provider.id) }
     }
 
     // 高级与推理参数
@@ -298,6 +329,24 @@ private fun ModelEditorContent(
     var temperature by rememberSaveable(modelId) { mutableFloatStateOf(existing?.temperature ?: 0.7f) }
     var maxTokensText by rememberSaveable(modelId) { mutableStateOf(existing?.maxTokens?.toString().orEmpty()) }
     var contextTokensText by rememberSaveable(modelId) { mutableStateOf(existing?.contextTokens?.toString().orEmpty()) }
+    val parsedMaxTokens = maxTokensText.trim().toIntOrNull()
+    val parsedContextTokens = contextTokensText.trim().toIntOrNull()
+    val effectiveContextTokens = parsedContextTokens ?: autoContextTokens
+    val maxTokensInvalid = maxTokensText.isNotBlank() && (parsedMaxTokens == null || parsedMaxTokens <= 0)
+    val contextTokensInvalid = contextTokensText.isNotBlank() &&
+        (parsedContextTokens == null || parsedContextTokens <= 0)
+    val tokenWindowInvalid = parsedMaxTokens != null && effectiveContextTokens != null &&
+        parsedMaxTokens > effectiveContextTokens
+    val tokenFieldsValid = !maxTokensInvalid && !contextTokensInvalid && !tokenWindowInvalid
+    var compactionKeepRecentText by rememberSaveable(modelId) {
+        mutableStateOf(existing?.compactionKeepRecentTokens?.toString().orEmpty())
+    }
+    var compactionReserveText by rememberSaveable(modelId) {
+        mutableStateOf(existing?.compactionReserveTokens?.toString().orEmpty())
+    }
+    val rpmValid = isValidOptionalModelInteger(rpmLimitText, 0)
+    val keepRecentValid = isValidOptionalModelInteger(compactionKeepRecentText, 1)
+    val reserveValid = isValidOptionalModelInteger(compactionReserveText, 1)
     var topP by rememberSaveable(modelId) { mutableFloatStateOf(existing?.topP ?: 1.0f) }
 
     var reasoningModeText by rememberSaveable(modelId) { mutableStateOf(existing?.reasoningMode ?: "auto") }
@@ -320,6 +369,12 @@ private fun ModelEditorContent(
     var responseApiEnabled by rememberSaveable(modelId) {
         mutableStateOf(existing?.responseApiEnabled ?: false)
     }
+    var promptCachingEnabled by rememberSaveable(modelId) {
+        mutableStateOf(existing?.promptCachingEnabled ?: true)
+    }
+    var promptCacheTtl1h by rememberSaveable(modelId) {
+        mutableStateOf(existing?.promptCacheTtl1h ?: false)
+    }
 
     var customHeaders by rememberSaveable(modelId) { mutableStateOf(existing?.customHeaders.orEmpty()) }
 
@@ -340,9 +395,7 @@ private fun ModelEditorContent(
             .map { it.trim() }
             .filter { it.isNotEmpty() }
             .distinct()
-        if (importedKeys.isNotEmpty()) {
-            keyList = importedKeys
-        }
+        if (importedKeys.isNotEmpty()) keyList = importedKeys
         val importedModels = profile.model.split(",").map { it.trim() }.filter { it.isNotEmpty() }
         if (importedModels.isNotEmpty()) {
             selectedModels = importedModels.toSet()
@@ -351,6 +404,8 @@ private fun ModelEditorContent(
         profile.temperature?.let { temperature = it }
         profile.maxTokens?.let { maxTokensText = it.toString() }
         profile.contextTokens?.let { contextTokensText = it.toString() }
+        if (profile.schemaVersion >= 2 || profile.compactionKeepRecentTokens != null) compactionKeepRecentText = profile.compactionKeepRecentTokens?.toString().orEmpty()
+        if (profile.schemaVersion >= 2 || profile.compactionReserveTokens != null) compactionReserveText = profile.compactionReserveTokens?.toString().orEmpty()
         profile.topP?.let { topP = it }
         profile.reasoningMode?.let { reasoningModeText = it }
         profile.reasoningEffort?.let { reasoningEffortText = it }
@@ -359,6 +414,8 @@ private fun ModelEditorContent(
         visionEnabled = profile.visionEnabled
         imageGenerationEnabled = profile.imageGenerationEnabled
         responseApiEnabled = profile.responseApiEnabled
+        promptCachingEnabled = profile.promptCachingEnabled
+        promptCacheTtl1h = profile.promptCacheTtl1h
         if (profile.customHeaders.isNotBlank()) customHeaders = profile.customHeaders
     }
 
@@ -415,85 +472,32 @@ private fun ModelEditorContent(
         )
     }
 
-    val compactFieldShape = Radius.smShape
-    val fieldColors = OutlinedTextFieldDefaults.colors(
+    val compactFieldShape = TextFieldDefaults.shape
+    val fieldColors = TextFieldDefaults.colors(
         focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f),
-        focusedBorderColor = MaterialTheme.colorScheme.primary,
-        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+        unfocusedIndicatorColor = MaterialTheme.colorScheme.outlineVariant,
     )
 
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.sm),
-        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+        modifier = modifier.fillMaxSize().imePadding(),
+        contentPadding = top.tianyan.app.ui.components.runtimeContentPadding(horizontal = 16.dp, top = 16.dp, bottom = 32.dp + bottomPadding),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        // ---- 1. 服务商选择与 Hero 卡片 ----
+        // The preset card is one selection target, leaving the full name room to wrap.
         item {
-            RuntimeCard(
-                modifier = Modifier.fillMaxWidth(),
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
+            RuntimeProviderCard(
+                providerId = provider.id, name = provider.name,
+                description = if (provider.id.startsWith("plugin.")) "已安装的本地插件" else when (provider.group) {
+                    ProviderGroup.OFFICIAL -> "官方"
+                    ProviderGroup.CHINA -> "国内"
+                    ProviderGroup.AGGREGATOR -> "聚合"
+                    ProviderGroup.LOCAL -> "本地"
+                    ProviderGroup.CUSTOM -> "自定义"
+                } + " · " + if (provider.protocol == ProviderProtocol.ANTHROPIC) "Claude Messages API" else "OpenAI 兼容 API",
                 onClick = { showProviderPicker = true },
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(Radius.smShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        ProviderBadge(providerIdOrName = provider.id, size = 26.dp)
-                    }
-
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                            Text(
-                                text = provider.name,
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                            Surface(
-                                shape = Radius.xsShape,
-                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
-                            ) {
-                                Text(
-                                    text = when (provider.group) {
-                                        ProviderGroup.OFFICIAL -> "官方"
-                                        ProviderGroup.CHINA -> "国内"
-                                        ProviderGroup.AGGREGATOR -> "聚合"
-                                        ProviderGroup.LOCAL -> "本地"
-                                        ProviderGroup.CUSTOM -> "自定义"
-                                    },
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
-                                )
-                            }
-                        }
-                        Text(
-                            text = if (provider.group == ProviderGroup.LOCAL) "本地沙箱轻量模型端点" else "OpenAI / Claude 兼容 API",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-
-                    RuntimeFilledTonalButton(
-                        onClick = { showProviderPicker = true },
-                        contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.sm),
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                            Text("切换预设", style = MaterialTheme.typography.labelMedium)
-                            RuntimeIcon(RuntimeIconName.ChevronDown, Modifier.size(14.dp))
-                        }
-                    }
-                }
-            }
+            )
         }
 
         // ---- 2. 基础连接卡片 (Connection Info) ----
@@ -501,28 +505,29 @@ private fun ModelEditorContent(
             RuntimeCard(
                 modifier = Modifier.fillMaxWidth(),
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
+                shape = MaterialTheme.shapes.extraLarge,
+                contentPadding = PaddingValues(SettingsDensity.cardPadding),
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         RuntimeIcon(RuntimeIconName.Globe, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
                         Text(
-                            text = "接口与基础连接",
+                            text = if (provider.id.startsWith("plugin.")) "档案信息" else "接口与基础连接",
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                     }
 
                     // 档案名称
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = name,
                         onValueChange = { name = it },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("档案名称（可选，留空按模型命名）") },
+                        label = { Text("档案名称") },
                         placeholder = { Text(if (selectedModels.isNotEmpty()) selectedModels.first() else provider.name) },
                         singleLine = true,
                         shape = compactFieldShape,
@@ -532,15 +537,15 @@ private fun ModelEditorContent(
                         },
                     )
 
-                    // Base URL
-                    OutlinedTextField(
+                    // External providers use installed MCP metadata rather than a user URL.
+                    if (provider.id.startsWith("plugin.")) LocalPluginProviderNotice() else RuntimeFilledTextField(
                         value = url,
                         onValueChange = { url = it },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Base URL（接口端点）") },
+                        label = { Text("Base URL") },
                         placeholder = {
                             Text(
-                                if (provider.protocol == top.tianyan.app.core.tools.ProviderProtocol.ANTHROPIC) {
+                                if (provider.protocol == ProviderProtocol.ANTHROPIC) {
                                     "https://api.anthropic.com/v1 或中转站地址"
                                 } else {
                                     "https://api.openai.com/v1"
@@ -548,11 +553,9 @@ private fun ModelEditorContent(
                             )
                         },
                         isError = url.isNotBlank() && !urlValid,
-                        supportingText = {
-                            if (url.isNotBlank() && !urlValid) {
-                                Text("接口地址需以 http:// 或 https:// 开头")
-                            }
-                        },
+                        supportingText = if (url.isNotBlank() && !urlValid) {
+                            { Text("接口地址需以 http:// 或 https:// 开头") }
+                        } else null,
                         singleLine = true,
                         shape = compactFieldShape,
                         colors = fieldColors,
@@ -568,7 +571,7 @@ private fun ModelEditorContent(
                                     RuntimeCircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                                 } else {
                                     RuntimeIcon(
-                                        name = RuntimeIconName.Refresh,
+                                        name = RuntimeIconName.Download,
                                         modifier = Modifier.size(18.dp),
                                         tint = if (url.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
                                     )
@@ -581,13 +584,14 @@ private fun ModelEditorContent(
         }
 
         // ---- 3. API 凭证与密钥池 ----
-        item {
+        if (!provider.id.startsWith("plugin.") || combinedKey.isNotBlank()) item {
             RuntimeCard(
                 modifier = Modifier.fillMaxWidth(),
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
+                shape = MaterialTheme.shapes.extraLarge,
+                contentPadding = PaddingValues(SettingsDensity.cardPadding),
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -595,7 +599,7 @@ private fun ModelEditorContent(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             RuntimeIcon(RuntimeIconName.Key, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
                             Text(
@@ -606,14 +610,14 @@ private fun ModelEditorContent(
                         }
 
                         Surface(
-                            shape = Radius.xsShape,
+                            shape = RoundedCornerShape(6.dp),
                             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
                         ) {
                             Text(
                                 text = "${keyList.count { it.isNotBlank() }} 个已配置",
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                             )
                         }
                     }
@@ -624,9 +628,9 @@ private fun ModelEditorContent(
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            OutlinedTextField(
+                            RuntimeFilledTextField(
                                 value = currentKey,
                                 onValueChange = { newVal ->
                                     keyList = keyList.toMutableList().also { it[index] = newVal }
@@ -687,28 +691,26 @@ private fun ModelEditorContent(
                     }
 
                     // 添加备用 Key / 批量导入
-                    Row(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        RuntimeOutlinedButton(
+                        RuntimeFilledTonalButton(
                             onClick = { keyList = keyList + "" },
-                            modifier = Modifier.weight(1f).height(38.dp),
-                            shape = Radius.smShape,
-                            contentPadding = PaddingValues(horizontal = Spacing.sm),
+                            modifier = Modifier.weight(1f).widthIn(min = 140.dp).heightIn(min = 48.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp),
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 RuntimeIcon(RuntimeIconName.Plus, Modifier.size(14.dp), MaterialTheme.colorScheme.primary)
-                                Text("+ 备用 Key", style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text("备用 Key", style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                         }
                         RuntimeOutlinedButton(
                             onClick = { showBatchImportKeysDialog = true },
-                            modifier = Modifier.weight(1f).height(38.dp),
-                            shape = Radius.smShape,
-                            contentPadding = PaddingValues(horizontal = Spacing.sm),
+                            modifier = Modifier.weight(1f).widthIn(min = 140.dp).heightIn(min = 48.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp),
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 RuntimeIcon(RuntimeIconName.Download, Modifier.size(14.dp), MaterialTheme.colorScheme.primary)
                                 Text("批量导入", style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
@@ -729,9 +731,10 @@ private fun ModelEditorContent(
             RuntimeCard(
                 modifier = Modifier.fillMaxWidth(),
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
+                shape = MaterialTheme.shapes.extraLarge,
+                contentPadding = PaddingValues(SettingsDensity.cardPadding),
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     val totalSelectedCount = (selectedModels + customModelInput.split(",").map { it.trim() }).filter { it.isNotBlank() }.distinct().size
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -740,7 +743,7 @@ private fun ModelEditorContent(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             RuntimeIcon(RuntimeIconName.Brain, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
                             Text(
@@ -752,42 +755,17 @@ private fun ModelEditorContent(
 
                         if (totalSelectedCount > 0) {
                             Surface(
-                                shape = Radius.xsShape,
+                                shape = RoundedCornerShape(6.dp),
                                 color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
                             ) {
                                 Text(
                                     text = "已选 $totalSelectedCount 个模型",
                                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                                     color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                                 )
                             }
                         }
-                    }
-
-                    // 拉取模型列表：从 Base URL 的 /models 端点获取可用模型，供下方点选
-                    RuntimeOutlinedButton(
-                        onClick = { discover(providerId, url, combinedKey) },
-                        enabled = !discovering && url.isNotBlank(),
-                        modifier = Modifier.fillMaxWidth().height(38.dp),
-                        shape = Radius.smShape,
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                            if (discovering) {
-                                RuntimeCircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
-                                Text("正在拉取模型列表…", style = MaterialTheme.typography.labelMedium)
-                            } else {
-                                RuntimeIcon(RuntimeIconName.Refresh, Modifier.size(14.dp), MaterialTheme.colorScheme.primary)
-                                Text("拉取模型列表", style = MaterialTheme.typography.labelMedium)
-                            }
-                        }
-                    }
-                    if (discoveryError != null) {
-                        Text(
-                            text = discoveryError,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                        )
                     }
 
                     if (candidateModels.isNotEmpty()) {
@@ -812,7 +790,7 @@ private fun ModelEditorContent(
                             }
                         }
 
-                        OutlinedTextField(
+                        RuntimeFilledTextField(
                             value = modelSearchQuery,
                             onValueChange = { modelSearchQuery = it },
                             modifier = Modifier.fillMaxWidth(),
@@ -853,7 +831,7 @@ private fun ModelEditorContent(
                         if (filteredCandidateModels.isEmpty()) {
                             Text(
                                 text = "没有匹配的模型，可清空搜索或在下方手动填写模型 ID",
-                                modifier = Modifier.padding(vertical = Spacing.sm),
+                                modifier = Modifier.padding(vertical = 8.dp),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -863,14 +841,14 @@ private fun ModelEditorContent(
                                     .fillMaxWidth()
                                     .heightIn(max = 360.dp)
                                     .verticalScroll(candidateScrollState),
-                                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 filteredCandidateModels.forEach { option ->
                                     val isSelected = selectedModels.contains(option)
                                     Surface(
                                         color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceContainerHigh,
-                                        shape = Radius.smShape,
+                                        shape = RoundedCornerShape(10.dp),
                                         border = BorderStroke(
                                             1.dp,
                                             if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
@@ -880,9 +858,9 @@ private fun ModelEditorContent(
                                         },
                                     ) {
                                         Row(
-                                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.sm),
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                                             verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                                         ) {
                                             if (isSelected) {
                                                 RuntimeIcon(
@@ -907,11 +885,11 @@ private fun ModelEditorContent(
                     }
 
                     // 自定义模型输入
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = customModelInput,
                         onValueChange = { customModelInput = it },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("自定义模型 ID（可选，逗号分隔额外模型）") },
+                        label = { Text("模型 ID（可选，逗号分隔额外模型）") },
                         placeholder = { Text("例如：gpt-4.5-preview, claude-3-7-sonnet") },
                         singleLine = true,
                         shape = compactFieldShape,
@@ -926,14 +904,15 @@ private fun ModelEditorContent(
             RuntimeCard(
                 modifier = Modifier.fillMaxWidth(),
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
+                shape = MaterialTheme.shapes.extraLarge,
+                contentPadding = PaddingValues(SettingsDensity.cardPadding),
                 onClick = { reasoningSectionExpanded = !reasoningSectionExpanded },
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         RuntimeIcon(RuntimeIconName.Speed, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
                         Column(modifier = Modifier.weight(1f)) {
@@ -956,25 +935,25 @@ private fun ModelEditorContent(
 
                     AnimatedVisibility(visible = reasoningSectionExpanded) {
                         Column(
-                            modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm),
-                            verticalArrangement = Arrangement.spacedBy(Spacing.md),
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp),
                         ) {
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
                             // Temperature 滑块
-                            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Text("Temperature (随机性)", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
-                                    Surface(shape = Radius.xsShape, color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)) {
+                                    Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)) {
                                         Text(
                                             text = String.format("%.2f", temperature),
                                             style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold),
                                             color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                                         )
                                     }
                                 }
@@ -985,7 +964,7 @@ private fun ModelEditorContent(
                                     steps = 20,
                                     modifier = Modifier.fillMaxWidth(),
                                 )
-                                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     PresetChip("0.2 精准", temperature == 0.2f) { temperature = 0.2f }
                                     PresetChip("0.7 平衡", temperature == 0.7f) { temperature = 0.7f }
                                     PresetChip("1.2 创意", temperature == 1.2f) { temperature = 1.2f }
@@ -995,26 +974,42 @@ private fun ModelEditorContent(
                             // Max Tokens 与 Context Tokens 双列并排
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
                             ) {
-                                OutlinedTextField(
+                                RuntimeFilledTextField(
                                     value = maxTokensText,
                                     onValueChange = { maxTokensText = it.filter(Char::isDigit) },
                                     modifier = Modifier.weight(1f),
                                     label = { Text("Max Tokens") },
                                     placeholder = { Text("8000") },
                                     singleLine = true,
+                                    isError = maxTokensInvalid || tokenWindowInvalid,
+                                    supportingText = if (maxTokensInvalid) {
+                                        { Text("请输入大于 0 的整数，或留空使用默认值") }
+                                    } else if (tokenWindowInvalid) {
+                                        { Text("不能大于上下文上限") }
+                                    } else null,
                                     shape = compactFieldShape,
                                     colors = fieldColors,
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 )
-                                OutlinedTextField(
+                                RuntimeFilledTextField(
                                     value = contextTokensText,
                                     onValueChange = { contextTokensText = it.filter(Char::isDigit) },
                                     modifier = Modifier.weight(1f),
                                     label = { Text("上下文上限") },
-                                    placeholder = { Text("128000") },
+                                    placeholder = { Text(autoContextTokens?.let(::formatContextWindow) ?: "留空自动") },
                                     singleLine = true,
+                                    isError = contextTokensInvalid || tokenWindowInvalid,
+                                    supportingText = if (contextTokensInvalid) {
+                                        { Text("请输入大于 0 的整数，或留空自动适配") }
+                                    } else if (tokenWindowInvalid) {
+                                        { Text("不能大于当前上下文上限（自动 ${autoContextTokens?.let(::formatContextWindow) ?: "全局预算"}）") }
+                                    } else if (contextTokensText.isBlank() && autoContextTokens != null) {
+                                        { Text("留空自动适配：${formatContextWindow(autoContextTokens)}") }
+                                    } else if (contextTokensText.isBlank()) {
+                                        { Text("留空使用全局兜底预算") }
+                                    } else null,
                                     shape = compactFieldShape,
                                     colors = fieldColors,
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -1022,19 +1017,19 @@ private fun ModelEditorContent(
                             }
 
                             // Top P 滑块
-                            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Text("Top P (核采样)", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
-                                    Surface(shape = Radius.xsShape, color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)) {
+                                    Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)) {
                                         Text(
                                             text = String.format("%.2f", topP),
                                             style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold),
                                             color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                                         )
                                     }
                                 }
@@ -1052,7 +1047,7 @@ private fun ModelEditorContent(
                                 expanded = reasoningModeMenu,
                                 onExpandedChange = { reasoningModeMenu = !reasoningModeMenu },
                             ) {
-                                OutlinedTextField(
+                                RuntimeFilledTextField(
                                     value = when (reasoningModeText) {
                                         "enabled" -> "开启深度推理（模型深入思考）"
                                         else -> "跟随模型默认"
@@ -1090,14 +1085,15 @@ private fun ModelEditorContent(
             RuntimeCard(
                 modifier = Modifier.fillMaxWidth(),
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
+                shape = MaterialTheme.shapes.extraLarge,
+                contentPadding = PaddingValues(SettingsDensity.cardPadding),
                 onClick = { advancedSectionExpanded = !advancedSectionExpanded },
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         RuntimeIcon(RuntimeIconName.Shield, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
                         Column(modifier = Modifier.weight(1f)) {
@@ -1120,15 +1116,17 @@ private fun ModelEditorContent(
 
                     AnimatedVisibility(visible = advancedSectionExpanded) {
                         Column(
-                            modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm),
-                            verticalArrangement = Arrangement.spacedBy(Spacing.md),
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
                             // 单 Key 每分钟上限
-                            OutlinedTextField(
+                            RuntimeFilledTextField(
                                 value = rpmLimitText,
-                                onValueChange = { rpmLimitText = it.filter(Char::isDigit) },
+                                onValueChange = { rpmLimitText = it },
+                                isError = !rpmValid,
+                                supportingText = { if (!rpmValid) Text(stringResource(R.string.model_integer_nonnegative)) },
                                 modifier = Modifier.fillMaxWidth(),
                                 label = { Text("单 Key 每分钟请求上限 (RPM)") },
                                 placeholder = { Text("0 表示不限制") },
@@ -1136,6 +1134,44 @@ private fun ModelEditorContent(
                                 shape = compactFieldShape,
                                 colors = fieldColors,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            )
+
+                            // 每模型压缩预算覆盖（对齐 pi compaction.modelOverrides）
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                RuntimeFilledTextField(
+                                    value = compactionKeepRecentText,
+                                    onValueChange = { compactionKeepRecentText = it },
+                                    isError = !keepRecentValid,
+                                    supportingText = { if (!keepRecentValid) Text(stringResource(R.string.model_integer_positive)) },
+                                    modifier = Modifier.weight(1f),
+                                    label = { Text("压缩保留上限") },
+                                    placeholder = { Text("20000") },
+                                    singleLine = true,
+                                    shape = compactFieldShape,
+                                    colors = fieldColors,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                )
+                                RuntimeFilledTextField(
+                                    value = compactionReserveText,
+                                    onValueChange = { compactionReserveText = it },
+                                    isError = !reserveValid,
+                                    supportingText = { if (!reserveValid) Text(stringResource(R.string.model_integer_positive)) },
+                                    modifier = Modifier.weight(1f),
+                                    label = { Text("响应预留 Token") },
+                                    placeholder = { Text("16384") },
+                                    singleLine = true,
+                                    shape = compactFieldShape,
+                                    colors = fieldColors,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                )
+                            }
+                            Text(
+                                "仅本模型的压缩预算覆盖：触发压缩时保留最近 N token 进上下文、为回复预留 N token；留空使用全局默认。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
 
                             // 特性开关列表
@@ -1168,6 +1204,20 @@ private fun ModelEditorContent(
                             )
 
                             EditorToggleRow(
+                                title = "Claude Prompt Caching",
+                                subtitle = "Anthropic 协议注入缓存断点，长会话最高省 90% 输入 Token",
+                                checked = promptCachingEnabled,
+                                onCheckedChange = { promptCachingEnabled = it },
+                            )
+
+                            EditorToggleRow(
+                                title = "Prompt Cache 1 小时 TTL",
+                                subtitle = "扩大缓存有效期（需服务端支持扩展 TTL）",
+                                checked = promptCacheTtl1h,
+                                onCheckedChange = { promptCacheTtl1h = it },
+                            )
+
+                            EditorToggleRow(
                                 title = "纯净排查模式",
                                 subtitle = "不注入系统提示词与工具定义",
                                 checked = pureChatMode,
@@ -1175,7 +1225,7 @@ private fun ModelEditorContent(
                             )
 
                             // 自定义请求头
-                            OutlinedTextField(
+                            RuntimeFilledTextField(
                                 value = customHeaders,
                                 onValueChange = { customHeaders = it },
                                 modifier = Modifier.fillMaxWidth(),
@@ -1199,21 +1249,20 @@ private fun ModelEditorContent(
 
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 RuntimeOutlinedButton(
                     onClick = { test(url, testModelTarget, combinedKey, responseApiEnabled, providerId) },
                     enabled = !testing && url.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth().height(44.dp),
-                    shape = Radius.smShape,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                 ) {
                     if (testing) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             RuntimeCircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                             Text("正在测试…")
                         }
                     } else {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             RuntimeIcon(RuntimeIconName.Play, Modifier.size(16.dp), MaterialTheme.colorScheme.primary)
                             Text("测试连接")
                         }
@@ -1222,14 +1271,14 @@ private fun ModelEditorContent(
 
                 discoveryError?.let {
                     Surface(
-                        shape = Radius.smShape,
+                        shape = RoundedCornerShape(10.dp),
                         color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             RuntimeIcon(RuntimeIconName.Alert, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
                             Text(
@@ -1246,14 +1295,14 @@ private fun ModelEditorContent(
                 testResult?.let { resultMsg ->
                     val isSuccess = resultMsg == "连接成功"
                     Surface(
-                        shape = Radius.smShape,
+                        shape = RoundedCornerShape(10.dp),
                         color = if (isSuccess) successStatusColor().copy(alpha = 0.15f) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             RuntimeIcon(
                                 name = if (isSuccess) RuntimeIconName.Check else RuntimeIconName.Alert,
@@ -1279,8 +1328,8 @@ private fun ModelEditorContent(
                 val customList = customModelInput.split(",").map { it.trim() }.filter { it.isNotBlank() }
                 (selectedModels + customList).filter { it.isNotBlank() }.distinct()
             }
-            val parsedMaxTokens = maxTokensText.trim().toIntOrNull()
-            val parsedContextTokens = contextTokensText.trim().toIntOrNull()
+            val parsedCompactionKeepRecent = compactionKeepRecentText.trim().toIntOrNull()?.takeIf { it > 0 }
+            val parsedCompactionReserve = compactionReserveText.trim().toIntOrNull()?.takeIf { it > 0 }
             val parsedRpmLimit = rpmLimitText.trim().toIntOrNull() ?: 0
 
             val buttonText = if (effectiveModels.size > 1) {
@@ -1305,24 +1354,36 @@ private fun ModelEditorContent(
                         reasoningEffortText.ifBlank { null },
                         if (toolCallEnabled) "native" else "disabled",
                         parsedContextTokens,
+                        parsedCompactionKeepRecent,
+                        parsedCompactionReserve,
                         customHeaders,
                         pureChatMode,
                         visionEnabled,
                         imageGenerationEnabled,
                         responseApiEnabled,
+                        promptCachingEnabled,
+                        promptCacheTtl1h,
                     )
                 },
                 modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = Radius.smShape,
-                enabled = effectiveModels.isNotEmpty() && urlValid,
+                shape = RoundedCornerShape(12.dp),
+                enabled = effectiveModels.isNotEmpty() && urlValid && tokenFieldsValid && rpmValid && keepRecentValid && reserveValid,
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     RuntimeIcon(RuntimeIconName.Check, Modifier.size(18.dp), MaterialTheme.colorScheme.onPrimary)
                     Text(buttonText, fontWeight = FontWeight.Bold)
                 }
             }
         }
     }
+}
+
+private fun formatContextWindow(tokens: Int): String = when {
+    tokens <= 0 -> "0"
+    tokens % 1_000_000 == 0 -> "${tokens / 1_000_000}M"
+    tokens >= 1_000_000 -> String.format(Locale.US, "%.1fM", tokens / 1_000_000.0)
+    tokens % 1_000 == 0 -> "${tokens / 1_000}K"
+    else -> String.format(Locale.US, "%.1fK", tokens / 1_000.0)
 }
 
 internal fun filterCandidateModels(models: List<String>, query: String): List<String> {
@@ -1333,67 +1394,6 @@ internal fun filterCandidateModels(models: List<String>, query: String): List<St
         models.filter { it.contains(normalizedQuery, ignoreCase = true) }
     }
 }
-
-@Composable
-private fun PresetChip(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    Surface(
-        shape = Radius.xsShape,
-        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
-        border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-        modifier = Modifier.clickable(onClick = onClick),
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-            ),
-            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
-        )
-    }
-}
-
-@Composable
-private fun EditorToggleRow(
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f),
-        shape = Radius.smShape,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-        ) {
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            RuntimeSwitch(
-                checked = checked,
-                onCheckedChange = onCheckedChange,
-            )
-        }
-    }
-}
-
 @Composable
 private fun BatchImportKeysDialog(
     onDismiss: () -> Unit,
@@ -1408,13 +1408,18 @@ private fun BatchImportKeysDialog(
     RuntimeAlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 RuntimeIcon(RuntimeIconName.Key, Modifier.size(20.dp), MaterialTheme.colorScheme.primary)
                 Text("批量导入密钥", fontWeight = FontWeight.Bold)
             }
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 Text(
                     "粘贴多个 API 密钥，一行一个，遇到换行即为下一个 Key：",
                     style = MaterialTheme.typography.bodySmall,
@@ -1426,11 +1431,11 @@ private fun BatchImportKeysDialog(
                     modifier = Modifier.fillMaxWidth().height(160.dp),
                     placeholder = { Text("sk-xxxxxxxxxxxxxxxx\nsk-yyyyyyyyyyyyyyyy\nsk-zzzzzzzzzzzzzzzz") },
                     textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                    shape = Radius.smShape,
+                    shape = RoundedCornerShape(10.dp),
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     RuntimeOutlinedButton(
@@ -1444,21 +1449,21 @@ private fun BatchImportKeysDialog(
                             }
                         },
                         modifier = Modifier.weight(1f).height(36.dp),
-                        shape = Radius.xsShape,
-                        contentPadding = PaddingValues(horizontal = Spacing.sm),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp),
                     ) {
                         Text("从剪贴板粘贴", style = MaterialTheme.typography.labelMedium)
                     }
                     if (parsedCount > 0) {
                         Surface(
-                            shape = Radius.xsShape,
+                            shape = RoundedCornerShape(6.dp),
                             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
                         ) {
                             Text(
                                 text = "已识别 $parsedCount 个",
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                             )
                         }
                     }
@@ -1474,7 +1479,7 @@ private fun BatchImportKeysDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            RuntimeTextButton(onClick = onDismiss) {
                 Text("取消")
             }
         },
@@ -1492,13 +1497,18 @@ private fun QuickImportJsonDialog(
     RuntimeAlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 RuntimeIcon(RuntimeIconName.Code, Modifier.size(20.dp), MaterialTheme.colorScheme.primary)
                 Text("从 JSON 填入模型配置", fontWeight = FontWeight.Bold)
             }
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 Text(
                     "粘贴天衍导出的模型配置或 OpenAI 兼容 JSON，将自动解析并填入当前表单：",
                     style = MaterialTheme.typography.bodySmall,
@@ -1510,7 +1520,7 @@ private fun QuickImportJsonDialog(
                     modifier = Modifier.fillMaxWidth().height(160.dp),
                     placeholder = { Text("{\n  \"name\": \"DeepSeek-V4\",\n  \"provider\": \"DeepSeek\",\n  \"baseUrl\": \"https://api.deepseek.com/v1\",\n  \"model\": \"deepseek-v4-flash\"\n}") },
                     textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                    shape = Radius.smShape,
+                    shape = RoundedCornerShape(10.dp),
                 )
                 RuntimeOutlinedButton(
                     onClick = {
@@ -1523,7 +1533,7 @@ private fun QuickImportJsonDialog(
                         }
                     },
                     modifier = Modifier.fillMaxWidth().height(36.dp),
-                    shape = Radius.xsShape,
+                    shape = RoundedCornerShape(8.dp),
                 ) {
                     Text("从剪贴板粘贴")
                 }
@@ -1538,7 +1548,7 @@ private fun QuickImportJsonDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            RuntimeTextButton(onClick = onDismiss) {
                 Text("取消")
             }
         },
@@ -1569,7 +1579,7 @@ private fun ProviderPickerDialog(
     RuntimeAlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 RuntimeIcon(RuntimeIconName.Sparkles, Modifier.size(20.dp), MaterialTheme.colorScheme.primary)
                 Text("选择服务商预设", fontWeight = FontWeight.Bold)
             }
@@ -1577,7 +1587,7 @@ private fun ProviderPickerDialog(
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 // 搜索框
                 OutlinedTextField(
@@ -1598,7 +1608,7 @@ private fun ProviderPickerDialog(
                         }
                     },
                     singleLine = true,
-                    shape = Radius.smShape,
+                    shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.fillMaxWidth().height(52.dp),
                     textStyle = MaterialTheme.typography.bodySmall,
                 )
@@ -1608,7 +1618,7 @@ private fun ProviderPickerDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     ProviderFilterChip(
@@ -1648,14 +1658,14 @@ private fun ProviderPickerDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = 340.dp),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     if (filteredProviders.isEmpty()) {
                         item {
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = Spacing.xl),
+                                    .padding(vertical = 24.dp),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Text(
@@ -1669,7 +1679,7 @@ private fun ProviderPickerDialog(
                         items(filteredProviders, key = { it.id }) { option ->
                             val isSelected = option.id == currentProviderId
                             Surface(
-                                shape = Radius.smShape,
+                                shape = RoundedCornerShape(12.dp),
                                 color = if (isSelected) {
                                     MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
                                 } else {
@@ -1689,14 +1699,14 @@ private fun ProviderPickerDialog(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                                 ) {
                                     Box(
                                         modifier = Modifier
                                             .size(32.dp)
-                                            .clip(Radius.xsShape)
+                                            .clip(RoundedCornerShape(8.dp))
                                             .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f)),
                                         contentAlignment = Alignment.Center,
                                     ) {
@@ -1705,11 +1715,11 @@ private fun ProviderPickerDialog(
 
                                     Column(
                                         modifier = Modifier.weight(1f),
-                                        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+                                        verticalArrangement = Arrangement.spacedBy(2.dp),
                                     ) {
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                                         ) {
                                             Text(
                                                 text = option.name,
@@ -1721,7 +1731,7 @@ private fun ProviderPickerDialog(
                                                 overflow = TextOverflow.Ellipsis,
                                             )
                                             Surface(
-                                                shape = Radius.xsShape,
+                                                shape = RoundedCornerShape(4.dp),
                                                 color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f),
                                             ) {
                                                 Text(
@@ -1734,7 +1744,7 @@ private fun ProviderPickerDialog(
                                                     },
                                                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                                                     color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                    modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
+                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                                                 )
                                             }
                                         }
@@ -1763,7 +1773,7 @@ private fun ProviderPickerDialog(
         },
         confirmButton = {},
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            RuntimeTextButton(onClick = onDismiss) {
                 Text("关闭")
             }
         },
@@ -1777,7 +1787,7 @@ private fun ProviderFilterChip(
     onClick: () -> Unit,
 ) {
     Surface(
-        shape = Radius.xsShape,
+        shape = RoundedCornerShape(8.dp),
         color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f),
         border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)) else null,
         modifier = Modifier.clickable(onClick = onClick),
@@ -1789,7 +1799,7 @@ private fun ProviderFilterChip(
                 fontSize = 11.sp,
             ),
             color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
         )
     }
 }

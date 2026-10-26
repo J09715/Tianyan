@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -45,9 +46,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
 import top.tianyan.app.ui.components.RuntimeIcon
-import top.tianyan.app.ui.theme.Radius
-import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.ui.components.RuntimeIconName
+import top.tianyan.app.ui.chat.artifact.ArtifactPreviewSheet
 
 private val DiffAddedBg = Color(0xFF0E2E1E)
 private val DiffAddedText = Color(0xFF7EE787)
@@ -66,19 +66,18 @@ fun ToolDiffView(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(Color(0xFF090D14), Radius.xsShape)
-            .padding(Spacing.sm),
-        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+            .background(Color(0xFF090D14), RoundedCornerShape(8.dp))
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         when (call.tool) {
             HarnessTool.EDIT -> EditToolDiff(call, result, workspace, onOpenFile)
             HarnessTool.WRITE -> WriteToolDiff(call, result, workspace, onOpenFile)
             HarnessTool.READ -> ReadToolDiff(call, result, workspace, onOpenFile)
-            // verify 与 base 同为「命令 + 退出码」形态，复用命令卡片展示。
-            HarnessTool.BASE, HarnessTool.VERIFY -> BaseToolDiff(call, result)
+            HarnessTool.BASE -> BaseToolDiff(call, result)
             HarnessTool.PROCESS, HarnessTool.HOST, HarnessTool.DOWNLOAD, HarnessTool.MEMORY, HarnessTool.PLAN, HarnessTool.SCRATCHPAD,
             HarnessTool.HISTORY_SEARCH, HarnessTool.HISTORY_READ, HarnessTool.BUILD_SCRIPT, HarnessTool.SUBAGENT, HarnessTool.MCP,
-            HarnessTool.LOAD_RULE, HarnessTool.REDTEAM, HarnessTool.ASK_USER -> BaseToolDiff(call, result)
+            HarnessTool.LOAD_RULE, HarnessTool.LOAD_SKILL, HarnessTool.COMPRESS, HarnessTool.ASK_USER, HarnessTool.RENDER_SURFACE -> BaseToolDiff(call, result)
         }
     }
 }
@@ -97,22 +96,29 @@ private fun EditToolDiff(
     // 顶部路径与在编辑器中打开/产物预览按钮
     FilePathHeader(path = path, workspace = workspace, onOpenFile = onOpenFile, previewContent = newText.ifEmpty { oldText })
 
-    val oldLines = remember(oldText) { if (oldText.isEmpty()) emptyList() else oldText.split('\n') }
-    val newLines = remember(newText) { if (newText.isEmpty()) emptyList() else newText.split('\n') }
+    // 优先渲染 harness 侧生成的精确 Unified Diff（反映真实命中区间与缩进重排）；
+    // 旧数据或写入失败时回退到按参数粗渲染。
+    val unifiedDiff = result?.takeIf { it.success }?.metadata?.get("diff")
+    if (!unifiedDiff.isNullOrBlank()) {
+        UnifiedDiffLines(unifiedDiff)
+    } else {
+        val oldLines = remember(oldText) { if (oldText.isEmpty()) emptyList() else oldText.split('\n') }
+        val newLines = remember(newText) { if (newText.isEmpty()) emptyList() else newText.split('\n') }
 
-    // Diff 区域：LazyColumn 虚拟化渲染，大 diff 只组合可见行，不再整块全量重组
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color(0xFF06090F), Radius.xsShape)
-            .heightIn(max = 320.dp)
-            .padding(vertical = Spacing.xs),
-    ) {
-        itemsIndexed(oldLines, key = { index, _ -> "old-$index" }) { _, line ->
-            DiffLine(text = "- $line", background = DiffRemovedBg, foreground = DiffRemovedText)
-        }
-        itemsIndexed(newLines, key = { index, _ -> "new-$index" }) { _, line ->
-            DiffLine(text = "+ $line", background = DiffAddedBg, foreground = DiffAddedText)
+        // Diff 区域：LazyColumn 虚拟化渲染，大 diff 只组合可见行，不再整块全量重组
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xFF06090F), RoundedCornerShape(6.dp))
+                .heightIn(max = 320.dp)
+                .padding(vertical = 4.dp),
+        ) {
+            itemsIndexed(oldLines, key = { index, _ -> "old-$index" }) { _, line ->
+                DiffLine(text = "- $line", background = DiffRemovedBg, foreground = DiffRemovedText)
+            }
+            itemsIndexed(newLines, key = { index, _ -> "new-$index" }) { _, line ->
+                DiffLine(text = "+ $line", background = DiffAddedBg, foreground = DiffAddedText)
+            }
         }
     }
 
@@ -129,6 +135,30 @@ private fun EditToolDiff(
 }
 
 @Composable
+private fun UnifiedDiffLines(diff: String) {
+    val lines = remember(diff) { diff.split('\n').filter { it.isNotEmpty() } }
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF06090F), RoundedCornerShape(6.dp))
+            .heightIn(max = 320.dp)
+            .padding(vertical = 4.dp),
+    ) {
+        itemsIndexed(lines, key = { index, _ -> "diff-$index" }) { _, line ->
+            val (background, foreground) = when {
+                line.startsWith("+++") || line.startsWith("---") ->
+                    Color(0xFF141C29) to Color(0xFF9FB3C8)
+                line.startsWith("@@") ->
+                    Color(0xFF12202F) to Color(0xFF82AAFF)
+                line.startsWith("+") -> DiffAddedBg to DiffAddedText
+                line.startsWith("-") -> DiffRemovedBg to DiffRemovedText
+                else -> Color(0xFF06090F) to Color(0xFF9AA7B8)
+            }
+            DiffLine(text = line, background = background, foreground = foreground)
+        }
+    }
+}
+@Composable
 private fun DiffLine(text: String, background: Color, foreground: Color) {
     Text(
         text = text,
@@ -139,7 +169,7 @@ private fun DiffLine(text: String, background: Color, foreground: Color) {
         modifier = Modifier
             .fillMaxWidth()
             .background(background)
-            .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+            .padding(horizontal = 8.dp, vertical = 2.dp),
     )
 }
 
@@ -169,9 +199,9 @@ private fun WriteToolDiff(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xFF06090F), Radius.xsShape)
+            .background(Color(0xFF06090F), RoundedCornerShape(6.dp))
             .horizontalScroll(rememberScrollState())
-            .padding(Spacing.sm),
+            .padding(8.dp),
     ) {
         Text(
             text = preview,
@@ -206,9 +236,9 @@ private fun ReadToolDiff(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF06090F), Radius.xsShape)
+                    .background(Color(0xFF06090F), RoundedCornerShape(6.dp))
                     .horizontalScroll(rememberScrollState())
-                    .padding(Spacing.sm),
+                    .padding(8.dp),
             ) {
                 Text(
                     text = preview,
@@ -238,11 +268,11 @@ private fun BaseToolDiff(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xFF06090F), Radius.xsShape)
+            .background(Color(0xFF06090F), RoundedCornerShape(4.dp))
             .horizontalScroll(rememberScrollState())
-            .padding(horizontal = Spacing.sm, vertical = Spacing.sm),
+            .padding(horizontal = 8.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(
             text = "$",
@@ -266,9 +296,9 @@ private fun BaseToolDiff(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(TerminalBoxBg, Radius.xsShape)
+                    .background(TerminalBoxBg, RoundedCornerShape(6.dp))
                     .horizontalScroll(rememberScrollState())
-                    .padding(Spacing.sm),
+                    .padding(10.dp),
             ) {
                 Text(
                     text = output.take(2000) + if (output.length > 2000) stringResource(R.string.chat_output_truncated) else "",
@@ -329,7 +359,7 @@ private fun FilePathHeader(
     }
 
     if (showPreviewSheet && !previewContent.isNullOrEmpty()) {
-        top.tianyan.app.ui.chat.artifact.ArtifactPreviewSheet(
+        ArtifactPreviewSheet(
             title = path.substringAfterLast('/'),
             content = previewContent,
             relativePath = path,
@@ -345,7 +375,7 @@ private fun FilePathHeader(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             modifier = Modifier.weight(1f, fill = false),
         ) {
             RuntimeIcon(RuntimeIconName.File, Modifier.size(15.dp), tint = Color(0xFF8FA1BA))
@@ -379,18 +409,18 @@ private fun FilePathHeader(
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             if (!previewContent.isNullOrEmpty()) {
                 Surface(
                     color = Color(0xFF1B2C47),
-                    shape = Radius.xsShape,
+                    shape = RoundedCornerShape(4.dp),
                     modifier = Modifier.minimumInteractiveComponentSize().clickable { showPreviewSheet = true },
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         RuntimeIcon(RuntimeIconName.Document, Modifier.size(12.dp), tint = Color(0xFF79C0FF))
                         Text(
@@ -403,15 +433,15 @@ private fun FilePathHeader(
 
                 Surface(
                     color = Color(0xFF1B2C47),
-                    shape = Radius.xsShape,
+                    shape = RoundedCornerShape(4.dp),
                     modifier = Modifier.minimumInteractiveComponentSize().clickable {
                         exportDocumentLauncher.launch(defaultFileName)
                     },
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         RuntimeIcon(RuntimeIconName.Download, Modifier.size(12.dp), tint = Color(0xFF79C0FF))
                         Text(
@@ -426,13 +456,13 @@ private fun FilePathHeader(
             if (projectName.isNotBlank() && onOpenFile != null) {
                 Surface(
                     color = Color(0xFF1E283D),
-                    shape = Radius.xsShape,
+                    shape = RoundedCornerShape(4.dp),
                     modifier = Modifier.minimumInteractiveComponentSize().clickable { onOpenFile(projectName, relativePath) },
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         RuntimeIcon(RuntimeIconName.Code, Modifier.size(12.dp), tint = Color(0xFF7EE787))
                         Text(

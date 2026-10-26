@@ -6,18 +6,14 @@ import android.os.Build
 import android.os.Environment
 import android.os.Process
 import android.provider.MediaStore
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /** Stores redacted crash reports locally; no network upload is performed. */
-@Singleton
-class CrashReporter @Inject constructor(
-    @ApplicationContext private val context: Context,
+class CrashReporter(
+    private val context: Context,
     private val secretRedactor: SensitiveDataRedactor,
 ) {
     fun install() {
@@ -34,17 +30,6 @@ class CrashReporter @Inject constructor(
     fun latestReport(): String? = File(context.filesDir, REPORT_PATH)
         .takeIf { it.isFile }
         ?.readText()
-
-    /** 崩溃报告的落盘目录，供开发者界面直接展示路径，用户可自行取走文件。 */
-    fun reportLocation(): String = reportDirectory().absolutePath
-
-    /** 清空全部本地崩溃报告（含已导出标记），避免一次性问题长期占位。 */
-    fun clearReports(): Boolean = runCatching {
-        var ok = true
-        reportDirectory().listFiles().orEmpty().forEach { file -> ok = file.delete() && ok }
-        File(context.filesDir, REPORT_PATH).takeIf { it.exists() }?.let { ok = it.delete() && ok }
-        ok
-    }.getOrDefault(false)
 
     /** Copies reports to Download/Tianyan/crash-reports after the next successful launch. */
     fun exportPendingReports(): Int {
@@ -76,9 +61,9 @@ class CrashReporter @Inject constructor(
                 appendLine("package=${context.packageName}")
                 appendLine("version=${appVersion()}")
                 appendLine("processId=${Process.myPid()}")
-                // Thread.id 已弃用（Java 19+）；用 Android 的 Process.myTid() 取线程 id，
-                // 语义一致（当前线程的系统级 id）且不依赖已弃用 API。
-                appendLine("thread=${thread.name} (${android.os.Process.myTid()})")
+                // threadId() 需 API 35+（minSdk 29 不可用），Thread.id 弃用但语义不变，仅用于崩溃报告展示
+                @Suppress("DEPRECATION")
+                appendLine("thread=${thread.name} (${thread.id})")
                 appendLine("device=${Build.MANUFACTURER} ${Build.MODEL}")
                 appendLine("android=${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
                 appendLine("exception=${throwable.javaClass.name}")

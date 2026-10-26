@@ -1,0 +1,4 @@
+<resources>
+    <string name="chat_pane_terminal">Terminal</string>
+    <string name="chat_pane_browser">Browser</string>
+</resources>

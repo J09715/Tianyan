@@ -1,7 +1,5 @@
 package top.tianyan.app.harness.mcp.server
 
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -9,8 +7,7 @@ import kotlinx.serialization.json.put
 import top.tianyan.app.runtime.browser.secret.SecretRedactingInterceptor
 import top.tianyan.app.runtime.browser.tools.BrowserMcpResources
 
-@Singleton
-class McpResourceDispatcher @Inject constructor(private val browserResources: BrowserMcpResources) {
+class McpResourceDispatcher(private val browserResources: BrowserMcpResources) {
 
     fun listResources(): List<JsonObject> = browserResources.list().map { uri ->
         buildJsonObject { put("uri", JsonPrimitive(uri)) }

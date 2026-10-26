@@ -2,20 +2,26 @@ package top.tianyan.app.runtime.tools
 
 import top.tianyan.app.core.model.RuntimeName
 import top.tianyan.app.core.model.RuntimeRequirement
+import top.tianyan.app.core.model.RuntimeState
 import top.tianyan.app.core.model.ToolManifest
 import top.tianyan.app.core.tools.DependencyManager
+import top.tianyan.app.core.tools.LocalPluginPayloadManager
+import top.tianyan.app.core.tools.LocalPluginPreparationEvent
 import top.tianyan.app.core.tools.ManifestDependencyParser
 import top.tianyan.app.core.tools.ProviderManager
 import top.tianyan.app.core.tools.ToolActionResult
 import top.tianyan.app.core.tools.ToolRuntimeAdapter
+import top.tianyan.app.core.tools.executionIdentity
 import top.tianyan.app.runtime.LinuxRuntime
 import top.tianyan.app.runtime.shell.CommandResult
 import top.tianyan.app.runtime.shell.ManagedProcess
 import top.tianyan.app.runtime.shell.ProcessType
 import top.tianyan.app.runtime.shell.SessionConfig
 import top.tianyan.app.runtime.shell.ShellCommand
+import top.tianyan.app.runtime.service.ServiceLaunch
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
 
@@ -29,7 +35,7 @@ class GenericRecipeInstaller(
     private val dependencyManager: DependencyManager,
     private val providerManager: ProviderManager,
     private val toolCommandLinker: ToolCommandLinker,
-    private val localPluginPayloadManager: top.tianyan.app.core.tools.LocalPluginPayloadManager? = null,
+    private val localPluginPayloadManager: LocalPluginPayloadManager? = null,
 ) : ToolRuntimeAdapter {
     override val toolId: String = manifest.id
 
@@ -39,11 +45,12 @@ class GenericRecipeInstaller(
             checkReady()
 
             val localPayload = if (manifest.source == "LOCAL") {
+                check(manifest.schemaVersion != 2 || localPluginPayloadManager != null) { "v2 插件缺少资源装载器" }
                 emit(InstallEvent.Progress(toolId, "正在装载本地插件资源", 0.05f, InstallEvent.Phase.PREPARING))
                 var preparedPath: String? = null
-                localPluginPayloadManager?.prepare(toolId, linuxRuntime.activeDistroId.value)?.collect { event ->
+                localPluginPayloadManager?.prepare(toolId, linuxRuntime.activeDistroId.value, manifest.version, manifest.plugin?.integrity)?.collect { event ->
                     when (event) {
-                        is top.tianyan.app.core.tools.LocalPluginPreparationEvent.Copying -> emit(
+                        is LocalPluginPreparationEvent.Copying -> emit(
                             InstallEvent.Progress(
                                 toolId = toolId,
                                 message = event.message,
@@ -51,7 +58,7 @@ class GenericRecipeInstaller(
                                 phase = InstallEvent.Phase.PREPARING,
                             ),
                         )
-                        is top.tianyan.app.core.tools.LocalPluginPreparationEvent.Ready -> preparedPath = event.payloadPath
+                        is LocalPluginPreparationEvent.Ready -> preparedPath = event.payloadPath
                     }
                 } ?: error("本地插件 payload 管理器不可用")
                 preparedPath ?: error("本地插件 payload 不存在")
@@ -159,6 +166,7 @@ class GenericRecipeInstaller(
                 val targetPath = "$toolDir/bin/$linkName"
                 val linkRes = toolCommandLinker.link(linkName, targetPath, baseEnvironment)
                 if (!linkRes.isSuccess) {
+                    check(manifest.schemaVersion != 2) { "v2 命令入口创建失败" }
                     val fallbackTarget = "/usr/bin/$linkName"
                     toolCommandLinker.link(linkName, fallbackTarget, baseEnvironment)
                 }
@@ -171,6 +179,7 @@ class GenericRecipeInstaller(
                 linuxRuntime.execute(ShellCommand(commandLine = verifyCmd, environment = baseEnvironment, timeoutMs = 60_000L)),
             )
             if (!versionResult.isSuccess) {
+                check(manifest.schemaVersion != 2) { "v2 插件验证失败" }
                 // 验证命令超时挂死（退出码 124）意味着工具链本身可能已损坏——
                 // 例如 java 启动器陷入 exec 回环：进程只烧 CPU、零输出，60 秒
                 // 后被超时强杀。此时绝不能拿“文件存在/可执行位”当安装成功，
@@ -199,7 +208,7 @@ class GenericRecipeInstaller(
             }
 
             val versionOutput = versionResult.stdout.trim().lineSequence().firstOrNull()?.takeIf { it.isNotBlank() } ?: manifest.version
-            emit(InstallEvent.Completed(toolId, versionOutput))
+            emit(InstallEvent.Completed(toolId, if (manifest.schemaVersion == 2) manifest.version else versionOutput))
         } catch (cancellation: CancellationException) {
             if (manifest.source == "LOCAL") {
                 runCatching {
@@ -226,6 +235,7 @@ class GenericRecipeInstaller(
         commandLine = "exec ${manifest.launchCommand ?: manifest.id}",
         environment = runtimeEnvironment(),
         allowSttyResize = false,
+        pluginIdentity = manifest.executionIdentity(),
     )
 
     override suspend fun startService(): ManagedProcess = linuxRuntime.startBackground(
@@ -238,13 +248,19 @@ class GenericRecipeInstaller(
         type = ProcessType.SERVICE,
     )
 
+    override suspend fun serviceLaunch(): ServiceLaunch? {
+        val commandLine = manifest.launchCommand ?: return null
+        return ServiceLaunch(commandLine, runtimeEnvironment(), manifest.executionIdentity())
+    }
+
     override suspend fun uninstall(deleteData: Boolean): ToolActionResult {
         val toolDir = ToolLayout.toolDirectory(toolId)
         val toolDataDir = ToolLayout.toolDataDirectory(toolId)
         val links = if (manifest.commandLinks.isNotEmpty()) manifest.commandLinks else listOf(manifest.id)
 
         for (link in links) {
-            toolCommandLinker.remove(link, runtimeEnvironment())
+            val removed = toolCommandLinker.remove(link, runtimeEnvironment())
+            if (manifest.schemaVersion == 2 && !removed.isSuccess) return ToolActionResult(false, "命令入口清理失败")
         }
 
         val customUninstall = manifest.uninstallScript
@@ -321,7 +337,7 @@ class GenericRecipeInstaller(
         fi
     """.trimIndent()
 
-    private suspend fun kotlinx.coroutines.flow.FlowCollector<InstallEvent>.executeAndReport(
+    private suspend fun FlowCollector<InstallEvent>.executeAndReport(
         result: CommandResult,
     ): CommandResult {
         (result.stdout.lineSequence() + result.stderr.lineSequence())
@@ -348,11 +364,11 @@ class GenericRecipeInstaller(
         return result
     }
 
-    private suspend fun kotlinx.coroutines.flow.FlowCollector<InstallEvent>.executeAndReport(
+    private suspend fun FlowCollector<InstallEvent>.executeAndReport(
         command: String,
     ): CommandResult = executeAndReport(execute(command))
 
-    private fun checkReady() = check(linuxRuntime.state.value is top.tianyan.app.core.model.RuntimeState.Ready) {
+    private fun checkReady() = check(linuxRuntime.state.value is RuntimeState.Ready) {
         "Linux Runtime 未就绪，请先初始化 Linux"
     }
 

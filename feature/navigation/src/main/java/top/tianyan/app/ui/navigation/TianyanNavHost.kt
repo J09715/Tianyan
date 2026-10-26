@@ -1,10 +1,10 @@
 package top.tianyan.app.ui.navigation
 
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.ime
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -12,14 +12,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.zIndex
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavBackStack
@@ -32,8 +27,7 @@ import androidx.navigation3.ui.NavDisplay
 import top.tianyan.app.ui.chat.ChatScreen
 import top.tianyan.app.ui.chat.ChatViewModel
 import top.tianyan.app.ui.components.MainDestination
-import top.tianyan.app.ui.components.RuntimeBottomBar
-import top.tianyan.app.ui.theme.LocalLiquidGlassBackdrop
+import top.tianyan.app.ui.chat.ChatNavigationDrawer
 import top.tianyan.app.ui.developer.DeveloperScreen
 import top.tianyan.app.ui.developer.AdbLogcatScreen
 import top.tianyan.app.ui.home.HomeScreen
@@ -44,143 +38,129 @@ import top.tianyan.app.ui.settings.LocalLlmScreen
 import top.tianyan.app.ui.settings.SettingsScreen
 import top.tianyan.app.ui.settings.SettingsViewModel
 import top.tianyan.app.ui.iteration.CustomIterationScreen
-import top.tianyan.app.ui.terminal.TerminalScreen
-import top.tianyan.app.ui.browser.BrowserScreen
+import top.tianyan.app.plugin.ui.PluginPages
+import top.tianyan.app.plugin.runtime.PluginController
+import org.koin.compose.koinInject
 import top.tianyan.app.ui.workspace.CodeEditorScreen
 import top.tianyan.app.ui.workspace.WorkspaceExplorerScreen
 import top.tianyan.app.ui.workspace.WorkspaceScreen
-import kotlinx.serialization.Serializable
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
+import top.tianyan.app.core.common.navigation.AppNavigationTarget
+import top.tianyan.app.core.common.navigation.GlobalNavigationBus
+import top.tianyan.app.feature.a2uipoc.A2uiPocScreen
+import top.tianyan.app.ui.browser.BrowserViewModel
+import top.tianyan.app.ui.bot.BotsScreen
+import top.tianyan.app.ui.git.GitScreen
+import top.tianyan.app.ui.settings.AboutCommunityScreen
+import top.tianyan.app.ui.settings.AgentEcoSettingsScreen
+import top.tianyan.app.ui.settings.AgentSettingsCategory
+import top.tianyan.app.ui.settings.AppManagementScreen
+import top.tianyan.app.ui.settings.AppearanceSettingsScreen
+import top.tianyan.app.ui.settings.CcSwitchScreen
+import top.tianyan.app.ui.settings.DistroManagementScreen
+import top.tianyan.app.ui.settings.EnvironmentVariableSettingsScreen
+import top.tianyan.app.ui.settings.FeatureHubScreen
+import top.tianyan.app.ui.settings.FtpSettingsScreen
+import top.tianyan.app.ui.settings.LinuxEnvironmentSettingsScreen
+import top.tianyan.app.ui.settings.McpSettingsScreen
+import top.tianyan.app.ui.settings.PhoneAgentSettingsScreen
+import top.tianyan.app.ui.settings.QuickPhrasesScreen
+import top.tianyan.app.ui.settings.SponsorScreen
+import top.tianyan.app.ui.settings.SshSettingsScreen
+import top.tianyan.app.ui.settings.StorageMountSettingsScreen
+import top.tianyan.app.ui.settings.StorageUsageScreen
+import top.tianyan.app.ui.settings.SystemDevSettingsScreen
+import top.tianyan.app.ui.settings.ToolCenterScreen
+import top.tianyan.app.ui.settings.ToolSelfHealingHelper
+import top.tianyan.app.ui.settings.permission.PermissionGuideScreen
+import top.tianyan.app.ui.settings.search.SettingsSearchScreen
+import top.tianyan.app.ui.settings.search.SettingsSearchTarget
+import top.tianyan.app.ui.settings.stats.StatsScreen
+import top.tianyan.app.ui.workflow.WorkflowScreen
+import top.tianyan.app.ui.workspace.WorkshopEnvironmentSettingsScreen
+import top.tianyan.app.ui.workspace.WorkshopScriptEditorScreen
+import top.tianyan.app.ui.workspace.WorkshopScriptType
+import top.tianyan.app.ui.workspace.WorkshopSettingsScreen
+import top.tianyan.app.ui.workspace.WorkshopSigningScreen
 
-@Serializable
-sealed interface AppDestination : NavKey
-
-@Serializable data object HomeDestination : AppDestination
-@Serializable data object AgentDestination : AppDestination
-@Serializable data object WorkspaceDestination : AppDestination
-@Serializable data object WorkshopSettingsDestination : AppDestination
-@Serializable data object WorkshopEnvironmentSettingsDestination : AppDestination
-@Serializable data object WorkshopSigningSettingsDestination : AppDestination
-@Serializable data class WorkshopScriptEditorDestination(val type: String) : AppDestination
-@Serializable data class WorkspaceExplorerDestination(val projectName: String, val initialPath: String = "") : AppDestination
-@Serializable data class CodeEditorDestination(val projectName: String, val relativePath: String) : AppDestination
-@Serializable data object SettingsDestination : AppDestination
-@Serializable data object AgentEcoSettingsDestination : AppDestination
-@Serializable data object LinuxEnvSettingsDestination : AppDestination
-@Serializable data object AppearanceSettingsDestination : AppDestination
-@Serializable data object SystemDevSettingsDestination : AppDestination
-@Serializable data object BackupSettingsDestination : AppDestination
-@Serializable data object AboutTianyanDestination : AppDestination
-@Serializable data object AgentSettingsDestination : AppDestination
-@Serializable data object AgentSubagentSettingsDestination : AppDestination
-@Serializable data object AgentSkillSettingsDestination : AppDestination
-@Serializable data object McpSettingsDestination : AppDestination
-@Serializable data object ToolCenterDestination : AppDestination
-@Serializable data class ToolDetailDestination(val toolId: String) : AppDestination
-@Serializable data object DistroManagementDestination : AppDestination
-@Serializable data object StorageMountSettingsDestination : AppDestination
-@Serializable data object StorageUsageDestination : AppDestination
-@Serializable data object AppManagementDestination : AppDestination
-@Serializable data object EnvironmentVariableSettingsDestination : AppDestination
-@Serializable data object SshSettingsDestination : AppDestination
-@Serializable data object FtpSettingsDestination : AppDestination
-@Serializable data object ModelProfilesDestination : AppDestination
-@Serializable data object LocalLlmDestination : AppDestination
-@Serializable data class ModelEditorDestination(val modelId: String? = null) : AppDestination
-@Serializable data object QuickPhrasesDestination : AppDestination
-@Serializable data object StatsDestination : AppDestination
-@Serializable data object PermissionGuideDestination : AppDestination
-@Serializable data object DeveloperDestination : AppDestination
-@Serializable data object AdbLogcatDestination : AppDestination
-@Serializable data object CustomIterationDestination : AppDestination
-@Serializable data class TerminalDestination(val toolId: String = "", val project: String = "") : AppDestination
-@Serializable data object BrowserDestination : AppDestination
-@Serializable data class WorkflowDestination(
-    val projectName: String = "",
-    val workflowId: String? = null,
-    val initialVariables: Map<String, String> = emptyMap(),
-) : AppDestination
-
-/**
- * 天衍核心导航分发系统
- * 采用 Navigation 3，为每个 Tab 独立维护持久回退栈与状态生命周期
- */
+/** 天衍核心导航分发系统：采用 Navigation 3，为每个 Tab 独立维护持久回退栈与状态生命周期 */
 @Composable
 fun TianyanNavHost(
-    globalNavigationBus: top.tianyan.app.core.common.navigation.GlobalNavigationBus? = null,
+    globalNavigationBus: GlobalNavigationBus? = null,
 ) {
     // Root tab entries are removed from composition when another tab becomes active. Keep the
-    // conversation owner at the Activity scope so switching back to 智枢 does not rebuild Hilt's
+    // conversation owner at the Activity scope so switching back to 智枢 does not rebuild Koin's
     // graph, restore the latest session, and restart its initialization skeleton on every visit.
-    val chatViewModel: ChatViewModel = hiltViewModel()
+    val chatViewModel: ChatViewModel = koinViewModel()
+    val pluginPages: PluginPages = koinInject()
+    val pluginPlatform: NativePluginPlatform = koinInject()
+    val pluginController: PluginController = koinInject()
     // 浏览器引擎是全局单例：BrowserViewModel 同样挂到 Activity 作用域，
     // 使智枢内嵌浏览器面板与独立浏览器页共享同一份 tab/URL/共浏览状态。
-    val browserViewModel: top.tianyan.app.ui.browser.BrowserViewModel = hiltViewModel()
+    val browserViewModel: BrowserViewModel = koinViewModel()
     val browserUiState by browserViewModel.uiState.collectAsStateWithLifecycle()
     // SettingsViewModel owns dozens of eagerly shared DataStore/database streams and performs
     // repository initialization. Let the settings navigation graph share the Activity-scoped
     // instance instead of constructing that whole graph once for every Navigation3 entry.
-    val settingsViewModel: SettingsViewModel = hiltViewModel()
-    val homeStack = rememberNavBackStack(HomeDestination)
-    val agentStack = rememberNavBackStack(AgentDestination)
-    val workspaceStack = rememberNavBackStack(WorkspaceDestination)
-    val settingsStack = rememberNavBackStack(SettingsDestination)
+    val settingsViewModel: SettingsViewModel = koinViewModel()
+    val activeStack = rememberNavBackStack(AgentDestination)
     var pendingHealingTask by remember { mutableStateOf<HealingTask?>(null) }
-    var selectedMain by rememberSaveable { mutableStateOf(MainDestination.Home) } // 默认进入天衍开辟主界
+    var showNavigation by rememberSaveable { mutableStateOf(false) }; var sidebarDocked by rememberSaveable { mutableStateOf(true) }
+    var showNewSession by rememberSaveable { mutableStateOf(false) }
+    /** Programmatic stack mutation (bus / workflow). */
+    fun NavBackStack<NavKey>.pushRaw(destination: NavKey) {
+        if (lastOrNull() != destination) add(destination)
+    }
+
+    val sidebarGesturesEnabled = activeStack.canSwipeOpenNavigation()
+    LaunchedEffect(sidebarGesturesEnabled) { if (!sidebarGesturesEnabled) showNavigation = false }
+    val selectedMain = activeStack.lastOrNull { it == HomeDestination || it == WorkspaceDestination || it == BotsDestination || it == SettingsDestination }.toMainDestination()
+    fun navigateMain(destination: MainDestination) {
+        if (activeStack.openMainOverlay(destination)) return
+        if (destination == MainDestination.Agent) while (activeStack.size > 1) activeStack.removeLastOrNull()
+    }
 
     LaunchedEffect(chatViewModel) {
         chatViewModel.workflowLaunchRequests.collect { request ->
-            selectedMain = MainDestination.Agent
-            agentStack.add(WorkflowDestination(request.projectName, request.workflowId, request.initialVariables))
+            navigateMain(MainDestination.Agent)
+            activeStack.pushRaw(WorkflowDestination(request.projectName, request.workflowId, request.initialVariables))
         }
     }
 
     LaunchedEffect(globalNavigationBus) {
         globalNavigationBus?.events?.collect { target ->
             when (target) {
-                top.tianyan.app.core.common.navigation.AppNavigationTarget.AdbLogcat -> {
-                    selectedMain = MainDestination.Settings
-                    if (settingsStack.lastOrNull() != AdbLogcatDestination) {
-                        if (settingsStack.lastOrNull() == SettingsDestination) {
-                            settingsStack.add(SystemDevSettingsDestination)
-                        }
-                        if (settingsStack.lastOrNull() == SystemDevSettingsDestination) {
-                            settingsStack.add(AdbLogcatDestination)
-                        } else if (settingsStack.lastOrNull() != AdbLogcatDestination) {
-                            settingsStack.add(AdbLogcatDestination)
-                        }
-                    }
-                    globalNavigationBus.clearLatest(target)
+                AppNavigationTarget.AdbLogcat -> activeStack.openSettingsPath(SystemDevSettingsDestination, AdbLogcatDestination)
+                is AppNavigationTarget.WorkflowRun -> {
+                    navigateMain(MainDestination.Agent)
+                    activeStack.pushRaw(WorkflowDestination(executionId = target.executionId))
+                }
+                AppNavigationTarget.AgentSettings -> activeStack.openSettingsPath(AgentSettingsDestination)
+                is AppNavigationTarget.SharedText -> {
+                    navigateMain(MainDestination.Agent)
+                    chatViewModel.onSharedTextReceived(target.text)
+                }
+                is AppNavigationTarget.AgentSession -> {
+                    navigateMain(MainDestination.Agent)
+                    val groupId = target.groupId
+                    val sessionId = target.sessionId
+                    if (groupId != null) activeStack.pushRaw(GroupChatDestination(groupId))
+                    else if (!sessionId.isNullOrBlank() && sessionId != "all") chatViewModel.switchSession(sessionId)
                 }
             }
+            globalNavigationBus.clearLatest(target)
         }
     }
 
-    var lastNavTime by remember { mutableStateOf(0L) }
-
-    val activeStack = when (selectedMain) {
-        MainDestination.Home -> homeStack
-        MainDestination.Agent -> agentStack
-        MainDestination.Workspace -> workspaceStack
-        MainDestination.Settings -> settingsStack
-    }
-
-    fun navigateMain(destination: MainDestination) {
-        selectedMain = destination
-    }
-
     fun NavBackStack<NavKey>.push(from: NavKey, destination: NavKey) {
-        val now = System.currentTimeMillis()
-        if (now - lastNavTime < 120L) return
         if (lastOrNull() == from && lastOrNull() != destination) {
-            lastNavTime = now
             add(destination)
         }
     }
 
     fun popBack() {
-        val now = System.currentTimeMillis()
-        if (now - lastNavTime < 120L) return
-        lastNavTime = now
         if (activeStack.size > 1) activeStack.removeLastOrNull()
     }
 
@@ -213,9 +193,9 @@ fun TianyanNavHost(
             entry<HomeDestination> {
                 GuardedEntry(HomeDestination) {
                     HomeScreen(
-                        onNavigate = ::navigateMain,
-                        onOpenTerminal = { homeStack.push(HomeDestination, TerminalDestination()) },
-                        onOpenToolCenter = { homeStack.push(HomeDestination, ToolCenterDestination) },
+                        onNavigate = ::navigateMain, onBack = { if (activeStack.size > 1) popBack() else navigateMain(MainDestination.Agent) },
+                        onOpenTerminal = { activeStack.push(HomeDestination, TerminalDestination()) },
+                        onOpenToolCenter = { activeStack.push(HomeDestination, ToolCenterDestination) },
                     )
                 }
             }
@@ -230,73 +210,71 @@ fun TianyanNavHost(
                     ChatScreen(
                         viewModel = chatViewModel,
                         onNavigate = ::navigateMain,
+                        onOpenNavigation = { showNavigation = true }, onInstallMcp = { activeStack.pushRaw(ToolCenterDestination) }, onCreateModelProfile = { activeStack.pushRaw(ModelEditorDestination()) },
                         // 内嵌终端面板非独立导航节点，无返回目标：隐藏顶栏返回箭头，避免点击无反馈
-                        terminalPane = { project -> TerminalScreen(onBack = {}, project = project, showBackButton = false) },
+                        terminalPane = { project -> TerminalPluginPage(pluginPages, project = project, embedded = true, onBack = {}) },
                         // 内嵌浏览器面板：与独立浏览器页共享 Activity 级 BrowserViewModel，
                         // 手机端左右滑动切换对话/浏览器，宽屏双栏可切"终端/浏览器"
-                        browserPane = { onExit ->
-                            top.tianyan.app.ui.browser.BrowserPane(
-                                viewModel = browserViewModel,
-                                onExit = onExit,
-                            )
-                        },
+                        browserPane = { onExit -> BrowserPluginPage(pluginPages, embedded = true, onBack = onExit) },
                         browserActivityTick = browserUiState.activityTick,
-                        browserBackPressed = { browserViewModel.handleBackImmediate() },
+                        browserBackPressed = { browserPluginBack(pluginController, browserViewModel) },
                         onOpenFile = { projectName, relativePath ->
-                            agentStack.push(AgentDestination, CodeEditorDestination(projectName, relativePath))
+                            activeStack.push(AgentDestination, CodeEditorDestination(projectName, relativePath))
                         },
-                        // 运行日志复用开发者页那一套（读取/清空/导出/崩溃报告），
-                        // 聊天页只暴露入口，不重复实现日志界面。
-                        onOpenLogs = { agentStack.push(AgentDestination, DeveloperDestination) },
+                        onOpenRepository = { projectName ->
+                            activeStack.push(AgentDestination, GitRepositoryDestination(projectName))
+                        },
                     )
                 }
             }
+            entry<BotsDestination> { GuardedEntry(BotsDestination) { BotsScreen(onBack = { if (activeStack.size > 1) popBack() else navigateMain(MainDestination.Agent) }, onOpenBot = { activeStack.push(BotsDestination, BotDetailDestination(it)) }, onOpenGroup = { activeStack.push(BotsDestination, GroupChatDestination(it)) }) } }
             entry<WorkspaceDestination> {
                 GuardedEntry(WorkspaceDestination) {
                     WorkspaceScreen(
-                        onNavigate = ::navigateMain,
-                        onOpenExplorer = { projectName -> workspaceStack.push(WorkspaceDestination, WorkspaceExplorerDestination(projectName)) },
-                        onOpenTerminal = { project -> workspaceStack.push(WorkspaceDestination, TerminalDestination(project = project)) },
-                        onOpenToolCenter = { workspaceStack.push(WorkspaceDestination, ToolCenterDestination) },
-                        onOpenWorkshopSettings = { workspaceStack.push(WorkspaceDestination, WorkshopSettingsDestination) },
-                        onOpenWorkflows = { projectName -> workspaceStack.push(WorkspaceDestination, WorkflowDestination(projectName)) },
+                        onNavigate = ::navigateMain, onBack = { if (activeStack.size > 1) popBack() else navigateMain(MainDestination.Agent) },
+                        onOpenExplorer = { projectName -> activeStack.push(WorkspaceDestination, WorkspaceExplorerDestination(projectName)) },
+                        onOpenTerminal = { project -> activeStack.push(WorkspaceDestination, TerminalDestination(project = project)) },
+                        onOpenToolCenter = { activeStack.push(WorkspaceDestination, ToolCenterDestination) },
+                        onOpenWorkshopSettings = { activeStack.push(WorkspaceDestination, WorkshopSettingsDestination) },
+                        onOpenWorkflows = { projectName -> activeStack.push(WorkspaceDestination, WorkflowDestination(projectName)) },
                     )
                 }
             }
             entry<WorkflowDestination> { destination ->
                 GuardedEntry(destination) {
-                    top.tianyan.app.ui.workflow.WorkflowScreen(
+                    WorkflowScreen(
                         projectName = destination.projectName,
                         initialWorkflowId = destination.workflowId,
                         initialVariables = destination.initialVariables,
+                        initialExecutionId = destination.executionId,
                         onBack = ::popBack,
                     )
                 }
             }
             entry<WorkshopSettingsDestination> {
                 GuardedEntry(WorkshopSettingsDestination) {
-                    top.tianyan.app.ui.workspace.WorkshopSettingsScreen(
+                    WorkshopSettingsScreen(
                         onBack = ::popBack,
-                        onOpenEnvironment = { workspaceStack.push(WorkshopSettingsDestination, WorkshopEnvironmentSettingsDestination) },
-                        onOpenSigning = { workspaceStack.push(WorkshopSettingsDestination, WorkshopSigningSettingsDestination) },
-                        onEditScript = { type -> workspaceStack.push(WorkshopSettingsDestination, WorkshopScriptEditorDestination(type.name)) },
+                        onOpenEnvironment = { activeStack.push(WorkshopSettingsDestination, WorkshopEnvironmentSettingsDestination) },
+                        onOpenSigning = { activeStack.push(WorkshopSettingsDestination, WorkshopSigningSettingsDestination) },
+                        onEditScript = { type -> activeStack.push(WorkshopSettingsDestination, WorkshopScriptEditorDestination(type.name)) },
                     )
                 }
             }
             entry<WorkshopEnvironmentSettingsDestination> {
                 GuardedEntry(WorkshopEnvironmentSettingsDestination) {
-                    top.tianyan.app.ui.workspace.WorkshopEnvironmentSettingsScreen(onBack = ::popBack)
+                    WorkshopEnvironmentSettingsScreen(onBack = ::popBack)
                 }
             }
             entry<WorkshopSigningSettingsDestination> {
                 GuardedEntry(WorkshopSigningSettingsDestination) {
-                    top.tianyan.app.ui.workspace.WorkshopSigningScreen(onBack = ::popBack)
+                    WorkshopSigningScreen(onBack = ::popBack)
                 }
             }
             entry<WorkshopScriptEditorDestination> { destination ->
                 GuardedEntry(destination) {
-                    top.tianyan.app.ui.workspace.WorkshopScriptEditorScreen(
-                        type = top.tianyan.app.ui.workspace.WorkshopScriptType.valueOf(destination.type),
+                    WorkshopScriptEditorScreen(
+                        type = WorkshopScriptType.valueOf(destination.type),
                         onBack = ::popBack,
                     )
                 }
@@ -308,10 +286,10 @@ fun TianyanNavHost(
                         initialPath = destination.initialPath,
                         onBack = ::popBack,
                         onOpenFile = { relativePath ->
-                            workspaceStack.push(destination, CodeEditorDestination(destination.projectName, relativePath))
+                            activeStack.push(destination, CodeEditorDestination(destination.projectName, relativePath))
                         },
                         onOpenTerminal = { project ->
-                            workspaceStack.push(destination, TerminalDestination(project = project))
+                            activeStack.push(destination, TerminalDestination(project = project))
                         },
                     )
                 }
@@ -328,19 +306,97 @@ fun TianyanNavHost(
             entry<SettingsDestination> {
                 GuardedEntry(SettingsDestination) {
                     SettingsScreen(
-                        onNavigate = ::navigateMain,
-                        onOpenAgentEco = { settingsStack.push(SettingsDestination, AgentEcoSettingsDestination) },
-                        onOpenLinuxEnv = { settingsStack.push(SettingsDestination, LinuxEnvSettingsDestination) },
-                        onOpenAppearance = { settingsStack.push(SettingsDestination, AppearanceSettingsDestination) },
-                        onOpenSystemDev = { settingsStack.push(SettingsDestination, SystemDevSettingsDestination) },
-                        onOpenAboutTianyan = { settingsStack.push(SettingsDestination, AboutTianyanDestination) },
+                        onNavigate = ::navigateMain, onBack = ::popBack,
+                        onOpenAgentEco = { activeStack.push(SettingsDestination, AgentEcoSettingsDestination) },
+                        onOpenLinuxEnv = { activeStack.push(SettingsDestination, LinuxEnvSettingsDestination) },
+                        onOpenAppearance = { activeStack.push(SettingsDestination, AppearanceSettingsDestination) },
+                        onOpenSystemDev = { activeStack.push(SettingsDestination, SystemDevSettingsDestination) },
+                        onOpenAboutCommunity = { activeStack.push(SettingsDestination, AboutCommunityDestination) },
+                        onOpenSearch = { activeStack.push(SettingsDestination, SettingsSearchDestination) },
+                        onOpenFeatureHub = { activeStack.push(SettingsDestination, FeatureHubDestination) },
                         viewModel = settingsViewModel,
+                    )
+                }
+            }
+            entry<SettingsSearchDestination> {
+                GuardedEntry(SettingsSearchDestination) {
+                    SettingsSearchScreen(
+                        onBack = ::popBack,
+                        onNavigateToTarget = { target ->
+                            when (target) {
+                                SettingsSearchTarget.MODEL_PROFILES -> activeStack.push(SettingsSearchDestination, ModelProfilesDestination)
+                                SettingsSearchTarget.MODEL_EDITOR_NEW -> activeStack.push(SettingsSearchDestination, ModelEditorDestination())
+                                SettingsSearchTarget.LOCAL_LLM -> activeStack.push(SettingsSearchDestination, LocalLlmDestination)
+                                SettingsSearchTarget.QUICK_PHRASES -> activeStack.push(SettingsSearchDestination, QuickPhrasesDestination)
+                                SettingsSearchTarget.STATS -> activeStack.push(SettingsSearchDestination, StatsDestination)
+                                SettingsSearchTarget.TOOL_CENTER -> activeStack.push(SettingsSearchDestination, ToolCenterDestination)
+                                SettingsSearchTarget.CC_SWITCH -> activeStack.push(SettingsSearchDestination, CcSwitchDestination)
+                                SettingsSearchTarget.AGENT_EXECUTION -> activeStack.push(SettingsSearchDestination, AgentSettingsDestination)
+                                SettingsSearchTarget.AGENT_SUBAGENTS -> activeStack.push(SettingsSearchDestination, AgentSubagentSettingsDestination)
+                                SettingsSearchTarget.AGENT_SKILLS -> activeStack.push(SettingsSearchDestination, AgentSkillSettingsDestination)
+                                SettingsSearchTarget.MCP_SETTINGS -> activeStack.push(SettingsSearchDestination, McpSettingsDestination)
+                                SettingsSearchTarget.DISTRO_MANAGEMENT -> activeStack.push(SettingsSearchDestination, DistroManagementDestination)
+                                SettingsSearchTarget.STORAGE_USAGE -> activeStack.push(SettingsSearchDestination, StorageUsageDestination)
+                                SettingsSearchTarget.STORAGE_MOUNTS -> activeStack.push(SettingsSearchDestination, StorageMountSettingsDestination)
+                                SettingsSearchTarget.ENV_VARS -> activeStack.push(SettingsSearchDestination, EnvironmentVariableSettingsDestination)
+                                SettingsSearchTarget.SSH_SETTINGS -> activeStack.push(SettingsSearchDestination, SshSettingsDestination)
+                                SettingsSearchTarget.FTP_SETTINGS -> activeStack.push(SettingsSearchDestination, FtpSettingsDestination)
+                                SettingsSearchTarget.WEB_CHAT,
+                                SettingsSearchTarget.PRIVILEGE_MODE -> activeStack.push(SettingsSearchDestination, LinuxEnvSettingsDestination)
+                                SettingsSearchTarget.APP_MANAGEMENT -> activeStack.push(SettingsSearchDestination, AppManagementDestination)
+                                SettingsSearchTarget.APPEARANCE_SETTINGS,
+                                SettingsSearchTarget.THEME_MODE,
+                                SettingsSearchTarget.DYNAMIC_COLOR,
+                                SettingsSearchTarget.FONT_SCALE,
+                                SettingsSearchTarget.TERMINAL_SETTINGS,
+                                SettingsSearchTarget.LANGUAGE_SETTINGS -> activeStack.push(SettingsSearchDestination, AppearanceSettingsDestination)
+                                SettingsSearchTarget.BATTERY_OPTIMIZATION,
+                                SettingsSearchTarget.PHANTOM_PROCESS -> activeStack.push(SettingsSearchDestination, SystemDevSettingsDestination)
+                                SettingsSearchTarget.DEVELOPER_OPTIONS -> activeStack.push(SettingsSearchDestination, DeveloperDestination)
+                                SettingsSearchTarget.ADB_LOGCAT -> activeStack.push(SettingsSearchDestination, AdbLogcatDestination)
+                                SettingsSearchTarget.CUSTOM_ITERATION -> activeStack.push(SettingsSearchDestination, CustomIterationDestination)
+                                SettingsSearchTarget.PERMISSION_GUIDE -> activeStack.push(SettingsSearchDestination, PermissionGuideDestination)
+                                SettingsSearchTarget.WORKSHOP_SETTINGS -> {
+                                    navigateMain(MainDestination.Workspace)
+                                    activeStack.pushRaw(WorkshopSettingsDestination)
+                                }
+                                SettingsSearchTarget.WORKSHOP_ENVIRONMENT -> {
+                                    navigateMain(MainDestination.Workspace)
+                                    activeStack.pushRaw(WorkshopSettingsDestination)
+                                    activeStack.pushRaw(WorkshopEnvironmentSettingsDestination)
+                                }
+                                SettingsSearchTarget.WORKSHOP_SIGNING -> {
+                                    navigateMain(MainDestination.Workspace)
+                                    activeStack.pushRaw(WorkshopSettingsDestination)
+                                    activeStack.pushRaw(WorkshopSigningSettingsDestination)
+                                }
+                                SettingsSearchTarget.WORKFLOWS -> {
+                                    navigateMain(MainDestination.Workspace)
+                                    activeStack.pushRaw(WorkflowDestination())
+                                }
+                                SettingsSearchTarget.NAV_HOME ->
+                                    navigateMain(MainDestination.Home)
+                                SettingsSearchTarget.NAV_AGENT_CHAT ->
+                                    navigateMain(MainDestination.Agent)
+                                SettingsSearchTarget.NAV_WORKSPACE ->
+                                    navigateMain(MainDestination.Workspace)
+                                SettingsSearchTarget.NAV_TERMINAL -> {
+                                    activeStack.pushRaw(TerminalDestination())
+                                }
+                                SettingsSearchTarget.NAV_BROWSER -> {
+                                    activeStack.pushRaw(BrowserDestination)
+                                }
+                                SettingsSearchTarget.ABOUT_COMMUNITY,
+                                SettingsSearchTarget.ABOUT_UPDATE -> activeStack.push(SettingsSearchDestination, AboutCommunityDestination)
+                                SettingsSearchTarget.ABOUT_SPONSOR -> activeStack.push(SettingsSearchDestination, SponsorDestination)
+                            }
+                        }
                     )
                 }
             }
             entry<AppearanceSettingsDestination> {
                 GuardedEntry(AppearanceSettingsDestination) {
-                    top.tianyan.app.ui.settings.AppearanceSettingsScreen(
+                    AppearanceSettingsScreen(
                         onBack = ::popBack,
                         viewModel = settingsViewModel,
                     )
@@ -348,74 +404,74 @@ fun TianyanNavHost(
             }
             entry<AgentEcoSettingsDestination> {
                 GuardedEntry(AgentEcoSettingsDestination) {
-                    top.tianyan.app.ui.settings.AgentEcoSettingsScreen(
+                    AgentEcoSettingsScreen(
                         onBack = ::popBack,
-                        onOpenModelProfiles = { settingsStack.push(AgentEcoSettingsDestination, ModelProfilesDestination) },
-                        onOpenLocalLlm = { settingsStack.push(AgentEcoSettingsDestination, LocalLlmDestination) },
-                        onOpenToolCenter = { settingsStack.push(AgentEcoSettingsDestination, ToolCenterDestination) },
-                        onOpenAgentSettings = { settingsStack.push(AgentEcoSettingsDestination, AgentSettingsDestination) },
-                        onOpenSubagentSettings = { settingsStack.push(AgentEcoSettingsDestination, AgentSubagentSettingsDestination) },
-                        onOpenSkillSettings = { settingsStack.push(AgentEcoSettingsDestination, AgentSkillSettingsDestination) },
-                        onOpenMcpSettings = { settingsStack.push(AgentEcoSettingsDestination, McpSettingsDestination) },
-                        onOpenQuickPhrases = { settingsStack.push(AgentEcoSettingsDestination, QuickPhrasesDestination) },
-                        onOpenStats = { settingsStack.push(AgentEcoSettingsDestination, StatsDestination) },
+                        onOpenModelProfiles = { activeStack.push(AgentEcoSettingsDestination, ModelProfilesDestination) },
+                        onOpenLocalLlm = { activeStack.push(AgentEcoSettingsDestination, LocalLlmDestination) },
+                        onOpenCcSwitch = { activeStack.push(AgentEcoSettingsDestination, CcSwitchDestination) },
+                        onOpenToolCenter = { activeStack.push(AgentEcoSettingsDestination, ToolCenterDestination) },
+                        onOpenAgentSettings = { activeStack.push(AgentEcoSettingsDestination, AgentSettingsDestination) },
+                        onOpenSubagentSettings = { activeStack.push(AgentEcoSettingsDestination, AgentSubagentSettingsDestination) },
+                        onOpenSkillSettings = { activeStack.push(AgentEcoSettingsDestination, AgentSkillSettingsDestination) },
+                        onOpenMcpSettings = { activeStack.push(AgentEcoSettingsDestination, McpSettingsDestination) },
+                        onOpenQuickPhrases = { activeStack.push(AgentEcoSettingsDestination, QuickPhrasesDestination) },
+                        onOpenStats = { activeStack.push(AgentEcoSettingsDestination, StatsDestination) },
+                        onOpenPhoneAgent = { activeStack.push(AgentEcoSettingsDestination, PhoneAgentSettingsDestination) },
                         viewModel = settingsViewModel,
                     )
                 }
             }
             entry<LinuxEnvSettingsDestination> {
                 GuardedEntry(LinuxEnvSettingsDestination) {
-                    top.tianyan.app.ui.settings.LinuxEnvironmentSettingsScreen(
+                    LinuxEnvironmentSettingsScreen(
                         onBack = ::popBack,
-                        onOpenDistroManagement = { settingsStack.push(LinuxEnvSettingsDestination, DistroManagementDestination) },
-                        onOpenStorageMounts = { settingsStack.push(LinuxEnvSettingsDestination, StorageMountSettingsDestination) },
-                        onOpenStorageUsage = { settingsStack.push(LinuxEnvSettingsDestination, StorageUsageDestination) },
-                        onOpenAppManagement = { settingsStack.push(LinuxEnvSettingsDestination, AppManagementDestination) },
-                        onOpenEnvironmentVariables = { settingsStack.push(LinuxEnvSettingsDestination, EnvironmentVariableSettingsDestination) },
-                        onOpenSshSettings = { settingsStack.push(LinuxEnvSettingsDestination, SshSettingsDestination) },
-                        onOpenFtpSettings = { settingsStack.push(LinuxEnvSettingsDestination, FtpSettingsDestination) },
+                        onOpenDistroManagement = { activeStack.push(LinuxEnvSettingsDestination, DistroManagementDestination) },
+                        onOpenStorageMounts = { activeStack.push(LinuxEnvSettingsDestination, StorageMountSettingsDestination) },
+                        onOpenStorageUsage = { activeStack.push(LinuxEnvSettingsDestination, StorageUsageDestination) },
+                        onOpenAppManagement = { activeStack.push(LinuxEnvSettingsDestination, AppManagementDestination) },
+                        onOpenEnvironmentVariables = { activeStack.push(LinuxEnvSettingsDestination, EnvironmentVariableSettingsDestination) },
+                        onOpenSshSettings = { activeStack.push(LinuxEnvSettingsDestination, SshSettingsDestination) },
+                        onOpenFtpSettings = { activeStack.push(LinuxEnvSettingsDestination, FtpSettingsDestination) },
                         viewModel = settingsViewModel,
                     )
                 }
             }
             entry<SystemDevSettingsDestination> {
                 GuardedEntry(SystemDevSettingsDestination) {
-                    top.tianyan.app.ui.settings.SystemDevSettingsScreen(
+                    SystemDevSettingsScreen(
                         onBack = ::popBack,
-                        onOpenDeveloper = { settingsStack.push(SystemDevSettingsDestination, DeveloperDestination) },
-                        onOpenAdbLogcat = { settingsStack.push(SystemDevSettingsDestination, AdbLogcatDestination) },
-                        onOpenCustomIteration = { settingsStack.push(SystemDevSettingsDestination, CustomIterationDestination) },
-                        onOpenPermissionGuide = { settingsStack.push(SystemDevSettingsDestination, PermissionGuideDestination) },
-                        onOpenBackup = { settingsStack.push(SystemDevSettingsDestination, BackupSettingsDestination) },
+                        onOpenDeveloper = { activeStack.push(SystemDevSettingsDestination, DeveloperDestination) },
+                        onOpenAdbLogcat = { activeStack.push(SystemDevSettingsDestination, AdbLogcatDestination) },
+                        onOpenCustomIteration = { activeStack.push(SystemDevSettingsDestination, CustomIterationDestination) },
+                        onOpenPermissionGuide = { activeStack.push(SystemDevSettingsDestination, PermissionGuideDestination) },
                         viewModel = settingsViewModel,
-                    )
-                }
-            }
-            entry<BackupSettingsDestination> {
-                GuardedEntry(BackupSettingsDestination) {
-                    top.tianyan.app.ui.settings.BackupSettingsScreen(
-                        onBack = ::popBack,
                     )
                 }
             }
             entry<PermissionGuideDestination> {
                 GuardedEntry(PermissionGuideDestination) {
-                    top.tianyan.app.ui.settings.permission.PermissionGuideScreen(
+                    PermissionGuideScreen(
                         onBack = ::popBack,
                     )
                 }
             }
-            entry<AboutTianyanDestination> {
-                GuardedEntry(AboutTianyanDestination) {
-                    top.tianyan.app.ui.settings.AboutTianyanScreen(
+            entry<AboutCommunityDestination> {
+                GuardedEntry(AboutCommunityDestination) {
+                    AboutCommunityScreen(
                         onBack = ::popBack,
+                        onOpenSponsor = { activeStack.push(AboutCommunityDestination, SponsorDestination) },
                         viewModel = settingsViewModel,
                     )
                 }
             }
+            entry<SponsorDestination> {
+                GuardedEntry(SponsorDestination) {
+                    SponsorScreen(onBack = ::popBack)
+                }
+            }
             entry<DistroManagementDestination> {
                 GuardedEntry(DistroManagementDestination) {
-                    top.tianyan.app.ui.settings.DistroManagementScreen(
+                    DistroManagementScreen(
                         onBack = ::popBack,
                         viewModel = settingsViewModel,
                     )
@@ -425,24 +481,24 @@ fun TianyanNavHost(
                 GuardedEntry(AgentSettingsDestination) {
                     AgentSettingsScreen(
                         onBack = ::popBack,
-                        category = top.tianyan.app.ui.settings.AgentSettingsCategory.EXECUTION,
+                        category = AgentSettingsCategory.EXECUTION,
                         viewModel = settingsViewModel,
                     )
                 }
             }
             entry<AgentSubagentSettingsDestination> {
                 GuardedEntry(AgentSubagentSettingsDestination) {
-                    AgentSettingsScreen(onBack = ::popBack, category = top.tianyan.app.ui.settings.AgentSettingsCategory.SUBAGENTS, viewModel = settingsViewModel)
+                    AgentSettingsScreen(onBack = ::popBack, category = AgentSettingsCategory.SUBAGENTS, viewModel = settingsViewModel)
                 }
             }
             entry<AgentSkillSettingsDestination> {
                 GuardedEntry(AgentSkillSettingsDestination) {
-                    AgentSettingsScreen(onBack = ::popBack, category = top.tianyan.app.ui.settings.AgentSettingsCategory.SKILLS, viewModel = settingsViewModel)
+                    AgentSettingsScreen(onBack = ::popBack, category = AgentSettingsCategory.SKILLS, viewModel = settingsViewModel)
                 }
             }
             entry<McpSettingsDestination> {
                 GuardedEntry(McpSettingsDestination) {
-                    top.tianyan.app.ui.settings.McpSettingsScreen(
+                    McpSettingsScreen(
                         onBack = ::popBack,
                         viewModel = settingsViewModel,
                     )
@@ -450,35 +506,52 @@ fun TianyanNavHost(
             }
             entry<ToolCenterDestination> {
                 GuardedEntry(ToolCenterDestination) {
-                    top.tianyan.app.ui.settings.ToolCenterScreen(
+                    ToolCenterScreen(
                         onBack = ::popBack,
                         onLaunchPty = { toolId -> activeStack.push(ToolCenterDestination, TerminalDestination(toolId = toolId)) },
                         onOpenToolDetail = { toolId -> activeStack.push(ToolCenterDestination, ToolDetailDestination(toolId = toolId)) },
                         onStartAiHealing = { toolId, toolName, logs ->
-                            val prompt = top.tianyan.app.ui.settings.ToolSelfHealingHelper.buildHealingPrompt(toolId, toolName, logs)
+                            val prompt = ToolSelfHealingHelper.buildHealingPrompt(toolId, toolName, logs)
                             pendingHealingTask = HealingTask("🔧 自愈: $toolName", prompt)
-                            selectedMain = MainDestination.Agent
+                            navigateMain(MainDestination.Agent)
+                        },
+                    )
+                }
+            }
+            entry<CcSwitchDestination> {
+                GuardedEntry(CcSwitchDestination) {
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    CcSwitchScreen(
+                        onBack = ::popBack,
+                        onLaunchTerminal = { executable -> activeStack.push(CcSwitchDestination, TerminalDestination(toolId = executable)) },
+                        onOpenBrowser = { url ->
+                            val targetUrl = url.ifBlank { "http://127.0.0.1:19870" }
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl)).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            runCatching {
+                                context.startActivity(intent)
+                            }.onFailure {
+                                Toast.makeText(context, "无法唤起外部浏览器: ${it.localizedMessage}", Toast.LENGTH_SHORT).show()
+                            }
                         },
                     )
                 }
             }
             entry<ToolDetailDestination> { destination ->
                 GuardedEntry(destination) {
-                    top.tianyan.app.ui.settings.ToolDetailScreen(
-                        toolId = destination.toolId,
+                    ToolDetailRoute(
+                        destination = destination,
                         onBack = ::popBack,
                         onLaunchTerminal = { toolId -> activeStack.push(destination, TerminalDestination(toolId = toolId)) },
-                        onStartAiHealing = { toolId, toolName, logs ->
-                            val prompt = top.tianyan.app.ui.settings.ToolSelfHealingHelper.buildHealingPrompt(toolId, toolName, logs)
-                            pendingHealingTask = HealingTask("🔧 自愈: $toolName", prompt)
-                            selectedMain = MainDestination.Agent
-                        },
+                        onHealing = { name, prompt -> pendingHealingTask = HealingTask("🔧 自愈: $name", prompt); navigateMain(MainDestination.Agent) },
+                        onOpenPluginPage = { activeStack.push(destination, PluginPageDestination("tianyan.tool-service", "main", mapOf("web.tool.id" to it))) },
                     )
                 }
             }
             entry<StorageMountSettingsDestination> {
                 GuardedEntry(StorageMountSettingsDestination) {
-                    top.tianyan.app.ui.settings.StorageMountSettingsScreen(
+                    StorageMountSettingsScreen(
                         onBack = ::popBack,
                         viewModel = settingsViewModel,
                     )
@@ -486,17 +559,17 @@ fun TianyanNavHost(
             }
             entry<StorageUsageDestination> {
                 GuardedEntry(StorageUsageDestination) {
-                    top.tianyan.app.ui.settings.StorageUsageScreen(onBack = ::popBack)
+                    StorageUsageScreen(onBack = ::popBack)
                 }
             }
             entry<AppManagementDestination> {
                 GuardedEntry(AppManagementDestination) {
-                    top.tianyan.app.ui.settings.AppManagementScreen(onBack = ::popBack)
+                    AppManagementScreen(onBack = ::popBack)
                 }
             }
             entry<EnvironmentVariableSettingsDestination> {
                 GuardedEntry(EnvironmentVariableSettingsDestination) {
-                    top.tianyan.app.ui.settings.EnvironmentVariableSettingsScreen(
+                    EnvironmentVariableSettingsScreen(
                         onBack = ::popBack,
                         viewModel = settingsViewModel,
                     )
@@ -504,20 +577,20 @@ fun TianyanNavHost(
             }
             entry<SshSettingsDestination> {
                 GuardedEntry(SshSettingsDestination) {
-                    top.tianyan.app.ui.settings.SshSettingsScreen(onBack = ::popBack)
+                    SshSettingsScreen(onBack = ::popBack)
                 }
             }
             entry<FtpSettingsDestination> {
                 GuardedEntry(FtpSettingsDestination) {
-                    top.tianyan.app.ui.settings.FtpSettingsScreen(onBack = ::popBack)
+                    FtpSettingsScreen(onBack = ::popBack)
                 }
             }
             entry<ModelProfilesDestination> {
                 GuardedEntry(ModelProfilesDestination) {
                     ModelProfilesScreen(
                         onBack = ::popBack,
-                        onCreate = { settingsStack.push(ModelProfilesDestination, ModelEditorDestination()) },
-                        onEdit = { modelId -> settingsStack.push(ModelProfilesDestination, ModelEditorDestination(modelId)) },
+                        onCreate = { activeStack.push(ModelProfilesDestination, ModelEditorDestination()) },
+                        onEdit = { modelId -> activeStack.push(ModelProfilesDestination, ModelEditorDestination(modelId)) },
                         viewModel = settingsViewModel,
                     )
                 }
@@ -526,8 +599,13 @@ fun TianyanNavHost(
                 GuardedEntry(LocalLlmDestination) {
                     LocalLlmScreen(
                         onBack = ::popBack,
-                        onOpenEngine = { settingsStack.push(LocalLlmDestination, ToolDetailDestination("llama-cpp")) },
+                        onOpenEngine = { activeStack.push(LocalLlmDestination, ToolDetailDestination("llama-cpp")) },
                     )
+                }
+            }
+            entry<PhoneAgentSettingsDestination> {
+                GuardedEntry(PhoneAgentSettingsDestination) {
+                    PhoneAgentSettingsScreen(onBack = ::popBack)
                 }
             }
             entry<ModelEditorDestination> { destination ->
@@ -542,7 +620,7 @@ fun TianyanNavHost(
             }
             entry<QuickPhrasesDestination> {
                 GuardedEntry(QuickPhrasesDestination) {
-                    top.tianyan.app.ui.settings.QuickPhrasesScreen(
+                    QuickPhrasesScreen(
                         onBack = ::popBack,
                         viewModel = settingsViewModel,
                     )
@@ -550,7 +628,7 @@ fun TianyanNavHost(
             }
             entry<StatsDestination> {
                 GuardedEntry(StatsDestination) {
-                    top.tianyan.app.ui.settings.stats.StatsScreen(onBack = ::popBack)
+                    StatsScreen(onBack = ::popBack)
                 }
             }
             entry<DeveloperDestination> {
@@ -563,70 +641,74 @@ fun TianyanNavHost(
                     AdbLogcatScreen(onBack = ::popBack)
                 }
             }
+            entry<A2uiPocDestination> {
+                GuardedEntry(A2uiPocDestination) {
+                    A2uiPocScreen(onBack = ::popBack)
+                }
+            }
+            entry<FeatureHubDestination> {
+                GuardedEntry(FeatureHubDestination) {
+                    FeatureHubScreen(
+                        onBack = ::popBack,
+                        onOpenCustomIteration = { activeStack.push(FeatureHubDestination, CustomIterationDestination) },
+                        onStartRoundtable = { pendingHealingTask = HealingTask(AgentPresets.ROUNDTABLE_TITLE, AgentPresets.ROUNDTABLE_PROMPT); navigateMain(MainDestination.Agent) },
+                        onOpenA2uiPoc = { activeStack.push(FeatureHubDestination, A2uiPocDestination) },
+                    )
+                }
+            }
             entry<CustomIterationDestination> {
                 GuardedEntry(CustomIterationDestination) {
                     CustomIterationScreen(
                         onBack = ::popBack,
                         onNavigateToChat = { prompt ->
                             pendingHealingTask = HealingTask("🚀 自定义迭代", prompt)
-                            selectedMain = MainDestination.Agent
+                            navigateMain(MainDestination.Agent)
                         },
                     )
                 }
             }
+            entry<PluginManagerDestination> { GuardedEntry(PluginManagerDestination) { ManagedPluginsScreen(pluginPlatform, pluginController, { activeStack.pushRaw(PluginPageDestination(it.pluginId, it.extensionId)) }, { activeStack.pushRaw(ToolDetailDestination(it)) }, ::popBack, { activeStack.pushRaw(WebPluginManagerDestination) }) } }
+            entry<WebPluginManagerDestination> { GuardedEntry(WebPluginManagerDestination) { top.tianyan.app.ui.settings.WebPluginsScreen({ id, version, plugin -> activeStack.pushRaw(PluginPageDestination(plugin, "main", mapOf("web.package.id" to id, "web.package.version" to version))) }, ::popBack) } }
+            entry<PluginPageDestination> { destination ->
+                GuardedEntry(destination) { RegisteredPluginPage(pluginPages, destination, ::popBack) }
+            }
             entry<TerminalDestination> { destination ->
-                GuardedEntry(destination) {
-                    TerminalScreen(onBack = ::popBack, project = destination.project)
-                }
+                GuardedEntry(destination) { TerminalPluginPage(pluginPages, project = destination.project, onBack = ::popBack) }
             }
             entry<BrowserDestination> {
-                GuardedEntry(BrowserDestination) {
-                    BrowserScreen(onBack = ::popBack, viewModel = browserViewModel)
+                GuardedEntry(BrowserDestination) { BrowserPluginPage(pluginPages, onBack = ::popBack) }
+            }
+            entry<GitRepositoryDestination> { destination ->
+                GuardedEntry(destination) {
+                    GitScreen(projectName = destination.projectName, onBack = ::popBack)
                 }
             }
+            entry<BotDetailDestination> { destination -> GuardedEntry(destination) { top.tianyan.app.ui.bot.BotDetailScreen(botId = destination.botId, onBack = ::popBack, onOpenSession = { sessionId -> chatViewModel.switchSession(sessionId); navigateMain(MainDestination.Agent) }) } }
+            entry<GroupChatDestination> { destination -> GuardedEntry(destination) { top.tianyan.app.ui.bot.GroupChatScreen(groupId = destination.groupId, onBack = ::popBack, onOpenBot = { activeStack.pushRaw(BotDetailDestination(it)) }) } }
     }
 
-    val density = LocalDensity.current
-    val liquidGlassBackdrop = LocalLiquidGlassBackdrop.current
-    val showLiquidBottomBar = liquidGlassBackdrop != null &&
-        activeStack.size == 1 &&
-        WindowInsets.ime.getBottom(density) == 0
-    Box(Modifier.fillMaxSize()) {
-        NavDisplay(
-            backStack = activeStack,
-            modifier = Modifier.fillMaxSize(),
-            onBack = ::popBack,
-            entryDecorators = listOf(
-                rememberSaveableStateHolderNavEntryDecorator(),
-                rememberViewModelStoreNavEntryDecorator(),
-            ),
-            entryProvider = appEntryProvider,
-        )
-        if (liquidGlassBackdrop != null) {
-            // Keep the expensive glass layers composed while a secondary destination is open.
-            // Recreating both backdrop render layers in the same frame as the root screen was
-            // the main source of pop-navigation stalls. Moving the retained bar off-screen also
-            // prevents its invisible click targets from intercepting the secondary page.
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .zIndex(if (showLiquidBottomBar) 1f else -1f)
-                    .graphicsLayer {
-                        alpha = if (showLiquidBottomBar) 1f else 0f
-                        translationY = if (showLiquidBottomBar) 0f else size.height
-                    },
-            ) {
-                RuntimeBottomBar(
-                    selected = selectedMain,
-                    onNavigate = ::navigateMain,
+    // Keep entry state and ViewModels across pushes and pops in the shared navigation stack.
+    // Explicit <NavKey>: outside NavDisplay's parameter context, listOf cannot infer T.
+    val entryDecorators = listOf(rememberSaveableStateHolderNavEntryDecorator<NavKey>(), rememberViewModelStoreNavEntryDecorator<NavKey>())
+    PluginNavigationShell(pluginPlatform, pluginController, browserViewModel, selectedPage = selectedPluginPage(activeStack.lastOrNull()),
+        onOpen = { showNavigation = false; activeStack.pushRaw(PluginPageDestination(it.pluginId, it.extensionId)) },
+        onOpenManager = { showNavigation = false; activeStack.pushRaw(PluginManagerDestination) }, onOpenNavigation = { showNavigation = true },
+    ) {
+        ChatNavigationDrawer(
+            viewModel = chatViewModel, visible = showNavigation, onDismiss = { showNavigation = false },
+            onOpen = { showNavigation = true }, gesturesEnabled = sidebarGesturesEnabled, docked = sidebarDocked, onDockedChange = { sidebarDocked = it }, newSessionVisible = showNewSession, selected = selectedMain,
+            onNewSession = { showNewSession = true }, onDismissNewSession = { showNewSession = false },
+            onNavigate = ::navigateMain, onOpenTerminal = { activeStack.pushRaw(TerminalDestination()) },
+            onOpenTools = { activeStack.pushRaw(ToolCenterDestination) },
+        ) {
+            Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                NavDisplay(
+                    backStack = activeStack, modifier = Modifier.fillMaxSize(), onBack = ::popBack,
+                    entryDecorators = entryDecorators, entryProvider = appEntryProvider,
                 )
             }
         }
     }
 }
 
-private data class HealingTask(
-    val title: String,
-    val prompt: String,
-)
+private data class HealingTask(val title: String, val prompt: String)

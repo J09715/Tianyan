@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -50,10 +51,21 @@ data class AiModelEntity(
     val imageGenerationEnabled: Boolean = false,
     /** 是否使用 Responses API（true = /v1/responses；false = /v1/chat/completions）。 */
     val responseApiEnabled: Boolean = false,
+    /** Anthropic Prompt Caching 开关（默认开；仅对 Anthropic 协议生效）。 */
+    val promptCachingEnabled: Boolean = true,
+    /** 是否使用 1 小时缓存 TTL（true = cache_control.ttl=1h）；默认 5 分钟。 */
+    val promptCacheTtl1h: Boolean = false,
     /** 已配置的 API Key 数量（仅元数据；Key 明文始终位于加密存储）。 */
     val apiKeyCount: Int = 0,
     /** 单个 Key 每分钟最多发起的请求数；0 表示不做客户端限制。 */
     val requestsPerMinutePerKey: Int = 0,
+    /**
+     * 每模型压缩预算覆盖（对齐 pi compaction.modelOverrides）：
+     * 压缩触发时保留的最近 token 上限；null = 不启用收紧（跟随全局预算行为）。
+     */
+    val compactionKeepRecentTokens: Int? = null,
+    /** 压缩预算线中为 LLM 响应预留的 token；null = 使用内置默认。 */
+    val compactionReserveTokens: Int? = null,
 )
 
 @Dao
@@ -70,11 +82,32 @@ interface AiModelDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(model: AiModelEntity)
 
+    @Query("SELECT * FROM harness_models")
+    suspend fun listAll(): List<AiModelEntity>
+
+    /** Imported records and activation flags commit together; concurrent edits require a fresh preview. */
+    @Transaction
+    suspend fun importBatch(expected: List<AiModelEntity>, models: List<AiModelEntity>) {
+        check(listAll().associateBy { it.id } == expected.associateBy { it.id }) { "模型档案已变化，请重新预览后导入" }
+        require(models.map { it.id }.distinct().size == models.size) { "导入档案 ID 重复" }
+        models.forEach { upsert(it) }
+    }
+
     @Query("UPDATE harness_models SET isActive = 0")
     suspend fun clearActive()
 
     @Query("UPDATE harness_models SET isActive = 1 WHERE id = :id")
     suspend fun setActive(id: String)
+
+    /**
+     * 唯一激活切换必须单事务：clearActive 与 setActive 分两步提交时，崩溃窗口内
+     * 会留下 0 激活模型，而 activeModel() 是 LIMIT 1 无排序，恢复行为不确定。
+     */
+    @Transaction
+    suspend fun activate(id: String) {
+        clearActive()
+        setActive(id)
+    }
 
     @Query("UPDATE harness_models SET reasoningMode = :mode, reasoningEffort = :effort WHERE id = :id")
     suspend fun updateReasoning(id: String, mode: String?, effort: String?)

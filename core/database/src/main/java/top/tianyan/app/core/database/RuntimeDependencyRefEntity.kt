@@ -1,4 +1,4 @@
-package top.tianyan.app.core.database
+﻿package top.tianyan.app.core.database
 
 import androidx.room.Entity
 

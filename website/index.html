@@ -4,15 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f7f7f8">
-  <meta name="description" content="天衍 Tianyan：把完整的 Linux 环境和能自主执行任务的智能体装进一部无需 Root 的手机。">
-  <meta property="og:title" content="天衍 Tianyan — 一机之内，天地自生">
-  <meta property="og:description" content="Android 无 Root Linux Runtime · Agent Harness · 原生 PTY · 工作区与工具生态">
+  <meta name="description" content="天衍 Tianyan：Android 无 Root Linux 与 AI 自动化工坊。Bot 团队协作、可视化工作流、原生终端、Git、浏览器自动化与 SSH 远程执行。">
+  <meta property="og:title" content="天衍 Tianyan — 掌中归墟，万象可期">
+  <meta property="og:description" content="把 Linux、AI 团队与可视化自动化工作流装进口袋。从对话、代码到构建交付，在 Android 上完成。">
   <meta property="og:type" content="website">
   <meta property="og:image" content="assets/tianyan-logo.png">
-  <title>天衍 Tianyan — 一机之内，天地自生</title>
+  <title>天衍 Tianyan — 掌中归墟，万象可期</title>
   <link rel="icon" href="assets/tianyan-logo.png">
-  <link rel="stylesheet" href="styles.css">
-  <script src="script.js" defer></script>
+  <link rel="stylesheet" href="styles.css?v=20261021">
+  <script src="script.js?v=20261021" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">跳到主要内容</a>
@@ -29,12 +29,13 @@
     </button>
 
     <nav class="site-nav" aria-label="主导航" data-nav>
-      <a href="#vision">理念</a>
       <a href="#capabilities">能力</a>
+      <a href="#collaboration">协作</a>
+      <a href="#workflows">工作流</a>
       <a href="#themes">界面</a>
       <a href="#plugins">插件</a>
       <a href="templates.html">模板</a>
-      <a href="#architecture">架构</a>
+      <a href="#start">开始使用</a>
       <a class="nav-github" href="https://github.com/J09715/Tianyan" target="_blank" rel="noreferrer">
         GitHub <span aria-hidden="true">↗</span>
       </a>
@@ -47,8 +48,8 @@
         <div class="hero-logo"><img src="assets/tianyan-logo.png" alt="天衍 Logo"></div>
         <div class="eyebrow">Android 上的 Linux AI Runtime</div>
         <h1>天衍</h1>
-        <p class="hero-tagline">一机之内，天地自生。</p>
-        <p class="hero-lead">无需 Root，在 Android 上运行完整 Linux、AI Agent、原生终端与工程工作区。</p>
+        <p class="hero-tagline">掌中归墟，万象可期。</p>
+        <p class="hero-lead">无需 Root，把 Linux、AI 团队与自动化工作流装进口袋。从一句想法，到代码、构建与交付。</p>
         <div class="hero-actions">
           <a class="button button-primary" href="https://github.com/J09715/Tianyan/releases" target="_blank" rel="noreferrer">
             <span>获取最新版本</span><span aria-hidden="true">↗</span>
@@ -58,31 +59,32 @@
           </a>
         </div>
         <div class="hero-meta" aria-label="系统需求">
-          <span>v0.5.0</span><i></i><span>Android 10+</span><i></i><span>ARM64</span><i></i><span>开源</span>
+          <span>源码 v1.3.0</span><i></i><span>Android 10+</span><i></i><span>ARM64</span><i></i><span>开源</span>
         </div>
+        <p class="version-note">功能介绍按当前源码整理 · 更新于 <time datetime="2026-10-21">2026.10.21</time> · 安装包以 Releases 为准</p>
       </div>
 
       <div class="hero-stage reveal" data-delay="1">
         <div class="glass-orb glass-orb-a" aria-hidden="true"></div>
         <div class="glass-orb glass-orb-b" aria-hidden="true"></div>
         <figure class="device-shot device-shot-dark">
-          <img src="assets/tianyan-logo.png" alt="天衍图标：内太极外八卦">
+          <img src="assets/theme-chengming-dark.jpg" alt="天衍澄明液态玻璃深色主题实机界面">
         </figure>
         <figure class="device-shot device-shot-light">
-          <img src="assets/tianyan-logo.png" alt="天衍图标：内太极外八卦">
+          <img src="assets/theme-chengming-light.jpg" alt="天衍澄明液态玻璃浅色主题实机界面">
         </figure>
-        <div class="glass-badge"><span></span> 内太极 · 外八卦</div>
+        <div class="glass-badge"><span></span> 实机界面 · 澄明液态玻璃</div>
       </div>
     </section>
 
     <section class="manifesto section-pad" id="vision">
       <div class="section-index reveal">01 / 理念</div>
       <div class="manifesto-grid">
-        <h2 class="reveal">它不是终端的外壳，<br>而是一个<span>行动发生的场域。</span></h2>
+        <h2 class="reveal">让想法有工具，<br>让行动有<span>抵达之处。</span></h2>
         <div class="manifesto-copy reveal" data-delay="1">
-          <p>模型在这里获得语言，工具获得双手，终端保存因果，工作区赋予记忆以位置。</p>
-          <p>天衍承认 Android 的边界，并在边界之内建立一套可运行、可观察、可持续演化的 Linux 世界。</p>
-          <blockquote>“一机之内，天地自生。”</blockquote>
+          <p>从一次 Agent 对话，到各有职责的 Bot 团队，再到可以重复运行的工作流，让模型、工具与真实项目在同一处协作。</p>
+          <p>终端运行进程，工作区承载文件，Git 记录变化。你可以看见执行过程，在需要时介入，也能把任务带到电脑大屏或远程 Linux。</p>
+          <blockquote>“掌中归墟，万象可期。”</blockquote>
         </div>
       </div>
     </section>
@@ -90,12 +92,12 @@
     <section class="screens section-pad" id="themes">
       <div class="section-heading reveal">
         <div><div class="section-index">02 / 核心界面</div><h2>从首页之外，<br>看见天衍如何工作。</h2></div>
-        <p>以下界面均运行于 Android 真机。智枢负责把意图变成行动，工坊承载项目与共享存储，乾坤管理模型、Linux 环境和整套系统配置。</p>
+        <p>智枢处理对话与任务，工坊承载项目与构建，乾坤管理模型和运行环境。以下为既有 Android 实机截图，供了解界面风格；当前版本布局以应用内为准。</p>
       </div>
       <div class="screen-gallery">
-        <figure class="screen-shot reveal"><div class="shot-pending"><span>待补充</span></div><figcaption><b>智枢</b><span>Agent · 快捷指令 · 任务执行</span></figcaption></figure>
-        <figure class="screen-shot reveal"><div class="shot-pending"><span>待补充</span></div><figcaption><b>工坊</b><span>Workspace · 项目 · 共享存储</span></figcaption></figure>
-        <figure class="screen-shot reveal"><div class="shot-pending"><span>待补充</span></div><figcaption><b>乾坤</b><span>模型 · Linux · 系统配置</span></figcaption></figure>
+        <figure class="screen-shot reveal"><a href="assets/screen-agent-dark.jpg" target="_blank"><img src="assets/screen-agent-dark.jpg" alt="智枢 Agent 界面"></a><figcaption><b>智枢</b><span>Agent · 快捷指令 · 任务执行</span></figcaption></figure>
+        <figure class="screen-shot reveal"><a href="assets/screen-workspace-dark.jpg" target="_blank"><img src="assets/screen-workspace-dark.jpg" alt="工坊工作区界面"></a><figcaption><b>工坊</b><span>Workspace · 项目 · 共享存储</span></figcaption></figure>
+        <figure class="screen-shot reveal"><a href="assets/screen-settings-dark.jpg" target="_blank"><img src="assets/screen-settings-dark.jpg" alt="乾坤系统设置界面"></a><figcaption><b>乾坤</b><span>模型 · Linux · 系统配置</span></figcaption></figure>
       </div>
     </section>
 
@@ -111,9 +113,9 @@
           <div class="feature-body">
             <span class="feature-kicker">LINUX RUNTIME</span>
             <h3>无 Root，衍化诸界</h3>
-            <p>基于 PRoot 运行完整 Linux 用户空间。多发行版安装、切换、更新与持久化，都在 Android 沙盒中有序发生。</p>
+            <p>基于 PRoot 运行 ARM64 Linux 用户空间，从 OCI 镜像安装 RootFS。支持 10 种发行版配置、多环境共存、切换与回滚，并可挂载 Android 共享存储。</p>
             <div class="distro-row" aria-label="支持的发行版">
-              <span>DEBIAN</span><span>UBUNTU</span><span>ARCH</span><span>ALPINE</span><span>KALI</span><span>FEDORA</span>
+              <span>UBUNTU</span><span>DEBIAN</span><span>ARCH</span><span>ALPINE</span><span>KALI</span><span>FEDORA</span><span>ALMALINUX</span><span>ROCKY</span><span>OPENSUSE</span><span>MANJARO</span>
             </div>
           </div>
           <div class="cube-art" aria-hidden="true"><div class="cube-top"></div><div class="cube-left"></div><div class="cube-right"></div><span></span></div>
@@ -123,7 +125,7 @@
           <div class="feature-number">贰</div>
           <span class="feature-kicker">AGENT HARNESS</span>
           <h3>让模型从回答，走向完成</h3>
-          <p>流式推理、工具调用、MCP 与子智能体协作汇成持续执行循环。</p>
+          <p>流式推理、视觉输入、工具调用与 MCP 按需发现。结合任务计划、子智能体、语义记忆和上下文压缩，持续推进真实任务。</p>
           <div class="loop-graphic" aria-hidden="true">
             <span class="loop-core">AI</span><span>思考</span><span>行动</span><span>验证</span>
           </div>
@@ -133,7 +135,7 @@
           <div class="feature-number">叁</div>
           <span class="feature-kicker">NATIVE PTY</span>
           <h3>真实终端，真实因果</h3>
-          <p>JNI forkpty、ANSI/VT100、多会话与动态 Resize。不是文本模拟，而是真实进程与控制终端。</p>
+          <p>JNI 原生 PTY 与 Termux 终端内核，支持多会话、作业控制、Ctrl+C 和窗口尺寸变化。直接操作 Linux 进程。</p>
           <div class="terminal-mini"><span>$ npm run build</span><br><b>Done in 4.2s.</b><i></i></div>
         </article>
 
@@ -141,7 +143,7 @@
           <div class="feature-number">肆</div>
           <span class="feature-kicker">WORKSPACE</span>
           <h3>为项目建立坐标</h3>
-          <p>文件浏览、代码编辑、宿主存储映射，以及 Agent 与终端共享的工程上下文。</p>
+          <p>新建项目、导入 ZIP 或克隆 GitHub 仓库。浏览源码、查看行级 Diff，在沙箱内后台构建 Android / Flutter 项目，签名并安装 APK。</p>
           <div class="file-tree" aria-hidden="true"><span>▾ tianyan</span><span>　▾ app</span><span>　　◇ src/main</span><span>　▾ feature</span><span>　　◇ chat</span><span>　　◇ terminal</span></div>
         </article>
 
@@ -149,17 +151,65 @@
           <div class="feature-number">伍</div>
           <span class="feature-kicker">TOOLS & SAFETY</span>
           <h3>百工之器，知止而行</h3>
-          <p>工具安装事务、服务管理与高风险操作审批，让能力、状态和失败路径都清晰可见。</p>
-          <div class="approval"><span>高风险命令</span><b>等待你的确认</b><button type="button" tabindex="-1">允许一次</button></div>
+          <p>可选择 PLAN、辅助或完全访问模式。文件检查点与对话分支回退帮助核对变化；执行中断后保留记录，结果不确定的操作需要复核。</p>
+          <div class="approval" role="img" aria-label="审批界面示意：待审批操作，等待你的确认"><span>待审批操作</span><b>等待你的确认</b><span class="approval-example">允许一次</span></div>
         </article>
+      </div>
+    </section>
+
+    <section class="collaboration section-pad" id="collaboration">
+      <div class="section-heading reveal">
+        <div><div class="section-index">04 / BOT 团队</div><h2>把不同专长，<br>带进同一个群聊。</h2></div>
+        <p>为 Bot 设置角色与模型，在私聊中深入讨论，在群聊中分配任务。独立任务保留自己的会话，后续要求可以沿原任务继续推进。</p>
+      </div>
+      <div class="collab-grid">
+        <div class="team-illustration reveal" role="img" aria-label="团队协作示意：用户提出目标，主控分配给开发与评审成员，独立任务完成后回报">
+          <div class="demo-caption">协作流程示意</div>
+          <div class="team-message"><span>你</span><p>一起把这个项目推进到可交付。</p></div>
+          <div class="team-message team-lead"><span>主控</span><p>拆解目标，分配独立任务，汇总成员回报。</p></div>
+          <div class="team-branches"><div><b>开发成员</b><span>实现与验证</span></div><div><b>评审成员</b><span>检查与建议</span></div></div>
+          <div class="team-result">任务回报 → 核对产物 → 补充要求与续办</div>
+        </div>
+        <div class="detail-list reveal" data-delay="1">
+          <article><span>01</span><div><h3>成员各有角色，也各有模型</h3><p>按职责组织团队，为每位成员选择已配置的供应商与具体模型，使用 @ 提及成员。</p></div></article>
+          <article><span>02</span><div><h3>把讨论落到独立任务</h3><p>查看排队、运行与受阻状态，补充要求，沿原会话继续任务，并追踪成员报告的产物。</p></div></article>
+          <article><span>03</span><div><h3>记忆可以阅读，也可以修订</h3><p>编辑 Bot 的 Markdown 记忆，查看提交差异与历史恢复；保存时检测后台修改冲突。</p></div></article>
+          <a class="text-link" href="https://github.com/J09715/Tianyan/blob/main/docs/BOT_COLLABORATION.md" target="_blank" rel="noreferrer">了解团队协作与恢复边界 ↗</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="workflows section-pad" id="workflows">
+      <div class="section-heading reveal">
+        <div><div class="section-index">05 / 可视化工作流</div><h2>把一次完成，<br>变成下次的起点。</h2></div>
+        <p>用可视化 DAG 连接命令、Agent、子智能体、构建和人工审批。支持条件分支、并行执行、运行历史，以及一次性、间隔和每日计划。</p>
+      </div>
+      <div class="workflow-illustration reveal" role="img" aria-label="工作流示意：手动或定时触发，执行检查，分为通过后构建和失败后由 Agent 分析，最后人工确认交付">
+        <div class="workflow-step"><small>触发</small><b>手动 / 定时</b></div><span aria-hidden="true">→</span>
+        <div class="workflow-step"><small>执行</small><b>Bash / Agent</b></div><span aria-hidden="true">→</span>
+        <div class="workflow-fork"><div class="workflow-step"><small>通过</small><b>构建产物</b></div><div class="workflow-step"><small>失败</small><b>分析与修复</b></div></div><span aria-hidden="true">→</span>
+        <div class="workflow-step"><small>交付</small><b>人工确认</b></div>
+      </div>
+      <div class="workflow-notes reveal"><p>从内置流程创建副本，或通过 JSON 导入、导出与分享。中断恢复沿原运行记录继续，已成功步骤不重新派发，未结算动作先确认重试。</p><a class="text-link" href="https://github.com/J09715/Tianyan/blob/main/docs/WORKFLOW.md" target="_blank" rel="noreferrer">阅读工作流指南 ↗</a></div>
+    </section>
+
+    <section class="connected section-pad" id="connected">
+      <div class="section-heading reveal"><div><div class="section-index">06 / 连接与交付</div><h2>从手机出发，<br>把工作连接起来。</h2></div><p>代码、网页、模型和远程环境，沿着同一条任务链协同。</p></div>
+      <div class="connected-grid">
+        <article class="connected-card reveal"><span class="feature-kicker">GIT WORKBENCH</span><h3>代码变化，有迹可循</h3><p>查看改动、暂存和提交，管理分支、标签与提交图，预览推送内容并同步远程仓库。</p></article>
+        <article class="connected-card reveal"><span class="feature-kicker">BROWSER & MCP</span><h3>网页也进入执行链</h3><p>多标签浏览器与 Browser MCP，让 Agent 读取页面、点击交互；Hook、网络时间线与 CDP 断点支持进一步调试。</p></article>
+        <article class="connected-card reveal"><span class="feature-kicker">SSH EXECUTION</span><h3>把任务带到远程 Linux</h3><p>连接 SSH 服务器，在会话绑定的远程环境运行命令、通过 SFTP 操作工作区文件。手机宿主能力仍作用于本机。</p></article>
+        <article class="connected-card reveal"><span class="feature-kicker">WEBCHAT</span><h3>换到电脑大屏，继续协作</h3><p>在手机开启 WebChat，通过访问地址与配对码连接浏览器，在电脑上输入和查看任务进展。</p></article>
+        <article class="connected-card reveal"><span class="feature-kicker">MODEL CHOICE</span><h3>模型与任务，自由搭配</h3><p>支持 Chat Completions、Responses 与 Anthropic Messages 三类协议；也可连接兼容端点的本地推理服务。</p></article>
+        <article class="connected-card reveal"><span class="feature-kicker">MORE WAYS TO CREATE</span><h3>从灵感，走到实际产物</h3><p>一句话做 App、Planner / Executor 双智能体、AI 圆桌会议与 A2UI，为创建、执行和评审提供更多入口。</p></article>
       </div>
     </section>
 
     <section class="plugins section-pad" id="plugins">
       <div class="plugin-intro reveal">
-        <div class="section-index">04 / 插件生态</div>
+        <div class="section-index">07 / 插件生态</div>
         <h2>把你的工具，<br>装进天衍。</h2>
-        <p>在线 Registry 与本地 <code>.txplugin</code> 各有清晰来源标识。本地包由清单与离线 payload 组成，可声明 ARM64 架构、安装步骤、命令入口、实时进度和能力元数据。</p>
+        <p>在线工具与本地 <code>.txplugin</code> 扩展你的工坊。v2 PROCESS 包承载命令、服务与受限 Agent 扩展，WEB 包承载可导入页面；新包使用严格版本、完整性与依赖检查，继续兼容 v1 工具包。</p>
         <div class="hero-actions">
           <a class="button button-primary" href="plugins.html">阅读插件制作教程 <span>→</span></a>
           <a class="button button-quiet" href="templates.html">阅读模板制作教程 <span>→</span></a>
@@ -167,30 +217,32 @@
       </div>
       <div class="plugin-steps reveal" data-delay="1">
         <div><b>01</b><strong>组织目录</strong><span>manifest.json + payload/</span></div>
-        <div><b>02</b><strong>声明来源</strong><span>LOCAL / REMOTE · ARM64 · 启动类型</span></div>
-        <div><b>03</b><strong>打包导入</strong><span>ZIP64 · SHA-256 · 版本去重</span></div>
-        <div><b>04</b><strong>验证发布</strong><span>离线安装 · 百分比进度 · 卸载</span></div>
+        <div><b>02</b><strong>选择扩展</strong><span>PROCESS 命令 / WEB 页面</span></div>
+        <div><b>03</b><strong>校验打包</strong><span>作者 CLI · SemVer · SHA-256</span></div>
+        <div><b>04</b><strong>导入使用</strong><span>进程安装验证 / 页面原生授权</span></div>
         <pre><code>{
-  "id": "hello-arm64",
-  "launchType": "command",
-  "architectures": ["ARM64"],
-  "offlineOnly": true,
-  "commandLinks": ["hello"]
+  "schemaVersion": 2,
+  "plugin": {
+    "id": "example.hello",
+    "api": {"minimum": 1, "maximum": 1},
+    "execution": "PROCESS"
+  }
 }</code></pre>
+        <p class="snippet-note">清单片段 · 完整可安装示例见插件教程</p>
       </div>
     </section>
 
     <section class="architecture section-pad" id="architecture">
-      <div class="section-index reveal">05 / 运行架构</div>
+      <div class="section-index reveal">08 / 运行架构</div>
       <div class="architecture-title reveal"><h2>意图进入天衍，<br><span>行动抵达系统。</span></h2><p>每一步都有上下文，每一次执行都有回声。未完成，便继续。</p></div>
       <div class="flow reveal" data-delay="1">
-        <div class="flow-node"><small>01</small><strong>人的意图</strong><span>自然语言 / 指令</span></div>
+        <div class="flow-node"><small>01</small><strong>人的意图</strong><span>对话 / 群聊 / 工作流</span></div>
         <i>→</i>
         <div class="flow-node"><small>02</small><strong>模型推理</strong><span>多 Provider / 本地模型</span></div>
         <i>→</i>
         <div class="flow-node flow-node-main"><small>03</small><strong>Harness</strong><span>规划 · 工具 · 子智能体</span></div>
         <i>→</i>
-        <div class="flow-node"><small>04</small><strong>Linux / MCP</strong><span>执行与结果校验</span></div>
+        <div class="flow-node"><small>04</small><strong>执行与交付</strong><span>Linux / SSH / MCP / 浏览器</span></div>
       </div>
       <div class="flow-return reveal"><span>↳</span> 结果回到上下文，驱动下一轮判断</div>
     </section>
@@ -203,9 +255,9 @@
     <section class="start section-pad" id="start">
       <div class="start-mark reveal"><img src="assets/tianyan-logo.png" alt="天衍 Logo"></div>
       <div class="start-copy reveal" data-delay="1">
-        <div class="section-index">06 / 从此处开始</div>
+        <div class="section-index">09 / 从此处开始</div>
         <h2>把一座 Linux 工坊，<br>装进你的口袋。</h2>
-        <p>天衍仍在快速演进。欢迎下载体验、阅读源码，或一同参与这个掌上计算世界的建造。</p>
+        <p>安装 APK，初始化 Linux，配置模型，再创建你的第一个项目。首次安装 RootFS 需要网络与足够存储；使用本地模型时还需准备可用的推理服务。</p>
         <div class="hero-actions">
           <a class="button button-primary" href="https://github.com/J09715/Tianyan/releases" target="_blank" rel="noreferrer">前往 Releases <span>↗</span></a>
           <a class="button button-outline" href="https://github.com/J09715/Tianyan" target="_blank" rel="noreferrer">查看源代码 <span>↗</span></a>
@@ -213,11 +265,20 @@
         <div class="requirements"><span>需要 Android 10 或更高版本</span><span>仅支持 ARM64-v8a</span></div>
       </div>
     </section>
+    <section class="getting-started section-pad" aria-label="快速上手与常见问题">
+      <ol class="setup-steps reveal"><li><b>安装</b><p>从 Releases 获取 ARM64 APK。</p></li><li><b>初始化</b><p>跟随启程向导安装 Linux RootFS。</p></li><li><b>配置</b><p>添加模型服务，按需启用工具与 MCP。</p></li><li><b>开始</b><p>创建工作区，在智枢描述你的目标。</p></li></ol>
+      <div class="faq reveal">
+        <details><summary>需要 Root 或额外系统权限吗？</summary><p>Linux 与普通 Agent 任务无需 Root。无线 ADB、Shizuku、无障碍和安装 APK 等能力按需配置，具体操作仍受 Android 系统权限限制。</p></details>
+        <details><summary>可以离线使用吗？</summary><p>已安装的 Linux、终端和本地文件操作可以离线使用。AI 是否需要联网取决于模型端点；本地推理需要另行准备运行环境与模型，APK 不内置模型权重。</p></details>
+        <details><summary>后台任务和定时计划会准点执行吗？</summary><p>工作流支持后台运行和计划调度。建议允许通知并调整电池优化设置；Android 的后台限制仍可能延迟或中断任务。</p></details>
+        <details><summary>换设备时如何备份？</summary><p>设置中可导出与恢复本地数据。备份不包含 RootFS、工作区实际文件和模型凭据，这些内容需另行备份。<a class="text-link" href="https://github.com/J09715/Tianyan/blob/main/docs/LOCAL_BACKUP.md" target="_blank" rel="noreferrer">查看备份范围 ↗</a></p></details>
+      </div>
+    </section>
   </main>
 
   <footer>
     <div class="footer-brand"><strong>天衍</strong><span>TIANYAN / LINUX AI RUNTIME</span></div>
-    <p>于方寸之间，构建一整个世界。</p>
+    <p>于天衍中立极，于方寸间创世。</p>
     <div class="footer-links"><a href="plugins.html">插件教程</a><a href="https://github.com/J09715/Tianyan">GitHub</a><a href="https://github.com/J09715/Tianyan/issues">Issues</a><a href="https://github.com/J09715/Tianyan/blob/main/README_EN.md">English README</a></div>
     <small>© <span data-year></span> Tianyan Project. Open source on GitHub.</small>
   </footer>

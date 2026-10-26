@@ -1,0 +1,4 @@
+<resources>
+    <string name="chat_pane_terminal">终端</string>
+    <string name="chat_pane_browser">浏览器</string>
+</resources>

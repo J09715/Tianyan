@@ -1,4 +1,4 @@
-package top.tianyan.app.core.database.task
+﻿package top.tianyan.app.core.database.task
 
 import androidx.room.Dao
 import androidx.room.Insert
@@ -8,8 +8,14 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface AgentTaskDao {
+    @Query("UPDATE agent_tasks SET groupProgressJson = :progress WHERE id = :id AND status IN ('RUNNING', 'WAITING_APPROVAL')")
+    suspend fun updateGroupProgress(id: String, progress: String)
+
     @Query("SELECT * FROM agent_tasks ORDER BY updatedAt DESC")
     fun observeAllTasks(): Flow<List<AgentTaskEntity>>
+
+    @Query("SELECT * FROM agent_tasks WHERE id = :id LIMIT 1")
+    fun observeTask(id: String): Flow<AgentTaskEntity?>
 
     @Query("SELECT * FROM agent_tasks WHERE id = :id LIMIT 1")
     suspend fun getTaskById(id: String): AgentTaskEntity?

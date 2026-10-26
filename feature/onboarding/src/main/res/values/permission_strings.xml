@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="onboarding_permissions_title">按需开启权限</string>
+    <string name="onboarding_permissions_description">沙箱已准备就绪。以下设置有助于后台任务和文件访问，全部可选，跳过也能继续使用。之后可在设置中调整。</string>
+    <string name="onboarding_permission_notification">通知权限</string>
+    <string name="onboarding_permission_notification_hint">显示运行状态、任务进度和需要你处理的提醒。</string>
+    <string name="onboarding_permission_overlay">悬浮窗权限</string>
+    <string name="onboarding_permission_overlay_hint">离开应用后，仍可通过悬浮小窗查看和继续对话。</string>
+    <string name="onboarding_permission_files">文件管理权限</string>
+    <string name="onboarding_permission_files_hint">允许访问手机共享存储中的项目和文件。不开启也可使用应用内文件及系统文件选择器。</string>
+    <string name="onboarding_permission_autostart">自启动权限</string>
+    <string name="onboarding_permission_autostart_hint">在系统的自启动或应用启动管理中允许天衍运行。不同品牌入口可能不同，部分系统没有此选项。</string>
+    <string name="onboarding_permission_battery">电池优化无限制</string>
+    <string name="onboarding_permission_battery_hint">减少息屏后编译或 AI 任务被暂停的情况。建议在应用电池设置中选择「无限制」或「不受限制」；开启后可能增加耗电。</string>
+    <string name="onboarding_permission_manual">需在系统设置中手动确认</string>
+    <string name="onboarding_permission_files_legacy">此系统使用文件选择器，无需所有文件访问权限</string>
+    <string name="onboarding_permission_battery_granted">已豁免系统电池优化，厂商后台限制请手动确认</string>
+    <string name="onboarding_permission_granted">已开启</string>
+    <string name="onboarding_permission_optional">尚未开启 · 可选</string>
+    <string name="onboarding_permission_manage">查看设置</string>
+    <string name="onboarding_permission_configure">去设置</string>
+    <string name="onboarding_permissions_continue">继续</string>
+    <string name="onboarding_permission_unavailable">无法直接跳转，请在系统设置的应用管理中手动配置</string>
+</resources>

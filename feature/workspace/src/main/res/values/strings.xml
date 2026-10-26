@@ -45,7 +45,7 @@
     <string name="workspace_projects_section">工坊隔离工程</string>
     <string name="workspace_projects_description">位于 Linux 沙箱 /workspace 目录下，与 Agent 实时互通</string>
     <string name="workspace_no_projects">还没有工坊工程</string>
-    <string name="workspace_no_projects_description">点击右上角新建工程，或从本地 ZIP / GitHub 导入已有项目</string>
+    <string name="workspace_no_projects_description">新建工程，或从本地 ZIP / GitHub 导入已有项目</string>
     <string name="workspace_building_device">正在构建到手机…</string>
     <string name="workspace_run_ready">运行就绪</string>
     <string name="workspace_run_failed">运行失败</string>
@@ -152,6 +152,10 @@
     <string name="workspace_open_file_failed">打开文件失败</string>
     <string name="workspace_file_saved">已保存文件</string>
     <string name="workspace_save_failed">保存失败</string>
+    <string name="workspace_save_conflict_title">文件已被修改</string>
+    <string name="workspace_save_conflict_message">该文件在编辑期间被其他进程（例如 AI 工具）修改。覆盖会丢弃磁盘上的最新改动，重新加载会放弃你当前的编辑。</string>
+    <string name="workspace_save_conflict_overwrite">覆盖</string>
+    <string name="workspace_save_conflict_reload">重新加载</string>
     <string name="workspace_prepare_build">准备编译环境…</string>
     <string name="workspace_unknown_error">未知错误</string>
     <string name="workspace_build_interrupted">构建异常中断</string>
@@ -196,8 +200,7 @@
     <string name="workspace_menu_import">导入</string>
     <string name="workspace_menu_templates">模板管理</string>
     <string name="workspace_menu_plugins">插件</string>
-            <string name="workspace_menu_workflows">工作流</string>
-        <string name="workspace_menu_settings">工坊设置</string>
+    <string name="workspace_menu_settings">工坊设置</string>
     <string name="workspace_action_next">下一步</string>
     <string name="workspace_action_previous">上一步</string>
     <string name="workspace_action_close">关闭</string>

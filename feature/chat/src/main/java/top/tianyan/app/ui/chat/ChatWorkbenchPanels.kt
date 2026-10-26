@@ -8,7 +8,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -26,14 +25,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.minimumInteractiveComponentSize
 import top.tianyan.app.ui.components.RuntimeAlertDialog
-import top.tianyan.app.ui.theme.Radius
-import top.tianyan.app.ui.theme.Spacing
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -50,7 +47,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -64,12 +60,14 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import top.tianyan.app.core.database.AgentMemoryEntity
 import top.tianyan.app.core.database.AgentScratchpadEntity
-import top.tianyan.app.core.database.AiModelEntity
-import top.tianyan.app.core.model.ApprovalMode
 import top.tianyan.app.feature.chat.R
 import top.tianyan.app.harness.QueuedPrompt
 import top.tianyan.app.harness.AssistantText
 import top.tianyan.app.harness.CapabilityEvent
+import top.tianyan.app.harness.ModelSwitchEvent
+import top.tianyan.app.harness.TurnChangesEvent
+import top.tianyan.app.harness.SkillSuggestion
+import top.tianyan.app.harness.TaskDelivery
 import top.tianyan.app.harness.HarnessMessage
 import top.tianyan.app.harness.ToolCall
 import top.tianyan.app.harness.ToolResult
@@ -80,166 +78,27 @@ import top.tianyan.app.harness.session.ConversationBranch
 import top.tianyan.app.harness.session.ConversationBranchKind
 import top.tianyan.app.ui.components.RuntimeCard
 import top.tianyan.app.ui.components.RuntimeIcon
+import top.tianyan.app.ui.theme.semanticColors
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeCircularProgressIndicator
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
+import top.tianyan.app.ui.components.RuntimeIconButton
 
 @Composable
-internal fun CollapsibleChatWorkbenchStrip(
-    activeModel: AiModelEntity?,
-    approvalMode: ApprovalMode,
-    currentBranch: ConversationBranch?,
-    runtimeEvents: List<HarnessEvent>,
-    running: Boolean,
-    onOpenModels: () -> Unit,
-    onOpenApprovalModes: () -> Unit,
-    onOpenBranches: () -> Unit,
-    onOpenRuntime: () -> Unit,
-    modifier: Modifier = Modifier,
-    onOpenBrowser: (() -> Unit)? = null,
-    browserHighlight: Boolean = false,
-    /** 仓库入口；与浏览器同一条工具条，方便在对话里直接切过去看改动。 */
-    onOpenGit: (() -> Unit)? = null,
-    gitUncommittedCount: Int = 0,
-    /** 运行日志入口；沿用开发者页那套读取/清空/导出，不在这里重做一份。 */
-    onOpenLogs: (() -> Unit)? = null,
-    /** 红队控制台入口；与浏览器/仓库/日志同一条工具条，点进去是整页而不是叠在对话上。 */
-    onOpenRedTeam: (() -> Unit)? = null,
-    redTeamTarget: String? = null,
-) {
-    // 轮次数只在事件列表变化时重算一次；此前未 remember 导致每次重组都做 O(n) 全表扫描
-    val roundCount = remember(runtimeEvents) { runtimeEvents.count { it is HarnessEvent.ProviderRoundStarted } }
-    val activeModelName = activeModel?.let { entity ->
-        entity.model.split(",").firstOrNull()?.trim().takeUnless { it.isNullOrBlank() } ?: entity.name
-    } ?: stringResource(R.string.chat_no_model_selected)
-
-    val (modeLabelRes, modeColor) = when (approvalMode) {
-        ApprovalMode.FULL_ACCESS -> R.string.chat_approval_full_access to Color(0xFFE65100)
-        ApprovalMode.ASSISTED -> R.string.chat_approval_assisted to Color(0xFF1976D2)
-        ApprovalMode.REQUEST -> R.string.chat_approval_request to Color(0xFF388E3C)
-    }
-
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.65f),
-        shape = RectangleShape,
-        modifier = modifier.fillMaxWidth(),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = Spacing.md, vertical = Spacing.xs),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.xs, Alignment.Start),
-        ) {
-            // 1. 模型选择项
-            WorkbenchStatusItem(
-                icon = RuntimeIconName.Brain,
-                label = activeModelName,
-                tint = MaterialTheme.colorScheme.primary,
-                onClick = onOpenModels,
-            )
-
-            StatusDivider()
-
-            // 2. 审批模式/权重项
-            WorkbenchStatusItem(
-                icon = RuntimeIconName.Shield,
-                label = stringResource(modeLabelRes),
-                tint = modeColor,
-                onClick = onOpenApprovalModes,
-            )
-
-            StatusDivider()
-
-            // 3. 分支状态项
-            WorkbenchStatusItem(
-                icon = RuntimeIconName.Hub,
-                label = currentBranch?.name ?: stringResource(R.string.chat_main_line),
-                tint = MaterialTheme.colorScheme.primary,
-                onClick = onOpenBranches,
-            )
-
-            StatusDivider()
-
-            // 4. 运行时/轮次状态项
-            WorkbenchStatusItem(
-                icon = RuntimeIconName.Logs,
-                label = when {
-                    running && roundCount > 0 -> stringResource(R.string.chat_runtime_round_status, roundCount)
-                    running -> stringResource(R.string.chat_runtime_event_status, runtimeEvents.size)
-                    roundCount > 0 -> stringResource(R.string.chat_round_number, roundCount)
-                    else -> stringResource(R.string.chat_event_count, runtimeEvents.size)
-                },
-                tint = if (running) Color(0xFF7C4DFF) else MaterialTheme.colorScheme.tertiary,
-                highlight = running,
-                onClick = onOpenRuntime,
-            )
-
-            // 5. 浏览器入口（轮次之后）：agent 在浏览器产生新动态时高亮提示
-            if (onOpenBrowser != null) {
-                StatusDivider()
-                WorkbenchStatusItem(
-                    icon = RuntimeIconName.Globe,
-                    label = if (browserHighlight) "浏览器 •" else "浏览器",
-                    tint = if (browserHighlight) Color(0xFF3F8FFF) else MaterialTheme.colorScheme.onSurfaceVariant,
-                    highlight = browserHighlight,
-                    onClick = onOpenBrowser,
-                )
-            }
-
-            // 6. 仓库入口：未提交改动数直接标在标签上，省掉「点进去才知道有没有改动」。
-            if (onOpenGit != null) {
-                StatusDivider()
-                val dirty = gitUncommittedCount > 0
-                WorkbenchStatusItem(
-                    icon = RuntimeIconName.GitBranch,
-                    label = if (dirty) "仓库 $gitUncommittedCount" else "仓库",
-                    tint = if (dirty) Color(0xFFF59E0B) else MaterialTheme.colorScheme.onSurfaceVariant,
-                    highlight = dirty,
-                    onClick = onOpenGit,
-                )
-            }
-
-            // 7. 运行日志入口
-            if (onOpenLogs != null) {
-                StatusDivider()
-                WorkbenchStatusItem(
-                    icon = RuntimeIconName.Document,
-                    label = stringResource(R.string.chat_open_logs),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    onClick = onOpenLogs,
-                )
-            }
-
-            // 8. 红队控制台入口：只在红队会话出现，标签直接带靶标名，
-            // 省掉「点进去才知道这个会话绑的是谁」。
-            if (onOpenRedTeam != null) {
-                StatusDivider()
-                val bound = !redTeamTarget.isNullOrBlank()
-                WorkbenchStatusItem(
-                    icon = RuntimeIconName.Shield,
-                    label = if (bound) "红队 · $redTeamTarget" else "红队",
-                    tint = if (bound) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                    highlight = bound,
-                    onClick = onOpenRedTeam,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun StatusDivider() {
+internal fun StatusDivider() {
     Box(
         modifier = Modifier
-            .padding(horizontal = Spacing.xs)
+            .padding(horizontal = 2.dp)
             .size(width = 1.dp, height = 9.dp)
             .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
     )
 }
 
 @Composable
-private fun WorkbenchStatusItem(
+internal fun WorkbenchStatusItem(
     icon: RuntimeIconName,
     label: String,
     tint: Color,
@@ -249,14 +108,14 @@ private fun WorkbenchStatusItem(
 ) {
     Surface(
         onClick = onClick,
-        shape = Radius.xsShape,
+        shape = RoundedCornerShape(4.dp),
         color = if (highlight) tint.copy(alpha = 0.14f) else Color.Transparent,
         modifier = modifier,
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             RuntimeIcon(
                 name = icon,
@@ -286,54 +145,56 @@ internal fun BranchBrowserSheet(
     onSwitch: (ConversationBranch) -> Unit,
     onOpenSubagent: (ConversationBranch) -> Unit,
 ) {
-    ModalBottomSheet(
+    val conversation = remember(branches) {
+        branches.filter { it.kind != ConversationBranchKind.SUBAGENT }
+    }
+    val subagents = remember(branches) { stableSubagentBranches(branches) }
+
+    PlainBackdropModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = Spacing.lg)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(
-                stringResource(R.string.chat_branches_title),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                stringResource(R.string.chat_branches_description),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = Spacing.xs, bottom = Spacing.sm),
-            )
+            item(key = "branch_sheet_title") {
+                Text(
+                    stringResource(R.string.chat_branches_title),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            item(key = "branch_sheet_description") {
+                Text(
+                    stringResource(R.string.chat_branches_description),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 6.dp),
+                )
+            }
             if (branches.isEmpty()) {
-                RuntimeCard {
-                    Text(
-                        stringResource(R.string.chat_no_branches),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                item(key = "branch_sheet_empty") {
+                    RuntimeCard {
+                        Text(
+                            stringResource(R.string.chat_no_branches),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             } else {
-                // 单趟分组替代两次全量 filter：分支列表在子智能体运行期间会持续增长，
-                // 且这段位于 composition 内，任何状态更新都会重跑这两次过滤。
-                val (conversation, subagents) = remember(branches) {
-                    val conversation = ArrayList<ConversationBranch>(branches.size)
-                    val subagents = ArrayList<ConversationBranch>()
-                    for (branch in branches) {
-                        if (branch.kind == ConversationBranchKind.SUBAGENT) subagents.add(branch)
-                        else conversation.add(branch)
-                    }
-                    conversation to subagents
+                item(key = "branch_sheet_conversation_header") {
+                    SectionLabel(stringResource(R.string.chat_conversation_paths), conversation.size)
                 }
-                SectionLabel(stringResource(R.string.chat_conversation_paths), conversation.size)
-                conversation.forEach { branch ->
+                items(conversation, key = ::branchUiKey) { branch ->
                     BranchCard(branch, enabled = !running && !branch.isBusy, onClick = { onSwitch(branch) })
                 }
                 if (subagents.isNotEmpty()) {
-                    SectionLabel(stringResource(R.string.chat_subagent_lanes), subagents.size)
-                    subagents.forEach { branch ->
+                    item(key = "branch_sheet_subagent_header") {
+                        SectionLabel(stringResource(R.string.chat_subagent_lanes), subagents.size)
+                    }
+                    items(subagents, key = ::branchUiKey) { branch ->
                         BranchCard(
                             branch = branch,
                             enabled = branch.laneName != null,
@@ -342,14 +203,25 @@ internal fun BranchBrowserSheet(
                     }
                 }
             }
-            Spacer(Modifier.height(Spacing.xxl))
+            item(key = "branch_sheet_bottom_spacer") {
+                Spacer(Modifier.height(32.dp))
+            }
         }
     }
 }
 
+internal fun branchUiKey(branch: ConversationBranch): String =
+    if (branch.kind == ConversationBranchKind.SUBAGENT) branch.laneName ?: branch.id else branch.id
+
+internal fun stableSubagentBranches(branches: List<ConversationBranch>): List<ConversationBranch> =
+    branches.asSequence()
+        .filter { it.kind == ConversationBranchKind.SUBAGENT }
+        .sortedBy(::branchUiKey)
+        .toList()
+
 @Composable
 private fun SectionLabel(title: String, count: Int) {
-    Row(Modifier.fillMaxWidth().padding(top = Spacing.xs, bottom = Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.weight(1f))
         Text("$count", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -360,25 +232,32 @@ private fun SectionLabel(title: String, count: Int) {
 private fun BranchCard(branch: ConversationBranch, enabled: Boolean, onClick: () -> Unit) {
     val tint = when (branch.kind) {
         ConversationBranchKind.MAIN -> MaterialTheme.colorScheme.primary
-        ConversationBranchKind.BRANCH -> Color(0xFF7C4DFF)
+        ConversationBranchKind.BRANCH -> semanticColors().agent
         ConversationBranchKind.SUBAGENT -> MaterialTheme.colorScheme.tertiary
         ConversationBranchKind.HISTORY -> MaterialTheme.colorScheme.secondary
     }
     RuntimeCard(
         containerColor = if (branch.isCurrent) tint.copy(alpha = 0.10f) else MaterialTheme.colorScheme.surfaceContainerLow,
         borderColor = if (branch.isCurrent) tint.copy(alpha = 0.55f) else Color.Transparent,
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(Spacing.md),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp),
         onClick = if (enabled && !branch.isCurrent) onClick else null,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Box(Modifier.size(34.dp).background(tint.copy(alpha = 0.14f), CircleShape), contentAlignment = Alignment.Center) {
-                RuntimeIcon(if (branch.kind == ConversationBranchKind.SUBAGENT) RuntimeIconName.Bot else RuntimeIconName.Hub, Modifier.size(18.dp), tint)
+                RuntimeIcon(if (branch.kind == ConversationBranchKind.SUBAGENT) RuntimeIconName.Bot else RuntimeIconName.GitBranch, Modifier.size(18.dp), tint)
             }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                    Text(branch.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        branch.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f, fill = false),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                     if (branch.isCurrent) MiniBadge(stringResource(R.string.chat_badge_current), tint)
-                    if (branch.isBusy) MiniBadge(stringResource(R.string.chat_badge_busy), Color(0xFF7C4DFF))
+                    if (branch.isBusy) MiniBadge(stringResource(R.string.chat_badge_busy), semanticColors().agent)
                     if (branch.faulted) MiniBadge(stringResource(R.string.chat_badge_faulted), MaterialTheme.colorScheme.error)
                 }
                 Text(
@@ -426,32 +305,26 @@ internal fun SubagentResultSheet(
     val toolResults = remember(state.messages) {
         state.messages.filterIsInstance<ToolResult>().associateBy { it.toolCallId }
     }
-    // 子智能体过程列表的过滤结果在组合期缓存。
-    //
-    // 原先直接写在 LazyListScope 的 items(items = ...) 实参位置：该表达式在每次重组时
-    // 求值，而面板展开期间每个流式发布帧都会带来新的 state.messages，于是每帧都要对整个
-    // 会话消息列表做一次全量过滤并分配新 List。长会话下这部分随消息数线性放大到每帧开销。
-    //
-    // 注意必须放在 LazyColumn 之外：LazyListScope 不是 @Composable 上下文，remember 在其中不可用。
-    val processMessages = remember(state.messages, finalResult?.id) {
-        state.messages.filter { it !is ToolResult && it.id != finalResult?.id }
-    }
-    var processExpanded by rememberSaveable(branch.id) { mutableStateOf(false) }
+    // 悬挂工具调用（发起但没落结果）说明 lane 是被超时/异常打断的，最后一条助手文本只是中途独白，
+    // 不是结论——标题与提示要换掉，避免把"Let me verify…"这类过程话当成最终成果。
+    val interrupted = branch.faulted || state.messages.filterIsInstance<ToolCall>()
+        .any { it.id !in toolResults.keys }
+    var processExpanded by rememberSaveable(branchUiKey(branch)) { mutableStateOf(false) }
 
-    ModalBottomSheet(
+    PlainBackdropModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(start = Spacing.lg, end = Spacing.lg, bottom = Spacing.xxl),
-            verticalArrangement = Arrangement.spacedBy(Spacing.md),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Box(
                         Modifier.size(38.dp).background(MaterialTheme.colorScheme.tertiaryContainer, CircleShape),
@@ -459,7 +332,7 @@ internal fun SubagentResultSheet(
                     ) {
                         RuntimeIcon(RuntimeIconName.Bot, Modifier.size(20.dp), MaterialTheme.colorScheme.onTertiaryContainer)
                     }
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
                             branch.name,
                             style = MaterialTheme.typography.titleLarge,
@@ -473,7 +346,7 @@ internal fun SubagentResultSheet(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    if (branch.isBusy) MiniBadge(stringResource(R.string.chat_badge_busy), Color(0xFF7C4DFF))
+                    if (branch.isBusy) MiniBadge(stringResource(R.string.chat_badge_busy), semanticColors().agent)
                     if (branch.faulted) MiniBadge(stringResource(R.string.chat_badge_faulted), MaterialTheme.colorScheme.error)
                 }
             }
@@ -481,12 +354,12 @@ internal fun SubagentResultSheet(
             if (state.loading) {
                 item {
                     Row(
-                        Modifier.fillMaxWidth().padding(vertical = Spacing.xl),
+                        Modifier.fillMaxWidth().padding(vertical = 24.dp),
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         RuntimeCircularProgressIndicator(Modifier.size(20.dp))
-                        Spacer(Modifier.width(Spacing.sm))
+                        Spacer(Modifier.width(8.dp))
                         Text(stringResource(R.string.chat_subagent_loading), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
@@ -506,7 +379,7 @@ internal fun SubagentResultSheet(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.tertiary,
                             )
-                            Spacer(Modifier.height(Spacing.xs))
+                            Spacer(Modifier.height(4.dp))
                             SelectionContainer {
                                 Text(
                                     subagentTaskDetails(taskMessage.text),
@@ -520,16 +393,35 @@ internal fun SubagentResultSheet(
 
                 item {
                     Text(
-                        stringResource(R.string.chat_subagent_final_result),
+                        stringResource(
+                            if (interrupted) R.string.chat_subagent_partial_result else R.string.chat_subagent_final_result,
+                        ),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
+                        color = if (interrupted) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
                     )
                 }
                 item {
                     RuntimeCard(
-                        containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.38f),
-                        borderColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.35f),
+                        containerColor = if (interrupted) {
+                            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.38f)
+                        } else {
+                            MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.38f)
+                        },
+                        borderColor = if (interrupted) {
+                            MaterialTheme.colorScheme.error.copy(alpha = 0.35f)
+                        } else {
+                            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.35f)
+                        },
                     ) {
+                        if (interrupted) {
+                            Text(
+                                stringResource(R.string.chat_subagent_partial_hint),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                            )
+                            Spacer(Modifier.height(4.dp))
+                        }
                         if (finalResult != null) {
                             MarkdownText(finalResult.text, Modifier.fillMaxWidth())
                         } else {
@@ -548,7 +440,7 @@ internal fun SubagentResultSheet(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                         onClick = { processExpanded = !processExpanded },
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             RuntimeIcon(RuntimeIconName.Logs, Modifier.size(17.dp), MaterialTheme.colorScheme.primary)
                             Text(
                                 stringResource(R.string.chat_subagent_process, branch.depth, branch.toolCallCount),
@@ -567,8 +459,7 @@ internal fun SubagentResultSheet(
 
                 if (processExpanded) {
                     items(
-                        items = processMessages,
-                        key = { it.id },
+                        items = state.messages.filter { it !is ToolResult && it.id != finalResult?.id }, key = { it.id },
                     ) { message ->
                         when (message) {
                             is UserMessage -> Unit
@@ -583,7 +474,9 @@ internal fun SubagentResultSheet(
                                 running = branch.isBusy,
                                 liveStatus = null,
                             )
-                            is CapabilityEvent -> Unit
+                            is CapabilityEvent, is TurnChangesEvent -> Unit
+                            is SkillSuggestion, is TaskDelivery -> Unit
+                            is ModelSwitchEvent -> Unit
                             is ToolResult -> Unit
                         }
                     }
@@ -609,8 +502,15 @@ private fun subagentTaskDetails(prompt: String): String {
 
 @Composable
 private fun MiniBadge(text: String, color: Color) {
-    Surface(color = color.copy(alpha = 0.12f), shape = Radius.xsShape) {
-        Text(text, style = MaterialTheme.typography.labelSmall, color = color, modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs))
+    Surface(color = color.copy(alpha = 0.12f), shape = RoundedCornerShape(6.dp)) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = color,
+            maxLines = 1,
+            softWrap = false,
+            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+        )
     }
 }
 
@@ -618,7 +518,7 @@ private fun MiniBadge(text: String, color: Color) {
 @Composable
 internal fun RuntimeTimelineSheet(
     events: List<HarnessEvent>,
-    messages: List<top.tianyan.app.harness.HarnessMessage>,
+    messages: List<HarnessMessage>,
     memories: List<AgentMemoryEntity> = emptyList(),
     scratchpads: List<AgentScratchpadEntity> = emptyList(),
     onDeleteMemory: (String) -> Unit = {},
@@ -627,7 +527,7 @@ internal fun RuntimeTimelineSheet(
     onNavigateToMessage: (String) -> Unit = {},
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(
+    PlainBackdropModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     ) {
@@ -638,8 +538,8 @@ internal fun RuntimeTimelineSheet(
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth(),
-            contentPadding = PaddingValues(start = Spacing.lg, end = Spacing.lg, bottom = Spacing.xxl),
-            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item {
                 Column {
@@ -652,7 +552,7 @@ internal fun RuntimeTimelineSheet(
                         stringResource(R.string.chat_runtime_description),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = Spacing.xs, bottom = Spacing.xs),
+                        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
                     )
                 }
             }
@@ -671,18 +571,18 @@ internal fun RuntimeTimelineSheet(
                             text = stringResource(R.string.chat_memory_empty),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(vertical = Spacing.xs),
+                            modifier = Modifier.padding(vertical = 4.dp),
                         )
                     } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             memories.forEach { memory ->
                                 Surface(
                                     color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f),
-                                    shape = Radius.xsShape,
+                                    shape = RoundedCornerShape(8.dp),
                                     modifier = Modifier.fillMaxWidth(),
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.sm),
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                     ) {
@@ -700,7 +600,7 @@ internal fun RuntimeTimelineSheet(
                                                 overflow = TextOverflow.Ellipsis,
                                             )
                                         }
-                                        top.tianyan.app.ui.components.RuntimeIconButton(
+                                        RuntimeIconButton(
                                             onClick = { onDeleteMemory(memory.id) },
                                             modifier = Modifier.size(24.dp),
                                         ) {
@@ -728,18 +628,18 @@ internal fun RuntimeTimelineSheet(
                             text = stringResource(R.string.chat_scratchpad_empty),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(vertical = Spacing.xs),
+                            modifier = Modifier.padding(vertical = 4.dp),
                         )
                     } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             scratchpads.forEach { pad ->
                                 Surface(
                                     color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f),
-                                    shape = Radius.xsShape,
+                                    shape = RoundedCornerShape(8.dp),
                                     modifier = Modifier.fillMaxWidth(),
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.sm),
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                     ) {
@@ -757,7 +657,7 @@ internal fun RuntimeTimelineSheet(
                                                 overflow = TextOverflow.Ellipsis,
                                             )
                                         }
-                                        top.tianyan.app.ui.components.RuntimeIconButton(
+                                        RuntimeIconButton(
                                             onClick = { onDeleteScratchpad(pad.key) },
                                             modifier = Modifier.size(24.dp),
                                         ) {
@@ -790,12 +690,12 @@ internal fun RuntimeTimelineSheet(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(bottom = Spacing.sm),
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                            .padding(bottom = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         StatPill(RuntimeIconName.Brain, roundCount.toString(), MaterialTheme.colorScheme.primary, Modifier.weight(1f))
                         StatPill(RuntimeIconName.Wrench, toolCount.toString(), MaterialTheme.colorScheme.tertiary, Modifier.weight(1f))
-                        StatPill(RuntimeIconName.Shield, approvalCount.toString(), Color(0xFFB25E00), Modifier.weight(1f))
+                        StatPill(RuntimeIconName.Shield, approvalCount.toString(), semanticColors().warning, Modifier.weight(1f))
                         StatPill(RuntimeIconName.Refresh, recoveryCount.toString(), MaterialTheme.colorScheme.secondary, Modifier.weight(1f))
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
@@ -806,7 +706,7 @@ internal fun RuntimeTimelineSheet(
                     RoundSection(round, onNavigateToMessage)
                     HorizontalDivider(
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
-                        modifier = Modifier.padding(vertical = Spacing.xs),
+                        modifier = Modifier.padding(vertical = 4.dp),
                     )
                 }
                 if (lifecycle.isNotEmpty()) {
@@ -816,7 +716,7 @@ internal fun RuntimeTimelineSheet(
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = Spacing.xs),
+                            modifier = Modifier.padding(top = 4.dp),
                         )
                     }
                     items(lifecycle) { event -> RuntimeEventRow(event) }
@@ -838,15 +738,15 @@ private fun CollapsibleRuntimeSectionCard(
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = Radius.smShape,
+        shape = RoundedCornerShape(10.dp),
         border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
         modifier = modifier.fillMaxWidth(),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(Spacing.sm),
-            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+                .padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Row(
                 modifier = Modifier
@@ -857,12 +757,12 @@ private fun CollapsibleRuntimeSectionCard(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     RuntimeIcon(icon, Modifier.size(16.dp), tint)
                     Text(
                         text = title,
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                        style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                 }
@@ -878,7 +778,7 @@ private fun CollapsibleRuntimeSectionCard(
                 enter = expandVertically() + fadeIn(),
                 exit = shrinkVertically() + fadeOut(),
             ) {
-                Box(modifier = Modifier.padding(top = Spacing.xs)) {
+                Box(modifier = Modifier.padding(top = 4.dp)) {
                     content()
                 }
             }
@@ -893,7 +793,7 @@ internal class RoundGroup(
     var displayIndex: Int = 0,
     val modelId: String?,
     val startedAt: Long,
-    var userPromptMessage: top.tianyan.app.harness.UserMessage? = null,
+    var userPromptMessage: UserMessage? = null,
 ) {
     val entries = mutableListOf<TimelineEntry>()
 }
@@ -907,7 +807,7 @@ internal sealed interface TimelineEntry {
         val entryId: String,
         val inputTokens: Long,
         val outputTokens: Long,
-        val message: top.tianyan.app.harness.AssistantText?,
+        val message: AssistantText?,
     ) : TimelineEntry
 
     data class Tool(
@@ -915,8 +815,8 @@ internal sealed interface TimelineEntry {
         val callId: String,
         var name: String,
         var settled: HarnessEvent.ToolCallSettled?,
-        var callMessage: top.tianyan.app.harness.ToolCall?,
-        var result: top.tianyan.app.harness.ToolResult?,
+        var callMessage: ToolCall?,
+        var result: ToolResult?,
     ) : TimelineEntry
 
     data class Approval(override val timestamp: Long, val toolName: String, val riskLevel: String) : TimelineEntry
@@ -925,13 +825,13 @@ internal sealed interface TimelineEntry {
 /** 把扁平事件流切成（轮次组，会话级生命周期）两段；tool call 与 settled 结果就地配对。 */
 internal fun buildRoundGroups(
     events: List<HarnessEvent>,
-    messages: List<top.tianyan.app.harness.HarnessMessage>,
+    messages: List<HarnessMessage>,
 ): Pair<List<RoundGroup>, List<HarnessEvent>> {
-    val toolResultsById = messages.filterIsInstance<top.tianyan.app.harness.ToolResult>()
+    val toolResultsById = messages.filterIsInstance<ToolResult>()
         .associateBy { it.toolCallId }
-    val callsById = messages.filterIsInstance<top.tianyan.app.harness.ToolCall>().associateBy { it.id }
-    val assistantsById = messages.filterIsInstance<top.tianyan.app.harness.AssistantText>().associateBy { it.id }
-    val userMessages = messages.filterIsInstance<top.tianyan.app.harness.UserMessage>()
+    val callsById = messages.filterIsInstance<ToolCall>().associateBy { it.id }
+    val assistantsById = messages.filterIsInstance<AssistantText>().associateBy { it.id }
+    val userMessages = messages.filterIsInstance<UserMessage>()
 
     val rounds = mutableListOf<RoundGroup>()
     val lifecycle = mutableListOf<HarnessEvent>()
@@ -1023,8 +923,8 @@ private fun RoundSection(
     Column {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-            modifier = Modifier.fillMaxWidth().padding(bottom = Spacing.sm),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
         ) {
             Text(
                 stringResource(R.string.chat_tl_round, if (group.displayIndex > 0) group.displayIndex else (group.roundNumber + 1)),
@@ -1050,20 +950,20 @@ private fun RoundSection(
                 .trim()
             Surface(
                 color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.65f),
-                shape = Radius.xsShape,
+                shape = RoundedCornerShape(8.dp),
                 border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = Spacing.sm)
-                    .clip(Radius.xsShape)
+                    .padding(bottom = 6.dp)
+                    .clip(RoundedCornerShape(8.dp))
                     .clickable(enabled = onNavigateToMessage != null) {
                         onNavigateToMessage?.invoke(userMsg.id)
                     },
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.sm),
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     RuntimeIcon(
                         RuntimeIconName.Prompt,
@@ -1081,7 +981,7 @@ private fun RoundSection(
                     if (onNavigateToMessage != null) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
                         ) {
                             Text(
                                 stringResource(R.string.chat_navigate_to_message),
@@ -1098,7 +998,7 @@ private fun RoundSection(
                 }
             }
         }
-        Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             group.entries.forEachIndexed { index, entry ->
                 RoundEntryRow(entry, isLast = index == group.entries.lastIndex)
             }
@@ -1111,8 +1011,8 @@ private fun RoundEntryRow(entry: TimelineEntry, isLast: Boolean) {
     var expanded by rememberSaveable { mutableStateOf(false) }
 
     val visual = when (entry) {
-        is TimelineEntry.Assistant -> Triple(RuntimeIconName.Sparkles, Color(0xFF7C4DFF), stringResource(R.string.chat_tl_model_response))
-        is TimelineEntry.Approval -> Triple(RuntimeIconName.Shield, Color(0xFFB25E00), entry.toolName)
+        is TimelineEntry.Assistant -> Triple(RuntimeIconName.Sparkles, semanticColors().agent, stringResource(R.string.chat_tl_model_response))
+        is TimelineEntry.Approval -> Triple(RuntimeIconName.Shield, semanticColors().warning, entry.toolName)
         is TimelineEntry.Tool -> {
             val settled = entry.settled
             val icon = when {
@@ -1122,7 +1022,7 @@ private fun RoundEntryRow(entry: TimelineEntry, isLast: Boolean) {
             }
             val color = when {
                 settled == null -> MaterialTheme.colorScheme.tertiary
-                settled.success -> Color(0xFF2E7D32)
+                settled.success -> semanticColors().success
                 else -> MaterialTheme.colorScheme.error
             }
             Triple(icon, color, entry.name)
@@ -1152,7 +1052,7 @@ private fun RoundEntryRow(entry: TimelineEntry, isLast: Boolean) {
                 .fillMaxWidth()
                 .clickable(enabled = expandable) { expanded = !expanded },
             verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             // 链式节点：圆点图标 + 连接线，未轮条目首尾相接。
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1163,8 +1063,8 @@ private fun RoundEntryRow(entry: TimelineEntry, isLast: Boolean) {
                     Box(Modifier.width(1.dp).height(22.dp).background(MaterialTheme.colorScheme.outlineVariant))
                 }
             }
-            Column(Modifier.weight(1f).padding(top = Spacing.xs, bottom = if (isLast) 4.dp else 8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            Column(Modifier.weight(1f).padding(top = 3.dp, bottom = if (isLast) 4.dp else 8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
                         title,
                         style = MaterialTheme.typography.titleSmall,
@@ -1194,7 +1094,7 @@ private fun RoundEntryRow(entry: TimelineEntry, isLast: Boolean) {
             if (expandable) {
                 RuntimeIcon(
                     if (expanded) RuntimeIconName.ChevronDown else RuntimeIconName.ChevronRight,
-                    Modifier.size(14.dp).padding(top = Spacing.sm),
+                    Modifier.size(14.dp).padding(top = 6.dp),
                     MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -1204,7 +1104,7 @@ private fun RoundEntryRow(entry: TimelineEntry, isLast: Boolean) {
             enter = expandVertically() + fadeIn(),
             exit = shrinkVertically() + fadeOut(),
         ) {
-            Box(Modifier.padding(start = Spacing.xxl, bottom = Spacing.sm)) {
+            Box(Modifier.padding(start = 38.dp, bottom = 8.dp)) {
                 when (entry) {
                     is TimelineEntry.Tool -> ToolExpandContent(entry)
                     is TimelineEntry.Assistant -> entry.message?.let { AssistantExpandContent(it) }
@@ -1217,7 +1117,7 @@ private fun RoundEntryRow(entry: TimelineEntry, isLast: Boolean) {
 
 @Composable
 private fun ToolExpandContent(entry: TimelineEntry.Tool) {
-    Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         entry.callMessage?.let { call ->
             PayloadBox(stringResource(R.string.chat_tl_args), prettyArgs(call.args))
         }
@@ -1231,8 +1131,8 @@ private fun ToolExpandContent(entry: TimelineEntry.Tool) {
 }
 
 @Composable
-private fun AssistantExpandContent(message: top.tianyan.app.harness.AssistantText) {
-    Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+private fun AssistantExpandContent(message: AssistantText) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (message.text.isNotBlank()) {
             PayloadBox(
                 stringResource(R.string.chat_tl_response),
@@ -1249,7 +1149,7 @@ private fun AssistantExpandContent(message: top.tianyan.app.harness.AssistantTex
 @Composable
 private fun PayloadBox(label: String, text: String) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -1261,24 +1161,24 @@ private fun PayloadBox(label: String, text: String) {
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            top.tianyan.app.ui.components.RuntimeIconButton(
+            RuntimeIconButton(
                 onClick = {
-                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                    clipboard?.setPrimaryClip(android.content.ClipData.newPlainText(label, text))
-                    android.widget.Toast.makeText(context, "已复制", android.widget.Toast.LENGTH_SHORT).show()
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                    clipboard?.setPrimaryClip(ClipData.newPlainText(label, text))
+                    Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
                 },
                 modifier = Modifier.size(20.dp),
             ) {
                 RuntimeIcon(RuntimeIconName.Copy, Modifier.size(12.dp), MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        Surface(color = MaterialTheme.colorScheme.surfaceContainerLow, shape = Radius.xsShape) {
+        Surface(color = MaterialTheme.colorScheme.surfaceContainerLow, shape = RoundedCornerShape(8.dp)) {
             Text(
                 text = limitDiagnosticText(text),
                 style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(Spacing.sm),
+                    .padding(8.dp),
             )
         }
     }
@@ -1289,15 +1189,15 @@ private fun StatPill(icon: RuntimeIconName, count: String, color: Color, modifie
     Surface(
         modifier = modifier,
         color = color.copy(alpha = 0.10f),
-        shape = Radius.smShape,
+        shape = RoundedCornerShape(10.dp),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.sm),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
         ) {
             RuntimeIcon(icon, Modifier.size(14.dp), color)
-            Spacer(Modifier.width(Spacing.sm))
+            Spacer(Modifier.width(5.dp))
             Text(
                 count,
                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
@@ -1311,15 +1211,15 @@ private fun StatPill(icon: RuntimeIconName, count: String, color: Color, modifie
 @Composable
 private fun RuntimeEventRow(event: HarnessEvent) {
     val visual = eventVisual(event)
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(Modifier.size(30.dp).background(visual.color.copy(alpha = 0.13f), CircleShape), contentAlignment = Alignment.Center) {
                 RuntimeIcon(visual.icon, Modifier.size(16.dp), visual.color)
             }
             Box(Modifier.width(1.dp).height(34.dp).background(MaterialTheme.colorScheme.outlineVariant))
         }
-        Column(Modifier.weight(1f).padding(top = Spacing.xs, bottom = Spacing.sm)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+        Column(Modifier.weight(1f).padding(top = 2.dp, bottom = 10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     visual.title,
                     style = MaterialTheme.typography.titleSmall,
@@ -1358,12 +1258,12 @@ private fun eventVisual(event: HarnessEvent): EventVisual = when (event) {
     )
     is HarnessEvent.OperationFinished -> EventVisual(
         if (event.outcome == "completed") RuntimeIconName.Check else RuntimeIconName.Stop,
-        if (event.outcome == "completed") Color(0xFF2E7D32) else MaterialTheme.colorScheme.error,
+        if (event.outcome == "completed") semanticColors().success else MaterialTheme.colorScheme.error,
         if (event.outcome == "completed") stringResource(R.string.chat_event_operation_completed) else stringResource(R.string.chat_event_operation_ended),
         event.detail ?: event.outcome,
     )
     is HarnessEvent.ProviderRoundStarted -> EventVisual(
-        RuntimeIconName.Brain, Color(0xFF7C4DFF),
+        RuntimeIconName.Brain, semanticColors().agent,
         stringResource(R.string.chat_event_provider_round, event.round + 1),
         buildString {
             append(stringResource(R.string.chat_attempt_count, event.attempt + 1))
@@ -1371,7 +1271,7 @@ private fun eventVisual(event: HarnessEvent): EventVisual = when (event) {
         },
     )
     is HarnessEvent.ProviderRoundSettled -> EventVisual(
-        RuntimeIconName.Sparkles, Color(0xFF7C4DFF),
+        RuntimeIconName.Sparkles, semanticColors().agent,
         stringResource(R.string.chat_event_provider_settled),
         stringResource(R.string.chat_token_usage, event.inputTokens, event.outputTokens),
     )
@@ -1382,14 +1282,14 @@ private fun eventVisual(event: HarnessEvent): EventVisual = when (event) {
     )
     is HarnessEvent.ToolCallSettled -> EventVisual(
         if (event.success) RuntimeIconName.Check else RuntimeIconName.Alert,
-        if (event.success) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error,
+        if (event.success) semanticColors().success else MaterialTheme.colorScheme.error,
         if (event.success) stringResource(R.string.chat_event_tool_completed, event.toolName)
         else stringResource(R.string.chat_event_tool_failed, event.toolName),
         event.durationMs?.let { stringResource(R.string.chat_event_duration, formatPanelDuration(it)) }
             ?: stringResource(R.string.chat_event_settled),
     )
     is HarnessEvent.ApprovalRequested -> EventVisual(
-        RuntimeIconName.Shield, Color(0xFFB25E00),
+        RuntimeIconName.Shield, semanticColors().warning,
         stringResource(R.string.chat_event_approval),
         "${event.toolName} · ${event.riskLevel}",
     )
@@ -1399,19 +1299,9 @@ private fun eventVisual(event: HarnessEvent): EventVisual = when (event) {
         event.detail ?: event.outcome,
     )
     is HarnessEvent.PermissionRequired -> EventVisual(
-        RuntimeIconName.Shield, Color(0xFFB25E00),
+        RuntimeIconName.Shield, semanticColors().warning,
         stringResource(R.string.chat_event_permission_required, event.permission),
         event.reason,
-    )
-    is HarnessEvent.RedTeamFactChanged -> EventVisual(
-        RuntimeIconName.Shield, MaterialTheme.colorScheme.error,
-        "红队事实已更新 · ${event.kind}",
-        "${event.status} · ${event.factId}",
-    )
-    is HarnessEvent.RedTeamPhaseChanged -> EventVisual(
-        RuntimeIconName.Play, MaterialTheme.colorScheme.error,
-        "红队阶段 · ${event.phase}",
-        event.detail ?: "阶段状态已更新",
     )
     is HarnessEvent.PlanStepProgress -> EventVisual(
         when (event.status) {
@@ -1421,10 +1311,10 @@ private fun eventVisual(event: HarnessEvent): EventVisual = when (event) {
             else -> RuntimeIconName.Sparkles
         },
         when (event.status) {
-            "COMPLETED" -> Color(0xFF2E7D32)
+            "COMPLETED" -> semanticColors().success
             "FAILED" -> MaterialTheme.colorScheme.error
             "RUNNING" -> MaterialTheme.colorScheme.primary
-            else -> Color(0xFF7C4DFF)
+            else -> semanticColors().agent
         },
         "工序 ${event.stepId} · ${event.title}",
         event.resultSummary ?: "状态: ${event.status}",
@@ -1440,20 +1330,20 @@ internal fun QueuedPromptStack(
     onConvertToSteer: ((QueuedPrompt) -> Unit)? = null,
 ) {
     if (prompts.isEmpty()) return
-    Column(Modifier.fillMaxWidth().padding(top = Spacing.xs), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+    Column(Modifier.fillMaxWidth().padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         prompts.forEach { prompt ->
             val (label, tint) = when (prompt.queue) {
-                PromptQueue.STEER -> stringResource(R.string.chat_label_steer) to Color(0xFF7C4DFF)
+                PromptQueue.STEER -> stringResource(R.string.chat_label_steer) to semanticColors().agent
                 PromptQueue.FOLLOW_UP -> stringResource(R.string.chat_label_follow_up) to MaterialTheme.colorScheme.tertiary
                 PromptQueue.NEXT_RUN -> stringResource(R.string.chat_label_queued) to MaterialTheme.colorScheme.secondary
             }
-            Surface(color = tint.copy(alpha = 0.08f), shape = Radius.xsShape) {
+            Surface(color = tint.copy(alpha = 0.08f), shape = RoundedCornerShape(8.dp)) {
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .padding(start = Spacing.sm, end = Spacing.xs, top = Spacing.xs, bottom = Spacing.xs),
+                        .padding(start = 8.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     MiniBadge(label, tint)
                     Text(
@@ -1467,20 +1357,20 @@ internal fun QueuedPromptStack(
                     if (prompt.queue == PromptQueue.NEXT_RUN && onConvertToSteer != null) {
                         Surface(
                             onClick = { onConvertToSteer(prompt) },
-                            color = Color(0xFF7C4DFF).copy(alpha = 0.14f),
-                            shape = Radius.xsShape,
-                            border = BorderStroke(0.8.dp, Color(0xFF7C4DFF).copy(alpha = 0.4f)),
+                            color = semanticColors().agent.copy(alpha = 0.14f),
+                            shape = RoundedCornerShape(6.dp),
+                            border = BorderStroke(0.8.dp, semanticColors().agent.copy(alpha = 0.4f)),
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.5.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
-                                RuntimeIcon(RuntimeIconName.Tune, Modifier.size(11.dp), Color(0xFF7C4DFF))
+                                RuntimeIcon(RuntimeIconName.Tune, Modifier.size(11.dp), semanticColors().agent)
                                 Text(
                                     stringResource(R.string.chat_label_steer),
                                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
-                                    color = Color(0xFF7C4DFF),
+                                    color = semanticColors().agent,
                                 )
                             }
                         }
@@ -1491,7 +1381,7 @@ internal fun QueuedPromptStack(
                         shape = CircleShape,
                         modifier = Modifier.minimumInteractiveComponentSize(),
                     ) {
-                        RuntimeIcon(RuntimeIconName.Edit, Modifier.padding(Spacing.xs).size(14.dp), MaterialTheme.colorScheme.onSurfaceVariant)
+                        RuntimeIcon(RuntimeIconName.Edit, Modifier.padding(3.dp).size(14.dp), MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Surface(
                         onClick = { onRemove(prompt) },
@@ -1499,7 +1389,7 @@ internal fun QueuedPromptStack(
                         shape = CircleShape,
                         modifier = Modifier.minimumInteractiveComponentSize(),
                     ) {
-                        RuntimeIcon(RuntimeIconName.Close, Modifier.padding(Spacing.xs).size(14.dp), MaterialTheme.colorScheme.onSurfaceVariant)
+                        RuntimeIcon(RuntimeIconName.Close, Modifier.padding(3.dp).size(14.dp), MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -1519,7 +1409,7 @@ internal fun CreateBranchDialog(messageId: String, onDismiss: () -> Unit, onCrea
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(stringResource(R.string.chat_create_branch_description), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 OutlinedTextField(

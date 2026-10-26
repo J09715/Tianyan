@@ -37,7 +37,7 @@ my-template/
 
 - `id` 只能包含小写字母、数字以及 `.`、`_`、`-` 分隔符。
 - `builtin.` 是系统内置模板保留前缀，用户模板不能使用。
-- `projectType` 支持 `ANDROID`、`FLUTTER`、`GENERAL`。
+- `projectType` 支持 `ANDROID`、`FLUTTER`、`GENERAL`、`TIANYAN_PLUGIN`（天衍本地插件开发）。
 - `category` 是模板选择页的第二级分组，`sortOrder` 越小越靠前。
 - JSON 采用严格解析；未知字段会被拒绝，避免拼写错误被静默忽略。
 
@@ -126,3 +126,13 @@ my-template/
 模板管理页支持导入用户 ZIP、导出用户或内置模板，以及删除用户模板；内置模板不可删除。以内置模板为样例制作新模板时，必须修改 `id` 并移除保留的 `builtin.` 前缀。
 
 应用内置模板会从 `project-template/src/main/assets/templates/<项目类型>/<模板目录>/template.json` 自动发现；新增标准目录不需要修改 Kotlin 注册表。
+
+## 10. 天衍本地插件开发
+
+内置模板 `builtin.tianyan-local-plugin` 位于 `templates/tianyan-plugin/process/`，在创建项目首步作为独立类型展示。用户填写工具 ID、点分插件身份、插件名称与初始版本，不需要 Android 包名或 Gradle。创建和归档导入均持久化 `TIANYAN_PLUGIN` 项目类型。
+
+初始文件包括 v2 `manifest.json`、`payload/bin/<toolId>` Shell 示例、`tools/package_plugin.py`、README 与 AGENTS 开发约定。示例支持 `--version`，打包脚本仅依赖 Python 3 标准库，自动计算所有 payload 文件的 SHA-256，将清单和 payload 打成 `dist/<toolId>-<version>.txplugin`，再由插件中心确认导入。Python 需要在运行打包命令前准备；创建工程不会自动安装依赖或执行脚本。
+
+项目卡片提供“一键导入调试”：宿主直接打包清单与 payload，无需 Python 或执行项目脚本，复用插件中心清单确认、完整性校验和安装链路。调试快照保存在工程 `dist/<toolId>-debug-<UUID>.txplugin`，清单版本采用 `<源版本去除构建元数据>+tianyan.debug.<SHA-256前16位>.<随机快照ID>`；指纹覆盖清单与 payload 哈希，源文件不改写。每次点击产生独立版本，回退代码或安装失败后也可重新导入。快照文件保留供手动清理；安装后从插件详情启动、查看日志。调试版本沿用同一插件身份，替换当前系统的已安装版本，不是并行安装，也不提供热重载。
+
+这是 [v2 本地 PROCESS 插件](PLUGIN_PACKAGE_V2.md) 的开发骨架，不提供外部 Compose/Provider 回调加载。不走 Android APK 构建和安装流程。同版本插件包不可覆盖导入，正式发布仍递增源版本并使用 Python 脚本打包。

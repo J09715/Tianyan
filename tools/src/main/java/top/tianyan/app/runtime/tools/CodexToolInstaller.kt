@@ -2,6 +2,7 @@ package top.tianyan.app.runtime.tools
 
 import top.tianyan.app.core.model.RuntimeName
 import top.tianyan.app.core.model.RuntimeRequirement
+import top.tianyan.app.core.model.RuntimeState
 import top.tianyan.app.core.tools.DependencyManager
 import top.tianyan.app.core.tools.ProviderManager
 import top.tianyan.app.core.tools.ToolActionResult
@@ -10,14 +11,12 @@ import top.tianyan.app.runtime.LinuxRuntime
 import top.tianyan.app.runtime.shell.CommandResult
 import top.tianyan.app.runtime.shell.ShellCommand
 import top.tianyan.app.runtime.shell.SessionConfig
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.flow
 
-@Singleton
-class CodexToolInstaller @Inject constructor(
+class CodexToolInstaller(
     private val linuxRuntime: LinuxRuntime,
     private val dependencyManager: DependencyManager,
     private val providerManager: ProviderManager,
@@ -52,48 +51,23 @@ class CodexToolInstaller @Inject constructor(
             }.getOrElse { CommandResult(exitCode = 1, stdout = "", stderr = it.message ?: "网络超时", durationMs = 0L) }
 
             if (!install.isSuccess) {
-                // chatgpt.com 脚本源在沙箱里常被重定向循环掐断（curl 47）。回退到
-                // 官方 npm 包 @openai/codex（Rust 二进制经 npm 分发），不再写伪装
-                // 二进制——那会让 --version 验证通过、运行时却 exec /bin/bash。
-                emit(InstallEvent.Output(toolId, "提示: chatgpt.com 脚本源受限，切换至 npm @openai/codex 官方包..."))
-                emit(InstallEvent.Progress(toolId, "准备 Node.js 运行时", 0.30f, InstallEvent.Phase.INSTALLING_DEPENDENCY))
-                ensureDependency(RuntimeName.NODE, toolId)
-                val npmEnvironment = installEnvironment + mapOf(
-                    "npm_config_prefix" to ToolLayout.toolDirectory(toolId),
-                    "NPM_CONFIG_PREFIX" to ToolLayout.toolDirectory(toolId),
+                // 失败必须如实上抛。此前这里会写入一个只会打印 "codex 0.1.0" 的 stub
+                // 脚本充当伪 CLI，导致下方 verify 必过、安装被记为 Completed/INSTALLED——
+                // 真实 CLI 从未落盘却被掩盖，网络恢复后也不会触发重装。
+                val reason = install.stderr.ifBlank { install.stdout }.trim()
+                error(
+                    "Codex 远程安装脚本执行失败（exit=${install.exitCode}）：" +
+                        reason.lineSequence().firstOrNull().orEmpty().ifBlank { "网络受限或脚本下载失败" },
                 )
-                val npmInstall = executeAndReport(
-                    linuxRuntime.execute(
-                        ShellCommand(
-                            "npm install -g @openai/codex --registry=https://registry.npmmirror.com || npm install -g @openai/codex",
-                            environment = npmEnvironment,
-                            timeoutMs = 10 * 60 * 1000L, // 10 分钟超时，npm 安装需要更长时间
-                        ),
-                    ),
-                )
-                if (!npmInstall.isSuccess) {
-                    error("Codex 安装失败：chatgpt.com 脚本与 npm @openai/codex 均不可用。" +
-                        npmInstall.stderr.ifBlank { npmInstall.stdout }.ifBlank { "npm 退出码 ${npmInstall.exitCode}" })
-                }
             }
-            // 两条通道都把 codex 落在 <toolDir>/bin/codex：官方脚本尊重 CODEX_HOME，
-            // npm 通道由 npm_config_prefix 决定。统一从 bin 入口链接。
             val link = toolCommandLinker.link(
                 command = "codex",
-                target = "${ToolLayout.toolDirectory(toolId)}/bin/codex",
+                target = "${ToolLayout.toolDirectory(toolId)}/.local/bin/codex",
                 environment = providerManager.environment(),
             )
             if (!link.isSuccess) error(link.stderr.ifBlank { "无法创建 codex 命令入口" })
             emit(InstallEvent.Progress(toolId, "验证 codex 命令", 0.85f, InstallEvent.Phase.VERIFYING_INSTALLATION))
-            val version = executeAndReport(
-                linuxRuntime.execute(
-                    ShellCommand(
-                        "codex --version",
-                        environment = providerManager.environment(),
-                        timeoutMs = 60_000L, // 1 分钟超时，首次启动可能需要初始化
-                    ),
-                ),
-            )
+            val version = executeAndReport("codex --version")
             if (!version.isSuccess) error(version.stderr.ifBlank { "找不到 codex 命令" })
             emit(InstallEvent.Completed(toolId, version.stdout.trim().lineSequence().firstOrNull()))
         } catch (cancellation: CancellationException) {
@@ -136,7 +110,7 @@ class CodexToolInstaller @Inject constructor(
         ShellCommand(command, environment = providerManager.environment()),
     )
 
-    private suspend fun kotlinx.coroutines.flow.FlowCollector<InstallEvent>.executeAndReport(
+    private suspend fun FlowCollector<InstallEvent>.executeAndReport(
         result: CommandResult,
     ): CommandResult {
         result.stdout.lineSequence().filter { it.isNotBlank() }.forEach { emit(InstallEvent.Output("codex", it)) }
@@ -144,12 +118,12 @@ class CodexToolInstaller @Inject constructor(
         return result
     }
 
-    private suspend fun kotlinx.coroutines.flow.FlowCollector<InstallEvent>.executeAndReport(
+    private suspend fun FlowCollector<InstallEvent>.executeAndReport(
         command: String,
     ): CommandResult = executeAndReport(execute(command))
 
     private fun checkRuntimeReady() {
-        check(linuxRuntime.state.value is top.tianyan.app.core.model.RuntimeState.Ready) {
+        check(linuxRuntime.state.value is RuntimeState.Ready) {
             "Linux Runtime 未就绪，请先初始化 Linux"
         }
     }

@@ -9,16 +9,21 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import top.tianyan.app.ui.components.RuntimeButton as Button
+import top.tianyan.app.ui.components.RuntimeCheckbox as Checkbox
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import top.tianyan.app.ui.components.RuntimeOutlinedButton as OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -26,6 +31,7 @@ import top.tianyan.app.ui.components.RuntimeTextButton as TextButton
 import top.tianyan.app.ui.components.RuntimeLinearProgressIndicator as LinearProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -46,23 +52,27 @@ import top.tianyan.app.harness.HarnessTool
 import top.tianyan.app.harness.ToolCall
 import top.tianyan.app.harness.ToolResult
 import top.tianyan.app.ui.components.RuntimeIcon
-import top.tianyan.app.ui.theme.Radius
-import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.components.RuntimeCard
 import top.tianyan.app.ui.components.RuntimeIconName
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import top.tianyan.app.core.database.AgentApprovalRequestEntity
+import top.tianyan.app.feature.a2uipoc.A2uiPocSurfaceCard
+import top.tianyan.app.harness.AskUserQuestions
+import top.tianyan.app.ui.theme.semanticColors
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
 
-/** 工具调用卡与审批请求卡。 */
-private val DotRunning = Color(0xFFB25E00)
-private val DotSuccess = Color(0xFF2E7D32)
-private val DotFailed = Color(0xFFBA1A1A)
-private val DiffAddedColor = Color(0xFF2E7D32)
-private val DiffDeletedColor = Color(0xFFC62828)
-
-/** 下载进度百分比正则：从 liveStatus 提取 "(45%)" 样式的进度值。
- *  提为顶层常量预编译，避免下载流式刷新期间每次重组在组合体内重新构建。 */
-private val DOWNLOAD_PERCENT_REGEX = Regex("""\((\d+)%\)""")
+/**
+ * 工具调用卡的运行态配色：组合期读取 [semanticColors]，随明暗主题切换。
+ * 原先的文件级十六进制常量在三套主题（标准 M3 / 动态取色 / 液态玻璃）下都固定为深色值，两头都不达标。
+ */
+private val DotRunning: Color @Composable get() = semanticColors().warning
+private val DotSuccess: Color @Composable get() = semanticColors().success
+private val DotFailed: Color @Composable get() = MaterialTheme.colorScheme.error
 
 @Composable
 internal fun ToolCard(
@@ -93,7 +103,7 @@ internal fun ToolCard(
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
         Column(
             Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             if (showReasoning) {
                 call.reasoning?.takeIf { it.isNotBlank() }
@@ -105,83 +115,70 @@ internal fun ToolCard(
                         )
                     }
             }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(Radius.xsShape)
-                    .clickable { expanded = !expanded }
-                    .padding(vertical = Spacing.xs),
+            RuntimeCard(
+                modifier = Modifier.fillMaxWidth(), onClick = { expanded = !expanded },
+                shape = MaterialTheme.shapes.large, contentPadding = PaddingValues(0.dp),
+                containerColor = Color.Transparent,
             ) {
-                Box(
-                    modifier = Modifier.size(16.dp),
-                    contentAlignment = Alignment.Center,
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
-                    val dotModifier = if (dotDesc != null) {
-                        Modifier.semantics { contentDescription = dotDesc }
-                    } else Modifier
-                    Box(dotModifier.size(6.dp).clip(CircleShape).background(dotColor))
-                }
-                Text(
-                    if (call.tool == HarnessTool.MCP) stringResource(R.string.chat_call_tool) else toolName(call.tool, call.rawToolName),
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 11.5.sp,
-                    ),
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    if (call.tool == HarnessTool.MCP) {
-                        "${toolName(call.tool, call.rawToolName)} · ${toolArgsSummary(call)}"
-                    } else {
-                        toolArgsSummary(call)
-                    },
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                // 代码改动统计徽章 (+N -M)
-                val diffStat = remember(call, result) {
-                    if (call.tool == HarnessTool.WRITE || call.tool == HarnessTool.EDIT) {
-                        parseDiffStat(call, result)
-                    } else null
-                }
-                diffStat?.let { (added, deleted) ->
-                    DiffStatBadge(added = added, deleted = deleted)
-                }
-                val durationText = if (result != null) {
-                    val duration = result.durationMs ?: (result.createdAt - call.createdAt).coerceAtLeast(0L)
-                    formatChatDuration(duration)
-                } else if (running) {
-                    var elapsed by remember(call.id) { mutableStateOf(0L) }
-                    LaunchedEffect(call.id) {
-                        while (true) {
-                            elapsed = (System.currentTimeMillis() - call.createdAt).coerceAtLeast(0L)
-                            // 500ms 刷新足够展示秒级耗时；过密轮询会让长会话持续重组抖动
-                            delay(500)
-                        }
+                    Box(
+                        modifier = Modifier.size(18.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        ToolStatusIndicator(toolIcon(call.tool), dotColor, dotDesc)
                     }
-                    formatChatDuration(elapsed)
-                } else {
-                    null
-                }
-                durationText?.let {
                     Text(
-                        it,
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        fontFamily = FontFamily.Monospace,
+                        toolDisplayName(call),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        toolArgsSummary(call).replace('\n', ' ').replace('\r', ' '),
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f), maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
+                    )
+                    // 代码改动统计徽章 (+N -M)
+                    val diffStat = remember(call, result) {
+                        if (call.tool == HarnessTool.WRITE || call.tool == HarnessTool.EDIT) parseDiffStat(call, result) else null
+                    }
+                    diffStat?.let { (added, deleted) ->
+                        DiffStatBadge(added = added, deleted = deleted)
+                    }
+                    val durationText = if (result != null) {
+                        formatChatDuration(result.durationMs ?: (result.createdAt - call.createdAt).coerceAtLeast(0L))
+                    } else if (running) {
+                        var elapsed by remember(call.id) { mutableStateOf(0L) }
+                        LaunchedEffect(call.id) {
+                            while (true) {
+                                elapsed = (System.currentTimeMillis() - call.createdAt).coerceAtLeast(0L)
+                                // 500ms 刷新足够展示秒级耗时；过密轮询会让长会话持续重组抖动
+                                delay(500)
+                            }
+                        }
+                        formatChatDuration(elapsed)
+                    } else {
+                        null
+                    }
+                    durationText?.let {
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontFamily = FontFamily.Monospace, maxLines = 1, softWrap = false,
+                        )
+                    }
+                    RuntimeIcon(
+                        if (expanded) RuntimeIconName.ChevronDown else RuntimeIconName.ChevronRight,
+                        Modifier.size(18.dp),
+                        MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                RuntimeIcon(
-                    if (expanded) RuntimeIconName.ChevronDown else RuntimeIconName.ChevronRight,
-                    Modifier.size(11.dp),
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                )
             }
 
             val downloadingPrefix = stringResource(R.string.chat_downloading_prefix)
@@ -193,26 +190,29 @@ internal fun ToolCard(
             if (downloadStatus != null) {
                 Text(
                     downloadStatus,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.5.sp),
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontFamily = FontFamily.Monospace,
                 )
-                val percent = DOWNLOAD_PERCENT_REGEX.find(downloadStatus)
+                val percent = Regex("\\((\\d+)%\\)").find(downloadStatus)
                     ?.groupValues?.getOrNull(1)?.toFloatOrNull()?.div(100f)
                 if (percent == null) {
                     LinearProgressIndicator(
                         modifier = Modifier.fillMaxWidth().height(2.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        color = MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                     )
                 } else {
                     LinearProgressIndicator(
                         progress = { percent },
                         modifier = Modifier.fillMaxWidth().height(2.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        color = MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                     )
                 }
+            }
+
+            // A2UI PoC：render_surface 生成的界面直接内嵌聊天流
+            if (call.tool == HarnessTool.RENDER_SURFACE && result?.success == true) {
+                A2uiPocSurfaceCard(call = call, modifier = Modifier.fillMaxWidth())
             }
 
             // 展开 Diff 与输出详情视图
@@ -226,9 +226,9 @@ internal fun ToolCard(
                 if (result != null && !running) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         TextButton(onClick = onRetry) {
-                            RuntimeIcon(RuntimeIconName.Refresh, Modifier.size(13.dp), MaterialTheme.colorScheme.primary)
-                            Spacer(Modifier.width(Spacing.xs))
-                            Text(stringResource(R.string.chat_retry_from_tool), fontSize = 11.5.sp)
+                            RuntimeIcon(RuntimeIconName.Refresh, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.width(4.dp))
+                            Text(stringResource(R.string.chat_retry_from_tool), style = MaterialTheme.typography.labelLarge)
                         }
                     }
                 }
@@ -239,32 +239,32 @@ internal fun ToolCard(
 
 @Composable
 internal fun ApprovalRequestCard(
-    request: top.tianyan.app.core.database.AgentApprovalRequestEntity,
-    onApprove: () -> Unit,
+    request: AgentApprovalRequestEntity,
+    onApprove: (rememberForSession: Boolean) -> Unit,
     onReject: () -> Unit,
 ) {
     val riskColor = when (request.riskLevel) {
         "critical" -> MaterialTheme.colorScheme.error
-        "high" -> Color(0xFFB45309)
+        "high" -> semanticColors().warning
         else -> MaterialTheme.colorScheme.primary
     }
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = Radius.smShape,
+        shape = RoundedCornerShape(12.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, riskColor.copy(alpha = 0.55f)),
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(Spacing.md),
-            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 RuntimeIcon(RuntimeIconName.Shield, Modifier.size(18.dp), riskColor)
                 Text(stringResource(R.string.chat_approval_required), style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
-                Surface(color = riskColor.copy(alpha = 0.12f), shape = Radius.xsShape) {
+                Surface(color = riskColor.copy(alpha = 0.12f), shape = RoundedCornerShape(4.dp)) {
                     Text(
                         request.riskLevel.uppercase(),
-                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         color = riskColor,
                     )
@@ -296,9 +296,30 @@ internal fun ApprovalRequestCard(
                 )
             }
 
+            // 「本会话内记住」：critical 风险不提供该选项（host 侧同样拒绝写入授权表）。
+            var rememberForSession by remember { mutableStateOf(false) }
+            if (!request.riskLevel.equals("critical", ignoreCase = true)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { rememberForSession = !rememberForSession },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(
+                        checked = rememberForSession,
+                        onCheckedChange = { rememberForSession = it },
+                    )
+                    Text(
+                        stringResource(R.string.chat_approval_remember_session),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
             // 审批处理期间禁用按钮，防止重复提交
             var resolving by remember { mutableStateOf(false) }
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), modifier = Modifier.fillMaxWidth()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 OutlinedButton(
                     onClick = {
                         resolving = true
@@ -310,7 +331,7 @@ internal fun ApprovalRequestCard(
                 Button(
                     onClick = {
                         resolving = true
-                        onApprove()
+                        onApprove(rememberForSession)
                     },
                     enabled = !resolving,
                     modifier = Modifier.weight(1f),
@@ -320,29 +341,173 @@ internal fun ApprovalRequestCard(
     }
 }
 
-internal fun toolName(tool: HarnessTool, rawToolName: String? = null): String {
-    if (!rawToolName.isNullOrBlank()) return rawToolName
-    return when (tool) {
-        HarnessTool.READ -> "read"
-        HarnessTool.WRITE -> "write"
-        HarnessTool.EDIT -> "edit"
-        HarnessTool.VERIFY -> "verify"
-        HarnessTool.BASE -> "base"
-        HarnessTool.PROCESS -> "process"
-        HarnessTool.HOST -> "host"
-        HarnessTool.DOWNLOAD -> "download"
-        HarnessTool.MEMORY -> "memory"
-        HarnessTool.PLAN -> "plan"
-        HarnessTool.SCRATCHPAD -> "scratchpad"
-        HarnessTool.HISTORY_SEARCH -> "history.search"
-        HarnessTool.HISTORY_READ -> "history.read"
-        HarnessTool.BUILD_SCRIPT -> "build_script"
-        HarnessTool.SUBAGENT -> "invoke_subagent"
-        HarnessTool.MCP -> "mcp"
-        HarnessTool.LOAD_RULE -> "load_rule"
-        HarnessTool.REDTEAM -> "redteam"
-        HarnessTool.ASK_USER -> "ask_user_question"
+/** ask_user 问题卡：渲染智能体的结构化提问（候选项 chips + 可选自定义输入），与 ApprovalRequestCard 同级复用 pending 请求流。提交答案走 resolveQuestion（答案即工具结果）；「忽略」走既有拒绝路径（模型收到未回答结果）。自定义输入与选项互斥：某题输入非空时优先采用输入。 */
+@Composable
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+internal fun AskUserCard(
+    request: AgentApprovalRequestEntity,
+    onAnswer: (requestId: String, answersJson: String) -> Unit,
+    onSkip: () -> Unit,
+) {
+    val questions = remember(request.id) {
+        runCatching {
+            AskUserQuestions.parse(
+                Json.parseToJsonElement(request.argumentsJson).jsonObject,
+            )
+        }.getOrNull().orEmpty()
     }
+    val selected = remember(request.id) { mutableStateMapOf<Int, String?>() }
+    val custom = remember(request.id) { mutableStateMapOf<Int, String?>() }
+    val allAnswered = questions.indices.all { index ->
+        !selected[index].isNullOrBlank() || !custom[index].isNullOrBlank()
+    }
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                RuntimeIcon(RuntimeIconName.Chat, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
+                Text(stringResource(R.string.chat_ask_user_title), style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
+            }
+            if (questions.isEmpty()) {
+                Text(stringResource(R.string.chat_ask_user_parse_failed), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            questions.forEachIndexed { index, question ->
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        buildString {
+                            question.header?.let { append("[$it] ") }
+                            append(question.question)
+                        },
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    )
+                    if (question.options.isNotEmpty()) {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            question.options.forEach { option ->
+                                AskUserOptionChip(
+                                    label = option.label,
+                                    description = option.description,
+                                    isSelected = selected[index] == option.label &&
+                                        custom[index].isNullOrBlank(),
+                                    onClick = {
+                                        if (selected[index] == option.label && custom[index].isNullOrBlank()) {
+                                            selected[index] = null
+                                        } else {
+                                            selected[index] = option.label
+                                            custom.remove(index)
+                                        }
+                                    },
+                                )
+                            }
+                        }
+                    }
+                    if (question.allowCustom) {
+                        OutlinedTextField(
+                            value = custom[index].orEmpty(),
+                            onValueChange = { value ->
+                                custom[index] = value
+                                if (value.isNotBlank()) selected.remove(index)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { Text(stringResource(R.string.chat_ask_user_custom_hint), style = MaterialTheme.typography.bodySmall) },
+                            textStyle = MaterialTheme.typography.bodyMedium,
+                            singleLine = true,
+                        )
+                    }
+                }
+            }
+            var resolving by remember { mutableStateOf(false) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    onClick = {
+                        resolving = true
+                        onSkip()
+                    },
+                    enabled = !resolving,
+                    modifier = Modifier.weight(1f),
+                ) { Text(stringResource(R.string.chat_ask_user_skip)) }
+                Button(
+                    onClick = {
+                        resolving = true
+                        val answers = buildJsonArray {
+                            questions.indices.forEach { index ->
+                                val answer = custom[index]?.trim()?.ifBlank { null }
+                                    ?: selected[index]?.trim()?.ifBlank { null }
+                                    ?: return@forEach
+                                add(
+                                    buildJsonObject {
+                                        put("index", index)
+                                        put("answer", answer)
+                                    },
+                                )
+                            }
+                        }
+                        onAnswer(request.id, answers.toString())
+                    },
+                    enabled = !resolving && allAnswered,
+                    modifier = Modifier.weight(1f),
+                ) { Text(stringResource(R.string.chat_ask_user_submit)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AskUserOptionChip(
+    label: String,
+    description: String?,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
+        border = BorderStroke(
+            1.dp,
+            if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+        ),
+        onClick = onClick,
+    ) {
+        Column(Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+            Text(label, style = MaterialTheme.typography.labelLarge, color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+            if (!description.isNullOrBlank()) {
+                Text(description, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+/** 工具类型 → 语义前缀图标（与思考块的 Brain 图标同一视觉语言）。形状标识工具类别；颜色由调用处以状态色着色。穷尽 HarnessTool，新增工具有编译器兜底。 */
+internal fun toolIcon(tool: HarnessTool): RuntimeIconName = when (tool) {
+    HarnessTool.READ -> RuntimeIconName.Document
+    HarnessTool.WRITE -> RuntimeIconName.WriteDocument
+    HarnessTool.EDIT -> RuntimeIconName.Edit
+    HarnessTool.BASE -> RuntimeIconName.Terminal
+    HarnessTool.PROCESS -> RuntimeIconName.Play
+    HarnessTool.HOST -> RuntimeIconName.Phone
+    HarnessTool.DOWNLOAD -> RuntimeIconName.Download
+    HarnessTool.MEMORY -> RuntimeIconName.Bookmark
+    HarnessTool.PLAN -> RuntimeIconName.Checklist
+    HarnessTool.SCRATCHPAD -> RuntimeIconName.StickyNote
+    HarnessTool.HISTORY_SEARCH -> RuntimeIconName.Search
+    HarnessTool.HISTORY_READ -> RuntimeIconName.History
+    HarnessTool.BUILD_SCRIPT -> RuntimeIconName.Hammer
+    HarnessTool.SUBAGENT -> RuntimeIconName.Bot
+    HarnessTool.MCP -> RuntimeIconName.Extension
+    HarnessTool.LOAD_RULE -> RuntimeIconName.BookOpen
+    HarnessTool.LOAD_SKILL -> RuntimeIconName.BookOpen
+    HarnessTool.COMPRESS -> RuntimeIconName.Compress
+    HarnessTool.ASK_USER -> RuntimeIconName.Chat
+    HarnessTool.RENDER_SURFACE -> RuntimeIconName.Palette
 }
 
 internal fun toolArgsSummary(call: ToolCall): String {
@@ -351,10 +516,7 @@ internal fun toolArgsSummary(call: ToolCall): String {
     return entries
 }
 
-/**
- * 代码行数增减变更徽章：类似 GitHub 的 +27 -8。
- * 绿色展示增加行数，红色展示删除行数。
- */
+/** 代码行数增减变更徽章：类似 GitHub 的 +27 -8。绿色展示增加行数，红色展示删除行数。 */
 @Composable
 internal fun DiffStatBadge(
     added: Int,
@@ -364,10 +526,10 @@ internal fun DiffStatBadge(
     if (added == 0 && deleted == 0) return
     Row(
         modifier = modifier
-            .clip(Radius.xsShape)
+            .clip(RoundedCornerShape(4.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f))
-            .padding(horizontal = Spacing.xs, vertical = Spacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+            .padding(horizontal = 4.dp, vertical = 1.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (added > 0) {
@@ -378,7 +540,7 @@ internal fun DiffStatBadge(
                     fontWeight = FontWeight.Bold,
                     fontSize = 10.sp,
                 ),
-                color = DiffAddedColor,
+                color = DotSuccess,
             )
         }
         if (deleted > 0) {
@@ -389,7 +551,7 @@ internal fun DiffStatBadge(
                     fontWeight = FontWeight.Bold,
                     fontSize = 10.sp,
                 ),
-                color = DiffDeletedColor,
+                color = DotFailed,
             )
         }
     }
@@ -397,9 +559,7 @@ internal fun DiffStatBadge(
 
 private val DIFF_STAT_REGEX = Regex("""DIFF_STAT:\s*\+(\d+)\s*-(\d+)""")
 
-/**
- * 从工具输出或参数中解析代码变更统计（增加行数, 删除行数）。
- */
+/** 从工具输出或参数中解析代码变更统计（增加行数, 删除行数）。 */
 internal fun parseDiffStat(call: ToolCall, result: ToolResult?): Pair<Int, Int>? {
     // 若工具执行已完成且失败，不展示代码变更统计
     if (result != null && !result.success) return null
@@ -434,4 +594,3 @@ internal fun parseDiffStat(call: ToolCall, result: ToolResult?): Pair<Int, Int>?
         else -> null
     }
 }
-

@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="chat_command_workflow">Run workflow</string>
+    <string name="chat_command_workflow_description">Run a Tianyan workflow with /wf &lt;workflow ID&gt;</string>
     <string name="chat_web_image">Web image</string>
     <string name="chat_web_content">Web content</string>
     <string name="chat_open_link_failed">Unable to open this link</string>
@@ -18,11 +20,15 @@
     <string name="chat_interrupted">Execution interrupted</string>
     <string name="chat_parallel_running">Running in parallel</string>
     <string name="chat_subtask_count">%1$d subtasks running in parallel</string>
+    <string name="chat_subtask_progress">%1$d/%2$d completed</string>
+    <string name="chat_subtask_failed_count">%1$d failed</string>
     <string name="chat_execution_summary">Summary &amp; output</string>
     <string name="chat_subagent_running">A subagent is using sandbox tools and analyzing results. Its summary will appear here when complete…</string>
     <string name="chat_approval_request">Request approval</string>
     <string name="chat_approval_assisted">Assisted</string>
     <string name="chat_approval_full_access">Full access</string>
+    <string name="chat_run_mode_build">Build</string>
+    <string name="chat_run_mode_plan">Plan</string>
     <string name="chat_title">Agent</string>
     <string name="chat_default_workspace">Default workspace</string>
     <string name="chat_status">%1$s · %2$s</string>
@@ -30,6 +36,8 @@
     <string name="chat_approval_request_description">Ask before all writes, commands, and external tool calls</string>
     <string name="chat_approval_assisted_description">Run routine development actions automatically and ask for risky operations</string>
     <string name="chat_approval_full_access_description">Run tools without approval prompts</string>
+    <string name="chat_run_mode_build_description">Execute normally; tools follow the approval mode</string>
+    <string name="chat_run_mode_plan_description">Read-only planning; state-changing tools are blocked</string>
     <string name="chat_attachment_files_prompt">Analyze the following attached files:</string>
     <string name="chat_attachment_images_prompt">Analyze the attached images:</string>
     <string name="chat_attachment_mount_header">\n\n[Attachments copied and mounted in the Linux sandbox]\n</string>
@@ -45,6 +53,19 @@
     <string name="chat_input_running">Working… You can queue another request</string>
     <string name="chat_input_hint">Enter a request… Use @ for skills, MCP tools, and attachments</string>
     <string name="chat_context_usage">Context usage</string>
+    <string name="chat_context_title">Context Usage</string>
+    <string name="chat_context_full">%1$d%% Full</string>
+    <string name="chat_context_tokens_summary">~%1$s / %2$s Tokens</string>
+    <string name="chat_context_declared_limit">Model limit %1$s</string>
+    <string name="chat_context_system_prompt">System prompt</string>
+    <string name="chat_context_tool_definitions">Tool definitions</string>
+    <string name="chat_context_rules">Rules</string>
+    <string name="chat_context_skills">Skills</string>
+    <string name="chat_context_mcp_dynamic">MCP &amp; dynamic tools</string>
+    <string name="chat_context_subagent_definitions">Subagent definitions</string>
+    <string name="chat_context_summarized_conversation">Summarized conversation</string>
+    <string name="chat_context_conversation">Conversation</string>
+    <string name="chat_context_kv_cache">⚡ KV cache hit: %1$s (%2$d%%)</string>
     <string name="chat_system_prompt">System prompt</string>
     <string name="chat_tools">Tools</string>
     <string name="chat_conversation_messages">Conversation messages</string>
@@ -69,6 +90,7 @@
     <string name="chat_reasoning_copied">Reasoning copied</string>
     <string name="chat_deep_reasoning">Deep reasoning…</string>
     <string name="chat_reasoning_process">Reasoning process</string>
+    <string name="chat_reasoning_duration">Thought for %1$s s</string>
     <string name="chat_call_tool">Tool call</string>
     <string name="chat_approval_required">Your approval is required</string>
     <string name="chat_reject">Reject</string>
@@ -89,6 +111,23 @@
     <string name="chat_isolated_sandbox">Isolated sandbox</string>
     <string name="chat_new_session">New session</string>
     <string name="chat_rename_session">Rename session</string>
+    <string name="chat_drawer_new_task">New Task</string>
+    <string name="chat_drawer_projects">Projects</string>
+    <string name="chat_drawer_bot_sessions">Bot sessions</string>
+    <string name="chat_drawer_attention">%1$d sessions need attention</string>
+    <string name="chat_hide_session">Hide session</string>
+    <string name="chat_hidden_sessions">%1$d hidden sessions</string>
+    <string name="chat_hidden_sessions_title">Hidden sessions</string>
+    <string name="chat_restore_session">Restore</string>
+    <string name="chat_restore_all_sessions">Restore all</string>
+    <string name="chat_drawer_bot_sessions_other">Other sessions</string>
+    <string name="chat_drawer_recent">Recent</string>
+    <string name="chat_drawer_no_projects">No linked projects</string>
+    <string name="chat_drawer_no_sessions_in_project">No sessions yet; tap + to create</string>
+    <string name="chat_drawer_no_recent_sessions">No unlinked sessions</string>
+    <string name="chat_drawer_create_in_project">Create new session in this project</string>
+    <string name="chat_drawer_quick_skills">Extensions &amp; Skills</string>
+    <string name="chat_drawer_quick_runtime">Runtime Activity</string>
     <string name="chat_title_label">Title</string>
     <string name="chat_save">Save</string>
     <string name="chat_select_model">Select provider</string>
@@ -115,9 +154,8 @@
     <string name="chat_session_name_hint">Enter a session name…</string>
     <string name="chat_link_workspace">Linked workspace (agent tools run here by default):</string>
     <string name="chat_no_workspace">No workspace (chat and global Linux only)</string>
-    <string name="chat_project_type_manual">Select manually</string>
-    <string name="chat_project_type_detected">Detected automatically; editable</string>
-    <string name="chat_agent_project_type">Agent project type</string>
+    <string name="chat_project_type_manual">Agent project type (select manually)</string>
+    <string name="chat_project_type_detected">Agent project type (detected automatically; editable)</string>
     <string name="chat_select">Select</string>
     <string name="chat_create_session">Create session</string>
     <string name="chat_no_arguments">(no arguments)</string>
@@ -169,8 +207,6 @@
     <string name="chat_reverse_decode">Unpack and decompile</string>
     <string name="chat_reverse_decode_description">Run the JADX or apktool unpacking workflow</string>
     <string name="chat_reverse_decode_prompt">Safely unpack and decompile the original APK in this project. Preserve the original file and write output to a new directory.</string>
-    <string name="chat_command_workflow">Workflows</string>
-    <string name="chat_command_workflow_description">Launch a saved workflow (DAG automation)</string>
     <string name="chat_command_run">Run code</string>
     <string name="chat_command_run_description">Run the current workspace entry point, such as python main.py or npm start</string>
     <string name="chat_command_install">Install dependencies</string>
@@ -194,7 +230,7 @@
     <string name="chat_mcp_category">MCP service</string>
     <string name="chat_downloading_prefix">Downloading:</string>
     <string name="chat_verifying_download">Verifying downloaded file</string>
-    <!-- Branch & runtime workbench -->
+    <!-- Branch &amp; runtime workbench -->
     <string name="chat_main_line">Main</string>
     <string name="chat_branch_count">%1$d paths</string>
     <string name="chat_branch_pill_title">Branch</string>
@@ -202,8 +238,6 @@
     <string name="chat_runtime_details">Runtime</string>
     <string name="chat_round_number">Round %1$d</string>
     <string name="chat_event_count">%1$d events</string>
-    <string name="chat_runtime_round_status">Running · round %1$d</string>
-    <string name="chat_runtime_event_status">Running · %1$d events</string>
     <string name="chat_workbench_collapse">Collapse workbench</string>
     <string name="chat_workbench_expand">Expand workbench</string>
     <string name="chat_action_convert_to_steer">Convert to steer</string>
@@ -225,6 +259,8 @@
     <string name="chat_subagent_loading">Loading subagent results…</string>
     <string name="chat_subagent_task">Research task</string>
     <string name="chat_subagent_final_result">Final result</string>
+    <string name="chat_subagent_partial_result">Last progress (task ended abnormally)</string>
+    <string name="chat_subagent_partial_hint">This subtask timed out or was interrupted; what follows is its last working state, not a final conclusion.</string>
     <string name="chat_subagent_no_result">This subagent did not produce a text result.</string>
     <string name="chat_subagent_pending">This subagent is still running. Tap “Refresh result” when it finishes.</string>
     <string name="chat_subagent_process">Research process · %1$d records · %2$d tool calls</string>
@@ -294,7 +330,7 @@
     <string name="chat_rewind_switched">Switched to the rewind branch</string>
     <string name="chat_rewind_no_checkpoint">No undoable changes recorded for this turn (only turns with file writes are recorded)</string>
     <string name="chat_rewind_failed">Rewind failed: %1$s</string>
-    <!-- Top bar menu & permission snackbar -->
+    <!-- Top bar menu &amp; permission snackbar -->
     <string name="chat_snackbar_grant">Grant</string>
     <string name="chat_snackbar_got_it">Got it</string>
     <string name="chat_workbench_menu">Agent workbench menu</string>
@@ -308,7 +344,6 @@
     <string name="chat_menu_capabilities_subtitle">%1$d activated</string>
     <string name="chat_menu_approval_mode">Approval mode</string>
     <string name="chat_open_session_list">Session list</string>
-    <string name="chat_open_logs">Logs</string>
     <string name="chat_new_session_button">New session</string>
     <string name="chat_add_attachment">Add attachment</string>
     <string name="chat_mount_capabilities">Mount capabilities</string>
@@ -319,7 +354,12 @@
     <string name="chat_approval_request_title">Ask mode (safe)</string>
     <string name="chat_approval_assisted_title">Assisted mode (semi-auto)</string>
     <string name="chat_approval_full_access_title">Full access (fastest)</string>
-    <!-- Capability chips & badges -->
+    <!-- Run intent selection -->
+    <string name="chat_menu_run_mode">Run intent</string>
+    <string name="chat_run_mode_hint">Decides whether the agent acts or only plans this round. Orthogonal to the approval mode above — they can combine, e.g. "Full access + Plan":</string>
+    <string name="chat_run_mode_build_title">Build mode (act)</string>
+    <string name="chat_run_mode_plan_title">Plan mode (read-only)</string>
+    <!-- Capability chips &amp; badges -->
     <string name="chat_pinned_badge">Pinned</string>
     <string name="chat_attach_button">Mount</string>
     <string name="chat_pinned_on">📌 Pinned</string>
@@ -327,15 +367,35 @@
     <string name="chat_mcp_badge">MCP</string>
     <string name="chat_capability_skill_fmt">Skill: %1$s</string>
     <string name="chat_capability_mcp_fmt">MCP: %1$s</string>
+    <string name="chat_model_switch_to_fmt">Switched to %1$s</string>
+    <string name="chat_model_switch_from_to_fmt">Switched from %1$s to %2$s</string>
+    <string name="chat_model_switch_window_fmt">Context window %1$s</string>
+    <string name="chat_model_switch_compacted_fmt">Compacted %2$d earlier messages for the %1$s window</string>
+    <string name="chat_model_switch_pending_fmt">Will compact earlier messages for the %1$s window on the next turn</string>
+    <string name="chat_message_feedback">Rate this response</string>
+    <string name="chat_message_feedback_title">Rate this response</string>
+    <string name="chat_message_feedback_up">👍 Helpful</string>
+    <string name="chat_message_feedback_down">👎 Problematic</string>
+    <string name="chat_message_feedback_note_hint">Details (optional)</string>
+    <string name="chat_message_feedback_submit">Submit</string>
+    <string name="chat_message_feedback_saved">Recorded, thanks for the feedback</string>
+    <string name="chat_message_feedback_failed">Submit failed, try again later</string>
+    <string name="chat_message_feedback_unavailable">No active session</string>
+    <string name="chat_turn_changes_created_fmt">%1$d created</string>
+    <string name="chat_turn_changes_modified_fmt">%1$d modified</string>
+    <string name="chat_turn_changes_touched_fmt">%1$d touched</string>
     <string name="chat_collapse">Collapse</string>
     <string name="chat_expand_more">Show %1$d more steps (of %2$d)%3$s</string>
-    <!-- Attachment menu & processing -->
+    <!-- Attachment menu &amp; processing -->
     <string name="chat_send_image">Send images</string>
     <string name="chat_send_file">Send files / artifacts</string>
     <string name="chat_remove_attachment">Remove attachment</string>
     <string name="chat_attachment_processing">Processing attachments…</string>
     <string name="chat_attachment_process_failed">%1$d attachment(s) failed to process, please retry</string>
-    <string name="chat_attachment_missing">Attachment file no longer exists, cannot open: %1$s</string>
+    <string name="chat_attachment_too_large">%1$d file(s) exceed the size limit (max %2$s) and were not added</string>
+    <string name="chat_skill_suggestion_created">Created skill “%1$s”</string>
+    <string name="chat_skill_suggestion_updated">Updated skill “%1$s”</string>
+    <string name="chat_skill_suggestion_apply_failed">Failed to apply skill suggestion: %1$s</string>
     <!-- Model form validation -->
     <string name="chat_provider_label">Provider</string>
     <string name="chat_base_url_invalid">Base URL must start with http:// or https://</string>
@@ -358,7 +418,7 @@
     <string name="chat_clear_scratchpad_message">• All task scratchpads in this session will be cleared. This cannot be undone.</string>
     <string name="chat_delete_memory_title">Delete this memory?</string>
     <string name="chat_delete_memory_message">• The model will no longer remember this fact. This cannot be undone.</string>
-    <!-- Tool & MCP state semantics -->
+    <!-- Tool &amp; MCP state semantics -->
     <string name="chat_tool_state_running">Tool running</string>
     <string name="chat_tool_state_success">Tool succeeded</string>
     <string name="chat_tool_state_failed">Tool failed</string>
@@ -377,7 +437,7 @@
     <string name="chat_tool_detail_args_truncated">… (truncated)</string>
     <string name="chat_tool_detail_view_raw">View raw arguments</string>
     <string name="chat_tool_detail_hide_raw">Hide raw arguments</string>
-    <!-- Code block & artifact -->
+    <!-- Code block &amp; artifact -->
     <string name="chat_code_badge">CODE</string>
     <string name="chat_artifact_preview">Preview</string>
     <string name="chat_artifact_mode_preview">Preview</string>
@@ -413,7 +473,70 @@
     <string name="chat_floating_send">Send</string>
     <string name="chat_floating_stop">Stop</string>
     <string name="chat_floating_close">Close Float</string>
+    <string name="chat_floating_reveal">Show agent floating window</string>
     <string name="chat_floating_idle">Ready</string>
     <string name="chat_floating_thinking">🧠 Thinking…</string>
     <string name="chat_floating_running">⚡ Executing…</string>
+    <string name="chat_context_compaction_threshold">History compacts at %1$s (%2$d%%)</string>
+    <string name="chat_request_context_title">Recent request context</string>
+    <string name="chat_request_context_close">Close</string>
+    <string name="chat_request_context_notice">Inspect the eight most recent constructed requests in this session, including earlier runs, after protocol conversion and redaction. Media and opaque data are omitted. Construction does not confirm server receipt. Snapshots are encrypted on this device for up to eight active sessions and excluded from system backups.</string>
+    <string name="chat_request_context_empty">No request snapshot yet. Send a message to capture one.</string>
+    <string name="chat_request_archive_memory">Snapshots are kept only in memory.</string>
+    <string name="chat_request_archive_loading">Loading local snapshots…</string>
+    <string name="chat_request_archive_saving">Encrypting and saving; the latest snapshots are not all on disk yet…</string>
+    <string name="chat_request_archive_saved">Local snapshots saved and available after restart.</string>
+    <string name="chat_request_archive_error">Could not read or save local snapshots. Current previews remain available but may be missing after restart.</string>
+    <string name="chat_request_archive_delete_error">Could not clear request snapshots. The session has not been deleted and input is paused. Please retry deletion.</string>
+    <string name="chat_request_context_attempt">Run %1$s · Round %2$d · Request %3$d · %4$s</string>
+    <string name="chat_request_context_diff_summary">Compared with previous capture: %1$d added · %2$d removed · %3$d changed · %4$d unchanged</string>
+    <string name="chat_request_context_diff_notice">Compares full redacted fields before display clipping. Messages match by position. Changes to media and opaque data are excluded.</string>
+    <string name="chat_request_context_diff_partial">Fields exceeded the capture limit; this comparison is incomplete.</string>
+    <string name="chat_request_context_diff_added">Added: %1$s</string>
+    <string name="chat_request_context_diff_removed">Removed: %1$s</string>
+    <string name="chat_request_context_diff_changed">Changed: %1$s</string>
+    <string name="chat_request_context_previous">Previous capture</string>
+    <string name="chat_request_context_current">Current capture</string>
+    <string name="chat_request_context_metadata">Protocol endpoint: %1$s · Original body: %2$d bytes</string>
+    <string name="chat_request_context_clipped">The preview was shortened for display. This does not change the request sent to the model or indicate history compaction.</string>
+    <string name="chat_request_context_search">Search fields or content</string>
+    <string name="chat_request_context_no_matches">No matching preview content.</string>
+    <string name="chat_request_context_expand">Expand %1$s</string>
+    <string name="chat_request_context_collapse">Collapse %1$s</string>
+    <string name="chat_share_received">Shared content received</string>
+    <string name="chat_share_chip_summarize">Summarize</string>
+    <string name="chat_share_chip_translate">Translate to Chinese</string>
+    <string name="chat_share_chip_save">Save to sandbox</string>
+    <!-- Sandbox toolchain panel -->
+    <string name="toolchain_title">Sandbox Toolchain</string>
+    <string name="toolchain_subtitle">Reverse · Build · Debug probes</string>
+    <string name="toolchain_entry">Toolchain</string>
+    <string name="toolchain_entry_gap">Toolchain •</string>
+    <string name="toolchain_detecting">Probing sandbox tools…</string>
+    <string name="toolchain_detect_failed">Probe failed: sandbox may not be running. Initialize the Linux sandbox first.</string>
+    <string name="toolchain_repair_all">Repair %1$d items</string>
+    <string name="toolchain_repairing">Repairing…</string>
+    <string name="toolchain_recheck">Recheck</string>
+    <string name="toolchain_group_native">Native build</string>
+    <string name="toolchain_group_reverse">Reverse engineering</string>
+    <string name="toolchain_group_debug">Debug &amp; tracing</string>
+    <string name="toolchain_status_ready">Ready</string>
+    <string name="toolchain_status_outdated">Outdated</string>
+    <string name="toolchain_status_missing">Missing</string>
+    <string name="toolchain_status_needs_root">Needs root</string>
+    <string name="toolchain_status_unknown">Unknown</string>
+    <string name="toolchain_chip_ready">Ready %1$d</string>
+    <string name="toolchain_chip_missing">Missing %1$d</string>
+    <string name="toolchain_chip_outdated">Outdated %1$d</string>
+    <string name="toolchain_chip_needs_root">Root %1$d</string>
+    <string name="toolchain_chip_unknown">Unknown %1$d</string>
+    <string name="toolchain_root_banner">Installed, but requires root to drive: %1$s</string>
+    <string name="toolchain_manual_only">Cannot auto-repair, install manually via dev suite: %1$s</string>
+    <string name="toolchain_log_empty">No auto-repairable items (install the rest manually via dev suite)</string>
+    <string name="toolchain_confirm_title">Confirm toolchain repair</string>
+    <string name="toolchain_confirm_components">Dev-kit components: %1$s</string>
+    <string name="toolchain_confirm_packages">apt packages: %1$s</string>
+    <string name="toolchain_confirm_large">Android components are large downloads and may take a while.</string>
+    <string name="toolchain_confirm_ok">Install</string>
+    <string name="toolchain_confirm_cancel">Cancel</string>
 </resources>

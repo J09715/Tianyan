@@ -1,251 +1,113 @@
 package top.tianyan.app.ui.workspace
-
-import top.tianyan.app.ui.components.RuntimeAlertDialog
-
-import android.Manifest
-import android.graphics.BitmapFactory
-import android.content.Context
+import top.tianyan.app.ui.components.previewOrNull
+import top.tianyan.app.ui.components.previewStateOf
+import org.koin.compose.viewmodel.koinViewModel
 import android.content.Intent
-import android.content.pm.ApplicationInfo
-import android.net.Uri
-import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.grid.items
+import top.tianyan.app.ui.components.fullWidthItem
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import top.tianyan.app.ui.components.RuntimeButton as Button
-import top.tianyan.app.ui.components.RuntimeFilledTonalButton as FilledTonalButton
-import top.tianyan.app.ui.components.RuntimeCheckbox as Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenu
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.FilterChip
-import top.tianyan.app.ui.components.RuntimeIconButton as IconButton
-import top.tianyan.app.ui.components.RuntimeLinearProgressIndicator as LinearProgressIndicator
-import top.tianyan.app.ui.components.RuntimeCircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import top.tianyan.app.ui.components.RuntimeOutlinedButton as OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import top.tianyan.app.ui.components.RuntimeTextButton as TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.mapSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.res.stringResource
-import top.tianyan.app.feature.workspace.R
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import top.tianyan.app.feature.workspace.R
 import top.tianyan.app.runtime.ApkImportSource
-import top.tianyan.app.runtime.GitTransport
-import top.tianyan.app.runtime.ProjectArchiveSource
 import top.tianyan.app.runtime.ProjectType
 import top.tianyan.app.runtime.WorkspaceProject
-import top.tianyan.app.ui.components.EmptyPanel
-import top.tianyan.app.ui.components.IconTile
+import top.tianyan.app.template.InstalledProjectTemplate
 import top.tianyan.app.ui.components.MainDestination
 import top.tianyan.app.ui.components.NoticeBanner
-import top.tianyan.app.ui.components.RuntimeBottomBar
-import top.tianyan.app.ui.components.liquidGlassContent
 import top.tianyan.app.ui.components.RuntimeCard
-import top.tianyan.app.ui.components.SkeletonBlock
-import top.tianyan.app.ui.components.SkeletonCircle
-import top.tianyan.app.ui.components.SkeletonTextLine
+import top.tianyan.app.ui.components.RuntimeCircularProgressIndicator
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
+import top.tianyan.app.ui.components.RuntimeIconButton as IconButton
+import top.tianyan.app.ui.components.RuntimeAlertDialog
+import top.tianyan.app.ui.components.RuntimeTopBar
+import top.tianyan.app.ui.components.RuntimeTextButton as TextButton
+import top.tianyan.app.ui.components.SectionHeader
 import top.tianyan.app.ui.components.SpotlightGuideOverlay
 import top.tianyan.app.ui.components.rememberSpotlightAnchor
 import top.tianyan.app.ui.components.spotlightAnchor
-import top.tianyan.app.ui.components.RuntimeTopBar
-import top.tianyan.app.ui.components.SectionHeader
-import top.tianyan.app.ui.theme.LocalLiquidGlassBackdrop
-import top.tianyan.app.ui.theme.Radius
-import top.tianyan.app.ui.theme.Spacing
-import top.tianyan.app.ui.theme.TianyanTheme
-import androidx.compose.foundation.gestures.scrollable
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.VerticalDivider
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableIntStateOf
-import kotlinx.coroutines.flow.Flow
-import top.tianyan.app.runtime.build.StepDuration
-import top.tianyan.app.template.TemplateProjectType
-import top.tianyan.app.template.InstalledProjectTemplate
-
-private enum class ProjectImportMode { LOCAL, GITHUB }
-private enum class CreateProjectStep { PROJECT_TYPE, EMPTY_DETAILS, TEMPLATE, DETAILS }
-
-@Composable
-private fun TemplatePreviewImage(file: java.io.File, modifier: Modifier = Modifier) {
-    val bitmap = remember(file.absolutePath, file.lastModified()) {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeFile(file.absolutePath, bounds)
-        var sample = 1
-        while (bounds.outWidth / sample > 512 || bounds.outHeight / sample > 512) sample *= 2
-        BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply { inSampleSize = sample })
-    }
-    bitmap?.let {
-        Image(
-            bitmap = it.asImageBitmap(),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = modifier,
-        )
-    }
-}
-
 /**
  * 天衍 · 工坊空间 (Workspace Space)
- * 管理 Linux 隔离工作区、代码工程与文件项目
- */
-/**
- * 工程卡片骨架。形状与真实 ProjectCard 对齐：40dp 图标位 + 两行标题/副标题 +
- * 右侧 32dp 圆点 + 底部右对齐两个按钮位。形状在这里描述，扫光由
- * `RuntimeSkeleton.kt` 统一提供，避免各屏各写一套 shimmer 导致速度/颜色不一致。
+ * 管理 Linux 隔离工作区、代码工程与文件项目。
+ *
+ * 本文件仅做装配：Scaffold 骨架 + 各向导/弹窗/卡片组件（见同包 WorkspaceXxx.kt）的编排。
  */
 @Composable
-private fun ProjectCardSkeleton(modifier: Modifier = Modifier) {
-    RuntimeCard(modifier = modifier.fillMaxWidth()) {
-        Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-            ) {
-                SkeletonBlock(modifier = Modifier.size(40.dp), shape = Radius.xsShape)
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
-                ) {
-                    SkeletonTextLine(widthFraction = 0.55f, height = 16.dp)
-                    SkeletonTextLine(widthFraction = 0.8f, height = 12.dp)
-                }
-                SkeletonCircle(size = 32.dp)
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(Spacing.sm, Alignment.End),
-            ) {
-                SkeletonBlock(modifier = Modifier.width(72.dp), height = 28.dp)
-                SkeletonBlock(modifier = Modifier.width(72.dp), height = 28.dp)
-            }
-        }
-    }
-}
-
-@Composable
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
-fun WorkspaceScreen(
+internal fun LocalWorkspaceScreen(
     onNavigate: (MainDestination) -> Unit,
     onOpenExplorer: (String) -> Unit,
     onOpenTerminal: (String) -> Unit,
     onOpenToolCenter: () -> Unit = {},
     onOpenWorkshopSettings: () -> Unit = {},
     onOpenWorkflows: (String) -> Unit = {},
-    viewModel: WorkspaceViewModel = hiltViewModel(),
+    viewModel: WorkspaceViewModel? = previewOrNull { koinViewModel() }, onBack: () -> Unit = { onNavigate(MainDestination.Agent) },
 ) {
-    val projects by viewModel.projects.collectAsStateWithLifecycle()
-    val busy by viewModel.busy.collectAsStateWithLifecycle()
-    val runtimeReady by viewModel.runtimeReady.collectAsStateWithLifecycle()
-    val message by viewModel.message.collectAsStateWithLifecycle()
-    val messageIsError by viewModel.messageIsError.collectAsStateWithLifecycle()
-    val buildProgress by viewModel.buildProgress.collectAsStateWithLifecycle()
-    val activeBuildingProjectName by viewModel.activeBuildingProjectName.collectAsStateWithLifecycle()
-    val isBuildDialogVisible by viewModel.isBuildDialogVisible.collectAsStateWithLifecycle()
-    val installedComponentIds by viewModel.installedComponentIds.collectAsStateWithLifecycle()
-    val keystores by viewModel.keystores.collectAsStateWithLifecycle()
-    val loadingProjects by viewModel.loadingProjects.collectAsStateWithLifecycle()
-    val githubImportProgress by viewModel.githubImportProgress.collectAsStateWithLifecycle()
-    val projectTemplates by viewModel.projectTemplates.collectAsStateWithLifecycle()
-    val templateScriptPreview by viewModel.templateScriptPreview.collectAsStateWithLifecycle()
+    val projects by viewModel?.projects?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val busy by viewModel?.busy?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val runtimeReady by viewModel?.runtimeReady?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val message by viewModel?.message?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val messageIsError by viewModel?.messageIsError?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val buildProgress by viewModel?.buildProgress?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val activeBuildingProjectName by viewModel?.activeBuildingProjectName?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val isBuildDialogVisible by viewModel?.isBuildDialogVisible?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val installedComponentIds by viewModel?.installedComponentIds?.collectAsStateWithLifecycle() ?: previewStateOf(emptySet())
+    val keystores by viewModel?.keystores?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val loadingProjects by viewModel?.loadingProjects?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val githubImportProgress by viewModel?.githubImportProgress?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val projectTemplates by viewModel?.projectTemplates?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val templateScriptPreview by viewModel?.templateScriptPreview?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val firstUseGuidesShown by viewModel?.firstUseGuidesShown?.collectAsStateWithLifecycle() ?: previewStateOf(emptySet())
     val context = LocalContext.current
-    // 弹窗开关与向导状态用 rememberSaveable，旋转后不丢失向导进度（S3）
+    val pluginDebug = rememberWorkspacePluginDebugAction(onOpenToolCenter)
+
+    // 弹窗开关用 rememberSaveable，旋转后不丢失向导进度（S3）
     var showCreate by rememberSaveable { mutableStateOf(false) }
     var showImport by rememberSaveable { mutableStateOf(false) }
     var showTemplateManager by rememberSaveable { mutableStateOf(false) }
     var showTemplateSpec by rememberSaveable { mutableStateOf(false) }
     var actionsExpanded by rememberSaveable { mutableStateOf(false) }
 
-    // 首次进入引导：高亮右上角「更多」菜单（内含插件中心与工坊设置入口）
-    val firstUseGuidesShown by viewModel.firstUseGuidesShown.collectAsStateWithLifecycle()
-    val moreAnchor = rememberSpotlightAnchor()
-    var selectedTemplate by rememberSaveable { mutableStateOf(top.tianyan.app.runtime.ProjectTemplate.EMPTY) }
-    var createProjectStep by rememberSaveable { mutableStateOf(CreateProjectStep.PROJECT_TYPE) }
-    val nullableProjectTypeSaver = androidx.compose.runtime.saveable.Saver<TemplateProjectType?, String>(
-        save = { it?.name },
-        restore = { name -> runCatching { TemplateProjectType.valueOf(name) }.getOrNull() },
-    )
-    var selectedProjectType by rememberSaveable(stateSaver = nullableProjectTypeSaver) { mutableStateOf<TemplateProjectType?>(null) }
-    var selectedTemplateId by rememberSaveable { mutableStateOf<String?>(null) }
-    var projectName by rememberSaveable { mutableStateOf("") }
-    var packageName by rememberSaveable { mutableStateOf("") }
-    // Map 不能直接进 Bundle，用 mapSaver 保存（键值均为 String）
-    val templateVariableValuesSaver = mapSaver(
-        save = { map -> map },
-        restore = { saved -> saved.mapValues { it.value.toString() } },
-    )
-    var templateVariableValues by rememberSaveable(stateSaver = templateVariableValuesSaver) { mutableStateOf<Map<String, String>>(emptyMap()) }
-    var trustTemplateScripts by rememberSaveable { mutableStateOf(false) }
+    // 向导状态屏幕级持有：字段全部 rememberSaveable，与拆分前语义一致
+    val createWizard = rememberCreateProjectWizardState()
+    val importWizard = rememberImportProjectWizardState()
     // 复杂对象（工程/模板/来源选择）旋转后需重新选择，保留 remember
     var deleteTarget by remember { mutableStateOf<WorkspaceProject?>(null) }
-    var apkSource by remember { mutableStateOf<ApkImportSource?>(null) }
-    var showAppPicker by rememberSaveable { mutableStateOf(false) }
-    var exportApkToDownload by rememberSaveable { mutableStateOf(false) }
-    var createInProgress by rememberSaveable { mutableStateOf(false) }
-    var importMode by rememberSaveable { mutableStateOf(ProjectImportMode.LOCAL) }
-    var importProjectName by rememberSaveable { mutableStateOf("") }
-    var importDirectoryPath by rememberSaveable { mutableStateOf("") }
-    var importDirectoryMenuExpanded by rememberSaveable { mutableStateOf(false) }
-    var importProjectType by rememberSaveable { mutableStateOf(ProjectType.ANDROID) }
-    var archiveSource by remember { mutableStateOf<ProjectArchiveSource?>(null) }
-    var importGitUrl by rememberSaveable { mutableStateOf("") }
-    var gitTransport by rememberSaveable { mutableStateOf(GitTransport.HTTP) }
-    var importInProgress by rememberSaveable { mutableStateOf(false) }
     var pendingExportProject by remember { mutableStateOf<WorkspaceProject?>(null) }
     var buildConfigTarget by remember { mutableStateOf<WorkspaceProject?>(null) }
     var pendingExportTemplateId by remember { mutableStateOf<String?>(null) }
@@ -261,20 +123,14 @@ fun WorkspaceScreen(
                 )
             }
             val displayName = queryDisplayName(context, uri) ?: "target.apk"
-            apkSource = ApkImportSource.FromFileUri(uri.toString(), displayName)
+            createWizard.apkSource = ApkImportSource.FromFileUri(uri.toString(), displayName)
         }
     }
-    val archivePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            val displayName = queryDisplayName(context, uri) ?: "project.zip"
-            archiveSource = ProjectArchiveSource(uri.toString(), displayName)
-            if (importProjectName.isBlank()) {
-                importProjectName = displayName.substringBeforeLast('.').filter {
-                    it.isLetterOrDigit() || it == '.' || it == '_' || it == '-'
-                }
+    val archivePicker = rememberWorkspaceArchivePicker { source ->
+        importWizard.archiveSource = source
+        if (importWizard.importProjectName.isBlank()) {
+            importWizard.importProjectName = source.fileName.substringBeforeLast('.').filter {
+                it.isLetterOrDigit() || it == '.' || it == '_' || it == '-'
             }
         }
     }
@@ -283,7 +139,7 @@ fun WorkspaceScreen(
             runCatching {
                 context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            viewModel.importProjectTemplate(uri.toString())
+            viewModel?.importProjectTemplate(uri.toString())
         }
     }
     val templateExportPicker = rememberLauncherForActivityResult(
@@ -291,7 +147,7 @@ fun WorkspaceScreen(
     ) { uri ->
         val templateId = pendingExportTemplateId
         pendingExportTemplateId = null
-        if (uri != null && templateId != null) viewModel.exportProjectTemplate(templateId, uri.toString())
+        if (uri != null && templateId != null) viewModel?.exportProjectTemplate(templateId, uri.toString())
     }
     val exportDirectoryPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         val project = pendingExportProject
@@ -303,637 +159,191 @@ fun WorkspaceScreen(
                     Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
                 )
             }
-            viewModel.exportProject(project, uri.toString())
-        }
-    }
-
-    val glassBackdrop = LocalLiquidGlassBackdrop.current
-    // 首次引导遮罩与 Scaffold 放在同一 Box 下（同层兄弟节点），保证聚光灯坐标与按钮 boundsInRoot 同一参照系
-    Box(modifier = Modifier.fillMaxSize()) {
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            RuntimeTopBar(
-                title = stringResource(R.string.workspace_title),
-                statusText = stringResource(R.string.workspace_active_projects, projects.size),
-            ) {
-                Box {
-                    IconButton(
-                        onClick = { actionsExpanded = true },
-                        enabled = !busy,
-                        modifier = Modifier.spotlightAnchor(moreAnchor),
-                        contentDescription = stringResource(R.string.workspace_cd_more),
-                    ) {
-                        RuntimeIcon(RuntimeIconName.More, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
-                    }
-                    DropdownMenu(expanded = actionsExpanded, onDismissRequest = { actionsExpanded = false }) {
-                        DropdownMenuItem(text = { Text(stringResource(R.string.workspace_menu_create)) }, leadingIcon = { RuntimeIcon(RuntimeIconName.Plus, Modifier.size(18.dp)) }, onClick = { actionsExpanded = false; showCreate = true })
-                        DropdownMenuItem(text = { Text(stringResource(R.string.workspace_menu_import)) }, leadingIcon = { RuntimeIcon(RuntimeIconName.FolderDownload, Modifier.size(18.dp)) }, onClick = { actionsExpanded = false; showImport = true })
-                        DropdownMenuItem(text = { Text(stringResource(R.string.workspace_menu_templates)) }, leadingIcon = { RuntimeIcon(RuntimeIconName.Package, Modifier.size(18.dp)) }, onClick = { actionsExpanded = false; showTemplateManager = true })
-                        DropdownMenuItem(text = { Text(stringResource(R.string.workspace_menu_plugins)) }, leadingIcon = { RuntimeIcon(RuntimeIconName.Package, Modifier.size(18.dp)) }, onClick = { actionsExpanded = false; onOpenToolCenter() })
-                        DropdownMenuItem(text = { Text(stringResource(R.string.workspace_menu_workflows)) }, leadingIcon = { RuntimeIcon(RuntimeIconName.Hub, Modifier.size(18.dp)) }, onClick = { actionsExpanded = false; onOpenWorkflows("") })
-                        DropdownMenuItem(text = { Text(stringResource(R.string.workspace_menu_settings)) }, leadingIcon = { RuntimeIcon(RuntimeIconName.Settings, Modifier.size(18.dp)) }, onClick = { actionsExpanded = false; onOpenWorkshopSettings() })
-                    }
-                }
-            }
-        },
-        bottomBar = {
-            if (glassBackdrop == null) {
-                RuntimeBottomBar(MainDestination.Workspace, onNavigate)
-            }
-        },
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .liquidGlassContent()
-                .padding(top = padding.calculateTopPadding()),
-            contentPadding = PaddingValues(start = Spacing.lg, end = Spacing.lg, top = Spacing.sm, bottom = 104.dp),
-            verticalArrangement = Arrangement.spacedBy(Spacing.md),
-        ) {
-            item {
-                message?.let { notice ->
-                    NoticeBanner(
-                        text = notice,
-                        isError = messageIsError,
-                    )
-                }
-
-                // 后台构建常驻状态栏 (Banner)
-                if (activeBuildingProjectName != null && !isBuildDialogVisible) {
-                    Surface(
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    shape = Radius.smShape,
-                    modifier = Modifier.fillMaxWidth().clickable { viewModel.showBuildDialog() },
-                    ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-                    ) {
-                        RuntimeCircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.5.dp,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                            Text(
-                                text = stringResource(R.string.workspace_building_project, activeBuildingProjectName.orEmpty()),
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            )
-                            Text(
-                                text = buildProgress?.step ?: stringResource(R.string.workspace_building),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        TextButton(onClick = { viewModel.showBuildDialog() }) {
-                            Text(stringResource(R.string.workspace_view_logs), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                        }
-                    }
-                    }
-                } else if (activeBuildingProjectName == null && buildProgress != null && !isBuildDialogVisible) {
-                    val progress = buildProgress!!
-                    Surface(
-                    color = if (progress.isSuccess == true) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.errorContainer,
-                    shape = Radius.smShape,
-                    modifier = Modifier.fillMaxWidth(),
-                    ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-                    ) {
-                        RuntimeIcon(
-                            if (progress.isSuccess == true) RuntimeIconName.Check else RuntimeIconName.Close,
-                            Modifier.size(18.dp),
-                            tint = if (progress.isSuccess == true) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onErrorContainer,
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = stringResource(if (progress.isSuccess == true) R.string.workspace_build_ready else R.string.workspace_build_failed),
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                color = if (progress.isSuccess == true) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onErrorContainer,
-                            )
-                            progress.message?.let {
-                                Text(
-                                    text = it,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = if (progress.isSuccess == true) MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                            if (progress.isSuccess == true && progress.apkPath != null) {
-                                TextButton(onClick = { viewModel.launchInstaller(progress.apkPath!!) }) {
-                                    Text(stringResource(R.string.workspace_install), fontWeight = FontWeight.Bold)
-                                }
-                            }
-                            TextButton(onClick = { viewModel.showBuildDialog() }) {
-                                Text(stringResource(R.string.workspace_details))
-                            }
-                            IconButton(
-                                onClick = { viewModel.dismissBuildProgress() },
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .minimumInteractiveComponentSize(),
-                                contentDescription = stringResource(R.string.workspace_cd_dismiss),
-                            ) {
-                                RuntimeIcon(RuntimeIconName.Close, Modifier.size(14.dp))
-                            }
-                        }
-                    }
-                    }
-                }
-            }
-
-            item {
-                // 宿主外部存储快速访问入口
-                RuntimeCard(
-                modifier = Modifier.fillMaxWidth(),
-                borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
-                onClick = { onOpenExplorer("sdcard") },
-                contentPadding = PaddingValues(Spacing.md),
-                ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        RuntimeIcon(
-                            RuntimeIconName.Folder,
-                            Modifier.size(20.dp),
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                    }
-
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                        Text(
-                            text = stringResource(R.string.workspace_shared_storage),
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Text(
-                            text = stringResource(R.string.workspace_shared_storage_description),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-
-                    RuntimeIcon(
-                        RuntimeIconName.ChevronRight,
-                        Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                }
-            }
-
-            item {
-                SectionHeader(
-                    title = stringResource(R.string.workspace_projects_section),
-                    subtitle = stringResource(R.string.workspace_projects_description),
-                )
-            }
-
-            if (loadingProjects) {
-                item {
-                    repeat(3) { index ->
-                        ProjectCardSkeleton(
-                            modifier = Modifier.padding(top = if (index == 0) 16.dp else 0.dp),
-                        )
-                    }
-                }
-            } else if (projects.isEmpty()) {
-                item {
-                    EmptyPanel(
-                        icon = RuntimeIconName.Workspace,
-                        title = stringResource(R.string.workspace_no_projects),
-                        description = stringResource(R.string.workspace_no_projects_description),
-                        modifier = Modifier.padding(top = Spacing.xl),
-                    )
-                }
-            } else {
-                items(projects, key = { it.name }) { project ->
-                    ProjectCard(
-                        project = project,
-                        busy = busy,
-                        isBuilding = (activeBuildingProjectName == project.name),
-                        onOpenExplorer = { onOpenExplorer(project.name) },
-                        onOpenTerminal = { onOpenTerminal(project.name) },
-                        onOpenAgent = { onNavigate(MainDestination.Agent) },
-                        onRunProject = { buildConfigTarget = project },
-                        onShowBuildLog = { viewModel.showBuildDialog() },
-                        onExport = {
-                            pendingExportProject = project
-                            exportDirectoryPicker.launch(null)
-                        },
-                        onDelete = { deleteTarget = project },
-                    )
-                }
-            }
-
-
-            item { Spacer(Modifier.height(Spacing.lg)) }
+            viewModel?.exportProject(project, uri.toString())
         }
     }
 
     // 首次进入引导：高亮右上角「更多」菜单（内含插件中心与工坊设置入口）
-    if ("workspace_more_menu" !in firstUseGuidesShown) {
-        SpotlightGuideOverlay(
-            anchor = moreAnchor,
-            title = stringResource(R.string.workspace_guide_more_title),
-            message = stringResource(R.string.workspace_guide_more_message),
-            onDismiss = { viewModel.markFirstUseGuideShown("workspace_more_menu") },
-        )
-    }
+    val moreAnchor = rememberSpotlightAnchor()
+    // 引导遮罩与 Scaffold 放在同一 Box 下（同层兄弟节点），保证聚光灯坐标与按钮 boundsInRoot 同一参照系
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
+            topBar = {
+                RuntimeTopBar(
+                    title = stringResource(R.string.workspace_title), onBack = onBack,
+                    statusText = stringResource(R.string.workspace_active_projects, projects.size),
+                ) {
+                    Box {
+                        IconButton(
+                            onClick = { actionsExpanded = true },
+                            enabled = !busy,
+                            modifier = Modifier.spotlightAnchor(moreAnchor),
+                            contentDescription = stringResource(R.string.workspace_cd_more),
+                        ) {
+                            RuntimeIcon(RuntimeIconName.More, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                        }
+                        DropdownMenu(expanded = actionsExpanded, onDismissRequest = { actionsExpanded = false }) {
+                            DropdownMenuItem(text = { Text(stringResource(R.string.workspace_menu_create)) }, leadingIcon = { RuntimeIcon(RuntimeIconName.Plus, Modifier.size(18.dp)) }, onClick = { actionsExpanded = false; showCreate = true })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.workspace_menu_import)) }, leadingIcon = { RuntimeIcon(RuntimeIconName.FolderDownload, Modifier.size(18.dp)) }, onClick = { actionsExpanded = false; showImport = true })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.workspace_menu_templates)) }, leadingIcon = { RuntimeIcon(RuntimeIconName.Package, Modifier.size(18.dp)) }, onClick = { actionsExpanded = false; showTemplateManager = true })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.workspace_menu_plugins)) }, leadingIcon = { RuntimeIcon(RuntimeIconName.Package, Modifier.size(18.dp)) }, onClick = { actionsExpanded = false; onOpenToolCenter() })
+                            DropdownMenuItem(text = { Text("工作流") }, leadingIcon = { RuntimeIcon(RuntimeIconName.Hub, Modifier.size(18.dp)) }, onClick = { actionsExpanded = false; onOpenWorkflows("") })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.workspace_menu_settings)) }, leadingIcon = { RuntimeIcon(RuntimeIconName.Settings, Modifier.size(18.dp)) }, onClick = { actionsExpanded = false; onOpenWorkshopSettings() })
+                        }
+                    }
+                }
+            },
+        ) { padding ->
+            androidx.compose.foundation.lazy.grid.LazyVerticalGrid(columns = androidx.compose.foundation.lazy.grid.GridCells.Adaptive(340.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(top.tianyan.app.ui.components.runtimeScrollViewport(padding)),
+                contentPadding = top.tianyan.app.ui.components.runtimeScrollContentPadding(padding, top.tianyan.app.ui.components.runtimeContentPadding(horizontal = 16.dp, top = 6.dp, bottom = 24.dp)),
+                verticalArrangement = Arrangement.spacedBy(14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                fullWidthItem {
+                    message?.let { notice ->
+                        NoticeBanner(
+                            text = notice,
+                            isError = messageIsError,
+                        )
+                    }
+
+                    // 后台构建常驻状态栏 (Banner)
+                    WorkspaceBuildStatusBanner(
+                        buildProgress = buildProgress,
+                        activeBuildingProjectName = activeBuildingProjectName,
+                        isBuildDialogVisible = isBuildDialogVisible,
+                        onShowDialog = { viewModel?.showBuildDialog() },
+                        onLaunchInstaller = { arg0 -> viewModel?.launchInstaller(arg0) },
+                        onDismiss = { viewModel?.dismissBuildProgress() },
+                    )
+                }
+
+                fullWidthItem {
+                    // 宿主外部存储快速访问入口
+                    RuntimeCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                        onClick = { onOpenExplorer("sdcard") },
+                        contentPadding = PaddingValues(14.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primaryContainer),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                RuntimeIcon(
+                                    RuntimeIconName.Folder,
+                                    Modifier.size(20.dp),
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                )
+                            }
+
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(2.dp),
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.workspace_shared_storage),
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                                Text(
+                                    text = stringResource(R.string.workspace_shared_storage_description),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+
+                            RuntimeIcon(
+                                RuntimeIconName.ChevronRight,
+                                Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+
+                fullWidthItem {
+                    SectionHeader(
+                        title = stringResource(R.string.workspace_projects_section),
+                        subtitle = stringResource(R.string.workspace_projects_description),
+                    )
+                }
+
+                if (loadingProjects) {
+                    fullWidthItem {
+                        repeat(3) { index ->
+                            ProjectCardSkeleton(
+                                modifier = Modifier.padding(top = if (index == 0) 16.dp else 0.dp),
+                            )
+                        }
+                    }
+                } else if (projects.isEmpty()) {
+                    fullWidthItem {
+                        WorkspaceEmptyState(
+                            enabled = !busy,
+                            onCreate = { showCreate = true },
+                            onImport = { showImport = true },
+                        )
+                    }
+                } else {
+                    items(projects, key = { it.name }) { project ->
+                        ProjectCard(
+                            project = project,
+                            busy = busy || pluginDebug.busy,
+                            isBuilding = (activeBuildingProjectName == project.name),
+                            onOpenExplorer = { onOpenExplorer(project.name) },
+                            onOpenTerminal = { onOpenTerminal(project.name) },
+                            onOpenAgent = { onNavigate(MainDestination.Agent) },
+                            onOpenWorkflows = { onOpenWorkflows(project.name) },
+                            onRunProject = {
+                                if (project.projectType == ProjectType.TIANYAN_PLUGIN) pluginDebug.start(project)
+                                else buildConfigTarget = project
+                            },
+                            onShowBuildLog = { viewModel?.showBuildDialog() },
+                            onExport = {
+                                pendingExportProject = project
+                                exportDirectoryPicker.launch(null)
+                            },
+                            onDelete = { deleteTarget = project },
+                        )
+                    }
+                }
+
+                fullWidthItem { Spacer(Modifier.height(16.dp)) }
+            }
+        }
+
+        // 首次进入引导遮罩
+        if ("workspace_more_menu" !in firstUseGuidesShown) {
+            SpotlightGuideOverlay(
+                anchor = moreAnchor,
+                title = stringResource(R.string.workspace_guide_more_title),
+                message = stringResource(R.string.workspace_guide_more_message),
+                onDismiss = { viewModel?.markFirstUseGuideShown("workspace_more_menu") },
+            )
+        }
     } // Box
 
     // 运行/构建进度与实时日志弹窗 (支持后台运行与随时最小化)
     if (isBuildDialogVisible && buildProgress != null) {
-        val progress = buildProgress!!
-        var showBuildLog by remember { mutableStateOf(false) }
-        var showStepAnalysis by remember { mutableStateOf(false) }
-        // Category collapse states: dependencies & others collapsed by default; compile & package expanded
-        var collapsedDeps by remember { mutableStateOf(true) }
-        var collapsedCompile by remember { mutableStateOf(false) }
-        var collapsedPackage by remember { mutableStateOf(false) }
-        var collapsedOther by remember { mutableStateOf(true) }
-
-        RuntimeAlertDialog(
-            onDismissRequest = { viewModel.hideBuildDialog() },
-            title = {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                ) {
-                    if (progress.isRunning) {
-                        RuntimeCircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                    }
-                    Text(stringResource(if (progress.isRunning) R.string.workspace_building_device else if (progress.isSuccess == true) R.string.workspace_run_ready else R.string.workspace_run_failed), fontWeight = FontWeight.Bold)
-                }
-            },
-            text = {
-                Column(
-                    modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.md),
-                ) {
-                    Text(progress.step, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium))
-                    if (progress.isRunning) {
-                        LinearProgressIndicator(
-                            progress = { progress.progress },
-                            modifier = Modifier.fillMaxWidth().height(6.dp).clip(Radius.xsShape),
-                        )
-                    }
-                    if (progress.currentDependency != null || progress.dependencyItemsObserved > 0) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
-                            shape = Radius.xsShape,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.sm),
-                                verticalArrangement = Arrangement.spacedBy(Spacing.xs),
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Text(
-                                        text = stringResource(R.string.workspace_dependency_activity),
-                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                        color = MaterialTheme.colorScheme.primary,
-                                    )
-                                    val countText = progress.dependenciesTotal?.let { total ->
-                                        stringResource(R.string.workspace_dependency_count_total, progress.dependencyItemsObserved, total)
-                                    } ?: stringResource(R.string.workspace_dependency_count, progress.dependencyItemsObserved)
-                                    Text(countText, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                                progress.currentDependency?.let { dependency ->
-                                    Text(
-                                        text = dependency,
-                                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
-                                progress.dependencyProgressPercent?.let { percent ->
-                                    LinearProgressIndicator(
-                                        progress = { percent / 100f },
-                                        modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(percent = 50)),
-                                    )
-                                    Text(
-                                        text = stringResource(R.string.workspace_dependency_percent, percent),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    progress.message?.let { msg ->
-                        Text(
-                            text = msg,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (progress.isSuccess == false) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-
-                    // ====== 构建阶段耗时分析 ======
-                    if (progress.stepDurations.isNotEmpty()) {
-                        TextButton(
-                            onClick = { showStepAnalysis = !showStepAnalysis },
-                            contentPadding = PaddingValues(0.dp),
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                                RuntimeIcon(if (showStepAnalysis) RuntimeIconName.ArrowUp else RuntimeIconName.ChevronDown, Modifier.size(14.dp))
-                                Text(stringResource(if (showStepAnalysis) R.string.workspace_hide_timing else R.string.workspace_timing), style = MaterialTheme.typography.labelMedium)
-                            }
-                        }
-
-                        if (showStepAnalysis) {
-                            Surface(
-                                color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                shape = Radius.xsShape,
-                                modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.xs),
-                            ) {
-                                Column(modifier = Modifier.padding(Spacing.sm), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                                    val maxDuration = (progress.stepDurations.maxOfOrNull { it.durationMs } ?: 1L).coerceAtLeast(1L)
-                                    progress.stepDurations.forEach { step ->
-                                        val barRatio = (step.durationMs.toFloat() / maxDuration.toFloat()).coerceIn(0.02f, 1f)
-                                        // 构建阶段色：拉取=蓝、编译=绿、打包=橙、其它=灰。
-                                        // 取自语义色令牌，深浅主题各自有对比度保证。
-                                        val barColor = when {
-                                            step.step.contains("拉取") || step.step.contains("依赖") -> TianyanTheme.colors.info
-                                            step.step.contains("编译") || step.step.contains("Kotlin") ||
-                                                step.step.contains("Java") || step.step.contains("Dex") -> TianyanTheme.colors.success
-                                            step.step.contains("打包") || step.step.contains("APK") -> TianyanTheme.colors.warning
-                                            else -> TianyanTheme.colors.neutral
-                                        }
-                                        val durationText = if (step.durationMs >= 1000) "${"%.1f".format(step.durationMs / 1000.0)}s" else "${step.durationMs}ms"
-                                        Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                            ) {
-                                                Text(
-                                                    text = step.step,
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSurface,
-                                                )
-                                                Text(
-                                                    text = durationText,
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                )
-                                            }
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .height(6.dp)
-                                                    .clip(Radius.xsShape)
-                                                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                                            ) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth(barRatio)
-                                                        .height(6.dp)
-                                                        .clip(Radius.xsShape)
-                                                        .background(barColor),
-                                                )
-                                            }
-                                        }
-                                    }
-                                    // 总时长
-                                    progress.totalDurationMs?.let { total ->
-                                        val totalText = if (total >= 1000) "${"%.1f".format(total / 1000.0)}s" else "${total}ms"
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                        ) {
-                                            Text(
-                                                text = stringResource(R.string.workspace_total),
-                                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                                color = MaterialTheme.colorScheme.onSurface,
-                                            )
-                                            Text(
-                                                text = totalText,
-                                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                                color = MaterialTheme.colorScheme.primary,
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // ====== 构建日志折叠面板 ======
-                    // The build task survives destination recreation in the
-                    // coordinator. Its first restored snapshot may not have
-                    // received log text yet, so keep the entry visible while
-                    // running (and for completed tasks) instead of tying it
-                    // to logOutput being non-empty.
-                    run {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
-                            TextButton(
-                                onClick = { showBuildLog = !showBuildLog },
-                                contentPadding = PaddingValues(0.dp),
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                                    RuntimeIcon(if (showBuildLog) RuntimeIconName.ArrowUp else RuntimeIconName.ChevronDown, Modifier.size(14.dp))
-                                    Text(stringResource(if (showBuildLog) R.string.workspace_hide_build_log else R.string.workspace_view_build_log), style = MaterialTheme.typography.labelMedium)
-                                }
-                            }
-
-                            if (showBuildLog && progress.logOutput.isNotBlank()) {
-                                TextButton(
-                                    onClick = {
-                                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                                        clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Tianyan Build Log", progress.logOutput))
-                                    },
-                                    contentPadding = PaddingValues(0.dp),
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                                        RuntimeIcon(RuntimeIconName.Copy, Modifier.size(12.dp))
-                                        Text(stringResource(R.string.workspace_copy_log), style = MaterialTheme.typography.labelSmall)
-                                    }
-                                }
-                            }
-                        }
-
-                        if (showBuildLog) {
-                            if (progress.logOutput.isBlank()) {
-                                Text(
-                                    text = stringResource(if (progress.isRunning) R.string.workspace_build_log_receiving else R.string.workspace_no_build_log),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            // 分类日志
-                            //
-                            // 构建日志在编译期持续增长：progress.logOutput 每个发布帧都是新字符串，
-                            // 而这段代码位于 composition 内。原实现每次重组都会
-                            //   1) 重建 3 个关键字列表，
-                            //   2) 对全部日志行做一次 map 分类（并分配一份 (Int, String) 配对列表），
-                            //   3) 再对分类结果做 4 次 filter + map。
-                            // 合计 6 趟遍历。上千行日志下，这些分配与遍历落在每一帧上，表现为
-                            // 滚动和流式追加时的持续掉帧——即使只是折叠状态变化触发的重组也要重算。
-                            //
-                            // 改为：关键字提升为文件级常量，分组结果用 remember 以日志原文为 key 缓存。
-                            // 日志未变化时完全跳过重算。
-                            val logsByCategory = remember(progress.logOutput) {
-                                classifyBuildLogLines(progress.logOutput)
-                            }
-                            val depsLogs = logsByCategory[0]
-                            val compileLogs = logsByCategory[1]
-                            val packageLogs = logsByCategory[2]
-                            val otherLogs = logsByCategory[3]
-
-                            data class Category(val type: Int, val emoji: String, val name: String, val logs: List<String>)
-                            val categories = listOf(
-                                Category(0, "📥", stringResource(R.string.workspace_log_dependencies), depsLogs),
-                                Category(1, "🔨", stringResource(R.string.workspace_log_compile), compileLogs),
-                                Category(2, "📦", stringResource(R.string.workspace_log_package), packageLogs),
-                                Category(3, "📋", stringResource(R.string.workspace_log_other), otherLogs),
-                            )
-
-                            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                                categories.forEach { cat ->
-                                    if (cat.logs.isNotEmpty()) {
-                                        val isCollapsed = when (cat.type) {
-                                            0 -> collapsedDeps
-                                            1 -> collapsedCompile
-                                            2 -> collapsedPackage
-                                            else -> collapsedOther
-                                        }
-                                        TextButton(
-                                            onClick = {
-                                                when (cat.type) {
-                                                    0 -> collapsedDeps = !collapsedDeps
-                                                    1 -> collapsedCompile = !collapsedCompile
-                                                    2 -> collapsedPackage = !collapsedPackage
-                                                    else -> collapsedOther = !collapsedOther
-                                                }
-                                            },
-                                            contentPadding = PaddingValues(0.dp),
-                                            modifier = Modifier.fillMaxWidth(),
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                            ) {
-                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                                                    RuntimeIcon(if (isCollapsed) RuntimeIconName.ChevronRight else RuntimeIconName.ArrowUp, Modifier.size(12.dp))
-                                                    Text("${cat.emoji} ${cat.name}", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
-                                                }
-                                                Text(stringResource(R.string.workspace_log_count, cat.logs.size), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                            }
-                                        }
-                                        if (!isCollapsed) {
-                                            Surface(
-                                                color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                                shape = Radius.xsShape,
-                                                modifier = Modifier.fillMaxWidth(),
-                                            ) {
-                                                Column(modifier = Modifier.padding(Spacing.sm)) {
-                                                    val displayLogs = if (cat.logs.size > 200) cat.logs.takeLast(200) else cat.logs
-                                                    displayLogs.forEach { line ->
-                                                        Text(
-                                                            text = line,
-                                                            style = MaterialTheme.typography.labelSmall.copy(
-                                                                fontFamily = FontFamily.Monospace,
-                                                                fontSize = 10.sp,
-                                                                lineHeight = 14.sp,
-                                                            ),
-                                                            color = MaterialTheme.colorScheme.onSurface,
-                                                        )
-                                                    }
-                                                    if (cat.logs.size > 200) {
-                                                        Text(
-                                                            text = stringResource(R.string.workspace_log_truncated, cat.logs.size),
-                                                            style = MaterialTheme.typography.labelSmall,
-                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                if (!progress.isRunning) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                        // 缺少环境时展示前往插件中心准备环境按钮
-                        if (progress.suggestedSuiteId != null) {
-                            Button(
-                                onClick = {
-                                    viewModel.dismissBuildProgress()
-                                    onOpenToolCenter()
-                                },
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                                    RuntimeIcon(RuntimeIconName.Package, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onPrimary)
-                                    Text(stringResource(R.string.workspace_prepare_environment))
-                                }
-                            }
-                        }
-
-                        val path = progress.apkPath
-                        if (progress.isSuccess == true && path != null) {
-                            Button(onClick = { viewModel.launchInstaller(path) }) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                                    RuntimeIcon(RuntimeIconName.Download, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onPrimary)
-                                    Text(stringResource(R.string.workspace_launch_install))
-                                }
-                            }
-                        }
-                        TextButton(onClick = { viewModel.dismissBuildProgress() }) {
-                            Text(stringResource(R.string.workspace_done))
-                        }
-                    }
-                } else {
-                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                        TextButton(onClick = { viewModel.cancelBuild() }) {
-                            Text(stringResource(R.string.workspace_stop_build), color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
-                        }
-                        TextButton(onClick = { viewModel.hideBuildDialog() }) {
-                            Text(stringResource(R.string.workspace_background), fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            },
-            dismissButton = {
-                if (progress.isRunning) {
-                    TextButton(onClick = { viewModel.hideBuildDialog() }) {
-                        Text(stringResource(R.string.workspace_collapse))
-                    }
-                }
-            },
+        BuildProgressDialog(
+            progress = buildProgress!!,
+            onOpenToolCenter = onOpenToolCenter,
+            onHideDialog = { viewModel?.hideBuildDialog() },
+            onDismissProgress = { viewModel?.dismissBuildProgress() },
+            onCancelBuild = { viewModel?.cancelBuild() },
+            onLaunchInstaller = { arg0 -> viewModel?.launchInstaller(arg0) },
         )
     }
 
@@ -964,7 +374,7 @@ fun WorkspaceScreen(
 
     templateScriptPreview?.let { preview ->
         RuntimeAlertDialog(
-            onDismissRequest = viewModel::dismissTemplateScripts,
+            onDismissRequest = { viewModel?.dismissTemplateScripts() },
             title = { Text(stringResource(R.string.workspace_template_scripts_title), fontWeight = FontWeight.Bold) },
             text = {
                 Text(
@@ -974,7 +384,7 @@ fun WorkspaceScreen(
                     style = MaterialTheme.typography.bodySmall,
                 )
             },
-            confirmButton = { TextButton(onClick = viewModel::dismissTemplateScripts) { Text(stringResource(R.string.workspace_action_close)) } },
+            confirmButton = { TextButton(onClick = { viewModel?.dismissTemplateScripts() }) { Text(stringResource(R.string.workspace_action_close)) } },
         )
     }
 
@@ -985,7 +395,7 @@ fun WorkspaceScreen(
             text = { Text(stringResource(R.string.workspace_delete_template_message, template.manifest.name)) },
             confirmButton = {
                 TextButton(onClick = {
-                    viewModel.deleteProjectTemplate(template.manifest.id)
+                    viewModel?.deleteProjectTemplate(template.manifest.id)
                     deleteTemplateTarget = null
                 }) { Text(stringResource(R.string.workspace_confirm_delete), color = MaterialTheme.colorScheme.error) }
             },
@@ -993,885 +403,28 @@ fun WorkspaceScreen(
         )
     }
 
-    if (showCreate) {
-        // 创建进行中：保持弹窗展示进度，完成后统一关闭并复位（模板实例化可能耗时 60 秒）
-        LaunchedEffect(createInProgress, busy) {
-            if (createInProgress && !busy) {
-                createInProgress = false
-                showCreate = false
-                projectName = ""
-                packageName = ""
-                templateVariableValues = emptyMap()
-                apkSource = null
-                exportApkToDownload = false
-                createProjectStep = CreateProjectStep.PROJECT_TYPE
-                selectedProjectType = null
-                selectedTemplateId = null
-                trustTemplateScripts = false
-            }
-        }
-        RuntimeAlertDialog(
-            onDismissRequest = {
-                if (!createInProgress) {
-                    showCreate = false
-                    projectName = ""
-                    packageName = ""
-                    apkSource = null
-                    exportApkToDownload = false
-                    createProjectStep = CreateProjectStep.PROJECT_TYPE
-                    selectedProjectType = null
-                    selectedTemplateId = null
-                    trustTemplateScripts = false
-                }
-            },
-            title = { Text(stringResource(R.string.workspace_new_project), fontWeight = FontWeight.Bold) },
-            text = {
-                Column(
-                    modifier = Modifier
-                        .heightIn(min = 360.dp, max = 420.dp)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.md),
-                ) {
-                    when (createProjectStep) {
-                        CreateProjectStep.PROJECT_TYPE -> {
-                            Text("选择项目类型", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                            Text("先选择要创建的项目平台", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            val projectTypes = projectTemplates.map { it.manifest.projectType }.distinct()
-                            Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
-                                // 空项目：跳过平台与模板选择，直接输入名称创建空文件夹
-                                RuntimeCard(
-                                    onClick = {
-                                        selectedProjectType = null
-                                        selectedTemplateId = null
-                                        selectedTemplate = top.tianyan.app.runtime.ProjectTemplate.EMPTY
-                                        templateVariableValues = emptyMap()
-                                        trustTemplateScripts = false
-                                        packageName = ""
-                                        createProjectStep = CreateProjectStep.EMPTY_DETAILS
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-                                        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md, vertical = Spacing.md),
-                                    ) {
-                                        RuntimeIcon(RuntimeIconName.Folder, Modifier.size(36.dp), MaterialTheme.colorScheme.primary)
-                                        Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                                            Text("空项目", fontWeight = FontWeight.SemiBold)
-                                            Text(
-                                                "只创建一个空文件夹，随时手动添加内容",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
-                                        }
-                                    }
-                                }
-                                projectTypes.chunked(2).forEach { rowTypes ->
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-                                    ) {
-                                        rowTypes.forEach { type ->
-                                            RuntimeCard(
-                                                onClick = {
-                                                    selectedProjectType = type
-                                                    selectedTemplateId = null
-                                                },
-                                                modifier = Modifier.weight(1f),
-                                                containerColor = if (selectedProjectType == type) {
-                                                    MaterialTheme.colorScheme.primaryContainer
-                                                } else {
-                                                    MaterialTheme.colorScheme.surfaceContainer
-                                                },
-                                            ) {
-                                                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.md)) {
-                                                    RuntimeIcon(
-                                                        when (type) {
-                                                            TemplateProjectType.ANDROID -> RuntimeIconName.Android
-                                                            TemplateProjectType.FLUTTER -> RuntimeIconName.Flutter
-                                                            TemplateProjectType.GENERAL -> RuntimeIconName.Code
-                                                        },
-                                                        Modifier.size(36.dp),
-                                                        MaterialTheme.colorScheme.primary,
-                                                    )
-                                                    Spacer(Modifier.height(Spacing.sm))
-                                                    Text(type.name.lowercase().replaceFirstChar { it.uppercase() }, fontWeight = FontWeight.SemiBold)
-                                                }
-                                            }
-                                        }
-                                        repeat(2 - rowTypes.size) {
-                                            Spacer(Modifier.weight(1f))
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        CreateProjectStep.EMPTY_DETAILS -> {
-                            Text("新建空项目", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                            Text("输入名称即创建一个空文件夹", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            OutlinedTextField(
-                                value = projectName,
-                                onValueChange = { projectName = it },
-                                label = { Text(stringResource(R.string.workspace_project_name)) },
-                                placeholder = { Text("my-sandbox") },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                            val emptyPath = projectName.trim()
-                            if (emptyPath.isNotBlank()) Text(
-                                stringResource(R.string.workspace_sandbox_path, "/workspace", emptyPath),
-                                style = MaterialTheme.typography.labelSmall,
-                                fontFamily = FontFamily.Monospace,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-
-                        CreateProjectStep.TEMPLATE -> {
-                            Text("选择模板", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                            Text("选择一个具体模板后继续", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            val filteredTemplates = projectTemplates.filter { it.manifest.projectType == selectedProjectType }
-                            Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
-                                filteredTemplates.groupBy { it.manifest.category }.forEach { (category, templates) ->
-                                    if (filteredTemplates.map { it.manifest.category.id }.distinct().size > 1) {
-                                        Text(category.name, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                                    }
-                                    templates.chunked(2).forEach { rowTemplates ->
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-                                        ) {
-                                            rowTemplates.forEach { template ->
-                                                val selected = selectedTemplateId == template.manifest.id
-                                                RuntimeCard(
-                                                    onClick = {
-                                                        selectedTemplateId = template.manifest.id
-                                                        trustTemplateScripts = false
-                                                        // 标准模板一律通过 manifest id 创建，避免 UI 依赖内置模板枚举。
-                                                        selectedTemplate = top.tianyan.app.runtime.ProjectTemplate.EMPTY
-                                                        templateVariableValues = template.manifest.variables
-                                                            .filter { it.prompt }
-                                                            .associate { variable ->
-                                                                variable.name to when {
-                                                                    variable.defaultValue.isNotBlank() -> variable.defaultValue
-                                                                    variable.inputType == top.tianyan.app.template.ProjectTemplateInputType.BOOLEAN -> "false"
-                                                                    variable.inputType == top.tianyan.app.template.ProjectTemplateInputType.SELECT && variable.required ->
-                                                                        variable.options.firstOrNull()?.value.orEmpty()
-                                                                    else -> ""
-                                                                }
-                                                            }
-                                                    },
-                                                    modifier = Modifier.weight(1f),
-                                                    containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
-                                                ) {
-                                                    Surface(
-                                                        modifier = Modifier.fillMaxWidth().aspectRatio(1f),
-                                                        shape = Radius.smShape,
-                                                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                                    ) {
-                                                        Box(contentAlignment = Alignment.Center) {
-                                                            val previewFile = template.previewFile
-                                                            if (previewFile != null) {
-                                                                TemplatePreviewImage(previewFile, Modifier.fillMaxSize())
-                                                            } else {
-                                                                RuntimeIcon(
-                                                                    when (template.manifest.projectType) {
-                                                                        TemplateProjectType.ANDROID -> RuntimeIconName.Android
-                                                                        TemplateProjectType.FLUTTER -> RuntimeIconName.Flutter
-                                                                        TemplateProjectType.GENERAL -> RuntimeIconName.Code
-                                                                    },
-                                                                    Modifier.size(42.dp),
-                                                                    MaterialTheme.colorScheme.primary,
-                                                                )
-                                                            }
-                                                        }
-                                                    }
-                                                    Spacer(Modifier.height(Spacing.sm))
-                                                    Text(
-                                                        template.manifest.name,
-                                                        fontWeight = FontWeight.SemiBold,
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis,
-                                                        fontSize = 12.sp,
-                                                        modifier = Modifier.padding(horizontal = Spacing.xs).padding(bottom = Spacing.xs),
-                                                    )
-                                                }
-                                            }
-                                            repeat(2 - rowTemplates.size) {
-                                                Spacer(Modifier.weight(1f))
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        CreateProjectStep.DETAILS -> {
-
-                    val selectedManifest = projectTemplates.firstOrNull {
-                        it.manifest.id == selectedTemplateId
-                    }?.manifest
-                    val projectNameVariable = selectedManifest?.variables?.firstOrNull {
-                        it.name == "projectName"
-                    }
-                    val projectNameError = projectNameVariable?.let { variable ->
-                        templateVariableError(variable, projectName)?.let {
-                            variable.description.ifBlank { it }
-                        }
-                    }
-
-                    OutlinedTextField(
-                        value = projectName,
-                        onValueChange = {
-                            projectName = it
-                            if (packageName.isBlank() || packageName.startsWith("com.example.")) {
-                                packageName = "com.example.${it.lowercase().filter { c -> c.isLetterOrDigit() }}"
-                            }
-                        },
-                        label = { Text(stringResource(R.string.workspace_project_name)) },
-                        placeholder = { Text("MyApplication / demo-app") },
-                        supportingText = projectNameError?.let { error -> { Text(error) } },
-                        isError = projectNameError != null,
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-
-                    // ============ APK 逆向模板：选择安装包来源 ============
-                    if (selectedTemplate == top.tianyan.app.runtime.ProjectTemplate.APK_REVERSE) {
-                        Text(
-                            stringResource(R.string.workspace_choose_apk_source),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                        ) {
-                            OutlinedButton(
-                                onClick = { showAppPicker = true },
-                                modifier = Modifier.weight(1f),
-                            ) {
-                                RuntimeIcon(RuntimeIconName.Package, Modifier.size(16.dp))
-                                Spacer(Modifier.size(6.dp))
-                                Text(stringResource(R.string.workspace_extract_installed), style = MaterialTheme.typography.labelMedium)
-                            }
-                            OutlinedButton(
-                                onClick = {
-                                    apkPicker.launch(
-                                        arrayOf(
-                                            "application/vnd.android.package-archive",
-                                            "application/octet-stream",
-                                        ),
-                                    )
-                                },
-                                modifier = Modifier.weight(1f),
-                            ) {
-                                RuntimeIcon(RuntimeIconName.Folder, Modifier.size(16.dp))
-                                Spacer(Modifier.size(6.dp))
-                                Text(stringResource(R.string.workspace_choose_apk_file), style = MaterialTheme.typography.labelMedium)
-                            }
-                        }
-                        Text(
-                            stringResource(R.string.workspace_apk_source_description),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        // 逆向工具链就绪状态：避免"建好工程却发现 jadx/apktool 缺失"
-                        val reverseToolReady = "android-re" in installedComponentIds && runtimeReady
-                        val statusSurfaceColor = when {
-                            reverseToolReady -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f)
-                            runtimeReady -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
-                            else -> MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f)
-                        }
-                        Surface(
-                            shape = Radius.smShape,
-                            color = statusSurfaceColor,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-                            ) {
-                                RuntimeIcon(
-                                    when {
-                                        reverseToolReady -> RuntimeIconName.Check
-                                        runtimeReady -> RuntimeIconName.Alert
-                                        else -> RuntimeIconName.Info
-                                    },
-                                    Modifier.size(17.dp),
-                                    tint = when {
-                                        reverseToolReady -> MaterialTheme.colorScheme.onSecondaryContainer
-                                        runtimeReady -> MaterialTheme.colorScheme.error
-                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                                    },
-                                )
-                                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                                    Text(
-                                        text = when {
-                                            reverseToolReady -> stringResource(R.string.workspace_reverse_ready)
-                                            runtimeReady -> stringResource(R.string.workspace_reverse_missing)
-                                            else -> stringResource(R.string.workspace_runtime_uninitialized)
-                                        },
-                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                                        color = when {
-                                            reverseToolReady -> MaterialTheme.colorScheme.onSecondaryContainer
-                                            runtimeReady -> MaterialTheme.colorScheme.onErrorContainer
-                                            else -> MaterialTheme.colorScheme.onSurfaceVariant
-                                        },
-                                    )
-                                    Text(
-                                        text = when {
-                                            reverseToolReady -> stringResource(R.string.workspace_reverse_output_ready)
-                                            runtimeReady -> stringResource(R.string.workspace_reverse_component_needed)
-                                            else -> stringResource(R.string.workspace_apk_creation_available)
-                                        },
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = when {
-                                            reverseToolReady -> MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f)
-                                            runtimeReady -> MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.75f)
-                                            else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                                        },
-                                    )
-                                }
-                                if (!reverseToolReady && runtimeReady) {
-                                    TextButton(onClick = {
-                                        showCreate = false
-                                        onOpenToolCenter()
-                                    }) {
-                                        Text(stringResource(R.string.workspace_install_components), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
-                                    }
-                                }
-                            }
-                        }
-                        apkSource?.let { source ->
-                            Surface(
-                                shape = Radius.smShape,
-                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(start = Spacing.md, end = Spacing.xs, top = Spacing.sm, bottom = Spacing.sm),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-                                ) {
-                                    RuntimeIcon(RuntimeIconName.Reverse, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
-                                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                                        Text(
-                                            text = source.displayName,
-                                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                        Text(
-                                            text = when (source) {
-                                                is ApkImportSource.FromInstalledApp -> stringResource(R.string.workspace_installed_app_source)
-                                                is ApkImportSource.FromFileUri -> stringResource(R.string.workspace_apk_file_source)
-                                            },
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    }
-                                    IconButton(
-                                        onClick = { apkSource = null },
-                                        modifier = Modifier
-                                            .size(30.dp)
-                                            .minimumInteractiveComponentSize(),
-                                        contentDescription = stringResource(R.string.workspace_cd_close),
-                                    ) {
-                                        RuntimeIcon(RuntimeIconName.Close, Modifier.size(15.dp), MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                }
-                            }
-                        }
-                        // 同时导出 APK 到宿主公共下载目录（供 MT 管理器等宿主侧工具直接打开）
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(Radius.smShape)
-                                .clickable { exportApkToDownload = !exportApkToDownload }
-                                .padding(vertical = Spacing.xs),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-                        ) {
-                            Checkbox(
-                                checked = exportApkToDownload,
-                                onCheckedChange = { exportApkToDownload = it },
-                            )
-                            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                                Text(
-                                    stringResource(R.string.workspace_export_apk),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
-                                Text(
-                                    stringResource(R.string.workspace_export_apk_description),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    }
-
-                    val path = projectName.trim()
-                    if (path.isNotBlank()) Text(
-                        stringResource(R.string.workspace_sandbox_path, "/workspace", path),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    if (selectedManifest != null) {
-                        TemplateVariableFields(
-                            variables = selectedManifest.variables,
-                            values = templateVariableValues + ("packageName" to packageName),
-                            onValueChange = { name, value ->
-                                if (name == "packageName") packageName = value
-                                else templateVariableValues = templateVariableValues + (name to value)
-                            },
-                        )
-                        val hasTemplateScripts = selectedManifest.hooks.beforeCreate.isNotBlank() ||
-                            selectedManifest.hooks.afterCreate.isNotBlank()
-                        if (hasTemplateScripts) {
-                            Surface(
-                                color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.55f),
-                                shape = Radius.smShape,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .clickable { trustTemplateScripts = !trustTemplateScripts }
-                                        .padding(Spacing.sm),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                                ) {
-                                    Checkbox(checked = trustTemplateScripts, onCheckedChange = { trustTemplateScripts = it })
-                                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                                        Text(stringResource(R.string.workspace_trust_scripts_title), fontWeight = FontWeight.SemiBold)
-                                        Text(
-                                            if (runtimeReady) {
-                                                stringResource(R.string.workspace_trust_scripts_hint_runtime)
-                                            } else {
-                                                stringResource(R.string.workspace_trust_scripts_hint_not_ready)
-                                            },
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                        )
-                                        TextButton(onClick = {
-                                            selectedTemplateId?.let(viewModel::showTemplateScripts)
-                                        }) { Text(stringResource(R.string.workspace_view_scripts)) }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        when (createProjectStep) {
-                            CreateProjectStep.PROJECT_TYPE -> createProjectStep = CreateProjectStep.TEMPLATE
-                            CreateProjectStep.EMPTY_DETAILS -> {
-                                createInProgress = true
-                                viewModel.create(
-                                    name = projectName,
-                                    template = top.tianyan.app.runtime.ProjectTemplate.EMPTY,
-                                )
-                            }
-                            CreateProjectStep.TEMPLATE -> createProjectStep = CreateProjectStep.DETAILS
-                            CreateProjectStep.DETAILS -> {
-                                createInProgress = true
-                                viewModel.create(
-                                    name = projectName,
-                                    template = selectedTemplate,
-                                    packageName = packageName,
-                                    apkSource = apkSource,
-                                    exportApkToDownload = exportApkToDownload,
-                                    templateVariables = templateVariableValues + ("packageName" to packageName),
-                                    templateId = selectedTemplateId.orEmpty(),
-                                    trustTemplateScripts = trustTemplateScripts,
-                                )
-                            }
-                        }
-                    },
-                    enabled = !createInProgress && when (createProjectStep) {
-                        CreateProjectStep.PROJECT_TYPE -> selectedProjectType != null
-                        CreateProjectStep.EMPTY_DETAILS -> projectName.isNotBlank() && !busy
-                        CreateProjectStep.TEMPLATE -> selectedTemplateId != null
-                        CreateProjectStep.DETAILS -> projectName.isNotBlank() && !busy &&
-                            run {
-                                val variables = projectTemplates.firstOrNull { it.manifest.id == selectedTemplateId }
-                                    ?.manifest?.variables.orEmpty().filter { it.prompt }
-                                val values = templateVariableValues + ("packageName" to packageName)
-                                val manifest = projectTemplates.firstOrNull { it.manifest.id == selectedTemplateId }?.manifest
-                                val hasScripts = manifest != null &&
-                                    (manifest.hooks.beforeCreate.isNotBlank() || manifest.hooks.afterCreate.isNotBlank())
-                                val scriptsReady = !hasScripts || (trustTemplateScripts && runtimeReady)
-                                val projectNameRule = manifest?.variables?.firstOrNull { it.name == "projectName" }
-                                val projectNameValid = projectNameRule == null ||
-                                    templateVariableError(projectNameRule, projectName) == null
-                                scriptsReady && projectNameValid && variables.none {
-                                    templateVariableError(it, values[it.name] ?: it.defaultValue) != null
-                                }
-                            }
-                    },
-                ) {
-                    if (createInProgress) {
-                        RuntimeCircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                        Spacer(Modifier.width(Spacing.sm))
-                        Text(stringResource(R.string.workspace_creating), color = MaterialTheme.colorScheme.primary)
-                    } else {
-                        Text(
-                            if (createProjectStep == CreateProjectStep.DETAILS || createProjectStep == CreateProjectStep.EMPTY_DETAILS) {
-                                stringResource(R.string.workspace_create)
-                            } else {
-                                stringResource(R.string.workspace_action_next)
-                            },
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        when (createProjectStep) {
-                            CreateProjectStep.PROJECT_TYPE -> {
-                                showCreate = false
-                                projectName = ""
-                                packageName = ""
-                                templateVariableValues = emptyMap()
-                                selectedProjectType = null
-                                selectedTemplateId = null
-                                trustTemplateScripts = false
-                            }
-                            CreateProjectStep.EMPTY_DETAILS -> createProjectStep = CreateProjectStep.PROJECT_TYPE
-                            CreateProjectStep.TEMPLATE -> createProjectStep = CreateProjectStep.PROJECT_TYPE
-                            CreateProjectStep.DETAILS -> createProjectStep = CreateProjectStep.TEMPLATE
-                        }
-                    },
-                    enabled = !createInProgress,
-                ) {
-                    Text(if (createProjectStep == CreateProjectStep.PROJECT_TYPE) stringResource(R.string.workspace_cancel) else stringResource(R.string.workspace_action_previous))
-                }
-            },
+    if (showCreate && viewModel != null) {
+        CreateProjectDialog(
+            state = createWizard,
+            viewModel = viewModel,
+            projectTemplates = projectTemplates,
+            busy = busy,
+            runtimeReady = runtimeReady,
+            installedComponentIds = installedComponentIds,
+            apkPicker = apkPicker,
+            onDismiss = { showCreate = false },
+            onOpenToolCenter = onOpenToolCenter,
         )
     }
 
-    if (showImport) {
-        fun resetImportDialog() {
-            showImport = false
-            importMode = ProjectImportMode.LOCAL
-            importProjectName = ""
-            importDirectoryPath = ""
-            importProjectType = ProjectType.ANDROID
-            archiveSource = null
-            importGitUrl = ""
-            gitTransport = GitTransport.HTTP
-            importInProgress = false
-        }
-        // GitHub 拉取进行中：保持弹窗展示克隆进度，完成后统一关闭并复位（克隆可能耗时数分钟）
-        LaunchedEffect(importInProgress, busy) {
-            if (importInProgress && !busy) resetImportDialog()
-        }
-        // GitHub HTTP(S) 导入地址前置校验：必须是 http:// 或 https:// 开头
-        val gitUrlError = if (
-            importMode == ProjectImportMode.GITHUB &&
-            gitTransport == GitTransport.HTTP &&
-            importGitUrl.isNotBlank() &&
-            !importGitUrl.trim().startsWith("http://") &&
-            !importGitUrl.trim().startsWith("https://")
-        ) stringResource(R.string.workspace_git_url_invalid) else null
-        RuntimeAlertDialog(
-            onDismissRequest = { if (!importInProgress) resetImportDialog() },
-            title = { Text(stringResource(R.string.workspace_import_project), fontWeight = FontWeight.Bold) },
-            text = {
-                Column(
-                    modifier = Modifier.verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.md),
-                ) {
-                    // GitHub 拉取进度：git 克隆可能耗时数分钟，实时展示最新进度与百分比
-                    if (importInProgress) {
-                        Surface(
-                            shape = Radius.smShape,
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
-                                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-                                ) {
-                                    RuntimeCircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                                    Text(
-                                        stringResource(R.string.workspace_git_clone_in_progress),
-                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                                        color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    githubImportProgress?.percent?.let { percent ->
-                                        Text(
-                                            "$percent%",
-                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                            color = MaterialTheme.colorScheme.primary,
-                                        )
-                                    }
-                                }
-                                val clonePercent = githubImportProgress?.percent
-                                LinearProgressIndicator(
-                                    progress = clonePercent?.let { percent -> { percent / 100f } },
-                                    modifier = Modifier.fillMaxWidth().height(5.dp).clip(Radius.xsShape),
-                                )
-                                githubImportProgress?.let { progress ->
-                                    Text(
-                                        progress.text,
-                                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    Text(
-                        stringResource(R.string.workspace_import_source),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                        FilterChip(
-                            selected = importMode == ProjectImportMode.LOCAL,
-                            onClick = { importMode = ProjectImportMode.LOCAL },
-                            leadingIcon = { RuntimeIcon(RuntimeIconName.FolderDownload, Modifier.size(16.dp)) },
-                            label = { Text(stringResource(R.string.workspace_local_archive)) },
-                            modifier = Modifier.weight(1f),
-                        )
-                        FilterChip(
-                            selected = importMode == ProjectImportMode.GITHUB,
-                            onClick = { importMode = ProjectImportMode.GITHUB },
-                            leadingIcon = { RuntimeIcon(RuntimeIconName.Github, Modifier.size(16.dp)) },
-                            label = { Text("GitHub") },
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-
-                    if (importMode == ProjectImportMode.LOCAL) {
-                        OutlinedButton(
-                            onClick = {
-                                archivePicker.launch(
-                                    arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream"),
-                                )
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            RuntimeIcon(RuntimeIconName.FolderOpen, Modifier.size(17.dp))
-                            Spacer(Modifier.size(7.dp))
-                            Text(stringResource(R.string.workspace_choose_project_archive))
-                        }
-                        archiveSource?.let { source ->
-                            Surface(
-                                shape = Radius.smShape,
-                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(start = Spacing.md, end = Spacing.xs, top = Spacing.sm, bottom = Spacing.sm),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-                                ) {
-                                    RuntimeIcon(RuntimeIconName.Compress, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
-                                    Text(
-                                        source.fileName,
-                                        modifier = Modifier.weight(1f),
-                                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                    IconButton(
-                                        onClick = { archiveSource = null },
-                                        modifier = Modifier
-                                            .size(30.dp)
-                                            .minimumInteractiveComponentSize(),
-                                        contentDescription = stringResource(R.string.workspace_cd_close),
-                                    ) {
-                                        RuntimeIcon(RuntimeIconName.Close, Modifier.size(15.dp))
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        Text(
-                            stringResource(R.string.workspace_git_transport),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                            FilterChip(
-                                selected = gitTransport == GitTransport.HTTP,
-                                onClick = { gitTransport = GitTransport.HTTP },
-                                label = { Text("HTTP(S)") },
-                                modifier = Modifier.weight(1f),
-                            )
-                            FilterChip(
-                                selected = gitTransport == GitTransport.SSH,
-                                onClick = { gitTransport = GitTransport.SSH },
-                                label = { Text("SSH") },
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                        OutlinedTextField(
-                            value = importGitUrl,
-                            onValueChange = { importGitUrl = it },
-                            label = { Text(stringResource(R.string.workspace_git_url)) },
-                            placeholder = {
-                                Text(
-                                    if (gitTransport == GitTransport.HTTP) "https://github.com/user/project.git"
-                                    else "git@github.com:user/project.git",
-                                )
-                            },
-                            supportingText = {
-                                Text(gitUrlError ?: stringResource(R.string.workspace_git_import_description))
-                            },
-                            isError = gitUrlError != null,
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-
-                    Text(
-                        stringResource(R.string.workspace_project_label),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                    ) {
-                        listOf(
-                            ProjectType.ANDROID to ("Android" to RuntimeIconName.Android),
-                            ProjectType.FLUTTER to ("Flutter" to RuntimeIconName.Flutter),
-                            ProjectType.REVERSE to (stringResource(R.string.workspace_template_reverse) to RuntimeIconName.Reverse),
-                            ProjectType.RED_TEAM to ("红队演练" to RuntimeIconName.Shield),
-                            ProjectType.GENERAL to (stringResource(R.string.workspace_template_empty) to RuntimeIconName.Code),
-                        ).forEach { (type, pair) ->
-                            FilterChip(
-                                selected = importProjectType == type,
-                                onClick = { importProjectType = type },
-                                leadingIcon = { RuntimeIcon(pair.second, Modifier.size(16.dp)) },
-                                label = { Text(pair.first, style = MaterialTheme.typography.labelSmall) },
-                            )
-                        }
-                    }
-
-                    OutlinedTextField(
-                        value = importProjectName,
-                        onValueChange = { importProjectName = it },
-                        label = { Text(stringResource(R.string.workspace_project_name)) },
-                        placeholder = { Text("my-imported-project") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-
-                    val importPathName = importProjectName.trim().ifBlank { "my-project" }
-                    val commonDirectories = listOf(
-                        "" to stringResource(R.string.workspace_location_project, importPathName),
-                        "projects/$importPathName" to stringResource(R.string.workspace_location_projects, importPathName),
-                        "repos/$importPathName" to stringResource(R.string.workspace_location_repos, importPathName),
-                        "work/$importPathName" to stringResource(R.string.workspace_location_work, importPathName),
-                    )
-                    ExposedDropdownMenuBox(
-                        expanded = importDirectoryMenuExpanded,
-                        onExpandedChange = { importDirectoryMenuExpanded = it },
-                    ) {
-                        OutlinedTextField(
-                            value = importDirectoryPath,
-                            onValueChange = {
-                                importDirectoryPath = it
-                                importDirectoryMenuExpanded = true
-                            },
-                            label = { Text(stringResource(R.string.workspace_linked_directory)) },
-                            placeholder = { Text(stringResource(R.string.workspace_directory_default)) },
-                            supportingText = { Text(stringResource(R.string.workspace_import_directory_hint)) },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(importDirectoryMenuExpanded) },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth().menuAnchor(
-                                ExposedDropdownMenuAnchorType.PrimaryEditable,
-                                true,
-                            ),
-                        )
-                        ExposedDropdownMenu(
-                            expanded = importDirectoryMenuExpanded,
-                            onDismissRequest = { importDirectoryMenuExpanded = false },
-                        ) {
-                            commonDirectories.forEach { (path, label) ->
-                                DropdownMenuItem(
-                                    text = { Text(label) },
-                                    onClick = {
-                                        importDirectoryPath = path
-                                        importDirectoryMenuExpanded = false
-                                    },
-                                )
-                            }
-                        }
-                    }
-                    val targetPath = importDirectoryPath.trim().ifBlank { importProjectName.trim() }
-                    if (targetPath.isNotBlank()) {
-                        Text(
-                            stringResource(R.string.workspace_sandbox_path, "/workspace", targetPath.trimStart('/')),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        if (importMode == ProjectImportMode.LOCAL) {
-                            archiveSource?.let {
-                                viewModel.importLocalProject(importProjectName, importDirectoryPath, importProjectType, it)
-                            }
-                            resetImportDialog()
-                        } else {
-                            // 拉取期间保持弹窗打开展示 git 克隆进度，完成后由 LaunchedEffect 统一关闭
-                            importInProgress = true
-                            viewModel.importGithubProject(
-                                importProjectName,
-                                importDirectoryPath,
-                                importProjectType,
-                                importGitUrl,
-                                gitTransport,
-                            )
-                        }
-                    },
-                    enabled = importProjectName.isNotBlank() && !busy && gitUrlError == null &&
-                        ((importMode == ProjectImportMode.LOCAL && archiveSource != null) ||
-                            (importMode == ProjectImportMode.GITHUB && importGitUrl.isNotBlank())),
-                ) { Text(stringResource(R.string.workspace_import), color = MaterialTheme.colorScheme.primary) }
-            },
-            dismissButton = {
-                TextButton(onClick = { resetImportDialog() }, enabled = !importInProgress) { Text(stringResource(R.string.workspace_cancel)) }
-            },
-        )
-    }
-
-    // APK 逆向模板：已安装应用选择弹窗
-    if (showAppPicker) {
-        AppPickerDialog(
-            onDismiss = { showAppPicker = false },
-            onSelect = { app ->
-                apkSource = ApkImportSource.FromInstalledApp(app.packageName, app.appLabel(context))
-                showAppPicker = false
-            },
+    if (showImport && viewModel != null) {
+        ImportProjectDialog(
+            state = importWizard,
+            viewModel = viewModel,
+            busy = busy,
+            githubImportProgress = githubImportProgress,
+            archivePicker = archivePicker,
+            onDismiss = { showImport = false },
         )
     }
 
@@ -1887,7 +440,7 @@ fun WorkspaceScreen(
             },
             confirmButton = {
                 TextButton(
-                    onClick = { deleteTarget = null; viewModel.delete(project.name) },
+                    onClick = { deleteTarget = null; viewModel?.delete(project.name) },
                     enabled = !busy,
                 ) {
                     if (busy) {
@@ -1909,7 +462,7 @@ fun WorkspaceScreen(
             onDismiss = { buildConfigTarget = null },
             onConfirm = { type, keystore ->
                 buildConfigTarget = null
-                viewModel.runProject(target, type, keystore)
+                viewModel?.runProject(target, type, keystore)
             },
             onManageSigning = {
                 buildConfigTarget = null
@@ -1917,546 +470,4 @@ fun WorkspaceScreen(
             },
         )
     }
-}
-
-@Composable
-private fun TemplateManagerDialog(
-    templates: List<InstalledProjectTemplate>,
-    busy: Boolean,
-    onDismiss: () -> Unit,
-    onImport: () -> Unit,
-    onExport: (InstalledProjectTemplate) -> Unit,
-    onDelete: (InstalledProjectTemplate) -> Unit,
-    onShowSpec: () -> Unit,
-) {
-    RuntimeAlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.workspace_menu_templates), fontWeight = FontWeight.Bold) },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(Spacing.md),
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                    Button(onClick = onImport, enabled = !busy, modifier = Modifier.weight(1f)) {
-                        Text(stringResource(R.string.workspace_template_import_zip))
-                    }
-                    OutlinedButton(onClick = onShowSpec, modifier = Modifier.weight(1f)) {
-                        Text(stringResource(R.string.workspace_template_spec))
-                    }
-                }
-                templates.groupBy { it.manifest.projectType }.forEach { (type, typeTemplates) ->
-                    Text(
-                        type.name.lowercase().replaceFirstChar { it.uppercase() },
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    typeTemplates.forEach { template ->
-                        RuntimeCard(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Surface(
-                                    modifier = Modifier.size(56.dp),
-                                    shape = Radius.xsShape,
-                                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                ) {
-                                    template.previewFile?.let { TemplatePreviewImage(it, Modifier.fillMaxSize()) }
-                                }
-                                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                                    Text(template.manifest.name, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                                    Text(
-                                        "${template.manifest.category.name} · ${if (template.isBundled) stringResource(R.string.workspace_template_bundled) else stringResource(R.string.workspace_template_user)}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                    Text(
-                                        template.manifest.id,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontFamily = FontFamily.Monospace,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
-                                TextButton(onClick = { onExport(template) }, enabled = !busy) { Text(stringResource(R.string.workspace_action_export)) }
-                                if (!template.isBundled) {
-                                    IconButton(
-                                        onClick = { onDelete(template) },
-                                        enabled = !busy,
-                                        contentDescription = stringResource(R.string.workspace_cd_delete_template),
-                                    ) {
-                                        RuntimeIcon(RuntimeIconName.Trash, Modifier.size(18.dp), MaterialTheme.colorScheme.error)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.workspace_action_done)) } },
-    )
-}
-
-@Composable
-private fun ProjectTemplateSpecDialog(onDismiss: () -> Unit) {
-    RuntimeAlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.workspace_spec_title), fontWeight = FontWeight.Bold) },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(Spacing.md),
-            ) {
-                Text(stringResource(R.string.workspace_spec_intro))
-                Text(stringResource(R.string.workspace_spec_min_structure), fontWeight = FontWeight.SemiBold)
-                Text(
-                    stringResource(R.string.workspace_spec_min_structure_body),
-                    fontFamily = FontFamily.Monospace,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                Text(stringResource(R.string.workspace_spec_manifest), fontWeight = FontWeight.SemiBold)
-                Text(stringResource(R.string.workspace_spec_manifest_body), style = MaterialTheme.typography.bodySmall)
-                Text(stringResource(R.string.workspace_spec_variables), fontWeight = FontWeight.SemiBold)
-                Text(stringResource(R.string.workspace_spec_variables_body), style = MaterialTheme.typography.bodySmall)
-                Text(stringResource(R.string.workspace_spec_preview), fontWeight = FontWeight.SemiBold)
-                Text(stringResource(R.string.workspace_spec_preview_body), style = MaterialTheme.typography.bodySmall)
-                Text(stringResource(R.string.workspace_spec_hooks), fontWeight = FontWeight.SemiBold)
-                Text(stringResource(R.string.workspace_spec_hooks_body), style = MaterialTheme.typography.bodySmall)
-                Text(stringResource(R.string.workspace_spec_validation), fontWeight = FontWeight.SemiBold)
-                Text(stringResource(R.string.workspace_spec_validation_body), style = MaterialTheme.typography.bodySmall)
-                Text(stringResource(R.string.workspace_spec_footer), color = MaterialTheme.colorScheme.primary)
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.workspace_spec_got_it)) } },
-    )
-}
-
-@Composable
-private fun BuildTypePickerDialog(
-    project: WorkspaceProject,
-    keystores: List<top.tianyan.app.core.datastore.WorkshopKeystore>,
-    onDismiss: () -> Unit,
-    onConfirm: (top.tianyan.app.runtime.build.WorkshopBuildType, top.tianyan.app.core.datastore.WorkshopKeystore?) -> Unit,
-    onManageSigning: () -> Unit,
-) {
-    var selectedType by remember { mutableStateOf(top.tianyan.app.runtime.build.WorkshopBuildType.DEBUG) }
-    var selectedKeystoreId by remember { mutableStateOf(keystores.firstOrNull()?.id.orEmpty()) }
-    val isRelease = selectedType == top.tianyan.app.runtime.build.WorkshopBuildType.RELEASE
-    val selectedKeystore = keystores.firstOrNull { it.id == selectedKeystoreId }
-
-    RuntimeAlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.workspace_build_type_title, project.name), fontWeight = FontWeight.Bold) },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
-                BuildTypeOption(
-                    title = stringResource(R.string.workspace_build_type_debug),
-                    description = stringResource(R.string.workspace_build_type_debug_description),
-                    selected = !isRelease,
-                    onClick = { selectedType = top.tianyan.app.runtime.build.WorkshopBuildType.DEBUG },
-                )
-                BuildTypeOption(
-                    title = stringResource(R.string.workspace_build_type_release),
-                    description = stringResource(R.string.workspace_build_type_release_description),
-                    selected = isRelease,
-                    onClick = { selectedType = top.tianyan.app.runtime.build.WorkshopBuildType.RELEASE },
-                )
-                if (isRelease) {
-                    if (keystores.isEmpty()) {
-                        Surface(color = MaterialTheme.colorScheme.errorContainer, shape = Radius.smShape) {
-                            Column(Modifier.fillMaxWidth().padding(Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                                Text(stringResource(R.string.workspace_build_no_keystore), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
-                                Button(onClick = onManageSigning) { Text(stringResource(R.string.workspace_build_go_create_keystore)) }
-                            }
-                        }
-                    } else {
-                        Text(stringResource(R.string.workspace_build_pick_keystore), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        keystores.forEach { keystore ->
-                            BuildTypeOption(
-                                title = keystore.name,
-                                description = "alias ${keystore.alias}",
-                                selected = keystore.id == selectedKeystoreId,
-                                onClick = { selectedKeystoreId = keystore.id },
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onConfirm(selectedType, if (isRelease) selectedKeystore else null) },
-                enabled = !isRelease || selectedKeystore != null,
-            ) { Text(stringResource(R.string.workspace_build_start)) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.workspace_cancel)) }
-        },
-    )
-}
-
-@Composable
-private fun BuildTypeOption(
-    title: String,
-    description: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    val borderColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
-    Surface(
-        color = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) else MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = Radius.smShape,
-        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
-        modifier = Modifier.fillMaxWidth().clip(Radius.smShape).clickable(onClick = onClick),
-    ) {
-        Row(Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
-            RuntimeIcon(
-                if (selected) RuntimeIconName.Check else RuntimeIconName.Key,
-                Modifier.size(18.dp),
-                if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
-}
-
-@Composable
-private fun ProjectCard(
-    project: WorkspaceProject,
-    busy: Boolean,
-    isBuilding: Boolean,
-    onOpenExplorer: () -> Unit,
-    onOpenTerminal: () -> Unit,
-    onOpenAgent: () -> Unit,
-    onRunProject: () -> Unit,
-    onShowBuildLog: () -> Unit,
-    onExport: () -> Unit,
-    onDelete: () -> Unit,
-) {
-    var moreExpanded by remember { mutableStateOf(false) }
-
-    // 项目类型徽章色：与构建阶段色同源，避免工坊里出现第三套绿/蓝/紫/红。
-    val typeBadgeColor = when (project.projectType) {
-        ProjectType.ANDROID -> TianyanTheme.colors.success
-        ProjectType.FLUTTER -> TianyanTheme.colors.info
-        ProjectType.REVERSE -> TianyanTheme.colors.accentViolet
-        ProjectType.RED_TEAM -> TianyanTheme.colors.danger
-        ProjectType.GENERAL -> MaterialTheme.colorScheme.primary
-    }
-
-    val typeIcon = when (project.projectType) {
-        ProjectType.ANDROID -> RuntimeIconName.Android
-        ProjectType.FLUTTER -> RuntimeIconName.Flutter
-        ProjectType.REVERSE -> RuntimeIconName.Reverse
-        ProjectType.RED_TEAM -> RuntimeIconName.Shield
-        ProjectType.GENERAL -> RuntimeIconName.Code
-    }
-
-    RuntimeCard(
-        modifier = Modifier.fillMaxWidth(),
-        borderColor = if (isBuilding) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
-        onClick = onOpenExplorer,
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-            ) {
-                IconTile(typeIcon, size = 40.dp, color = typeBadgeColor)
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.xs),
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                    ) {
-                        Text(
-                            text = project.name,
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false),
-                        )
-                        Surface(
-                            color = if (isBuilding) MaterialTheme.colorScheme.primaryContainer else typeBadgeColor.copy(alpha = 0.15f),
-                            shape = Radius.xsShape,
-                        ) {
-                            Text(
-                                text = if (isBuilding) stringResource(R.string.workspace_building_badge) else project.projectType.displayName,
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
-                                color = if (isBuilding) MaterialTheme.colorScheme.primary else typeBadgeColor,
-                                modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
-                            )
-                        }
-                    }
-                    Text(
-                        text = "${project.linuxPath} · ${project.sizeBytes.toReadableSize()}",
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 11.sp,
-                        ),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-
-                Box {
-                    IconButton(
-                        onClick = { moreExpanded = true },
-                        enabled = !busy,
-                        modifier = Modifier
-                            .size(32.dp)
-                            .minimumInteractiveComponentSize(),
-                        contentDescription = stringResource(R.string.workspace_cd_more),
-                    ) {
-                        RuntimeIcon(RuntimeIconName.More, Modifier.size(18.dp), MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    DropdownMenu(
-                        expanded = moreExpanded,
-                        onDismissRequest = { moreExpanded = false },
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.workspace_open_terminal)) },
-                            leadingIcon = {
-                                RuntimeIcon(RuntimeIconName.Terminal, Modifier.size(17.dp))
-                            },
-                            onClick = {
-                                moreExpanded = false
-                                onOpenTerminal()
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.workspace_export_project)) },
-                            leadingIcon = {
-                                RuntimeIcon(RuntimeIconName.Compress, Modifier.size(17.dp))
-                            },
-                            onClick = {
-                                moreExpanded = false
-                                onExport()
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.workspace_delete_project), color = MaterialTheme.colorScheme.error) },
-                            leadingIcon = {
-                                RuntimeIcon(RuntimeIconName.Trash, Modifier.size(17.dp), MaterialTheme.colorScheme.error)
-                            },
-                            onClick = {
-                                moreExpanded = false
-                                onDelete()
-                            },
-                        )
-                    }
-                }
-            }
-
-            if (isBuilding) {
-                LinearProgressIndicator(
-                    modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(percent = 50)),
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-
-            // 快捷操作栏：精简去噪，只保留最核心的直达动作
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.End,
-            ) {
-                // 只有可编译运行工程（Android / Flutter）显示"运行到手机"按钮；逆向/通用工程走终端
-                if (project.projectType == top.tianyan.app.runtime.ProjectType.ANDROID ||
-                    project.projectType == top.tianyan.app.runtime.ProjectType.FLUTTER
-                ) {
-                    FilledTonalButton(
-                        onClick = if (isBuilding) onShowBuildLog else onRunProject,
-                        enabled = !busy || isBuilding,
-                        shape = Radius.smShape,
-                        contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
-                        modifier = Modifier.padding(end = Spacing.sm),
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                        ) {
-                            if (isBuilding) {
-                                RuntimeCircularProgressIndicator(
-                                    modifier = Modifier.size(13.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                                Text(stringResource(R.string.workspace_compiling), style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.primary)
-                            } else {
-                                RuntimeIcon(RuntimeIconName.Play, Modifier.size(14.dp), tint = typeBadgeColor)
-                                Text(stringResource(R.string.workspace_run_on_device), style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = typeBadgeColor)
-                            }
-                        }
-                    }
-                } else {
-                    TextButton(
-                        onClick = onOpenTerminal,
-                        enabled = !busy,
-                        modifier = Modifier.padding(end = Spacing.xs),
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
-                        ) {
-                            RuntimeIcon(RuntimeIconName.Terminal, Modifier.size(15.dp), MaterialTheme.colorScheme.primary)
-                            Text(stringResource(R.string.workspace_terminal), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                        }
-                    }
-                }
-
-            }
-        }
-    }
-}
-
-private fun Long.toReadableSize(): String = when {
-    this < 1024 -> "$this B"
-    this < 1024 * 1024 -> "%.1f KB".format(this / 1024.0)
-    this < 1024 * 1024 * 1024 -> "%.1f MB".format(this / (1024.0 * 1024))
-    else -> "%.1f GB".format(this / (1024.0 * 1024 * 1024))
-}
-
-// ==================== APK 逆向模板：已安装应用选择器 ====================
-
-/** 已安装应用的应用名（label），失败时回退包名。 */
-private fun ApplicationInfo.appLabel(context: Context): String =
-    runCatching { loadLabel(context.packageManager).toString() }.getOrDefault(packageName)
-
-/** 通过 SAF 查询 URI 的显示文件名。 */
-private fun queryDisplayName(context: Context, uri: Uri): String? =
-    runCatching {
-        context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-            ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
-    }.getOrNull()
-
-@Composable
-private fun AppPickerDialog(
-    onDismiss: () -> Unit,
-    onSelect: (ApplicationInfo) -> Unit,
-) {
-    val context = LocalContext.current
-    val apps = remember {
-        runCatching {
-            context.packageManager.getInstalledApplications(0)
-                .filter { it.sourceDir != null && java.io.File(it.sourceDir).isFile }
-                .sortedBy { it.appLabel(context).lowercase() }
-        }.getOrDefault(emptyList())
-    }
-    RuntimeAlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.workspace_choose_installed_app), fontWeight = FontWeight.Bold) },
-        text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                if (apps.isEmpty()) {
-                    Text(
-                        stringResource(R.string.workspace_apps_unavailable),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                } else {
-                    Text(
-                        stringResource(R.string.workspace_choose_app_description),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(Spacing.sm))
-                    LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
-                    items(apps, key = { it.packageName }) { app ->
-                        val label = app.appLabel(context)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onSelect(app) }
-                                .padding(vertical = Spacing.sm, horizontal = Spacing.xs),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(Radius.xsShape)
-                                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                RuntimeIcon(
-                                    RuntimeIconName.Package,
-                                    Modifier.size(22.dp),
-                                    MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            Column(
-                                modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(Spacing.xs),
-                            ) {
-                                Text(
-                                    text = label,
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Text(
-                                    text = app.packageName,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                            RuntimeIcon(RuntimeIconName.ChevronRight, Modifier.size(18.dp), MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        androidx.compose.material3.HorizontalDivider(
-                            modifier = Modifier.padding(start = 52.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                        )
-                    }
-                }
-            }
-        }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.workspace_cancel)) } },
-    )
-}
-
-// ── 构建日志分类 ────────────────────────────────────────────────────────────
-//
-// 关键字提升为文件级常量：原实现把它们放在 composition 内，每次重组都重新分配
-// 三个 List。分类结果按 0..3 索引返回（依赖 / 编译 / 打包 / 其他）。
-private val BUILD_LOG_DEP_KEYWORDS = listOf("downloading", "fetching", "kilobytes", "megabytes", "get")
-private val BUILD_LOG_COMPILE_KEYWORDS = listOf("compile", "kotlin", "javac", "dex")
-private val BUILD_LOG_PACKAGE_KEYWORDS = listOf("package", "install", "apk")
-
-/**
- * 单趟把构建日志按类别分组。
- *
- * 原实现走 6 趟（一次 map 分类 + 四次 filter/map），并分配一份中间配对列表；
- * 构建日志上千行时这会落在每一帧上。这里改为一次遍历、四个桶直接追加。
- *
- * 语义与原实现完全一致：按「依赖 → 编译 → 打包 → 其他」的优先级取首个命中的类别
- * （`when` 的分支顺序即优先级），空行归入「其他」——与原来 `lines()` 后逐行分类
- * 的结果相同。
- */
-private fun classifyBuildLogLines(raw: String): List<List<String>> {
-    val buckets = List(4) { mutableListOf<String>() }
-    for (line in raw.lineSequence()) {
-        val lower = line.lowercase()
-        val category = when {
-            BUILD_LOG_DEP_KEYWORDS.any { lower.contains(it) } -> 0
-            BUILD_LOG_COMPILE_KEYWORDS.any { lower.contains(it) } -> 1
-            BUILD_LOG_PACKAGE_KEYWORDS.any { lower.contains(it) } -> 2
-            else -> 3
-        }
-        buckets[category].add(line)
-    }
-    return buckets
 }

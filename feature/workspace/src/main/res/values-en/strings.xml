@@ -45,7 +45,7 @@
     <string name="workspace_projects_section">Isolated workspace projects</string>
     <string name="workspace_projects_description">Located under /workspace in the Linux sandbox with real-time agent access</string>
     <string name="workspace_no_projects">No workspace projects yet</string>
-    <string name="workspace_no_projects_description">Create a project in the top-right, or import one from a local ZIP or GitHub</string>
+    <string name="workspace_no_projects_description">Create a project or import an existing project from a local ZIP or GitHub</string>
     <string name="workspace_building_device">Building for device…</string>
     <string name="workspace_run_ready">Ready to run</string>
     <string name="workspace_run_failed">Run failed</string>
@@ -150,6 +150,10 @@
     <string name="workspace_open_file_failed">Failed to open file</string>
     <string name="workspace_file_saved">File saved</string>
     <string name="workspace_save_failed">Save failed</string>
+    <string name="workspace_save_conflict_title">File changed on disk</string>
+    <string name="workspace_save_conflict_message">This file was modified by another process (for example an AI tool) while you were editing. Overwrite discards the disk version; Reload discards your edits.</string>
+    <string name="workspace_save_conflict_overwrite">Overwrite</string>
+    <string name="workspace_save_conflict_reload">Reload</string>
     <string name="workspace_prepare_build">Preparing build environment…</string>
     <string name="workspace_unknown_error">Unknown error</string>
     <string name="workspace_build_interrupted">Build interrupted</string>
@@ -194,8 +198,7 @@
     <string name="workspace_menu_import">Import</string>
     <string name="workspace_menu_templates">Templates</string>
     <string name="workspace_menu_plugins">Plugins</string>
-            <string name="workspace_menu_workflows">Workflows</string>
-        <string name="workspace_menu_settings">Workshop settings</string>
+    <string name="workspace_menu_settings">Workshop settings</string>
     <string name="workspace_action_next">Next</string>
     <string name="workspace_action_previous">Back</string>
     <string name="workspace_action_close">Close</string>

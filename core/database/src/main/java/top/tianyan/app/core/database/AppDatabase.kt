@@ -22,11 +22,14 @@ import top.tianyan.app.core.database.task.AgentTaskDao
         AgentSubagentEntity::class,
         AgentSubagentSettingsEntity::class,
         McpServerEntity::class,
+        McpOAuthCredentialEntity::class,
+        McpOAuthTransactionEntity::class,
         AgentSkillEntity::class,
         StorageMountBindingEntity::class,
         ToolSettingsEntity::class,
         AgentApprovalRequestEntity::class,
         AgentApprovalSettingsEntity::class,
+        AgentApprovalAuditEntity::class,
         QuickPhraseEntity::class,
         HarnessEntryEntity::class,
         HarnessLaneEntity::class,
@@ -40,9 +43,35 @@ import top.tianyan.app.core.database.task.AgentTaskDao
         AgentTaskEntity::class,
         WorkflowEntity::class,
         WorkflowExecutionLogEntity::class,
-        RedTeamFactEntity::class,
+        WorkflowScheduleEntity::class,
+        BackupRestoreReceipt::class,
+        BotEntity::class,
+        BotMemberGroupEntity::class,
+        TeamVersionEntity::class,
+        BotMemberGroupMemberEntity::class,
+        GroupChatEntity::class,
+        GroupGovernanceEntity::class,
+        GroupProposalEntity::class,
+        GroupMemberEntity::class,
+        GroupMessageEntity::class,
+        GroupSeenEntity::class,
+        GroupMessageSeqEntity::class,
+        GroupRoundEntity::class,
+        GroupLateReplyEntity::class,
+        BotScheduleEntity::class,
+        BotAssignmentEntity::class,
+        AssignmentDispatchReceipt::class,
+        BotWorkBatchEntity::class,
+        BotGroupSessionEntity::class,
+        BotScheduleDeliveryEntity::class,
+        GroupDeliveryEntity::class,
+        BotAssignmentRequestEntity::class,
+        TaskBudgetEntity::class,
+        BudgetRequestEntity::class,
+        BtwQueryEntity::class,
+        AgentMessageFeedbackEntity::class,
     ],
-    version = 51,
+    version = 83,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -57,16 +86,28 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun agentContextDao(): AgentContextDao
     abstract fun agentSubagentDao(): AgentSubagentDao
     abstract fun mcpServerDao(): McpServerDao
+    abstract fun mcpOAuthCredentialDao(): McpOAuthCredentialDao
+    abstract fun mcpOAuthTransactionDao(): McpOAuthTransactionDao
     abstract fun agentSkillDao(): AgentSkillDao
     abstract fun storageMountBindingDao(): StorageMountBindingDao
     abstract fun toolSettingsDao(): ToolSettingsDao
     abstract fun agentApprovalDao(): AgentApprovalDao
+    abstract fun agentApprovalAuditDao(): AgentApprovalAuditDao
+    abstract fun agentMessageFeedbackDao(): AgentMessageFeedbackDao
     abstract fun quickPhraseDao(): QuickPhraseDao
     abstract fun harnessRuntimeDao(): HarnessRuntimeDao
     abstract fun androidAppDao(): AndroidAppDao
     abstract fun buildScriptDao(): BuildScriptDao
     abstract fun agentTaskDao(): AgentTaskDao
     abstract fun workflowDao(): WorkflowDao
-    abstract fun redTeamFactDao(): RedTeamFactDao
+    abstract fun workflowScheduleDao(): WorkflowScheduleDao
+    abstract fun personaBotDao(): PersonaBotDao
+    abstract fun botMemberGroupDao(): BotMemberGroupDao
+    abstract fun groupChatDao(): GroupChatDao
+    abstract fun botScheduleDao(): BotScheduleDao
+    abstract fun botScheduleDeliveryDao(): BotScheduleDeliveryDao
+    abstract fun botAssignmentDao(): BotAssignmentDao
+    abstract fun botGroupSessionDao(): BotGroupSessionDao
+    abstract fun btwQueryDao(): BtwQueryDao
 }
 

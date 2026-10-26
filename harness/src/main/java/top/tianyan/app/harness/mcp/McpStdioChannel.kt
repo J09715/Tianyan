@@ -19,4 +19,6 @@ interface McpStdioChannel {
 /** Builds MCP STDIO channels. Lets tests inject an in-memory factory. */
 interface McpStdioChannelFactory {
     suspend fun open(server: McpServerConfig): McpStdioChannel
+    /** Retry startup rollback even when no channel was handed to the transport. */
+    suspend fun closePending(serverId: String) {}
 }

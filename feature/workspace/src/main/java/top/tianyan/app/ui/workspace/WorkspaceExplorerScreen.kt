@@ -1,14 +1,14 @@
 package top.tianyan.app.ui.workspace
-
+import top.tianyan.app.ui.components.previewOrNull
+import top.tianyan.app.ui.components.previewStateOf
+import org.koin.compose.viewmodel.koinViewModel
 import top.tianyan.app.ui.components.RuntimeAlertDialog
-import top.tianyan.app.ui.theme.Spacing
-import top.tianyan.app.ui.theme.Radius
-
 import android.Manifest
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -29,6 +29,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import top.tianyan.app.ui.components.RuntimeButton as Button
 import top.tianyan.app.ui.components.RuntimeCircularProgressIndicator as CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -61,7 +62,6 @@ import androidx.compose.ui.platform.LocalContext
 import top.tianyan.app.feature.workspace.R
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.tianyan.app.runtime.WorkspaceFileItem
 import top.tianyan.app.ui.components.EmptyPanel
@@ -85,27 +85,27 @@ fun WorkspaceExplorerScreen(
     onBack: () -> Unit,
     onOpenFile: (String) -> Unit,
     onOpenTerminal: (String) -> Unit,
-    viewModel: WorkspaceViewModel = hiltViewModel(),
+    viewModel: WorkspaceViewModel? = previewOrNull { koinViewModel() },
 ) {
-    val fileItems by viewModel.fileItems.collectAsStateWithLifecycle()
-    val currentPath by viewModel.currentPath.collectAsStateWithLifecycle()
-    val loading by viewModel.loadingFiles.collectAsStateWithLifecycle()
-    val message by viewModel.message.collectAsStateWithLifecycle()
-    val messageIsError by viewModel.messageIsError.collectAsStateWithLifecycle()
-    val busy by viewModel.busy.collectAsStateWithLifecycle()
-    val sharedStorageAccessLimited by viewModel.sharedStorageAccessLimited.collectAsStateWithLifecycle()
+    val fileItems by viewModel?.fileItems?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val currentPath by viewModel?.currentPath?.collectAsStateWithLifecycle() ?: previewStateOf("")
+    val loading by viewModel?.loadingFiles?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val message by viewModel?.message?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val messageIsError by viewModel?.messageIsError?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val busy by viewModel?.busy?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val sharedStorageAccessLimited by viewModel?.sharedStorageAccessLimited?.collectAsStateWithLifecycle() ?: previewStateOf(false)
 
     val context = LocalContext.current
     val allFilesPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
     ) {
         // 从系统"所有文件访问"授权页返回（无论是否授权）都重新评估并刷新
-        viewModel.refreshAfterPermissionReturn()
+        viewModel?.refreshAfterPermissionReturn()
     }
     val legacyStoragePermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) {
-        viewModel.refreshAfterPermissionReturn()
+        viewModel?.refreshAfterPermissionReturn()
     }
 
     // 对话框开关与输入状态用 rememberSaveable，旋转后不丢失（复杂对象目标仍为 remember）
@@ -128,8 +128,21 @@ fun WorkspaceExplorerScreen(
     val newFolderNameError = entryNameError(newFolderName)
     val renameNameError = renameTarget?.let { entryNameError(renameInput) }
 
+    var savedCurrentPath by rememberSaveable { mutableStateOf(initialPath) }
+
+    LaunchedEffect(currentPath) {
+        if (viewModel?.selectedProject?.value == projectName) {
+            savedCurrentPath = currentPath
+        }
+    }
+
     LaunchedEffect(projectName, initialPath) {
-        viewModel.loadExplorer(projectName, initialPath)
+        val resumePath = if (savedCurrentPath.isNotBlank()) savedCurrentPath else initialPath
+        viewModel?.loadExplorer(projectName, resumePath)
+    }
+
+    BackHandler(enabled = currentPath.isNotBlank()) {
+        viewModel?.navigateUp()
     }
 
     Scaffold(
@@ -140,7 +153,7 @@ fun WorkspaceExplorerScreen(
                 statusText = if (currentPath.isBlank()) "/workspace/$projectName" else ".../$currentPath",
                 onBack = {
                     if (currentPath.isNotBlank()) {
-                        viewModel.navigateUp()
+                        viewModel?.navigateUp()
                     } else {
                         onBack()
                     }
@@ -164,6 +177,7 @@ fun WorkspaceExplorerScreen(
                                 leadingIcon = { RuntimeIcon(RuntimeIconName.File, Modifier.size(18.dp)) },
                                 onClick = {
                                     showCreateMenu = false
+                                    viewModel?.clearMessage()
                                     newFileName = ""
                                     showCreateFileDialog = true
                                 },
@@ -173,6 +187,7 @@ fun WorkspaceExplorerScreen(
                                 leadingIcon = { RuntimeIcon(RuntimeIconName.Folder, Modifier.size(18.dp)) },
                                 onClick = {
                                     showCreateMenu = false
+                                    viewModel?.clearMessage()
                                     newFolderName = ""
                                     showCreateFolderDialog = true
                                 },
@@ -190,7 +205,7 @@ fun WorkspaceExplorerScreen(
 
                     // 刷新
                     IconButton(
-                        onClick = { viewModel.refreshDirectory() },
+                        onClick = { viewModel?.refreshDirectory() },
                         enabled = !loading,
                         contentDescription = stringResource(R.string.workspace_cd_refresh),
                     ) {
@@ -203,13 +218,13 @@ fun WorkspaceExplorerScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
+                .then(top.tianyan.app.ui.components.runtimeScrollViewport(padding)),
         ) {
             // 面包屑导航栏
             BreadcrumbBar(
                 projectName = projectName,
                 currentPath = currentPath,
-                onNavigate = { targetPath -> viewModel.navigateToDirectory(targetPath) },
+                onNavigate = { targetPath -> viewModel?.navigateToDirectory(targetPath) },
             )
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -234,7 +249,7 @@ fun WorkspaceExplorerScreen(
 
             // 消息提示
             message?.let { notice ->
-                Box(Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm)) {
+                Box(Modifier.padding(horizontal = 14.dp, vertical = 6.dp)) {
                     NoticeBanner(text = notice, isError = messageIsError)
                 }
             }
@@ -248,17 +263,17 @@ fun WorkspaceExplorerScreen(
                     icon = RuntimeIconName.Folder,
                     title = stringResource(R.string.workspace_empty_directory),
                     description = stringResource(R.string.workspace_empty_directory_hint),
-                    modifier = Modifier.padding(Spacing.xl),
+                    modifier = Modifier.padding(24.dp),
                 )
             } else {
                 Box(Modifier.fillMaxSize()) {
                     LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = padding.calculateBottomPadding()),
                     ) {
                         // 如果在子目录，显示返回上一级项
                         if (currentPath.isNotBlank()) {
                             item {
-                                ParentDirectoryRow(onClick = { viewModel.navigateUp() })
+                                ParentDirectoryRow(onClick = { viewModel?.navigateUp() })
                                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                             }
                         }
@@ -268,12 +283,13 @@ fun WorkspaceExplorerScreen(
                                 item = item,
                                 onClick = {
                                     if (item.isDirectory) {
-                                        viewModel.navigateToDirectory(item.relativePath)
+                                        viewModel?.navigateToDirectory(item.relativePath)
                                     } else {
                                         onOpenFile(item.relativePath)
                                     }
                                 },
                                 onRename = {
+                                    viewModel?.clearMessage()
                                     renameTarget = item
                                     renameInput = item.name
                                 },
@@ -300,112 +316,51 @@ fun WorkspaceExplorerScreen(
         }
     }
 
-    // 新建文件对话框
     if (showCreateFileDialog) {
-        RuntimeAlertDialog(
-            onDismissRequest = { showCreateFileDialog = false },
-            title = { Text(stringResource(R.string.workspace_new_file), fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                    OutlinedTextField(
-                        value = newFileName,
-                        onValueChange = { newFileName = it },
-                        label = { Text(stringResource(R.string.workspace_file_name)) },
-                        placeholder = { Text("main.py / app.js / config.json") },
-                        isError = newFileNameError != null,
-                        supportingText = newFileNameError?.let { error -> { Text(error) } },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.createFile(newFileName)
-                        showCreateFileDialog = false
-                    },
-                    enabled = newFileName.isNotBlank() && newFileNameError == null && !busy,
-                ) {
-                    if (busy) {
-                        CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
-                    } else {
-                        Text(stringResource(R.string.workspace_create), color = MaterialTheme.colorScheme.primary)
-                    }
-                }
-            },
-            dismissButton = { TextButton(onClick = { showCreateFileDialog = false }) { Text(stringResource(R.string.workspace_cancel)) } },
+        WorkspaceNameDialog(
+            title = stringResource(R.string.workspace_new_file),
+            label = stringResource(R.string.workspace_file_name),
+            value = newFileName,
+            onValueChange = { newFileName = it; viewModel?.clearMessage() },
+            validationError = newFileNameError,
+            operationError = message.takeIf { messageIsError },
+            busy = busy,
+            actionLabel = stringResource(R.string.workspace_create),
+            enabled = newFileName.isNotBlank() && newFileNameError == null,
+            onSubmit = { viewModel?.clearMessage(); viewModel?.createFile(newFileName) { showCreateFileDialog = false } },
+            onDismiss = { showCreateFileDialog = false },
         )
     }
 
-    // 新建文件夹对话框
     if (showCreateFolderDialog) {
-        RuntimeAlertDialog(
-            onDismissRequest = { showCreateFolderDialog = false },
-            title = { Text(stringResource(R.string.workspace_new_folder), fontWeight = FontWeight.Bold) },
-            text = {
-                OutlinedTextField(
-                    value = newFolderName,
-                    onValueChange = { newFolderName = it },
-                    label = { Text(stringResource(R.string.workspace_folder_name)) },
-                    placeholder = { Text("src / models / tests") },
-                    isError = newFolderNameError != null,
-                    supportingText = newFolderNameError?.let { error -> { Text(error) } },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.createDirectory(newFolderName)
-                        showCreateFolderDialog = false
-                    },
-                    enabled = newFolderName.isNotBlank() && newFolderNameError == null && !busy,
-                ) {
-                    if (busy) {
-                        CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
-                    } else {
-                        Text(stringResource(R.string.workspace_create), color = MaterialTheme.colorScheme.primary)
-                    }
-                }
-            },
-            dismissButton = { TextButton(onClick = { showCreateFolderDialog = false }) { Text(stringResource(R.string.workspace_cancel)) } },
+        WorkspaceNameDialog(
+            title = stringResource(R.string.workspace_new_folder),
+            label = stringResource(R.string.workspace_folder_name),
+            value = newFolderName,
+            onValueChange = { newFolderName = it; viewModel?.clearMessage() },
+            validationError = newFolderNameError,
+            operationError = message.takeIf { messageIsError },
+            busy = busy,
+            actionLabel = stringResource(R.string.workspace_create),
+            enabled = newFolderName.isNotBlank() && newFolderNameError == null,
+            onSubmit = { viewModel?.clearMessage(); viewModel?.createDirectory(newFolderName) { showCreateFolderDialog = false } },
+            onDismiss = { showCreateFolderDialog = false },
         )
     }
 
-    // 重命名对话框
     renameTarget?.let { target ->
-        RuntimeAlertDialog(
-            onDismissRequest = { renameTarget = null },
-            title = { Text(stringResource(R.string.workspace_rename_title, target.name), fontWeight = FontWeight.Bold) },
-            text = {
-                OutlinedTextField(
-                    value = renameInput,
-                    onValueChange = { renameInput = it },
-                    label = { Text(stringResource(R.string.workspace_new_name)) },
-                    isError = renameNameError != null,
-                    supportingText = renameNameError?.let { error -> { Text(error) } },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.renameItem(target.relativePath, renameInput)
-                        renameTarget = null
-                    },
-                    enabled = renameInput.isNotBlank() && renameInput != target.name && renameNameError == null && !busy,
-                ) {
-                    if (busy) {
-                        CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
-                    } else {
-                        Text(stringResource(R.string.workspace_save), color = MaterialTheme.colorScheme.primary)
-                    }
-                }
-            },
-            dismissButton = { TextButton(onClick = { renameTarget = null }) { Text(stringResource(R.string.workspace_cancel)) } },
+        WorkspaceNameDialog(
+            title = stringResource(R.string.workspace_rename_title, target.name),
+            label = stringResource(R.string.workspace_new_name),
+            value = renameInput,
+            onValueChange = { renameInput = it; viewModel?.clearMessage() },
+            validationError = renameNameError,
+            operationError = message.takeIf { messageIsError },
+            busy = busy,
+            actionLabel = stringResource(R.string.workspace_save),
+            enabled = renameInput.isNotBlank() && renameNameError == null && renameInput != target.name,
+            onSubmit = { viewModel?.clearMessage(); viewModel?.renameItem(target.relativePath, renameInput) { renameTarget = null } },
+            onDismiss = { renameTarget = null },
         )
     }
 
@@ -422,7 +377,7 @@ fun WorkspaceExplorerScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        viewModel.deleteItem(target.relativePath)
+                        viewModel?.deleteItem(target.relativePath)
                         deleteTarget = null
                     },
                     enabled = !busy,
@@ -454,9 +409,9 @@ private fun BreadcrumbBar(
         LazyRow(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             item {
                 BreadcrumbChip(
@@ -495,14 +450,14 @@ private fun BreadcrumbChip(
     onClick: () -> Unit,
 ) {
     Surface(
-        shape = Radius.xsShape,
+        shape = RoundedCornerShape(8.dp),
         color = if (isCurrent) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
         modifier = Modifier.clickable(onClick = onClick),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             RuntimeIcon(
                 icon,
@@ -525,15 +480,15 @@ private fun BreadcrumbChip(
 private fun SharedStoragePermissionBanner(onAuthorize: () -> Unit) {
     Surface(
         color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f),
-        shape = Radius.smShape,
+        shape = RoundedCornerShape(12.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = Spacing.md, vertical = Spacing.sm),
+            .padding(horizontal = 14.dp, vertical = 8.dp),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             RuntimeIcon(
                 RuntimeIconName.Alert,
@@ -542,7 +497,7 @@ private fun SharedStoragePermissionBanner(onAuthorize: () -> Unit) {
             )
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 Text(
                     text = stringResource(R.string.workspace_shared_permission_banner_title),
@@ -572,9 +527,9 @@ private fun ParentDirectoryRow(onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = Spacing.lg, vertical = Spacing.md),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         RuntimeIcon(
             RuntimeIconName.ArrowUp,
@@ -607,16 +562,16 @@ private fun FileItemRow(
                 haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                 onClick()
             })
-            .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
+            .padding(horizontal = 16.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         // 图标
         if (item.isDirectory) {
             Box(
                 modifier = Modifier
                     .size(36.dp)
-                    .clip(Radius.smShape)
+                    .clip(RoundedCornerShape(10.dp))
                     .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)),
                 contentAlignment = Alignment.Center,
             ) {
@@ -630,7 +585,7 @@ private fun FileItemRow(
             Box(
                 modifier = Modifier
                     .size(36.dp)
-                    .clip(Radius.smShape)
+                    .clip(RoundedCornerShape(10.dp))
                     .background(extColor.copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center,
             ) {
@@ -645,21 +600,22 @@ private fun FileItemRow(
         // 名称和详情
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = item.name,
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontWeight = if (item.isDirectory) FontWeight.SemiBold else FontWeight.Normal,
                     ),
+                    modifier = Modifier.weight(1f, fill = false),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (!item.isDirectory && item.extension.isNotBlank()) {
                     Surface(
                         color = extColor.copy(alpha = 0.15f),
-                        shape = Radius.xsShape,
+                        shape = RoundedCornerShape(4.dp),
                     ) {
                         Text(
                             text = item.extension.uppercase(),
@@ -669,13 +625,15 @@ private fun FileItemRow(
                                 fontWeight = FontWeight.Bold,
                             ),
                             color = extColor,
-                            modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
+                            maxLines = 1,
+                            softWrap = false,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
                         )
                     }
                 }
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (!item.isDirectory) {
                     Text(
                         text = item.sizeBytes.toReadableSize(),

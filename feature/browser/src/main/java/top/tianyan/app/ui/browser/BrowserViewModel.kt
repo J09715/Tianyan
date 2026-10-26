@@ -3,8 +3,6 @@ package top.tianyan.app.ui.browser
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import android.webkit.WebView
-import dagger.hilt.android.lifecycle.HiltViewModel
-import javax.inject.Inject
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -15,10 +13,10 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import top.tianyan.app.core.browser.BROWSER_HOME_URL
 import top.tianyan.app.core.browser.BrowserDescriptor
 import top.tianyan.app.core.browser.BrowserFamily
 import top.tianyan.app.core.browser.PageSnapshot
+import top.tianyan.app.core.browser.TianyanNewTab
 import top.tianyan.app.core.datastore.BrowserPreferences
 import top.tianyan.app.runtime.browser.BrowserEventBus
 import top.tianyan.app.runtime.browser.BrowserRegistry
@@ -29,8 +27,7 @@ import top.tianyan.app.runtime.browser.cdp.DebugPausedState
 import top.tianyan.app.runtime.browser.hook.HookHitRecord
 import top.tianyan.app.ui.browser.snapshot.SnapshotSheetState
 
-@HiltViewModel
-class BrowserViewModel @Inject constructor(
+class BrowserViewModel(
     val registry: BrowserRegistry,
     val eventBus: BrowserEventBus,
     private val browserPreferences: BrowserPreferences,
@@ -154,7 +151,11 @@ class BrowserViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             eventBus.url.collect { loadedUrl ->
-                if (loadedUrl.isNotBlank()) _urlInput.value = loadedUrl
+                when {
+                    // 品牌起始页：URL 栏清空显示占位符（虚拟地址对用户无导航意义）
+                    loadedUrl == TianyanNewTab.URL -> _urlInput.value = ""
+                    loadedUrl.isNotBlank() -> _urlInput.value = loadedUrl
+                }
             }
         }
         // 共浏览开关：从 DataStore 读取并保持同步（设置页等其他入口的修改也会生效）
@@ -215,7 +216,7 @@ class BrowserViewModel @Inject constructor(
         val raw = _urlInput.value.trim()
         if (raw.isBlank()) return
         val target = normalizeUrl(raw) ?: run {
-            _toolMessage.value = "不支持的链接：仅允许 http/https（输入 home 可回到起始页）"
+            _toolMessage.value = "不支持的链接：仅允许 http/https（或 about:blank）"
             return
         }
         viewModelScope.launch {
@@ -282,9 +283,9 @@ class BrowserViewModel @Inject constructor(
         val tab = runCatching { engine.listTabs() }.getOrDefault(emptyList())
             .firstOrNull { it.tabId == tabId } ?: return@launch
         runCatching { engine.closeTab(tab) }
-        // 关掉唯一 tab 后回落到起始页，避免视图永久空白
+        // 关掉唯一 tab 后保留品牌起始页，避免视图永久空白
         if (engine.activeTab() == null) {
-            runCatching { engine.openTab(BROWSER_HOME_URL, activate = true) }
+            runCatching { engine.openTab(TianyanNewTab.URL, activate = true) }
         }
         refreshNavState()
         syncTabs()
@@ -303,16 +304,16 @@ class BrowserViewModel @Inject constructor(
     private fun ensureActiveTab() = viewModelScope.launch {
         runCatching {
             val engine = registry.getDefault()
-            if (engine.activeTab() == null) engine.openTab(BROWSER_HOME_URL, activate = true)
+            if (engine.activeTab() == null) engine.openTab(TianyanNewTab.URL, activate = true)
         }.onFailure { _toolMessage.value = it.message ?: "浏览器引擎尚未就绪" }
         syncTabs()
     }
 
-    /** 轮询同步 tab 列表；引擎已注册但无 tab 时静默补一个空白 tab（兜底竞态/全部关闭）。 */
+    /** 轮询同步 tab 列表；引擎已注册但无 tab 时静默补一个品牌起始页 tab（兜底竞态/全部关闭）。 */
     private suspend fun syncTabs() {
         val engine = runCatching { registry.getDefault() }.getOrNull() ?: return
         if (engine.activeTab() == null) {
-            runCatching { engine.openTab(BROWSER_HOME_URL, activate = true) }
+            runCatching { engine.openTab(TianyanNewTab.URL, activate = true) }
         }
         val tokens = runCatching { engine.listTabs() }.getOrDefault(emptyList())
         _tabs.value = tokens.toTabUi(engine.activeTab()?.tabId)
@@ -332,15 +333,9 @@ class BrowserViewModel @Inject constructor(
         BrowserTabUi(tabId = token.tabId, title = liveTitle, url = liveUrl, active = token.tabId == activeId)
     }
 
-    /** URL 归一化：放行 http/https 与内置起始页；其余协议（javascript:/file:/intent: 等）拒绝。 */
+    /** URL 归一化：仅放行 http/https 与 about:blank；其余协议（javascript:/file:/intent: 等）拒绝。 */
     private fun normalizeUrl(value: String): String? {
-        if (value.equals("about:blank", ignoreCase = true)) return BROWSER_HOME_URL
-        if (value.equals("home", ignoreCase = true) ||
-            value.equals("about:home", ignoreCase = true) ||
-            value.equals(BROWSER_HOME_URL, ignoreCase = true)
-        ) {
-            return BROWSER_HOME_URL
-        }
+        if (value.equals("about:blank", ignoreCase = true)) return "about:blank"
         val schemeEnd = value.indexOf("://")
         if (schemeEnd <= 0) return "https://$value"
         val scheme = value.take(schemeEnd).lowercase()

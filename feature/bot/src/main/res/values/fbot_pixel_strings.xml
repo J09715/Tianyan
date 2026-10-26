@@ -1,0 +1,225 @@
+<resources>
+    <string name="fbot_pixel_apply">使用此造型</string>
+    <string name="fbot_pixel_edit">设计像素角色</string>
+    <string name="fbot_pixel_title">像素角色编辑</string>
+    <string name="fbot_pixel_random">随机生成</string>
+    <string name="fbot_pixel_kind">造型</string>
+    <string name="fbot_pixel_hair">发型（人形）</string>
+    <string name="fbot_pixel_eyes">眼睛</string>
+    <string name="fbot_pixel_mouth">嘴型</string>
+    <string name="fbot_pixel_outfit">服装</string>
+    <string name="fbot_pixel_accessory">配饰</string>
+    <string name="fbot_pixel_skin">肤色 / 机身色</string>
+    <string name="fbot_pixel_hair_color">发色 / 机械面板色</string>
+    <string name="fbot_pixel_outfit_color">服装颜色</string>
+    <string name="fbot_pixel_backdrop">头像背景</string>
+    <string name="fbot_pixel_state_idle">待机</string>
+    <string name="fbot_pixel_state_thinking">思考</string>
+    <string name="fbot_pixel_state_executing">编程</string>
+    <string name="fbot_pixel_state_blocked">受阻</string>
+    <string name="fbot_desk_title">工位看板</string>
+    <string name="fbot_desk_expand">展开工位</string>
+    <string name="fbot_desk_collapse">收起工位</string>
+    <string name="fbot_desk_members_count">%1$d 人在岗</string>
+    <string name="fbot_desk_busy_count"> · %1$d 人忙碌</string>
+    <string name="fbot_desk_status_thinking">思考中</string>
+    <string name="fbot_desk_status_executing">编程中</string>
+    <string name="fbot_desk_status_active">回复中</string>
+    <string name="fbot_desk_status_blocked">受阻</string>
+    <string name="fbot_desk_status_success">已完成</string>
+    <string name="fbot_desk_status_failed">失败</string>
+    <string name="fbot_desk_status_idle">待命中</string>
+    <string name="fbot_desk_mention_hint">点击提及</string>
+    <string name="fbot_cyber_studio">办公室</string>
+    <string name="fbot_cyber_studio_desc">全屏像素办公室，看大家在忙什么，点角色就能安排事情</string>
+    <string name="fbot_pixel_office_status_idle">[待命中]</string>
+    <string name="fbot_pixel_office_status_busy">[%1$d 人在忙]</string>
+    <string name="fbot_pixel_office_empty">办公室还空着。邀请同事进群后，就能在这里看到他们走动。</string>
+    <string name="fbot_pixel_office_idle_line">待命中，随时可以开工</string>
+    <string name="fbot_pixel_office_say">跟办公室说一句…</string>
+    <string name="fbot_pixel_office_waiting">等你一下</string>
+    <string name="fbot_pixel_office_banner">协同办公</string>
+    <string name="fbot_pixel_office_pet_cat">摸摸猫</string>
+    <string name="fbot_pixel_office_brew_coffee">按一下咖啡机</string>
+    <string name="fbot_pixel_office_zoom_in">放大办公室</string>
+    <string name="fbot_pixel_office_zoom_out">缩小办公室</string>
+    <string name="fbot_pixel_office_fit_view">查看完整办公室</string>
+    <string name="fbot_pixel_office_reset_view">恢复默认视角</string>
+    <string name="fbot_pixel_office_show_paths">显示路径调试层</string>
+    <string name="fbot_pixel_office_hide_paths">隐藏路径调试层</string>
+    <string name="fbot_pixel_office_select_actor">选择 %1$s</string>
+    <string name="fbot_pixel_office_actor_description">%1$s，%2$s</string>
+    <string name="fbot_pixel_office_actor_waiting">%1$s，%2$s，等待确认 %3$d 秒</string>
+    <string name="fbot_office_step_read">正在读取 %1$s</string>
+    <string name="fbot_office_step_read_file">正在读取文件</string>
+    <string name="fbot_office_step_write">正在写入 %1$s</string>
+    <string name="fbot_office_step_write_file">正在写入文件</string>
+    <string name="fbot_office_step_edit">正在修改 %1$s</string>
+    <string name="fbot_office_step_edit_file">正在修改文件</string>
+    <string name="fbot_office_step_command">正在执行命令</string>
+    <string name="fbot_office_step_command_detail">正在执行 %1$s</string>
+    <string name="fbot_office_step_search">正在检索 %1$s</string>
+    <string name="fbot_office_step_search_any">正在检索资料</string>
+    <string name="fbot_office_step_test">正在运行测试</string>
+    <string name="fbot_office_step_web">正在浏览网页</string>
+    <string name="fbot_office_step_delegate">正在调度成员</string>
+    <string name="fbot_office_step_delegate_detail">正在调度 %1$s</string>
+    <string name="fbot_office_step_file">文件</string>
+    <string name="fbot_office_thinking_fallback">正在构建回答逻辑…</string>
+    <string name="fbot_office_screen_read">读取</string>
+    <string name="fbot_office_screen_write">写入</string>
+    <string name="fbot_office_screen_edit">修改</string>
+    <string name="fbot_office_screen_command">命令</string>
+    <string name="fbot_office_screen_search">检索</string>
+    <string name="fbot_office_screen_test">测试</string>
+    <string name="fbot_office_screen_web">网页</string>
+    <string name="fbot_office_screen_delegate">调度</string>
+    <string name="fbot_office_kanban_title">任务看板</string>
+    <string name="fbot_office_board_thought">思考：%1$s</string>
+    <string name="fbot_office_kanban_todo">待办</string>
+    <string name="fbot_office_kanban_doing">进行中</string>
+    <string name="fbot_office_kanban_done">完成</string>
+    <string name="fbot_office_kanban_empty">暂无任务</string>
+    <string name="fbot_office_kanban_more">+%1$d</string>
+    <string name="fbot_office_kanban_elapsed">%1$ds</string>
+    <string name="fbot_office_kanban_open">展开任务看板</string>
+    <string name="fbot_office_kanban_close">关闭任务看板</string>
+    <string name="fbot_office_kanban_locate">定位</string>
+    <string name="fbot_office_kanban_failed">失败</string>
+    <string name="fbot_office_kanban_summary">%1$d 项任务 · %2$d 项进行中</string>
+    <string name="fbot_office_kanban_depends">依赖：%1$s</string>
+    <string name="fbot_office_standup_host">先对齐一下分工</string>
+    <string-array name="fbot_office_idle_general">
+        <item>整理一下桌面</item>
+        <item>看看下一步做什么</item>
+        <item>随时可以开工</item>
+        <item>先喝口水</item>
+    </string-array>
+    <string-array name="fbot_office_idle_frontend">
+        <item>UI 规范已对齐</item>
+        <item>等一个交互稿</item>
+        <item>组件库又更新了</item>
+    </string-array>
+    <string-array name="fbot_office_idle_backend">
+        <item>接口契约没问题</item>
+        <item>缓存命中率不错</item>
+        <item>再看看慢查询</item>
+    </string-array>
+    <string-array name="fbot_office_idle_test">
+        <item>用例已就绪，随时提测</item>
+        <item>要不要先跑一遍回归</item>
+        <item>边界条件再补一个</item>
+    </string-array>
+    <string-array name="fbot_office_idle_ops">
+        <item>PRoot 沙箱稳健运行中</item>
+        <item>部署通道已就绪</item>
+        <item>日志里没有异常</item>
+    </string-array>
+    <string-array name="fbot_office_idle_product">
+        <item>需求边界再确认一下</item>
+        <item>优先级已经排好</item>
+        <item>这个场景得再想想</item>
+    </string-array>
+    <string-array name="fbot_office_idle_data">
+        <item>指标口径已统一</item>
+        <item>等数据回流</item>
+        <item>样本量还差点</item>
+    </string-array>
+    <string-array name="fbot_office_idle_design">
+        <item>配色再收一版</item>
+        <item>间距已经对齐</item>
+        <item>动效节奏对了</item>
+    </string-array>
+    <string-array name="fbot_office_idle_writer">
+        <item>文档结构搭好了</item>
+        <item>等最后一遍润色</item>
+        <item>示例代码补上</item>
+    </string-array>
+    <string name="fbot_pixel_zone_think">思考区</string>
+    <string name="fbot_pixel_zone_meet">会议区</string>
+    <string name="fbot_pixel_zone_work">工作区</string>
+    <string name="fbot_pixel_zone_coffee">咖啡区</string>
+    <string name="fbot_pixel_zone_rest">休息区</string>
+    <string name="fbot_cyber_studio_back_chat">返回群聊</string>
+    <string name="fbot_cyber_studio_desks_section">智能体工位</string>
+    <string name="fbot_cyber_studio_pipeline_section">任务流水看板</string>
+    <string name="fbot_cyber_studio_mention_action">呼叫沟通</string>
+    <string name="fbot_cyber_studio_profile_action">档案</string>
+    <string name="fbot_cyber_studio_no_assignments">暂无任务流水，在群聊中 @智能体 即可下发任务</string>
+    <string name="fbot_cyber_studio_summary">%1$d 位成员在席 · %2$d 项工单</string>
+    <string-array name="fbot_pixel_kinds">
+        <item>人形</item>
+        <item>猫耳</item>
+        <item>机器人</item>
+        <item>赛博半机械</item>
+    </string-array>
+    <string-array name="fbot_pixel_hairs">
+        <item>短发</item>
+        <item>波波头</item>
+        <item>长发</item>
+        <item>刺猬头</item>
+        <item>束发马尾</item>
+    </string-array>
+    <string-array name="fbot_pixel_eye_styles">
+        <item>明亮</item>
+        <item>笑眼</item>
+        <item>专注</item>
+        <item>灵动眨眼</item>
+    </string-array>
+    <string-array name="fbot_pixel_mouth_styles">
+        <item>微笑</item>
+        <item>平静</item>
+        <item>开口</item>
+        <item>酷</item>
+    </string-array>
+    <string-array name="fbot_pixel_outfits">
+        <item>T 恤</item>
+        <item>连帽衫</item>
+        <item>西装</item>
+        <item>汉服长袍</item>
+    </string-array>
+    <string-array name="fbot_pixel_accessories">
+        <item>无</item>
+        <item>眼镜</item>
+        <item>耳机</item>
+        <item>帽子</item>
+        <item>官帽</item>
+        <item>护目镜</item>
+        <item>工牌</item>
+    </string-array>
+    <string-array name="fbot_pixel_skins">
+        <item>浅色</item>
+        <item>暖色</item>
+        <item>小麦</item>
+        <item>棕色</item>
+        <item>深色</item>
+    </string-array>
+    <string-array name="fbot_pixel_hair_colors">
+        <item>墨黑</item>
+        <item>栗棕</item>
+        <item>铜色</item>
+        <item>金色</item>
+        <item>银白</item>
+        <item>蓝色</item>
+        <item>粉紫</item>
+        <item>青绿</item>
+    </string-array>
+    <string-array name="fbot_pixel_outfit_colors">
+        <item>蓝紫</item>
+        <item>青绿</item>
+        <item>玫红</item>
+        <item>琥珀</item>
+        <item>浅紫</item>
+        <item>藏青</item>
+        <item>朱红</item>
+        <item>米白</item>
+    </string-array>
+    <string-array name="fbot_pixel_backdrops">
+        <item>淡紫</item>
+        <item>薄荷</item>
+        <item>桃色</item>
+        <item>天蓝</item>
+        <item>奶油</item>
+        <item>浅灰</item>
+    </string-array>
+</resources>

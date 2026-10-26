@@ -1,6 +1,5 @@
 package top.tianyan.app.ui.chat
 
-import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -8,32 +7,33 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
+import top.tianyan.app.harness.MentionExtractor
 
 /** 构建精准匹配技能与插件实体的正则表达式（优先长词带空格全称匹配） */
 
 internal fun buildMentionRegex(knownNames: List<String>): Regex {
     val sorted = knownNames.filter { it.isNotBlank() }.sortedByDescending { it.length }
     val escaped = sorted.map { Regex.escape(it) }
-    val pattern = if (escaped.isNotEmpty()) {
-        """@(${escaped.joinToString("|")}|[^\s@,，:：\n]+)"""
+    val generic = """[^${MentionExtractor.MENTION_HARD_BOUNDARY}]+"""
+    // 与 MentionExtractor 同一套：已知名单最长优先 + 邮箱/词边界保护 + 硬终止符。
+    val body = if (escaped.isNotEmpty()) {
+        """${escaped.joinToString("|")}|$generic"""
     } else {
-        """@([^\s@,，:：\n]+)"""
+        generic
     }
-    return Regex(pattern)
+    return Regex("""(?<![\w.+-])@($body)""")
 }
 
-/** 为文本中的 @能力 实体添加自适应半透明高亮样式（支持带空格全称）。
- *  [cachedRegex] 传入调用方按名单缓存好的正则，为空时才现场构建，避免每次键击重复编译。 */
+/** 为文本中的 @能力 实体添加自适应半透明高亮样式（支持带空格全称） */
 internal fun formatMentionText(
     text: String,
     knownNames: List<String>,
     mentionColor: Color,
     mentionBg: Color,
-    cachedRegex: Regex? = null,
 ): AnnotatedString {
     if (!text.contains("@")) return AnnotatedString(text)
     val builder = AnnotatedString.Builder(text)
-    val regex = cachedRegex ?: buildMentionRegex(knownNames)
+    val regex = buildMentionRegex(knownNames)
     for (match in regex.findAll(text)) {
         val range = match.range
         builder.addStyle(
@@ -58,11 +58,8 @@ internal class MentionVisualTransformation(
     private val mentionColor: Color,
     private val mentionBg: Color,
 ) : VisualTransformation {
-    // 正则随实例按名单缓存一次：filter() 每次键击/重排都会调用，避免重复编译
-    private val mentionRegex: Regex = buildMentionRegex(knownNames)
-
     override fun filter(text: AnnotatedString): TransformedText {
-        val transformed = formatMentionText(text.text, knownNames, mentionColor, mentionBg, mentionRegex)
+        val transformed = formatMentionText(text.text, knownNames, mentionColor, mentionBg)
         return TransformedText(transformed, OffsetMapping.Identity)
     }
 }

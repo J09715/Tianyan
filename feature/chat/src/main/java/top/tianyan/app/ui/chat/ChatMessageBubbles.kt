@@ -3,17 +3,12 @@ package top.tianyan.app.ui.chat
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import top.tianyan.app.ui.components.RuntimeAlertDialog
-import top.tianyan.app.ui.theme.Radius
-import top.tianyan.app.ui.theme.Spacing
+import top.tianyan.app.ui.components.RuntimeCard
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.util.LruCache
-import android.webkit.MimeTypeMap
 import android.widget.Toast
-import androidx.core.content.FileProvider
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -28,9 +23,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.add
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -55,15 +50,16 @@ import androidx.compose.material3.Text
 import top.tianyan.app.ui.components.RuntimeTextButton as TextButton
 import top.tianyan.app.ui.components.RuntimeLinearProgressIndicator as LinearProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -75,30 +71,29 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import top.tianyan.app.harness.AssistantText
 import top.tianyan.app.harness.CapabilityEvent
-import top.tianyan.app.harness.MessageAttachment
+import top.tianyan.app.harness.SkillSuggestion
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.FlowRow
+import top.tianyan.app.ui.components.RuntimeOutlinedButton as OutlinedButton
+import top.tianyan.app.harness.ModelSwitchEvent
 import top.tianyan.app.harness.UserMessage
 import top.tianyan.app.harness.checkpoint.RewindScope
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
-
-/**
- * 剥离历史消息里残留的附件挂载说明（≤0.18.17 会把整段拼进消息正文并落库）。
- *
- * 只切分隔符之后的全部内容：那段是程序生成的路径清单，不是用户写的字。
- * 新消息正文里本就不含该段，对它们是恒等变换（前缀字节不受影响）。
- */
-internal fun stripAttachmentManifest(text: String): String =
-    text.substringBefore("\n\n[附件：")
-        .substringBefore("\n\n[Attachment:")
-        .trimEnd()
+import java.io.File
+import kotlinx.coroutines.flow.MutableStateFlow
+import org.koin.core.context.GlobalContext
+import top.tianyan.app.core.common.navigation.AppNavigationTarget
+import top.tianyan.app.core.common.navigation.GlobalNavigationBus
+import top.tianyan.app.core.common.translation.TranslationManager
+import top.tianyan.app.core.common.translation.TranslationModelStatus
 
 /** 消息气泡：用户/助手气泡、思考块、任务计划卡、能力事件卡。 */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -112,11 +107,7 @@ internal fun UserBubble(
     onRewind: (RewindScope) -> Unit = {},
 ) {
     val context = LocalContext.current
-    // 旧版本（≤0.18.17）把附件挂载说明拼进了消息正文并落库，气泡会显示一整段路径文字。
-    // 渲染层统一剥离：新消息本就不含该段，历史消息也能显示干净。
-    val visibleText = remember(message.text) { stripAttachmentManifest(message.text) }
     var showMenu by remember { mutableStateOf(false) }
-    var previewImageUrl by rememberSaveable { mutableStateOf<String?>(null) }
     // 删除消息为破坏性操作，先经确认对话框
     var showDeleteConfirm by rememberSaveable { mutableStateOf(false) }
     // 撤回到此轮：先选择撤回范围（代码/对话/两者）
@@ -124,20 +115,20 @@ internal fun UserBubble(
 
     val copyText = {
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboard.setPrimaryClip(ClipData.newPlainText(context.getString(R.string.chat_user_request_clipboard), visibleText))
+        clipboard.setPrimaryClip(ClipData.newPlainText(context.getString(R.string.chat_user_request_clipboard), message.text))
         Toast.makeText(context, context.getString(R.string.chat_request_copied), Toast.LENGTH_SHORT).show()
     }
 
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
         Column(
             horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             // 🌟 1. 多模态图片预览卡片
             if (message.imageUrls.isNotEmpty()) {
                 LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                    modifier = Modifier.padding(bottom = Spacing.xs),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.padding(bottom = 2.dp),
                 ) {
                     itemsIndexed(
                         items = message.imageUrls,
@@ -146,55 +137,34 @@ internal fun UserBubble(
                         ImageThumbnail(
                             imageUrl = imageUrl,
                             cacheKey = "chat-image-${message.id}-$index",
-                            onClick = { previewImageUrl = imageUrl },
-                        )
-                    }
-                }
-            }
-
-            // 🌟 1.5 文件附件卡片
-            //
-            // 为什么必须有这一块：附件此前只在发送时被拼进提示词文本，气泡层只渲染
-            // message.text，于是用户看到的就是一整段带路径的文字（"发文件变成文字"）。
-            // 现在附件元信息随消息持久化（UserMessage.attachments），这里渲染成卡片；
-            // 提示词那侧保留挂载说明是为了告诉模型去哪里读文件，两者职责不同、不冲突。
-            val fileAttachments = message.attachments.filter { !it.isImage }
-            if (fileAttachments.isNotEmpty()) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
-                    modifier = Modifier
-                        .padding(bottom = Spacing.xs)
-                        .widthIn(max = 560.dp),
-                ) {
-                    fileAttachments.forEach { attachment ->
-                        AttachmentFileCard(
-                            attachment = attachment,
-                            onClick = { openAttachment(context, attachment) },
+                            onClick = { showMenu = true },
                         )
                     }
                 }
             }
 
             // 🌟 2. 用户文字气泡
-            if (visibleText.isNotBlank()) {
+            if (message.text.isNotBlank()) {
                 Surface(
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    shape = RoundedCornerShape(16.dp, 4.dp, 16.dp, 16.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = RoundedCornerShape(24.dp, 8.dp, 24.dp, 24.dp),
                     modifier = Modifier
                         .widthIn(max = 560.dp)
                         .clickable { showMenu = true },
                 ) {
                     val mentionColor = MaterialTheme.colorScheme.primary
                     val mentionBg = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
-                    val annotatedText = remember(visibleText, knownMentionNames, mentionColor, mentionBg) {
-                        formatMentionText(visibleText, knownMentionNames, mentionColor, mentionBg)
+                    val annotatedText = remember(message.text, knownMentionNames, mentionColor, mentionBg) {
+                        formatMentionText(message.text, knownMentionNames, mentionColor, mentionBg)
                     }
-                    Text(
-                        text = annotatedText,
-                        modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
+                    SelectionContainer {
+                        Text(
+                            text = annotatedText,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                    }
                 }
             } else if (message.imageUrls.isNotEmpty()) {
                 // 纯图片消息：显示小菜单按钮
@@ -237,7 +207,7 @@ internal fun UserBubble(
             )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.chat_create_branch)) },
-                leadingIcon = { RuntimeIcon(RuntimeIconName.Hub, Modifier.size(16.dp)) },
+                leadingIcon = { RuntimeIcon(RuntimeIconName.GitBranch, Modifier.size(16.dp)) },
                 onClick = {
                     showMenu = false
                     onCreateBranch()
@@ -266,13 +236,6 @@ internal fun UserBubble(
                 },
             )
         }
-    }
-
-    previewImageUrl?.let { imageUrl ->
-        ChatImagePreviewDialog(
-            imageUrl = imageUrl,
-            onDismiss = { previewImageUrl = null },
-        )
     }
 
     // 删除消息二次确认
@@ -310,7 +273,7 @@ internal fun UserBubble(
             onDismissRequest = { showRewindScopeDialog = false },
             title = { Text(stringResource(R.string.chat_rewind_title), fontWeight = FontWeight.Bold) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
                         stringResource(R.string.chat_rewind_subtitle),
                         style = MaterialTheme.typography.bodyMedium,
@@ -359,11 +322,11 @@ private fun RewindScopeOption(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             RuntimeIcon(icon, Modifier.size(20.dp), MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.width(Spacing.md))
+            Spacer(Modifier.width(12.dp))
             Column {
                 Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
                 Text(
@@ -393,8 +356,8 @@ internal fun ImageThumbnail(
     val thumbnailPx = with(LocalDensity.current) { 130.dp.roundToPx() }
     val request = remember(imageUrl, cacheKey, thumbnailPx) {
         val data: Any = when {
-            imageUrl.startsWith("file://") -> java.io.File(imageUrl.removePrefix("file://"))
-            imageUrl.startsWith("/") -> java.io.File(imageUrl)
+            imageUrl.startsWith("file://") -> File(imageUrl.removePrefix("file://"))
+            imageUrl.startsWith("/") -> File(imageUrl)
             else -> imageUrl
         }
         ImageRequest.Builder(context)
@@ -411,122 +374,44 @@ internal fun ImageThumbnail(
         contentScale = ContentScale.Crop,
         modifier = Modifier
             .size(width = 130.dp, height = 130.dp)
-            .clip(Radius.smShape)
+            .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .border(
                 1.dp,
                 MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
-                Radius.smShape,
+                RoundedCornerShape(12.dp),
             )
             // 与文字气泡一致的点击语义：弹出操作菜单
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
     )
 }
 
-/**
- * 把 [MessageAttachment] 还原成 Android 本地文件。guestPath 是 PRoot 沙箱内路径
- * （/attachments/xxx），Android 侧真实文件保存在 filesDir/linux-runtime/attachments/xxx。
- * 历史消息或已被清理的附件可能已不存在，此时返回 null，调用方走降级提示。
- */
-private fun attachmentFile(context: Context, attachment: MessageAttachment): java.io.File? {
-    val name = attachment.guestPath.substringAfterLast('/').ifBlank { attachment.name }
-    if (name.isBlank()) return null
-    val candidate = java.io.File(context.filesDir, "linux-runtime/attachments/$name")
-    return candidate.takeIf { it.exists() && it.length() > 0L }
-}
-
-/**
- * 点击文件附件：用系统查看器打开。URI 走 FileProvider 并附带只读授权，
- * mimeType 优先用发送时保留的类型，缺失时按扩展名回退。
- */
-private fun openAttachment(context: Context, attachment: MessageAttachment) {
-    val mimeType = attachment.mimeType
-        ?: MimeTypeMap.getSingleton().getMimeTypeFromExtension(
-            attachment.name.substringAfterLast('.', "").lowercase(),
-        )
-        ?: "*/*"
-    val file = attachmentFile(context, attachment)
-    val uri = file?.let { f ->
-        runCatching {
-            FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", f)
-        }.getOrNull()
-    }
-    if (uri == null) {
-        Toast.makeText(
-            context,
-            context.getString(R.string.chat_attachment_missing, attachment.name),
-            Toast.LENGTH_SHORT,
-        ).show()
-        return
-    }
-    val intent = Intent(Intent.ACTION_VIEW).apply {
-        setDataAndType(uri, mimeType)
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    }
-    runCatching {
-        context.startActivity(Intent.createChooser(intent, attachment.name))
-    }.onFailure {
-        Toast.makeText(
-            context,
-            context.getString(R.string.chat_attachment_missing, attachment.name),
-            Toast.LENGTH_SHORT,
-        ).show()
-    }
-}
-
-/** 全屏图片预览：点缩略图后弹出，点任意处关闭。支持 data URL 与本地文件路径。 */
-@Composable
-private fun ChatImagePreviewDialog(imageUrl: String, onDismiss: () -> Unit) {
-    val context = LocalContext.current
-    val data = remember(imageUrl) {
-        when {
-            imageUrl.startsWith("file://") -> java.io.File(imageUrl.removePrefix("file://"))
-            imageUrl.startsWith("/attachments/") ->
-                java.io.File(context.filesDir, "linux-runtime/attachments/${imageUrl.substringAfterLast('/')}")
-            imageUrl.startsWith("/") -> java.io.File(imageUrl)
-            else -> imageUrl
-        }
-    }
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
-    ) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.94f))
-                .clickable(onClick = onDismiss),
-            contentAlignment = Alignment.Center,
-        ) {
-            AsyncImage(
-                model = ImageRequest.Builder(context)
-                    .data(data)
-                    .build(),
-                contentDescription = stringResource(R.string.chat_user_image),
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-    }
-}
-
 @Composable
 internal fun AssistantBubble(
     message: AssistantText,
     defaultExpanded: Boolean,
+    autoTranslate: Boolean = false,
     live: Boolean = false,
     showRegenerate: Boolean = false,
     onRegenerate: () -> Unit = {},
     onCreateBranch: () -> Unit = {},
+    onNavigateToSettings: (() -> Unit)? = null,
 ) {
     val reasoning = message.reasoning
     val context = LocalContext.current
-    val generatedImagePayload = remember(message.id, message.text.length) {
-        val cacheKey = "${message.id}:${message.text.length}"
-        generatedImageFlagCache.get(cacheKey)
-            ?: message.text.contains("data:image/", ignoreCase = true).also { found ->
-                generatedImageFlagCache.put(cacheKey, found)
-            }
+    // 生成图判定：live（流式进行中）直接跳过扫描 —— 此时 base64 尚未写完，扫描必然 miss，
+    // 却会在每个流式分片对整段（可能数 MB）文本跑一次 contains。改为仅在流结束后的稳定文本上判定，
+    // 缓存键也随之从「含 text.length」收敛为「按 message.id」，避免键随每帧变化导致缓存永久失效。
+    val generatedImagePayload = remember(message.id, live) {
+        if (live) {
+            false
+        } else {
+            val cacheKey = message.id
+            generatedImageFlagCache.get(cacheKey)
+                ?: message.text.contains("data:image/", ignoreCase = true).also { found ->
+                    generatedImageFlagCache.put(cacheKey, found)
+                }
+        }
     }
 
     val copyAll = {
@@ -535,13 +420,16 @@ internal fun AssistantBubble(
         Toast.makeText(context, context.getString(R.string.chat_response_copied), Toast.LENGTH_SHORT).show()
     }
 
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         if (!reasoning.isNullOrBlank()) {
             ThinkingBlock(
                 id = message.id,
                 reasoning = reasoning,
                 defaultExpanded = defaultExpanded,
                 live = live,
+                durationMs = message.reasoningMs,
+                autoTranslate = autoTranslate,
+                onNavigateToSettings = onNavigateToSettings,
             )
         }
 
@@ -552,7 +440,7 @@ internal fun AssistantBubble(
             }
         }
 
-        if (message.text.isNotBlank()) {
+        if (message.text.isNotBlank()) ChatReadableMessage {
             if (live) {
                 val liveImageDataStart = remember(message.text) {
                     message.text.indexOf("data:image/", ignoreCase = true)
@@ -574,12 +462,12 @@ internal fun AssistantBubble(
                     }
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerLow,
-                        shape = Radius.mdShape,
+                        shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.size(width = 260.dp, height = 180.dp),
                     ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(Spacing.md, Alignment.CenterVertically),
+                            verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically),
                         ) {
                             CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 3.dp)
                             Text(
@@ -590,114 +478,101 @@ internal fun AssistantBubble(
                         }
                     }
                 } else {
-                    // 流式期间也走 Markdown 渲染（此前是裸 Text，所以"输出完才排版"）。
-                    //
-                    // 掉帧风险用「尾部安全窗口」压住，而不是退回纯文本：窗口只在
-                    // 围栏/段落/换行边界处断开（见 truncateAtSafeMarkdownBoundary），
-                    // 保证解析结果始终是合法 Markdown —— 否则半个 ``` 会让整屏变成
-                    // 一个巨大代码块，比不排版更难看。
-                    val liveMarkdown = remember(message.text) {
-                        if (message.text.length > LIVE_PREVIEW_CHARS) {
-                            LIVE_PREVIEW_PREFIX + top.tianyan.app.harness.session
-                                .truncateAtSafeMarkdownBoundary(message.text, LIVE_PREVIEW_CHARS)
-                        } else {
-                            message.text.take(MAX_LIVE_TEXT_CHARS)
-                        }
+                    SelectionContainer {
+                        Text(
+                            text = message.text.take(MAX_LIVE_TEXT_CHARS),
+                            modifier = Modifier.fillMaxWidth(),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
                     }
-                    MarkdownText(
-                        markdown = liveMarkdown,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
                 }
             } else {
                 MarkdownText(
                     markdown = message.text,
                     modifier = Modifier.fillMaxWidth(),
-                    contentCacheKey = if (generatedImagePayload) {
-                        "assistant:${message.id}:${message.text.length}"
-                    } else {
-                        null
-                    },
+                    // 缓存键只用 message.id：流式期间每帧 text.length 都会变，把长度编进键会让
+                    // 缓存形同失效。大文本 LRU 在 MarkdownText 内用内容指纹校验，同一 id 换正文不会串味。
+                    contentCacheKey = "assistant:${message.id}",
                 )
             }
         }
 
-        // 底部动作栏：耗时信息 + 复制按钮
+        // 统计区域占满剩余宽度，操作按钮始终贴右；长统计文本可收缩省略。
         if (!live && message.text.isNotBlank()) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(top = 0.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                message.totalMs?.let {
-                    Text(
-                        stringResource(R.string.chat_elapsed, formatChatDuration(it)),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontFamily = FontFamily.Monospace,
-                    )
-                }
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    message.totalMs?.let {
+                        Text(
+                            stringResource(R.string.chat_elapsed, formatChatDuration(it)),
+                            modifier = Modifier.weight(1f, fill = false),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontFamily = FontFamily.Monospace,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
 
-                // Provider 报告的本轮 token 用量明细（输入/输出/缓存命中与命中率）。
-                val tokenParts = buildList {
-                    message.promptTokens?.let { add("↑${formatTokenCount(it)}") }
-                    message.completionTokens?.let { add("↓${formatTokenCount(it)}") }
-                    message.cachedTokens?.takeIf { cached -> cached > 0 }?.let { cached ->
-                        val prompt = message.promptTokens ?: 0
-                        val pct = if (prompt > 0) ((cached.toLong() * 100L) / prompt.toLong()).toInt().coerceIn(1, 100) else null
-                        if (pct != null) {
-                            add("⚡${formatTokenCount(cached)} ($pct%)")
-                        } else {
-                            add("⚡${formatTokenCount(cached)}")
+                    // Provider 报告的本轮 token 用量明细（输入/输出/缓存命中与命中率）。
+                    val tokenParts = buildList {
+                        message.promptTokens?.let { add("↑${formatTokenCount(it)}") }
+                        message.completionTokens?.let { add("↓${formatTokenCount(it)}") }
+                        message.cachedTokens?.takeIf { cached -> cached > 0 }?.let { cached ->
+                            val prompt = message.promptTokens ?: 0
+                            val pct = if (prompt > 0) ((cached.toLong() * 100L) / prompt.toLong()).toInt().coerceIn(1, 100) else null
+                            if (pct != null) {
+                                add("⚡${formatTokenCount(cached)} ($pct%)")
+                            } else {
+                                add("⚡${formatTokenCount(cached)}")
+                            }
                         }
                     }
-                }
 
-                if (tokenParts.isNotEmpty()) {
-                    Text(
-                        tokenParts.joinToString(" "),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
-                        fontFamily = FontFamily.Monospace,
-                    )
-                }
+                    if (tokenParts.isNotEmpty()) {
+                        Text(
+                            tokenParts.joinToString(" "),
+                            modifier = Modifier.weight(1f, fill = false),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                            fontFamily = FontFamily.Monospace,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
 
-                Spacer(Modifier.weight(1f))
+                }
 
                 if (showRegenerate) {
-                    IconButton(onClick = onRegenerate, modifier = Modifier.size(26.dp), contentDescription = stringResource(R.string.chat_regenerate)) {
-                        RuntimeIcon(RuntimeIconName.Refresh, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                    IconButton(onClick = onRegenerate, modifier = Modifier.size(24.dp), contentDescription = stringResource(R.string.chat_regenerate)) {
+                        RuntimeIcon(RuntimeIconName.Refresh, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
                     }
                 }
 
-                IconButton(onClick = onCreateBranch, modifier = Modifier.size(26.dp), contentDescription = stringResource(R.string.chat_branch_from_here)) {
-                    RuntimeIcon(RuntimeIconName.Hub, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                IconButton(onClick = onCreateBranch, modifier = Modifier.size(24.dp), contentDescription = stringResource(R.string.chat_branch_from_here)) {
+                    RuntimeIcon(RuntimeIconName.GitBranch, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
 
                 // 复制按钮
                 IconButton(onClick = copyAll, modifier = Modifier.size(24.dp), contentDescription = stringResource(R.string.chat_copy)) {
                     RuntimeIcon(
                         RuntimeIconName.Copy,
-                        Modifier.size(13.dp),
+                        Modifier.size(18.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+
+                // 消息反馈（自包含组件：koinInject 直取服务，不向列表/Screen 钻孔）
+                if (!live) MessageFeedbackAction(message.id)
             }
         }
     }
 }
 
 private const val MAX_LIVE_TEXT_CHARS = 64_000
-
-/**
- * 流式期间正文/思考链只渲染尾部窗口的字符数：
- * live 时每 100ms 分片到达，若对超长 Text 全量重排会持续掉帧；
- * 完成后（非 live）恢复全文渲染，不影响最终展示与复制。
- */
-private const val LIVE_PREVIEW_CHARS = 4_000
-
-/** 流式预览窗口的截断前缀，仅 live 且超窗时出现。 */
-private const val LIVE_PREVIEW_PREFIX = "…（流式预览）\n"
 /** Avoid rescanning a multi-megabyte Base64 response whenever its lazy-list item re-enters composition. */
 private val generatedImageFlagCache = LruCache<String, Boolean>(64)
 
@@ -730,10 +605,7 @@ private fun extractTaskPlanSteps(text: String): List<TaskStepItem> {
 }
 
 @Composable
-private fun TaskPlanCard(
-    steps: List<TaskStepItem>,
-    modifier: Modifier = Modifier,
-) {
+private fun TaskPlanCard(steps: List<TaskStepItem>, modifier: Modifier = Modifier) {
     var expanded by remember { mutableStateOf(true) }
     val completedCount = steps.count { it.isCompleted }
     val progress = if (steps.isNotEmpty()) completedCount.toFloat() / steps.size else 0f
@@ -742,30 +614,27 @@ private fun TaskPlanCard(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .clip(Radius.smShape)
+            .clip(RoundedCornerShape(12.dp))
             .clickable {
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 expanded = !expanded
             },
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
-        ),
-        shape = Radius.smShape,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+        shape = RoundedCornerShape(12.dp),
     ) {
         Column(
-            modifier = Modifier.padding(Spacing.md),
-            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Box(
                     modifier = Modifier
                         .size(24.dp)
-                        .clip(Radius.xsShape)
+                        .clip(RoundedCornerShape(6.dp))
                         .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -787,7 +656,7 @@ private fun TaskPlanCard(
                 Surface(
                     color = if (completedCount == steps.size) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                     else MaterialTheme.colorScheme.surfaceContainerHigh,
-                    shape = Radius.xsShape,
+                    shape = RoundedCornerShape(6.dp),
                 ) {
                     Text(
                         text = stringResource(R.string.chat_plan_completed, completedCount, steps.size),
@@ -798,7 +667,7 @@ private fun TaskPlanCard(
                         ),
                         color = if (completedCount == steps.size) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                     )
                 }
 
@@ -815,7 +684,7 @@ private fun TaskPlanCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(4.dp)
-                    .clip(Radius.xsShape),
+                    .clip(RoundedCornerShape(2.dp)),
                 color = MaterialTheme.colorScheme.primary,
                 trackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             )
@@ -826,13 +695,13 @@ private fun TaskPlanCard(
                 exit = shrinkVertically() + fadeOut(),
             ) {
                 Column(
-                    modifier = Modifier.padding(top = Spacing.xs),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    modifier = Modifier.padding(top = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     steps.forEach { step ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             Box(
                                 modifier = Modifier
@@ -878,81 +747,163 @@ internal fun ThinkingBlock(
     reasoning: String,
     defaultExpanded: Boolean,
     live: Boolean = false,
+    durationMs: Long? = null,
+    autoTranslate: Boolean = false,
+    onNavigateToSettings: (() -> Unit)? = null,
 ) {
     var expanded by rememberSaveable(id) { mutableStateOf(defaultExpanded) }
+    var showTranslation by rememberSaveable(id) { mutableStateOf(false) }
+    var translatedText by rememberSaveable(id) { mutableStateOf<String?>(null) }
+    var isTranslating by remember { mutableStateOf(false) }
+    var showMissingModelDialog by rememberSaveable(id) { mutableStateOf(false) }
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
-
+    val scope = rememberCoroutineScope()
+    val translationManager = remember {
+        GlobalContext.getOrNull()
+            ?.getOrNull<TranslationManager>()
+    }
+    val globalNavigationBus = remember {
+        GlobalContext.getOrNull()
+            ?.getOrNull<GlobalNavigationBus>()
+    }
+    val fallbackStatusFlow = remember {
+        MutableStateFlow<TranslationModelStatus>(
+            TranslationModelStatus.Checking
+        )
+    }
+    val translationModelStatus by (translationManager?.status ?: fallbackStatusFlow)
+        .collectAsStateWithLifecycle()
+    LaunchedEffect(expanded, autoTranslate) {
+        if (expanded && autoTranslate && !live && !showTranslation && translatedText == null) {
+            if (translationManager?.isReady() == true) {
+                isTranslating = true
+                val result = translationManager.translate(reasoning)
+                if (result.isSuccess) {
+                    translatedText = result.getOrNull()
+                    showTranslation = true
+                }
+                isTranslating = false
+            }
+        }
+    }
     val copyToClipboard = {
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboard.setPrimaryClip(ClipData.newPlainText(context.getString(R.string.chat_reasoning_clipboard), reasoning))
+        val textToCopy = if (showTranslation && translatedText != null) translatedText else reasoning
+        clipboard.setPrimaryClip(ClipData.newPlainText(context.getString(R.string.chat_reasoning_clipboard), textToCopy))
         Toast.makeText(context, context.getString(R.string.chat_reasoning_copied), Toast.LENGTH_SHORT).show()
     }
 
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clickable {
-                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                expanded = !expanded
-            },
-        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+    RuntimeCard(
+        modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large,
+        containerColor = Color.Transparent, contentPadding = PaddingValues(0.dp),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = Spacing.xs),
+                .fillMaxWidth().clip(MaterialTheme.shapes.medium)
+                .clickable { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); expanded = !expanded },
         ) {
             Box(
-                modifier = Modifier.size(16.dp),
+                modifier = Modifier.size(18.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 if (live) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(12.dp),
+                        modifier = Modifier.size(18.dp),
                         strokeWidth = 1.5.dp,
                         color = MaterialTheme.colorScheme.primary,
                     )
                 } else {
                     RuntimeIcon(
                         RuntimeIconName.Brain,
-                        modifier = Modifier.size(13.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
 
             Text(
-                stringResource(if (live) R.string.chat_deep_reasoning else R.string.chat_reasoning_process),
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 11.5.sp,
-                    fontWeight = FontWeight.Medium,
-                ),
-                color = if (live) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                text = when {
+                    live -> stringResource(R.string.chat_deep_reasoning)
+                    durationMs != null && durationMs > 0 ->
+                        stringResource(R.string.chat_reasoning_duration, "%.1f".format(durationMs / 1000.0))
+                    else -> stringResource(R.string.chat_reasoning_process)
+                },
+                style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f),
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurface,
             )
 
-            Spacer(Modifier.weight(1f))
-
             if (expanded) {
+                if (!live) {
+                    IconButton(
+                        onClick = {
+                            val isReady = translationManager?.isReady() == true
+                            if (!isReady) {
+                                showMissingModelDialog = true
+                            } else {
+                                if (showTranslation) {
+                                    showTranslation = false
+                                } else if (translatedText != null) {
+                                    showTranslation = true
+                                } else {
+                                    scope.launch {
+                                        isTranslating = true
+                                        val result = translationManager.translate(reasoning)
+                                        if (result.isSuccess) {
+                                            translatedText = result.getOrNull()
+                                            showTranslation = true
+                                        } else {
+                                            Toast.makeText(
+                                                context,
+                                                result.exceptionOrNull()?.message ?: "离线翻译失败",
+                                                Toast.LENGTH_SHORT,
+                                            ).show()
+                                        }
+                                        isTranslating = false
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier.size(18.dp),
+                        contentDescription = if (showTranslation) "查看英文原文" else "离线翻译思考",
+                    ) {
+                        if (isTranslating) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 1.5.dp,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        } else {
+                            RuntimeIcon(
+                                RuntimeIconName.Globe,
+                                Modifier.size(18.dp),
+                                tint = if (showTranslation) MaterialTheme.colorScheme.primary
+                                       else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+
                 IconButton(
                     onClick = copyToClipboard,
-                    modifier = Modifier.size(22.dp),
+                    modifier = Modifier.size(18.dp),
                     contentDescription = stringResource(R.string.chat_copy_reasoning),
                 ) {
                     RuntimeIcon(
                         RuntimeIconName.Copy,
-                        Modifier.size(11.dp),
-                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        Modifier.size(18.dp),
+                        MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
 
             RuntimeIcon(
                 if (expanded) RuntimeIconName.ChevronDown else RuntimeIconName.ChevronRight,
-                Modifier.size(11.dp),
-                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                Modifier.size(18.dp),
+                MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 
@@ -964,40 +915,208 @@ internal fun ThinkingBlock(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .drawBehind {
-                        // 左侧极简灰色强调线，对齐上方 16dp 容器的水平中轴 (x = 8dp)
-                        val lineX = 8.dp.toPx()
-                        drawLine(
-                            color = Color(0xFF6B7280).copy(alpha = 0.35f),
-                            start = Offset(lineX, 0f),
-                            end = Offset(lineX, size.height),
-                            strokeWidth = 1.5.dp.toPx(),
+                    .clickable {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        expanded = false
+                    }
+                    .padding(top = 12.dp, bottom = 4.dp),
+            ) {
+                if (showTranslation && translatedText != null) {
+                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier.padding(bottom = 2.dp),
+                        ) {
+                            RuntimeIcon(
+                                RuntimeIconName.Globe,
+                                Modifier.size(20.dp),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                            Text(
+                                text = "中文译文 (ML Kit 离线生成)",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                        MarkdownText(
+                            translatedText.orEmpty(),
+                            modifier = Modifier.fillMaxWidth(),
                         )
                     }
-                    .padding(start = Spacing.xl, top = Spacing.xs, bottom = Spacing.xs),
-            ) {
-                if (live) {
-                    SelectionContainer {
+                } else if (isTranslating) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.padding(vertical = 4.dp),
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 1.5.dp,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
                         Text(
-                            // 思考链流式期间同样只渲染尾部窗口，避免超长 reasoning 每 100ms 全量重排
-                            text = if (reasoning.length > LIVE_PREVIEW_CHARS) {
-                                LIVE_PREVIEW_PREFIX + reasoning.takeLast(LIVE_PREVIEW_CHARS)
-                            } else {
-                                reasoning
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                fontSize = 12.sp,
-                                lineHeight = 17.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                            text = "正在离线翻译思考内容...",
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             ),
                         )
                     }
                 } else {
-                    MarkdownText(
-                        reasoning,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    if (live) {
+                        SelectionContainer {
+                            Text(
+                                text = reasoning,
+                                modifier = Modifier.fillMaxWidth(),
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                ),
+                            )
+                        }
+                    } else {
+                        MarkdownText(
+                            reasoning,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (showMissingModelDialog) {
+        val isDownloading = translationModelStatus is TranslationModelStatus.Downloading
+        val downloadingStatus = translationModelStatus as? TranslationModelStatus.Downloading
+        RuntimeAlertDialog(
+            onDismissRequest = { showMissingModelDialog = false },
+            title = {
+                Text(
+                    text = if (isDownloading) "离线翻译模型下载中" else "未下载离线翻译语种包",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            },
+            text = {
+                Text(
+                    text = if (isDownloading && downloadingStatus != null) {
+                        "离线翻译语种模型正在后台下载中（${downloadingStatus.stepName}，${downloadingStatus.detailText}）。\n\n下载完成后将自动就绪支持离线翻译，您可前往「智能体设置」查看详细进度。"
+                    } else {
+                        "本地英语-中文翻译模型（约 60MB）尚未下载。请前往「Agent 设置」完成语种模型下载后方可离线翻译思考流内容。"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showMissingModelDialog = false
+                        if (onNavigateToSettings != null) {
+                            onNavigateToSettings()
+                        } else {
+                            globalNavigationBus?.navigateTo(AppNavigationTarget.AgentSettings)
+                        }
+                    }
+                ) {
+                    Text(if (isDownloading) "查看下载进度" else "前往设置")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showMissingModelDialog = false }) {
+                    Text(if (isDownloading) "后台继续" else "取消")
+                }
+            },
+        )
+    }
+}
+
+/**
+ * 技能进化建议卡片（对话后技能沉淀/进化）：
+ * 创建新技能 / 更新既有技能 / 忽略，动作完成后由上层隐藏卡片。
+ */
+@Composable
+internal fun SkillSuggestionCard(
+    suggestion: SkillSuggestion,
+    onCreate: () -> Unit,
+    onUpdate: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val isUpdate = suggestion.action == "update"
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                RuntimeIcon(
+                    RuntimeIconName.Sparkles,
+                    Modifier.size(14.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    if (isUpdate) "技能进化建议 · 修复既有技能" else "技能进化建议 · 沉淀为新技能",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            Text(
+                suggestion.skillName,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (suggestion.description.isNotBlank()) {
+                Text(
+                    suggestion.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (suggestion.reason.isNotBlank()) {
+                Text(
+                    "依据：" + suggestion.reason,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                if (isUpdate) {
+                    OutlinedButton(
+                        onClick = onUpdate,
+                        modifier = Modifier.height(32.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                    ) {
+                        Text("更新技能", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false)
+                    }
+                }
+                Button(
+                    onClick = onCreate,
+                    modifier = Modifier.height(32.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                ) {
+                    Text(if (isUpdate) "另存为新技能" else "创建技能", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false)
+                }
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.height(32.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                ) {
+                    Text("忽略", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, softWrap = false)
                 }
             }
         }
@@ -1010,16 +1129,16 @@ internal fun CapabilityEventCard(event: CapabilityEvent) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = Spacing.xs),
+            .padding(vertical = 1.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Box(
             modifier = Modifier.size(16.dp),
             contentAlignment = Alignment.Center,
         ) {
             RuntimeIcon(
-                if (isSkill) RuntimeIconName.Brain else RuntimeIconName.Cpu,
+                if (isSkill) RuntimeIconName.BookOpen else RuntimeIconName.Extension,
                 Modifier.size(13.dp),
                 tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
             )
@@ -1045,5 +1164,76 @@ internal fun CapabilityEventCard(event: CapabilityEvent) {
                 modifier = Modifier.weight(1f),
             )
         }
+    }
+}
+
+@Composable
+internal fun ModelSwitchCard(event: ModelSwitchEvent) {
+    val toWindow = formatContextWindow(event.toContextTokens)
+    val title = if (event.fromLabel.isBlank()) {
+        stringResource(R.string.chat_model_switch_to_fmt, event.toLabel)
+    } else {
+        stringResource(R.string.chat_model_switch_from_to_fmt, event.fromLabel, event.toLabel)
+    }
+    val subtitle = when {
+        event.compacted && event.foldedMessageCount > 0 ->
+            stringResource(R.string.chat_model_switch_compacted_fmt, toWindow, event.foldedMessageCount)
+        event.compactionPending ->
+            stringResource(R.string.chat_model_switch_pending_fmt, toWindow)
+        else -> stringResource(R.string.chat_model_switch_window_fmt, toWindow)
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(1.dp)
+                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)),
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.widthIn(max = 260.dp),
+            ) {
+                RuntimeIcon(
+                    RuntimeIconName.Bot,
+                    Modifier.size(13.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    title,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Medium,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(1.dp)
+                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)),
+            )
+        }
+        Text(
+            subtitle,
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+            modifier = Modifier.fillMaxWidth(),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }

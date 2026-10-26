@@ -6,6 +6,8 @@ import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import top.tianyan.app.core.model.workflow.WorkflowDefinition
+import top.tianyan.app.core.model.workflow.WorkflowDefinitionImport
+import top.tianyan.app.core.model.workflow.WorkflowDefinitionExport
 import top.tianyan.app.core.model.workflow.WorkflowEdge
 import top.tianyan.app.core.model.workflow.WorkflowNode
 import top.tianyan.app.core.model.workflow.WorkflowNodeType
@@ -23,6 +25,36 @@ class WorkflowEditorStateTest {
     )
 
     @Test
+    fun `imported definitions start unsaved and preserve references through editing`() {
+        val imported = WorkflowDefinitionImport.fresh(base)
+        val history = WorkflowEditHistory(imported, initiallySaved = false)
+        assertTrue(history.isDirty)
+        assertFalse(history.canUndo)
+        history.commit(updatedWorkflowMetadata(imported, "Imported", "", "", 2))
+        assertTrue(history.undo())
+        assertEquals(base.nodes, history.current.nodes)
+        assertEquals(base.edges, history.current.edges)
+        history.markSaved()
+        assertFalse(history.isDirty)
+        assertTrue(history.current.id != base.id)
+    }
+
+    @Test
+    fun `exporting applied draft preserves unsaved edits without changing edit history`() {
+        val history = WorkflowEditHistory(base, initiallySaved = true)
+        val draft = updatedWorkflowMetadata(base, "Draft", "unsaved", "custom", 2)
+        history.commit(draft)
+        val exported = WorkflowDefinitionImport.parse(WorkflowDefinitionExport.encode(history.current))
+        assertEquals("Draft", exported.name)
+        assertEquals(2, exported.maxParallelNodes)
+        assertEquals(base.nodes, exported.nodes)
+        assertTrue(history.isDirty)
+        assertTrue(history.undo())
+        assertEquals(base, history.current)
+        assertEquals("Draft", exported.name)
+    }
+
+    @Test
     fun `history supports undo redo and saved baseline`() {
         val history = WorkflowEditHistory(base, initiallySaved = true)
         history.commit(base.copy(name = "Changed"))
@@ -33,6 +65,20 @@ class WorkflowEditorStateTest {
         assertTrue(history.redo())
         history.markSaved()
         assertFalse(history.isDirty)
+    }
+
+    @Test
+    fun `parallelism metadata participates in undo redo without changing graph`() {
+        val history = WorkflowEditHistory(base, initiallySaved = true)
+        history.commit(updatedWorkflowMetadata(base, "Changed", "description", "category", 1))
+        assertEquals(1, history.current.maxParallelNodes)
+        assertEquals(base.nodes, history.current.nodes)
+        assertEquals(base.edges, history.current.edges)
+        assertTrue(history.undo())
+        assertEquals(4, history.current.maxParallelNodes)
+        assertTrue(history.redo())
+        assertEquals(1, history.current.maxParallelNodes)
+        assertThrows(IllegalArgumentException::class.java) { updatedWorkflowMetadata(base, "Changed", "", "", 0) }
     }
 
     @Test

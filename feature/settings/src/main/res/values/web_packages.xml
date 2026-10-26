@@ -1,0 +1,33 @@
+<resources>
+    <string name="web_packages_title">外部 Web 插件</string>
+    <string name="web_packages_scope">导入静态页面插件。普通页面无需 Linux；标注 PRoot 静态或工具服务来源的页面需本地 Linux（PRoot 静态来源还需 Python 3）。使用应用能力时需单独确认。</string>
+    <string name="web_packages_proot_label">PRoot 静态服务</string>
+    <string name="web_packages_service_label">工具服务来源 · %1$s</string>
+    <string name="web_packages_service_source">页面内容由已安装工具“%1$s”的本地 Web 服务提供；端口、路径、命令与环境均由原生解析，包内不接受地址、凭据、端口或命令。只读来源要求服务已在运行；启动来源（PROOT_SERVICE）会在打开时启动该工具自述的服务实例，关闭页面只回收本实例。需要已就绪的本地 Linux。</string>
+    <string name="web_packages_proot_too_large">此包的页面资源超过 PRoot 启动容量。请让作者精简资源后重新打包，或改用普通 PACKAGE 页面来源。</string>
+    <string name="web_packages_proot_source">打开此页面会在当前本地发行版启动宿主管理的静态服务，关闭时回收。需要已就绪的 Linux 和 /usr/bin/python3；不自动安装依赖。资源与认证信息压缩后须能放入 4 KiB 初始数据包，超出时拒绝启动。</string>
+    <string name="web_packages_import">导入</string>
+    <string name="web_packages_open">打开</string>
+    <string name="web_packages_remove">移除</string>
+    <string name="web_packages_cancel">取消</string>
+    <string name="web_packages_retry">重试</string>
+    <string name="web_packages_busy">正在校验和处理插件…</string>
+    <string name="web_packages_failed">插件处理失败。请检查包格式、文件完整性和版本后重试。</string>
+    <string name="web_packages_empty">尚未导入 Web 插件</string>
+    <string name="web_packages_confirm_title">导入外部 Web 插件？</string>
+    <string name="web_packages_confirmation">名称和说明由插件提供，不代表官方认证。导入会校验文件完整性；导入成功不会自动打开页面或授予应用能力。</string>
+    <string name="web_packages_no_capabilities">此包未请求应用能力。</string>
+    <string name="web_packages_app_info">请求读取应用包名、Android API 和插件 API 版本，不包含凭证、文件或设备日志。</string>
+    <string name="web_packages_permission_title">允许插件读取应用信息？</string>
+    <string name="web_packages_remove_title">移除 Web 插件？</string>
+    <string name="web_packages_remove_detail">将移除“%1$s”的全部导入版本，并使其打开页面的授权失效。</string>
+    <string name="web_packages_unavailable">插件尚在加载、已升级或已移除。请返回插件列表重新打开。</string>
+    <string name="web_packages_clipboard_title">允许插件复制这段文本？</string>
+    <string name="web_packages_clipboard_write">请求写入纯文本剪贴板，每次均需确认具体内容；会覆盖原剪贴板，不读取其内容。</string>
+    <string name="web_packages_install_apk_title">允许插件安装这个 APK？</string>
+    <string name="web_packages_install_apk_detail">请求安装一个位于沙箱可解析目录下的 APK 文件，路径需逐次确认且只能以 .apk 结尾；宿主会自行解析真实文件，可用无线 ADB 静默安装或调起系统安装器。这是写操作，不能缓存为会话授权。</string>
+    <string name="web_packages_logcat_title">允许插件读取设备日志？</string>
+    <string name="web_packages_logcat_detail">请求抓取一段有界的系统日志快照（固定末尾 200 行、无标签或关键字过滤）。日志可能包含其它应用的信息，页面不接受任何参数，也不会清空日志缓冲。</string>
+    <string name="web_tool_service_open">以插件页面打开</string>
+    <string name="web_tool_service_scope">以只读插件页面打开当前正在运行的本地工具服务。页面只读取有界静态资源，逐个路径固定首次内容；另可经确认后按路径只读请求或分块读取该服务自身（单次 32768 字、单流 65536 字）。不启动、不停止工具服务，不获得回环地址或凭据，也不授予其它应用能力。</string>
+</resources>

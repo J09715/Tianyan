@@ -2,6 +2,7 @@ package top.tianyan.app.runtime.browser.cdp
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
@@ -83,7 +84,7 @@ class CdpTargetMatcher(
 
     /** 临时 WS 会话读页内 marker；失败（未注入/连接失败）返回 null。 */
     private suspend fun probeMarker(target: CdpTargetInfo): String? = runCatching {
-        val path = target.webSocketDebuggerUrl.substringAfter("devtools", "").ifEmpty { return null }
+        val path = WsHandshake.targetPath(target.webSocketDebuggerUrl)
         val conn = transport.open()
         val ws = try {
             WsHandshake.open(conn, path)
@@ -92,6 +93,10 @@ class CdpTargetMatcher(
             return null
         }
         val session = CdpSession(ws, scope)
+        session.start(object : CdpSession.EventListener {
+            override suspend fun onEvent(method: String, params: JsonObject, sessionId: String?) = Unit
+            override suspend fun onClosed() = Unit
+        })
         try {
             val resp = session.send(
                 "Runtime.evaluate",
@@ -101,7 +106,7 @@ class CdpTargetMatcher(
                 },
                 timeoutMs = 3_000,
             )
-            (resp["result"] as? kotlinx.serialization.json.JsonObject)
+            (resp["result"] as? JsonObject)
                 ?.get("result")?.jsonObject
                 ?.get("value")?.jsonPrimitive?.contentOrNull
         } finally {

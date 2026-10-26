@@ -58,6 +58,8 @@ enum class GuiBackendId(val label: String) {
     CMD_INPUT("cmd-input"),
     BIN_INPUT("bin-input"),
     CLIPBOARD("clipboard"),
+    /** Shower 虚拟屏：Binder 输入注入，仅用于 virtual_display 会话（不参与主屏降级链） */
+    SHOWER_VIRTUAL_DISPLAY("shower-virtual-display"),
 }
 
 data class GuiAttempt(

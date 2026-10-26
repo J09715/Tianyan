@@ -1,14 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Material Symbols Outlined (Apache 2.0) via Google Fonts, converted to Android vector drawable -->
+<!-- Material Symbols Rounded, weight 300, optical size 24; Apache-2.0. Glyph: description.
+     Source: google/material-design-icons@49d4db35df873165d6bd6ba09b063c7dafbac2f4; converted from SVG. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp"
-    android:height="24dp"
-    android:viewportWidth="960"
-    android:viewportHeight="960">
-    <group
-        android:translateY="960">
-        <path
-            android:pathData="M320-240h320v-80H320v80Zm0-160h320v-80H320v80ZM240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H240Zm280-520v-200H240v640h480v-440H520ZM240-800v200-200 640-640Z"
-            android:fillColor="#FF000000" />
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="960" android:viewportHeight="960">
+    <group android:translateX="-0" android:translateY="960">
+        <path android:fillColor="#FF000000" android:pathData="M360-250h240q12.77 0 21.38-8.62Q630-267.23 630-280t-8.62-21.38Q612.77-310 600-310H360q-12.77 0-21.38 8.62Q330-292.77 330-280t8.62 21.38Q347.23-250 360-250Zm0-160h240q12.77 0 21.38-8.62Q630-427.23 630-440t-8.62-21.38Q612.77-470 600-470H360q-12.77 0-21.38 8.62Q330-452.77 330-440t8.62 21.38Q347.23-410 360-410ZM252.31-100Q222-100 201-121q-21-21-21-51.31v-615.38Q180-818 201-839q21-21 51.31-21h287.77q14.46 0 27.81 5.62 13.34 5.61 23.19 15.46l167.84 167.84q9.85 9.85 15.46 23.19 5.62 13.35 5.62 27.81v447.77Q780-142 759-121q-21 21-51.31 21H252.31ZM540-656.16V-800H252.31q-4.62 0-8.46 3.85-3.85 3.84-3.85 8.46v615.38q0 4.62 3.85 8.46 3.84 3.85 8.46 3.85h455.38q4.62 0 8.46-3.85 3.85-3.84 3.85-8.46V-620H576.16q-15.47 0-25.81-10.35Q540-640.69 540-656.16ZM240-800v180-180V-160v-640Z" />
     </group>
 </vector>

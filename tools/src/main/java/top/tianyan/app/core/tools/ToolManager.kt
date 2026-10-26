@@ -9,11 +9,19 @@ import top.tianyan.app.core.security.SecretRedactor
 import top.tianyan.app.runtime.LinuxRuntime
 import top.tianyan.app.runtime.BackgroundTaskRegistry
 import top.tianyan.app.runtime.service.LocalServiceSpec
+import top.tianyan.app.runtime.service.ProotServiceDescriptor
 import top.tianyan.app.runtime.tools.InstallEvent
 import top.tianyan.app.runtime.shell.LinuxSession
 import top.tianyan.app.runtime.shell.ManagedProcess
-import javax.inject.Inject
-import javax.inject.Singleton
+import top.tianyan.app.runtime.shell.CommandResult
+import top.tianyan.app.runtime.shell.SessionConfig
+import top.tianyan.app.runtime.shell.ShellCommand
+import top.tianyan.app.runtime.tools.GenericRecipeInstaller
+import top.tianyan.app.runtime.tools.ToolCommandLinker
+import top.tianyan.app.runtime.scripts.RuntimeAssetSynchronizer
+import top.tianyan.app.core.model.BuiltinPluginBundles
+import top.tianyan.app.core.database.ToolSettingsRepository
+import top.tianyan.app.core.datastore.ToolPreferences
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -25,7 +33,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -38,42 +48,7 @@ import kotlinx.coroutines.launch
 import android.net.Uri
 import top.tianyan.app.core.common.result.AppResult
 
-data class ToolInstallProgress(
-    val toolId: String,
-    val message: String,
-    val progress: Float? = null,
-    val terminal: Boolean = false,
-)
-
-sealed interface LocalPluginImportState {
-    data object Idle : LocalPluginImportState
-    /** The URI has been selected; only manifest metadata is being read. */
-    data class Reading(val fileName: String) : LocalPluginImportState
-    data class PendingConfirmation(
-        val uri: Uri,
-        val fileName: String,
-        val manifest: ToolManifest,
-        val archiveSizeBytes: Long?,
-    ) : LocalPluginImportState
-    data class Importing(
-        val fileName: String,
-        val progress: Float?,
-        val bytesRead: Long,
-        val totalBytes: Long?,
-        val currentEntry: String?,
-    ) : LocalPluginImportState
-    data class Succeeded(val pluginName: String, val version: String) : LocalPluginImportState
-    data class AlreadyImported(val pluginName: String, val version: String) : LocalPluginImportState
-    data class Failed(val message: String) : LocalPluginImportState
-}
-
-private data class UninstallOutcome(
-    val success: Boolean,
-    val message: String,
-)
-
-@Singleton
-class ToolManager @Inject constructor(
+class ToolManager(
     private val toolRepository: ToolRepository,
     private val installLogRepository: InstallLogRepository,
     private val installTaskRepository: InstallTaskRepository,
@@ -82,17 +57,18 @@ class ToolManager @Inject constructor(
     private val linuxRuntime: LinuxRuntime,
     private val backgroundTaskRegistry: BackgroundTaskRegistry,
     private val providerManager: ProviderManager,
-    private val toolCommandLinker: top.tianyan.app.runtime.tools.ToolCommandLinker,
+    private val toolCommandLinker: ToolCommandLinker,
     private val notificationNotifier: ToolNotificationNotifier,
     private val secretRedactor: SecretRedactor,
-    private val toolSettingsRepository: top.tianyan.app.core.database.ToolSettingsRepository,
-    private val settingsDataStore: top.tianyan.app.core.datastore.ToolPreferences,
-    private val assetSynchronizer: top.tianyan.app.runtime.scripts.RuntimeAssetSynchronizer,
+    private val toolSettingsRepository: ToolSettingsRepository,
+    private val settingsDataStore: ToolPreferences,
+    private val assetSynchronizer: RuntimeAssetSynchronizer,
     private val flutterSdkDownloader: FlutterSdkDownloader,
     private val localPluginPayloadManager: LocalPluginPayloadManager,
     private val serviceController: ToolServiceController,
-    private val logger: top.tianyan.app.core.common.logging.AppLogger,
+    private val packageOperations: ToolPackageOperations,
     installerAdapters: Set<@JvmSuppressWildcards ToolRuntimeAdapter>,
+    private val localAccess: top.tianyan.app.runtime.environment.LocalBackendAccess? = null,
 ) {
     private val managerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val installMutex = Mutex()
@@ -109,6 +85,22 @@ class ToolManager @Inject constructor(
 
     private val _isBatchInstalling = MutableStateFlow(false)
     val isBatchInstalling: StateFlow<Boolean> = _isBatchInstalling.asStateFlow()
+    private val bundleBatch = BundleComponentBatch(
+        localAccess = localAccess,
+        linuxRuntime = linuxRuntime,
+        backgroundTaskRegistry = backgroundTaskRegistry,
+        notificationNotifier = notificationNotifier,
+        installLogRepository = installLogRepository,
+        assetSynchronizer = assetSynchronizer,
+        flutterSdkDownloader = flutterSdkDownloader,
+        installMutex = installMutex,
+        isBatchInstalling = _isBatchInstalling,
+        bundleInstallState = _bundleInstallState,
+        bundleInstallLog = _bundleInstallLog,
+        scope = managerScope,
+        currentDistroId = ::currentDistroId,
+        probeInstalledComponents = ::probeInstalledComponents,
+    )
 
     private val _localPluginImportState = MutableStateFlow<LocalPluginImportState>(LocalPluginImportState.Idle)
     val localPluginImportState: StateFlow<LocalPluginImportState> = _localPluginImportState.asStateFlow()
@@ -121,10 +113,10 @@ class ToolManager @Inject constructor(
         managerScope.launch {
             runCatching {
                 val persisted = installLogRepository
-                    .observeForTool(currentDistroId(), BUNDLE_LOG_TOOL_ID)
+                    .observeForTool(currentDistroId(), BundleComponentBatch.LOG_TOOL_ID)
                     .first()
                     .map { it.message }
-                if (persisted.isNotEmpty()) _bundleInstallLog.value = persisted.takeLast(MAX_BUNDLE_LOG_LINES)
+                if (persisted.isNotEmpty()) _bundleInstallLog.value = persisted.takeLast(BundleComponentBatch.MAX_LOG_LINES)
             }
         }
     }
@@ -135,38 +127,50 @@ class ToolManager @Inject constructor(
     /** 插件状态按当前发行版隔离：切换系统后自动切换为该系统的安装状态。 */
     @OptIn(ExperimentalCoroutinesApi::class)
     fun observeTools(): Flow<List<ToolEntity>> =
-        linuxRuntime.activeDistroId.flatMapLatest { toolRepository.observeTools(it) }
+        linuxRuntime.activeDistroId.flatMapLatest { distroId ->
+            toolRepository.observeTools(distroId).map { list ->
+                list.filterNot { it.id in ToolRegistry.REMOVED_TOOL_IDS }
+            }
+        }
 
     /** Expose manifest metadata for detail screens. */
     fun manifest(toolId: String): ToolManifest? = toolRepository.manifest(toolId)
 
     suspend fun importLocalPlugin(
         uri: Uri,
+        expected: ToolManifest? = null,
         onProgress: (LocalPluginImportProgress) -> Unit = {},
     ): AppResult<ToolManifest> {
-        val result = toolRepository.importLocal(uri, onProgress)
+        packageOperations.captureLegacy(linuxRuntime.installedDistros.value.map { it.id } + currentDistroId())
+        val result = toolRepository.importLocal(uri, onProgress, expected)
         if (result is AppResult.Success) syncRegistry()
         return result
     }
 
     /** Read and validate package metadata; no extraction or registry mutation occurs yet. */
     @Synchronized
-    fun startLocalPluginImport(uri: Uri, fileName: String): Job {
+    fun startLocalPluginImport(uri: Uri, fileName: String, requireAvailable: Boolean = false): Job {
+        localAccess?.requireLocal()
+        if (requireAvailable) requireLocalPluginImportAvailable(_localPluginImportState.value, localPluginImportJob?.isActive == true)
         localPluginImportJob?.takeIf { it.isActive }?.let { return it }
         _localPluginImportState.value = LocalPluginImportState.Reading(fileName)
         return managerScope.launch {
-            val result = toolRepository.inspectLocal(uri)
-            // 同版本已导入也进入确认流程（覆盖导入）：离线包可能被作者重新
-            // 打包过（如修复安装脚本），importLocal 已支持原子替换同版本。
-            // 死路的 AlreadyImported 提示会把修复后的包永远挡在外面。
-            _localPluginImportState.value = when (result) {
-                is AppResult.Success -> LocalPluginImportState.PendingConfirmation(
-                    uri = uri,
-                    fileName = fileName,
-                    manifest = result.data.manifest,
-                    archiveSizeBytes = result.data.archiveSizeBytes,
-                )
-                is AppResult.Failure -> LocalPluginImportState.Failed(result.error.message)
+            try {
+                val previewDistro = currentDistroId()
+                val result = toolRepository.inspectLocal(uri)
+                _localPluginImportState.value = when (result) {
+                    is AppResult.Success -> if (result.data.alreadyImported) LocalPluginImportState.AlreadyImported(result.data.manifest.name, result.data.manifest.version) else LocalPluginImportState.PendingConfirmation(
+                        uri = uri,
+                        fileName = fileName,
+                        manifest = result.data.manifest,
+                        archiveSizeBytes = result.data.archiveSizeBytes,
+                        addedCapabilities = packageOperations.addedCapabilities(previewDistro, result.data.manifest),
+                        distroId = previewDistro,
+                    )
+                    is AppResult.Failure -> LocalPluginImportState.Failed(result.error.message)
+                }
+            } catch (cancelled: CancellationException) { throw cancelled } catch (failure: Exception) {
+                _localPluginImportState.value = LocalPluginImportState.Failed(failure.message ?: "插件预览失败")
             }
         }.also { localPluginImportJob = it }
     }
@@ -174,7 +178,12 @@ class ToolManager @Inject constructor(
     /** Confirm a previously previewed package and perform extraction/registration. */
     @Synchronized
     fun confirmLocalPluginImport(): Job? {
+        localAccess?.requireLocal()
         val pending = _localPluginImportState.value as? LocalPluginImportState.PendingConfirmation ?: return null
+        if (pending.distroId != currentDistroId()) {
+            _localPluginImportState.value = LocalPluginImportState.Failed("目标系统已变化，请重新导入确认")
+            return null
+        }
         _localPluginImportState.value = LocalPluginImportState.Importing(
             fileName = pending.fileName,
             progress = null,
@@ -184,7 +193,7 @@ class ToolManager @Inject constructor(
         )
         return managerScope.launch {
             try {
-                val result = importLocalPlugin(pending.uri) { progress ->
+                val result = importLocalPlugin(pending.uri, expected = pending.manifest) { progress ->
                     _localPluginImportState.value = LocalPluginImportState.Importing(
                         fileName = pending.fileName,
                         progress = progress.fraction,
@@ -199,7 +208,7 @@ class ToolManager @Inject constructor(
                     var installCompleted = false
                     var installFailure: String? = null
                     try {
-                        install(manifest.id).collect { event ->
+                        installInternal(manifest.id, OPERATION_INSTALL, pending.distroId, manifest).collect { event ->
                             when (event) {
                                 is InstallEvent.Progress -> _localPluginImportState.value = LocalPluginImportState.Importing(
                                     fileName = pending.fileName,
@@ -214,7 +223,8 @@ class ToolManager @Inject constructor(
                                 else -> Unit
                             }
                         }
-                    } catch (throwable: Throwable) {
+                    } catch (cancelled: CancellationException) { throw cancelled }
+                    catch (throwable: Throwable) {
                         installFailure = throwable.message ?: "插件安装失败"
                     }
                     if (installCompleted) {
@@ -248,14 +258,15 @@ class ToolManager @Inject constructor(
     }
 
     /** Check whether a background gateway process is alive AND its port is listening (web services). */
-    fun isGatewayRunning(toolId: String): Boolean {
+    suspend fun isGatewayRunning(toolId: String): Boolean {
         val spec = serviceSpec(toolId)
         return serviceController.isRunning(toolId, spec)
     }
 
     /** Stop a running gateway service for the given tool. */
     suspend fun stopGateway(toolId: String) {
-        serviceController.stop(toolId)
+        val spec = serviceSpec(toolId)
+        serviceController.stop(toolId, spec)
     }
 
     /**
@@ -263,6 +274,7 @@ class ToolManager @Inject constructor(
      * model environment) that are injected via environment variables at process start.
      */
     suspend fun restartGateway(toolId: String): ManagedProcess {
+        localAccess?.requireLocal()
         requireInstalledTool(toolId)
         return serviceController.restart(toolId, requireAdapter(toolId), serviceSpec(toolId))
     }
@@ -270,64 +282,6 @@ class ToolManager @Inject constructor(
     /** Observe real-time output logs for a tool's background service. */
     fun observeServiceLogs(toolId: String): Flow<List<String>> =
         serviceController.observeLogs(toolId)
-
-    /**
-     * 开机自启：把用户勾了「自启动」的 web/service 工具逐个拉起来。
-     *
-     * 为什么必须在这里补：`tool_settings.autoStart` 此前只有写入方（设置页开关）
-     * 和一个 UI 读取方（用于回显 Switch 状态），没有任何启动流程消费它——进程表
-     * `ProcessRegistry.processes` 是纯内存 LinkedHashMap，应用一退全部丢失。于是
-     * 用户看到的是「开关打开了，重启后服务还是没了」。
-     *
-     * 语义约束：
-     * - 只处理 launchType 为 web/service 的工具：其余类型（pty/one_shot/command）
-     *   是前台会话型，不该在后台常驻；
-     * - 已经跑着的实例直接跳过，重复调用幂等（冷启动与手动恢复都会走这里）；
-     * - 单个工具失败不影响其余工具，失败只记日志——一个插件的配置错误不该让
-     *   整个开机自启链断掉；
-     * - 需要服务端口就绪才算成功，由 `serviceController.start` 内部探测，因此这里
-     *   拿到返回值即代表端口已监听。
-     *
-     * @return 实际被拉起的工具 id，供调用方记录或断言。
-     */
-    suspend fun startAutoStartServices(distroId: String = currentDistroId()): List<String> {
-        val candidates = runCatching { toolSettingsRepository.listAutoStartToolIds(distroId) }
-            .getOrElse { throwable ->
-                logger.w("读取开机自启清单失败：${throwable.message}", throwable)
-                return emptyList()
-            }
-        if (candidates.isEmpty()) return emptyList()
-
-        val started = mutableListOf<String>()
-        for (toolId in candidates) {
-            val manifest = runCatching { toolRepository.manifest(toolId) }.getOrNull()
-            if (manifest == null) {
-                logger.w("开机自启跳过 $toolId：清单中已不存在")
-                continue
-            }
-            if (manifest.launchType != "web" && manifest.launchType != "service") continue
-            if (!manifest.enabled) {
-                logger.w("开机自启跳过 $toolId：该工具已被 Registry 暂停")
-                continue
-            }
-            val tool = runCatching { toolRepository.findById(distroId, toolId) }.getOrNull()
-            if (tool == null || (tool.state != ToolState.INSTALLED.name && tool.state != ToolState.UPDATE_AVAILABLE.name)) {
-                logger.w("开机自启跳过 $toolId：未安装（state=${tool?.state ?: "缺失"}）")
-                continue
-            }
-            if (isGatewayRunning(toolId)) continue
-
-            runCatching { startGateway(toolId) }
-                .onSuccess {
-                    started += toolId
-                    logger.i("开机自启已拉起：$toolId")
-                }
-                .onFailure { throwable ->
-                    logger.w("开机自启失败 $toolId：${throwable.message}", throwable)
-                }
-        }
-        return started
-    }
 
     /** Get snapshot of service logs for a tool. */
     fun getServiceLogs(toolId: String): List<String> =
@@ -341,6 +295,7 @@ class ToolManager @Inject constructor(
     fun isToolSupported(toolId: String): Boolean = getAdapter(toolId) != null
 
     fun startInstall(toolId: String): Job {
+        localAccess?.requireLocal()
         val existing = installJobs[toolId]
         if (existing?.isActive == true) return existing
         return managerScope.launch {
@@ -355,6 +310,7 @@ class ToolManager @Inject constructor(
     }
 
     fun startUpdate(toolId: String): Job {
+        localAccess?.requireLocal()
         val existing = installJobs[toolId]
         if (existing?.isActive == true) return existing
         return managerScope.launch {
@@ -368,16 +324,16 @@ class ToolManager @Inject constructor(
         }
     }
 
-    private fun getAdapter(toolId: String): ToolRuntimeAdapter? {
-        staticInstallerById[toolId]?.let { return it }
-        val manifest = toolRepository.manifest(toolId) ?: return null
+    private fun getAdapter(toolId: String, fixed: ToolManifest? = null, distroId: String? = null): ToolRuntimeAdapter? {
+        if (fixed?.schemaVersion != 2) staticInstallerById[toolId]?.let { return it }
+        val manifest = fixed ?: toolRepository.manifest(toolId) ?: return null
         if (!manifest.installScript.isNullOrBlank() || manifest.installMethod.isNotBlank()) {
-            return top.tianyan.app.runtime.tools.GenericRecipeInstaller(
+            return GenericRecipeInstaller(
                 manifest = manifest,
-                linuxRuntime = linuxRuntime,
+                linuxRuntime = distroId?.let { PinnedToolRuntime(linuxRuntime, it, manifest.executionIdentity()) } ?: linuxRuntime,
                 dependencyManager = dependencyManager,
                 providerManager = providerManager,
-                toolCommandLinker = toolCommandLinker,
+                toolCommandLinker = distroId?.let { ToolCommandLinker(PinnedToolRuntime(linuxRuntime, it, manifest.executionIdentity())) } ?: toolCommandLinker,
                 localPluginPayloadManager = localPluginPayloadManager,
             )
         }
@@ -385,13 +341,33 @@ class ToolManager @Inject constructor(
     }
 
     /** Service metadata comes from the signed/validated manifest, not the UI. */
-    fun serviceSpec(toolId: String): LocalServiceSpec? {
-        val manifest = toolRepository.manifest(toolId) ?: return null
+    suspend fun serviceSpec(toolId: String): LocalServiceSpec? {
+        val manifest = packageOperations.runtimeManifest(currentDistroId(), toolId) ?: return null
         val port = manifest.servicePort ?: return null
         return LocalServiceSpec(
             serviceId = toolId,
             port = port,
             path = manifest.servicePath,
+        )
+    }
+
+    /**
+     * Native launch plan for a tool service a plugin page may start itself. Port, path, command and
+     * environment are all resolved natively from the installed manifest and provider environment,
+     * never from Web content, a package field or a page argument.
+     */
+    suspend fun serviceLaunch(toolId: String): ProotServiceDescriptor? {
+        val spec = serviceSpec(toolId) ?: return null
+        val distro = currentDistroId()
+        val manifest = packageOperations.runtimeManifest(distro, toolId) ?: return null
+        val launch = getAdapter(toolId, manifest, distro)?.serviceLaunch() ?: return null
+        return ProotServiceDescriptor(
+            port = spec.port,
+            basePath = spec.path.trimEnd('/') + "/",
+            launchCommand = launch.launchCommand,
+            environment = launch.environment, pluginIdentity = launch.pluginIdentity,
+            ownerPluginId = toolId,
+            distroId = distro,
         )
     }
 
@@ -461,22 +437,22 @@ class ToolManager @Inject constructor(
                 }
             }
         }
+        // 清理已废弃/移除的独立在线插件（如 claude-code、openclaw、hermes-agent）
+        toolRepository.deleteByIds(ToolRegistry.REMOVED_TOOL_IDS)
         installTransactionManager.cleanupOrphans(liveInstallTools)
     }
 
     /** Install and update share the same transactional adapter path. */
     fun install(toolId: String): Flow<InstallEvent> = installInternal(toolId, OPERATION_INSTALL)
 
-    /**
-     * 🔍 实时探针：探测 Linux 沙箱中各个子组件的实际安装就绪状态
-     */
+    /** Probe component installation in the phone's Linux runtime. */
     suspend fun probeInstalledComponents(): Set<String> {
         val distroId = currentDistroId()
-        val allComponents = top.tianyan.app.core.model.BuiltinPluginBundles.bundles.flatMap { it.components }
+        val allComponents = BuiltinPluginBundles.bundles.flatMap { it.components }
         val installed = mutableSetOf<String>()
         allComponents.forEach { comp ->
             val result = linuxRuntime.execute(
-                top.tianyan.app.runtime.shell.ShellCommand(
+                ShellCommand(
                     commandLine = comp.checkCommand,
                     workingDirectory = "/root",
                     timeoutMs = 5000L,
@@ -490,186 +466,26 @@ class ToolManager @Inject constructor(
         return installed
     }
 
-    /**
-     * 🛠️ 批量聚合原子安装选中的组件 (Batch Component Installation)
-     * 自动对 APT 依赖包进行去重，只运行 1 次 update 和 1 次 install，彻底杜绝 dpkg 锁冲突，性能提升 3~5 倍。
-     */
-    fun batchInstallComponents(componentIds: Set<String>): Flow<InstallEvent> = flow {
-        if (componentIds.isEmpty()) {
-            emit(InstallEvent.Completed("components", "1.0.0"))
-            return@flow
-        }
-        val distroId = currentDistroId()
-        val bundleTitle = "开发套件装配"
-        installMutex.withLock {
-            _isBatchInstalling.value = true
-            backgroundTaskRegistry.start(BUNDLE_TASK_ID)
-            _bundleInstallLog.value = emptyList()
-            runCatching { installLogRepository.deleteForTool(distroId, BUNDLE_LOG_TOOL_ID) }
-            emit(InstallEvent.Started("components"))
-            runCatching {
-                assetSynchronizer.syncAssetsToDistro(distroId)
-            }
-            val steps = top.tianyan.app.core.model.BuiltinPluginBundles.buildBatchInstallScript(componentIds)
-            val selectedComps = top.tianyan.app.core.model.BuiltinPluginBundles.bundles.flatMap { it.components }.filter { it.id in componentIds }
-            val compNames = selectedComps.joinToString("、") { it.name }
+    fun batchInstallComponents(componentIds: Set<String>, reinstall: Boolean = false): Flow<InstallEvent> =
+        bundleBatch.install(componentIds, reinstall)
+    suspend fun <T> runExclusive(block: suspend () -> T): T = installMutex.withLock { localAccess?.requireLocal(); block() }
+    /** 卸载选中组件。仍被其他已装配组件使用的目录和软件包会保留。 */
+    fun batchUninstallComponents(componentIds: Set<String>): Flow<InstallEvent> =
+        bundleBatch.uninstall(componentIds)
 
-            val initialMsg = "正在准备 [$compNames] 批量装配流水线..."
-            _bundleInstallState.value = initialMsg
-            appendBundleInstallLog(initialMsg)
-            notificationNotifier.showProgress("dev_bundle_install", bundleTitle, initialMsg, 0.05f)
-            emit(InstallEvent.Progress("components", initialMsg, 0.05f))
+    fun startBackgroundBatchInstall(
+        componentIds: Set<String>,
+        reinstall: Boolean = false,
+        onCompleted: (() -> Unit)? = null,
+    ): Job = bundleBatch.startInstall(componentIds, reinstall, onCompleted)
 
-            try {
-                steps.forEachIndexed { index, step ->
-                    val progress = 0.1f + 0.8f * (index.toFloat() / steps.size.toFloat())
-                    val shortDesc = when {
-                        index == 0 -> "正在创建 dpkg 配置目录..."
-                        index == 1 -> "正在写入 PRoot dpkg 安全策略..."
-                        index == 2 -> "正在清理 dpkg/apt 残留锁与临时文件..."
-                        "dpkg --remove" in step -> "正在清理无法完成的可选软件包事务..."
-                        "dpkg --configure" in step -> "正在恢复未完成的 dpkg 事务..."
-                        // apt-get 后面带有 -o 参数，不能用固定的
-                        // "apt-get update" 子串判断，否则会误落入安装文案。
-                        "apt-get" in step && " update " in step -> "正在同步软件源并聚合下载全部依赖包..."
-                        "apt-get" in step -> "正在安装 [$compNames] 所需系统依赖..."
-                        "gradle" in step -> "正在部署并链接 Gradle 8.14.2 自动化构建环境..."
-                        "setup_android_core" in step -> "正在部署 Android SDK 平台包与 Gradle 构建环境 (国内镜像加速)..."
-                        "termux_ndk" in step -> "正在下载、校验并原子装配 Linux AArch64 NDK..."
-                        "jadx" in step -> "正在部署 JADX-CLI 源码反编译工具包..."
-                        "android" in step -> "正在配置 Android SDK 官方开发工具链..."
-                        "flutter" in step -> "正在拉取并配置 Flutter SDK 跨端开发环境..."
-                        else -> "正在执行环境准备步骤..."
-                    }
-                    // 重型下载型脚本 (SDK 平台包 ~60MB / Gradle ~120MB / Flutter SDK git clone) 放宽超时；
-                    // apt-get install 聚合步（openjdk 等 ~150-200MB）单独 30 分钟档——
-                    // Android 核心环境第 7 步 10 分钟超时不够用（用户实测 timeout）。
-                    val stepTimeoutMs = when {
-                        "/opt/tianyan/scripts/" in step ||
-                            "setup_android_core.sh" in step || "setup_flutter.sh" in step -> HEAVY_SETUP_STEP_TIMEOUT_MS
-                        "apt-get" in step && " install " in step -> APT_INSTALL_STEP_TIMEOUT_MS
-                        else -> DEFAULT_STEP_TIMEOUT_MS
-                    }
-                    val stepLabel = "[步骤 ${index + 1}/${steps.size}] $shortDesc"
-                    _bundleInstallState.value = stepLabel
-                    appendBundleInstallLog(stepLabel)
-                    notificationNotifier.showProgress("dev_bundle_install", bundleTitle, stepLabel, progress)
-                    emit(InstallEvent.Progress("components", stepLabel, progress))
+    fun startBackgroundBatchUninstall(
+        componentIds: Set<String>,
+        onCompleted: (() -> Unit)? = null,
+    ): Job = bundleBatch.startUninstall(componentIds, onCompleted)
 
-                    val flutterArchive = if ("setup_flutter.sh" in step) {
-                        appendBundleInstallLog("==> [Tianyan] 使用应用内断点下载器获取 Flutter SDK（不在 PRoot 内调用 curl）...")
-                        var lastFlutterLogAt = 0L
-                        var lastFlutterLoggedBytes = -1L
-                        flutterSdkDownloader.prepare(distroId) { downloaded, total ->
-                            val totalText = total?.takeIf { it > 0 }?.let { " / ${it / (1024 * 1024)} MB" }.orEmpty()
-                            val downloadedMb = downloaded / (1024 * 1024)
-                            val now = System.currentTimeMillis()
-                            val completed = total != null && total > 0L && downloaded >= total
-                            val shouldLog = downloaded == 0L || completed ||
-                                (downloaded > lastFlutterLoggedBytes && now - lastFlutterLogAt >= FLUTTER_DOWNLOAD_LOG_INTERVAL_MS)
-                            if (shouldLog) {
-                                appendBundleInstallLog("[Tianyan] Flutter SDK 应用内下载：$downloadedMb MB$totalText")
-                                lastFlutterLoggedBytes = downloaded
-                                lastFlutterLogAt = now
-                            }
-                        }
-                    } else {
-                        null
-                    }
-                    val result = linuxRuntime.execute(
-                        top.tianyan.app.runtime.shell.ShellCommand(
-                            commandLine = step,
-                            workingDirectory = "/root",
-                            environment = flutterArchive?.let {
-                                mapOf("TIANYAN_FLUTTER_ARCHIVE" to it.guestPath)
-                            }.orEmpty(),
-                            timeoutMs = stepTimeoutMs,
-                        ),
-                        distroId = distroId,
-                    )
-                    result.stdout.trim().takeIf { it.isNotBlank() }?.let { appendBundleInstallLog(it.takeLast(4000)) }
-                    result.stderr.trim().takeIf { it.isNotBlank() }?.let { appendBundleInstallLog(it.takeLast(4000)) }
-                    if (!result.isSuccess) {
-                        error("安装步骤执行失败: ${result.stderr.ifBlank { result.stdout }.takeLast(800)}")
-                    }
-                }
-
-                _bundleInstallState.value = "正在验证已安装组件状态..."
-                appendBundleInstallLog("正在验证已安装组件状态...")
-                notificationNotifier.showProgress("dev_bundle_install", bundleTitle, "正在验证状态...", 0.95f)
-                emit(InstallEvent.Progress("components", "正在验证已安装组件状态...", 0.95f))
-
-                val installed = probeInstalledComponents()
-                val missing = componentIds - installed
-                if (missing.isNotEmpty()) {
-                    error("开发套件安装未完成，缺少组件: ${missing.joinToString()}")
-                }
-
-                notificationNotifier.showSuccess("dev_bundle_install", bundleTitle, "已成功就绪")
-                emit(InstallEvent.Completed("components", "1.0.0"))
-            } catch (e: Exception) {
-                appendBundleInstallLog("安装失败: ${e.message ?: "装配异常"}")
-                notificationNotifier.showFailed("dev_bundle_install", bundleTitle, e.message ?: "装配异常")
-                emit(InstallEvent.Failed("components", e.message ?: "装配异常"))
-                throw e
-            } finally {
-                _isBatchInstalling.value = false
-                backgroundTaskRegistry.finish(BUNDLE_TASK_ID)
-                _bundleInstallState.value = null
-            }
-        }
-    }
-
-    private fun appendBundleInstallLog(message: String) {
-        val normalized = message.trim()
-        if (normalized.isBlank()) return
-        val incoming = normalized.lineSequence().filter { it.isNotBlank() }.toList()
-        if (incoming.isEmpty()) return
-        val retained = (_bundleInstallLog.value + incoming).toMutableList()
-        var totalChars = retained.sumOf { it.length + 1 }
-        while (totalChars > MAX_BUNDLE_LOG_CHARS && retained.size > 1) {
-            totalChars -= retained.removeAt(0).length + 1
-        }
-        // A single tool line can be unusually large; cap it independently.
-        _bundleInstallLog.value = retained.map { line ->
-            if (line.length <= MAX_BUNDLE_LINE_CHARS) line else line.takeLast(MAX_BUNDLE_LINE_CHARS)
-        }
-        managerScope.launch {
-            runCatching {
-                incoming.forEach { line ->
-                    installLogRepository.insert(
-                        InstallLogEntity(
-                            distroId = currentDistroId(),
-                            toolId = BUNDLE_LOG_TOOL_ID,
-                            event = "bundle",
-                            message = if (line.length <= MAX_BUNDLE_LINE_CHARS) line else line.takeLast(MAX_BUNDLE_LINE_CHARS),
-                        ),
-                    )
-                }
-            }
-        }
-    }
-
-    /**
-     * 🚀 在应用级生命周期协程 (managerScope) 中脱机静默运行批量装配
-     * 用户可自由切换至任何页面（工坊、聊天、终端等），完全不影响后台装配进程，通知栏实时同步。
-     */
-    fun startBackgroundBatchInstall(componentIds: Set<String>, onCompleted: (() -> Unit)? = null): Job {
-        return managerScope.launch {
-            try {
-                batchInstallComponents(componentIds).collect {}
-                onCompleted?.invoke()
-            } catch (e: Exception) {
-                android.util.Log.w("ToolManager", "Background batch install components failed: ${e.message}", e)
-            }
-        }
-    }
-
-    /**
-     * 🛠️ 兼容按套件 ID 批量安装
-     */
     fun batchInstallSuites(suiteIds: Set<String>): Flow<InstallEvent> {
-        val componentIds = top.tianyan.app.core.model.BuiltinPluginBundles.bundles
+        val componentIds = BuiltinPluginBundles.bundles
             .filter { it.id in suiteIds }
             .flatMap { it.components }
             .map { it.id }
@@ -677,15 +493,29 @@ class ToolManager @Inject constructor(
         return batchInstallComponents(if (componentIds.isEmpty()) suiteIds else componentIds)
     }
 
-    private fun installInternal(toolId: String, operation: String): Flow<InstallEvent> = flow {
+    private fun installInternal(toolId: String, operation: String, targetDistro: String? = null, expected: ToolManifest? = null): Flow<InstallEvent> = flow {
+        localAccess?.requireLocal()
+        val distro = targetDistro ?: currentDistroId()
+        try {
+            packageOperations.install(distro, toolId, expected) { fixed ->
+                emitAll(installRecipe(toolId, operation, distro, fixed, checkNotNull(getAdapter(toolId, fixed, distro))))
+            }
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (failure: Exception) {
+            val event = InstallEvent.Failed(toolId, secretRedactor.redact(failure.message ?: "插件安装检查失败"))
+            updateFromEvent(event)
+            emit(event)
+        }
+    }
+
+    private fun installRecipe(toolId: String, operation: String, distroId: String, fixed: ToolManifest, adapter: ToolRuntimeAdapter): Flow<InstallEvent> = flow {
+        localAccess?.requireLocal()
         require(isToolSupported(toolId)) { "暂不支持安装工具：$toolId" }
         requireManifestEnabled(toolId)
-        val distroId = currentDistroId()
         val currentJob = coroutineContext[Job]
             ?: error("安装任务必须运行在协程中")
         val previousTool = toolRepository.findById(distroId, toolId)
-        val preservePreviousInstall = operation == OPERATION_UPDATE &&
-            previousTool?.installedVersion != null
+        val preservePreviousInstall = previousTool?.installedVersion != null
         installMutex.withLock {
             check(toolId !in installJobs) { "工具正在安装：$toolId" }
             installJobs[toolId] = currentJob
@@ -696,7 +526,7 @@ class ToolManager @Inject constructor(
                 InstallTaskEntity(
                     distroId = distroId,
                     toolId = toolId,
-                    operation = operation,
+                    operation = if (preservePreviousInstall) OPERATION_UPDATE else operation,
                     state = TASK_RUNNING,
                     message = "任务开始",
                 ),
@@ -707,37 +537,23 @@ class ToolManager @Inject constructor(
         var cancelled = false
         var transaction: InstallTransaction? = null
         try {
-            if (operation == OPERATION_UPDATE) {
+            if (preservePreviousInstall) {
                 linuxRuntime.listBackground()
                     .filter { it.toolId == toolId }
                     .forEach { linuxRuntime.stopBackground(it.id) }
             }
-            if (preservePreviousInstall) {
-                val current = requireAdapter(toolId).verify()
-                check(current.isSuccess) {
-                    "更新前验证失败：${current.stderr.ifBlank { current.stdout }.trim()}"
-                }
-            }
+            // A snapshot does not require a healthy old installation. Repair and upgrades
+            // run the candidate recipe first, then its own post-install verification.
             transaction = installTransactionManager.begin(distroId, toolId, preservePreviousInstall)
-            selectInstaller(toolId).collect { event ->
-                val safeEvent = event.redacted()
+            adapter.install().collect { event ->
+                val safeEvent = event.redacted(secretRedactor)
                 recordEvent(distroId, safeEvent)
                 updateFromEvent(safeEvent)
                 when (safeEvent) {
                     is InstallEvent.Progress -> {
                         notificationNotifier.showProgress(toolId, toolName, safeEvent.message, safeEvent.progress)
                     }
-                    is InstallEvent.Completed -> {
-                        val installedVer = safeEvent.version?.trim()?.takeIf { it.isNotBlank() }
-                            ?: toolRepository.findById(distroId, toolId)?.manifestVersion
-                        toolRepository.updateStateAndInstalledVersion(
-                            distroId = distroId,
-                            id = toolId,
-                            state = ToolState.INSTALLED.name,
-                            installedVersion = installedVer,
-                        )
-                        notificationNotifier.showSuccess(toolId, toolName, installedVer)
-                    }
+                    is InstallEvent.Completed -> Unit
                     is InstallEvent.Failed -> {
                         transaction?.let { installTransactionManager.rollback(it) }
                         transaction = null
@@ -756,13 +572,29 @@ class ToolManager @Inject constructor(
                     else -> Unit
                 }
                 when (safeEvent) {
-                    is InstallEvent.Completed -> updateTask(distroId, toolId, TASK_COMPLETED, "安装完成")
                     is InstallEvent.Failed -> updateTask(distroId, toolId, TASK_FAILED, safeEvent.message)
                     else -> Unit
                 }
                 if (safeEvent is InstallEvent.Completed) {
+                    // 顺序关键：先 commit（删快照 = 磁盘落定），再把 INSTALLED + 新版本写入 DB。
+                    // 若反过来（先落库再 commit），进程在窗口期被杀时恢复侧会用旧快照覆盖磁盘，
+                    // 而 DB 已记新版本且状态 INSTALLED——磁盘回旧版却永不提示更新，无法自愈。
+                    // commit 后落库则任一时刻被杀都可恢复：快照在 → 按旧快照回滚、DB 版本号仍是
+                    // 旧值（一致）；快照已删 → 磁盘即新版，最坏多提示一次更新（无害）。
+                    val receiptVersion = safeEvent.version?.trim()?.takeIf { it.isNotBlank() } ?: fixed.version
+                    packageOperations.record(distroId, fixed, receiptVersion)
                     transaction?.let { installTransactionManager.commit(it) }
                     transaction = null
+                    val installedVer = safeEvent.version?.trim()?.takeIf { it.isNotBlank() }
+                        ?: fixed.version
+                    toolRepository.updateStateAndInstalledVersion(
+                        distroId = distroId,
+                        id = toolId,
+                        state = ToolState.INSTALLED.name,
+                        installedVersion = installedVer,
+                    )
+                    notificationNotifier.showSuccess(toolId, toolName, installedVer)
+                    updateTask(distroId, toolId, TASK_COMPLETED, "安装完成")
                 }
                 emit(safeEvent)
             }
@@ -853,18 +685,21 @@ class ToolManager @Inject constructor(
     }
 
     suspend fun uninstall(toolId: String, deleteData: Boolean = false) {
-        require(isToolSupported(toolId)) { "暂不支持卸载工具：$toolId" }
-        installMutex.withLock {
-            check(toolId !in installJobs) { "工具正在安装：$toolId" }
+        localAccess?.requireLocal()
+        val distro = currentDistroId()
+        packageOperations.uninstall(distro, toolId) { fixed ->
+            require(isToolSupported(toolId)) { "暂不支持卸载工具：$toolId" }
+            installMutex.withLock {
+                check(toolId !in installJobs) { "工具正在安装：$toolId" }
+            }
+            linuxRuntime.listBackground()
+                .filter { it.toolId == toolId }
+                .forEach { linuxRuntime.stopBackground(it.id) }
+            uninstallLocked(toolId, deleteData, distro, fixed)
         }
-        linuxRuntime.listBackground()
-            .filter { it.toolId == toolId }
-            .forEach { linuxRuntime.stopBackground(it.id) }
-        uninstallLocked(toolId, deleteData)
     }
 
-    private suspend fun uninstallLocked(toolId: String, deleteData: Boolean) {
-        val distroId = currentDistroId()
+    private suspend fun uninstallLocked(toolId: String, deleteData: Boolean, distroId: String, fixed: ToolManifest) {
         installTaskRepository.upsert(
             InstallTaskEntity(
                 distroId = distroId,
@@ -875,7 +710,7 @@ class ToolManager @Inject constructor(
             ),
         )
         try {
-            val outcome = requireAdapter(toolId, requireEnabled = false).uninstall(deleteData).toUninstallOutcome()
+            val outcome = checkNotNull(getAdapter(toolId, fixed, distroId)).uninstall(deleteData).toUninstallOutcome()
             val event = if (outcome.success) "UNINSTALLED" else "UNINSTALL_FAILED"
             val safeMessage = secretRedactor.redact(outcome.message.ifBlank { "卸载完成" })
             toolRepository.updateStateAndInstalledVersion(
@@ -923,7 +758,7 @@ class ToolManager @Inject constructor(
         _verifications.value = emptyMap()
     }
 
-    suspend fun launch(toolId: String): top.tianyan.app.runtime.shell.CommandResult {
+    suspend fun launch(toolId: String): CommandResult {
         requireInstalledTool(toolId)
         return requireAdapter(toolId).launch()
     }
@@ -936,7 +771,7 @@ class ToolManager @Inject constructor(
             requireAdapter(toolId).interactiveSessionConfig()
         }
         return if (config == null) {
-            linuxRuntime.startSession(top.tianyan.app.runtime.shell.SessionConfig(workingDirectory = workingDirectory))
+            linuxRuntime.startSession(SessionConfig(workingDirectory = workingDirectory))
         } else {
             linuxRuntime.startSession(config.copy(workingDirectory = workingDirectory))
         }
@@ -985,6 +820,7 @@ class ToolManager @Inject constructor(
     }
 
     suspend fun startGateway(toolId: String): ManagedProcess {
+        localAccess?.requireLocal()
         requireInstalledTool(toolId)
         return serviceController.start(toolId, requireAdapter(toolId), serviceSpec(toolId))
     }
@@ -998,16 +834,13 @@ class ToolManager @Inject constructor(
         return tool
     }
 
-    private fun selectInstaller(toolId: String): Flow<InstallEvent> =
-        requireAdapter(toolId).install()
-
-    private fun requireAdapter(
+    private suspend fun requireAdapter(
         toolId: String,
         requireEnabled: Boolean = true,
-    ): ToolRuntimeAdapter = checkNotNull(getAdapter(toolId)) { "暂不支持工具：$toolId" }.also {
-        if (requireEnabled) {
-            requireManifestEnabled(toolId)
-        }
+    ): ToolRuntimeAdapter {
+        val distro = currentDistroId()
+        if (requireEnabled) requireManifestEnabled(toolId)
+        return checkNotNull(getAdapter(toolId, packageOperations.runtimeManifest(distro, toolId), distro)) { "暂不支持工具：$toolId" }
     }
 
     private fun requireManifestEnabled(toolId: String) {
@@ -1029,13 +862,6 @@ class ToolManager @Inject constructor(
                 updatedAt = System.currentTimeMillis(),
             ),
         )
-    }
-
-    private fun InstallEvent.redacted(): InstallEvent = when (this) {
-        is InstallEvent.Progress -> copy(message = secretRedactor.redact(message))
-        is InstallEvent.Output -> copy(line = secretRedactor.redact(line))
-        is InstallEvent.Failed -> copy(message = secretRedactor.redact(message))
-        else -> this
     }
 
     private fun updateFromEvent(event: InstallEvent) {
@@ -1083,79 +909,6 @@ class ToolManager @Inject constructor(
         }
     }
 
-    private fun InstallEvent.toLog(distroId: String): InstallLogEntity = when (this) {
-        is InstallEvent.Started -> InstallLogEntity(distroId = distroId, toolId = toolId, event = "STARTED", message = "开始安装")
-        is InstallEvent.Progress -> InstallLogEntity(
-            distroId = distroId,
-            toolId = toolId,
-            event = "PROGRESS_${phase.name}",
-            message = message,
-        )
-        is InstallEvent.Output -> InstallLogEntity(distroId = distroId, toolId = toolId, event = "OUTPUT", message = line)
-        is InstallEvent.Completed -> InstallLogEntity(distroId = distroId, toolId = toolId, event = "COMPLETED", message = "安装完成${version?.let { "：$it" } ?: ""}")
-        is InstallEvent.Failed -> InstallLogEntity(distroId = distroId, toolId = toolId, event = "FAILED", message = message)
-        is InstallEvent.RolledBack -> InstallLogEntity(distroId = distroId, toolId = toolId, event = "ROLLED_BACK", message = "已回滚安装事务")
-        is InstallEvent.Cancelled -> InstallLogEntity(distroId = distroId, toolId = toolId, event = "CANCELLED", message = "用户取消安装")
-    }
-
-    private suspend fun ToolManifest.toEntity(distroId: String, existing: ToolEntity?) = ToolEntity(
-        distroId = distroId,
-        id = id,
-        name = name,
-        description = description,
-        dependencies = dependencies.joinToString(","),
-        launchType = launchType,
-        state = when {
-            !enabled -> ToolState.DISABLED.name
-            existing == null -> ToolState.AVAILABLE.name
-            else -> {
-                val installedVersion = existing.installedVersion
-                val manifestLatest = latestVersion ?: version
-                when {
-                    existing.state == ToolState.DISABLED.name ->
-                        if (installedVersion != null) ToolState.INSTALLED.name else ToolState.AVAILABLE.name
-                    installedVersion != null && isUpdateNewer(manifestLatest, installedVersion) ->
-                        ToolState.UPDATE_AVAILABLE.name
-                    existing.state == ToolState.UPDATE_AVAILABLE.name -> ToolState.INSTALLED.name
-                    else -> existing.state
-                }
-            }
-        },
-        manifestVersion = version,
-        installedVersion = existing?.installedVersion,
-        publisher = publisher,
-        category = category,
-        permissions = permissions.joinToString(","),
-        homepage = homepage,
-        updateStrategy = updateStrategy,
-        latestVersion = latestVersion ?: version,
-    )
-
-    private fun isUpdateNewer(manifestLatest: String?, installedVersion: String?): Boolean {
-        if (manifestLatest.isNullOrBlank() || installedVersion.isNullOrBlank()) return false
-        val latestNums = manifestLatest.versionNumbers() ?: return false
-        val currentNums = installedVersion.versionNumbers() ?: return false
-        for (i in 0 until maxOf(latestNums.size, currentNums.size)) {
-            val l = latestNums.getOrElse(i) { 0 }
-            val c = currentNums.getOrElse(i) { 0 }
-            if (l > c) return true
-            if (l < c) return false
-        }
-        return false
-    }
-
-    private fun String.versionNumbers(): List<Int>? = Regex("\\d+(?:\\.\\d+){0,3}")
-        .find(this)
-        ?.value
-        ?.split('.')
-        ?.mapNotNull { it.toIntOrNull() }
-
-    private fun ToolActionResult.toUninstallOutcome(): UninstallOutcome =
-        UninstallOutcome(success, message)
-
-    private fun top.tianyan.app.runtime.shell.CommandResult.toUninstallOutcome(): UninstallOutcome =
-        UninstallOutcome(isSuccess, stderr.ifBlank { stdout })
-
     private companion object {
         const val OPERATION_INSTALL = "INSTALL"
         const val OPERATION_UPDATE = "UPDATE"
@@ -1165,23 +918,6 @@ class ToolManager @Inject constructor(
         const val TASK_FAILED = "FAILED"
         const val TASK_CANCELLED = "CANCELLED"
         const val TASK_INTERRUPTED = "INTERRUPTED"
-        /** 普通安装步骤 (dpkg 自愈 / apt 聚合安装 / 软链配置) 的默认超时 */
-        // PRoot cold-starts (JDK/Gradle/Flutter) can spend several minutes
-        // unpacking or compiling on slower ARM devices. A three-minute default
-        // incorrectly aborts valid installs before the script can finish.
-        const val DEFAULT_STEP_TIMEOUT_MS = 10 * 60_000L
-
-        /** apt-get install 聚合步超时：openjdk-17 全家桶 ~150-200MB，慢网络 10 分钟不够（实测超时过） */
-        const val APT_INSTALL_STEP_TIMEOUT_MS = 30 * 60_000L
-
-        /** 重型下载型脚本 (Android SDK 平台包 / Gradle / Flutter SDK / JADX) 的超时，与 GenericRecipeInstaller 对齐 */
-        const val HEAVY_SETUP_STEP_TIMEOUT_MS = 45 * 60_000L
-        const val FLUTTER_DOWNLOAD_LOG_INTERVAL_MS = 2_000L
-        const val MAX_BUNDLE_LOG_CHARS = 120 * 1024
-        const val MAX_BUNDLE_LINE_CHARS = 8 * 1024
-        const val MAX_BUNDLE_LOG_LINES = 2048
-        const val BUNDLE_LOG_TOOL_ID = "components"
-        const val BUNDLE_TASK_ID = "dev-bundle-install"
     }
 
 }

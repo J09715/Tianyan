@@ -9,41 +9,58 @@ import top.tianyan.app.runtime.WorkspaceStorage
 import top.tianyan.app.core.common.result.AppResult
 import top.tianyan.app.template.InstalledProjectTemplate
 import top.tianyan.app.template.ProjectTemplateStore
-import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import android.content.Context
 import top.tianyan.app.feature.workspace.R
-import javax.inject.Inject
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import android.Manifest
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import top.tianyan.app.core.datastore.FirstUseGuidePreferences
+import top.tianyan.app.core.datastore.WorkshopKeystore
+import top.tianyan.app.core.datastore.WorkshopPreferences
+import top.tianyan.app.core.model.BuiltinPluginBundles
+import top.tianyan.app.core.model.PluginBundle
+import top.tianyan.app.core.model.PluginComponent
+import top.tianyan.app.core.model.RuntimeState
+import top.tianyan.app.core.tools.ToolManager
+import top.tianyan.app.runtime.ApkImportSource
+import top.tianyan.app.runtime.GitTransport
+import top.tianyan.app.runtime.LinuxRuntime
+import top.tianyan.app.runtime.ProjectArchiveSource
+import top.tianyan.app.runtime.ProjectTemplate
+import top.tianyan.app.runtime.ProjectType
+import top.tianyan.app.runtime.build.BuildRunProgress
+import top.tianyan.app.runtime.build.WorkshopBuildType
+import top.tianyan.app.runtime.tools.InstallEvent
 
-@HiltViewModel
-class WorkspaceViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
+class WorkspaceViewModel(
+    private val context: Context,
     private val workspaceManager: WorkspaceManager,
     private val buildCoordinator: WorkspaceBuildTaskCoordinator,
-    private val toolManager: top.tianyan.app.core.tools.ToolManager,
-    private val linuxRuntime: top.tianyan.app.runtime.LinuxRuntime,
-    private val workshopPreferences: top.tianyan.app.core.datastore.WorkshopPreferences,
+    private val toolManager: ToolManager,
+    private val linuxRuntime: LinuxRuntime,
+    private val workshopPreferences: WorkshopPreferences,
     private val projectTemplateStore: ProjectTemplateStore,
-    private val settingsDataStore: top.tianyan.app.core.datastore.SettingsDataStore,
+    private val firstUseGuidePreferences: FirstUseGuidePreferences,
 ) : ViewModel() {
 
-    /** 首次使用引导登记（统一存于 SettingsDataStore，设置页可整体清空重看）。 */
-    val firstUseGuidesShown: StateFlow<Set<String>> = settingsDataStore.firstUseGuidesShown
+    /** 首次使用引导登记（统一存于偏好存储，设置页可整体清空重看）。 */
+    val firstUseGuidesShown: StateFlow<Set<String>> = firstUseGuidePreferences.firstUseGuidesShown
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
     fun markFirstUseGuideShown(id: String) {
-        viewModelScope.launch { settingsDataStore.markFirstUseGuideShown(id) }
+        viewModelScope.launch { firstUseGuidePreferences.markFirstUseGuideShown(id) }
     }
 
     private val _projectTemplates = MutableStateFlow<List<InstalledProjectTemplate>>(emptyList())
@@ -52,18 +69,18 @@ class WorkspaceViewModel @Inject constructor(
     val templateScriptPreview: StateFlow<String?> = _templateScriptPreview.asStateFlow()
 
     // ==================== 聚合开发套件与子组件状态 ====================
-    val pluginBundles: List<top.tianyan.app.core.model.PluginBundle> = top.tianyan.app.core.model.BuiltinPluginBundles.bundles
+    val pluginBundles: List<PluginBundle> = BuiltinPluginBundles.bundles
 
     private val _installedComponentIds = MutableStateFlow<Set<String>>(emptySet())
     val installedComponentIds: StateFlow<Set<String>> = _installedComponentIds.asStateFlow()
 
     /** Linux 沙箱是否已初始化就绪（组件探针依赖它，未就绪时探针结果不可信）。 */
     val runtimeReady: StateFlow<Boolean> = linuxRuntime.state
-        .map { it is top.tianyan.app.core.model.RuntimeState.Ready }
+        .map { it is RuntimeState.Ready }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
-    private val _activeBundleForSetup = MutableStateFlow<top.tianyan.app.core.model.PluginBundle?>(null)
-    val activeBundleForSetup: StateFlow<top.tianyan.app.core.model.PluginBundle?> = _activeBundleForSetup.asStateFlow()
+    private val _activeBundleForSetup = MutableStateFlow<PluginBundle?>(null)
+    val activeBundleForSetup: StateFlow<PluginBundle?> = _activeBundleForSetup.asStateFlow()
 
     private val _selectedComponents = MutableStateFlow<Set<String>>(emptySet())
     val selectedComponents: StateFlow<Set<String>> = _selectedComponents.asStateFlow()
@@ -80,17 +97,17 @@ class WorkspaceViewModel @Inject constructor(
     }
 
     fun refreshProjectTemplates() {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
             _projectTemplates.value = projectTemplateStore.list()
         }
     }
 
     fun importProjectTemplate(uri: String) {
         if (_busy.value) return
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
             _busy.value = true
             runCatching {
-                val input = requireNotNull(context.contentResolver.openInputStream(android.net.Uri.parse(uri))) {
+                val input = requireNotNull(context.contentResolver.openInputStream(Uri.parse(uri))) {
                     "无法读取模板文件"
                 }
                 input.use(projectTemplateStore::importZip)
@@ -106,10 +123,10 @@ class WorkspaceViewModel @Inject constructor(
 
     fun exportProjectTemplate(id: String, uri: String) {
         if (_busy.value) return
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
             _busy.value = true
             runCatching {
-                val output = requireNotNull(context.contentResolver.openOutputStream(android.net.Uri.parse(uri), "wt")) {
+                val output = requireNotNull(context.contentResolver.openOutputStream(Uri.parse(uri), "wt")) {
                     "无法创建模板文件"
                 }
                 output.use { projectTemplateStore.exportZip(id, it) }
@@ -124,7 +141,7 @@ class WorkspaceViewModel @Inject constructor(
 
     fun deleteProjectTemplate(id: String) {
         if (_busy.value) return
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
             _busy.value = true
             runCatching { projectTemplateStore.delete(id) }
                 .onSuccess {
@@ -137,7 +154,7 @@ class WorkspaceViewModel @Inject constructor(
     }
 
     fun showTemplateScripts(id: String) {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
             _templateScriptPreview.value = runCatching {
                 projectTemplateStore.hookScripts(id).joinToString("\n\n") { (path, script) ->
                     "===== $path =====\n$script"
@@ -151,16 +168,10 @@ class WorkspaceViewModel @Inject constructor(
     }
 
     fun refreshInstalledStatus() {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
                 _installedComponentIds.value = toolManager.probeInstalledComponents()
-            } catch (cancellation: kotlinx.coroutines.CancellationException) {
-                throw cancellation
-            } catch (e: Exception) {
-                // 探测失败时 _installedComponentIds 会保留上一次的旧值，
-                // 界面上表现为"组件仍已安装"，与真实状态不符。留日志以便定位。
-                android.util.Log.w("WorkspaceViewModel", "probeInstalledComponents 失败，组件安装状态可能已过期", e)
-            }
+            } catch (_: Exception) {}
         }
     }
 
@@ -180,7 +191,7 @@ class WorkspaceViewModel @Inject constructor(
         _activeBundleForSetup.value = targetBundle
     }
 
-    fun selectBundleTab(bundle: top.tianyan.app.core.model.PluginBundle) {
+    fun selectBundleTab(bundle: PluginBundle) {
         val installed = _installedComponentIds.value
         val initial = bundle.components.filter { it.isRequired || it.id in installed }.map { it.id }.toSet()
         _selectedComponents.value = if (initial.isEmpty()) bundle.components.map { it.id }.toSet() else initial
@@ -193,7 +204,7 @@ class WorkspaceViewModel @Inject constructor(
         }
     }
 
-    fun toggleComponent(component: top.tianyan.app.core.model.PluginComponent) {
+    fun toggleComponent(component: PluginComponent) {
         if (component.isRequired) return // 锁定必选
         val current = _selectedComponents.value
         _selectedComponents.value = if (component.id in current) current - component.id else current + component.id
@@ -203,11 +214,11 @@ class WorkspaceViewModel @Inject constructor(
         val selected = _selectedComponents.value
         if (selected.isEmpty()) return
 
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
             _isInstallingComponents.value = true
             try {
                 toolManager.batchInstallComponents(selected).collect { event ->
-                    if (event is top.tianyan.app.runtime.tools.InstallEvent.Progress) {
+                    if (event is InstallEvent.Progress) {
                         _suiteInstallProgress.value = event.message
                     }
                 }
@@ -224,7 +235,7 @@ class WorkspaceViewModel @Inject constructor(
     }
 
     // 兼容原 devSuites 接口
-    val devSuites: List<top.tianyan.app.core.model.PluginBundle> get() = pluginBundles
+    val devSuites: List<PluginBundle> get() = pluginBundles
     val showDevSuiteDialog: StateFlow<Boolean> get() = MutableStateFlow(_activeBundleForSetup.value != null).asStateFlow()
     val selectedDevSuites: StateFlow<Set<String>> get() = _selectedComponents
     val isInstallingSuites: StateFlow<Boolean> get() = _isInstallingComponents
@@ -234,8 +245,6 @@ class WorkspaceViewModel @Inject constructor(
     val loadingProjects: StateFlow<Boolean> = _loadingProjects.asStateFlow()
 
     val projects: StateFlow<List<WorkspaceProject>> = workspaceManager.observeProjects()
-        // conflate：索引写入触发的多轮过期全量投影，只保留最后一次重算结果。
-        .conflate()
         .onEach { if (_loadingProjects.value) _loadingProjects.value = false }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -265,7 +274,7 @@ class WorkspaceViewModel @Inject constructor(
     val githubImportProgress: StateFlow<GithubImportProgress?> = _githubImportProgress.asStateFlow()
 
     // 运行/构建状态
-    val buildProgress: StateFlow<top.tianyan.app.runtime.build.BuildRunProgress?> = buildCoordinator.state
+    val buildProgress: StateFlow<BuildRunProgress?> = buildCoordinator.state
         .map { it?.progress }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), buildCoordinator.state.value?.progress)
 
@@ -277,7 +286,7 @@ class WorkspaceViewModel @Inject constructor(
     val isBuildDialogVisible: StateFlow<Boolean> = _isBuildDialogVisible.asStateFlow()
 
     /** 工坊已登记的 Android 签名（Release 构建时选择）。 */
-    val keystores: StateFlow<List<top.tianyan.app.core.datastore.WorkshopKeystore>> = workshopPreferences.keystores
+    val keystores: StateFlow<List<WorkshopKeystore>> = workshopPreferences.keystores
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     // ==================== 文件浏览器状态 ====================
@@ -302,22 +311,20 @@ class WorkspaceViewModel @Inject constructor(
     val sharedStorageAccessLimited: StateFlow<Boolean> = _sharedStorageAccessLimited.asStateFlow()
 
     // ==================== 代码编辑器状态 ====================
-    private val _openedFilePath = MutableStateFlow<String?>(null)
-    val openedFilePath: StateFlow<String?> = _openedFilePath.asStateFlow()
-
-    private val _openedFileExtension = MutableStateFlow("")
-    val openedFileExtension: StateFlow<String> = _openedFileExtension.asStateFlow()
-
-    private val _fileContent = MutableStateFlow("")
-    val fileContent: StateFlow<String> = _fileContent.asStateFlow()
-
-    private var originalContent: String = ""
-
-    private val _isDirty = MutableStateFlow(false)
-    val isDirty: StateFlow<Boolean> = _isDirty.asStateFlow()
-
-    private val _isSaving = MutableStateFlow(false)
-    val isSaving: StateFlow<Boolean> = _isSaving.asStateFlow()
+    private val editor = EditorSessionController(
+        scope = viewModelScope,
+        workspaceManager = workspaceManager,
+        context = context,
+        notify = ::notify,
+        selectedProject = _selectedProject,
+        loadingFiles = _loadingFiles,
+    )
+    val openedFilePath: StateFlow<String?> = editor.openedFilePath
+    val fileContent: StateFlow<String> = editor.fileContent
+    val contentRevision: StateFlow<Long> = editor.contentRevision
+    val isDirty: StateFlow<Boolean> = editor.isDirty
+    val isSaving: StateFlow<Boolean> = editor.isSaving
+    val saveConflict: StateFlow<Boolean> = editor.saveConflict
 
     init {
         refresh()
@@ -341,17 +348,8 @@ class WorkspaceViewModel @Inject constructor(
         buildCoordinator.dismiss()
     }
 
-    /**
-     * 索引同步：listProjects 会做全量目录扫描与项目投影，没有 debounce 时连续事件
-     * （进页 + 数据写入 + 生命周期回根）会把同一轮扫描并发叠开，IO 线程池被打满、
-     * 内存峰值抬高，是项目变多后加载缓慢与闪退的直接放大器。
-     */
-    private var indexSyncJob: Job? = null
-
     fun refresh() {
-        indexSyncJob?.cancel()
-        indexSyncJob = viewModelScope.launch {
-            delay(250)
+        viewModelScope.launch {
             workspaceManager.listProjects()
         }
     }
@@ -362,9 +360,9 @@ class WorkspaceViewModel @Inject constructor(
         name: String,
         storage: WorkspaceStorage = WorkspaceStorage.INTERNAL,
         directoryPath: String = "",
-        template: top.tianyan.app.runtime.ProjectTemplate = top.tianyan.app.runtime.ProjectTemplate.EMPTY,
+        template: ProjectTemplate = ProjectTemplate.EMPTY,
         packageName: String = "",
-        apkSource: top.tianyan.app.runtime.ApkImportSource? = null,
+        apkSource: ApkImportSource? = null,
         exportApkToDownload: Boolean = false,
         gitUrl: String = "",
         templateVariables: Map<String, String> = emptyMap(),
@@ -398,8 +396,8 @@ class WorkspaceViewModel @Inject constructor(
     fun importLocalProject(
         name: String,
         directoryPath: String,
-        projectType: top.tianyan.app.runtime.ProjectType,
-        source: top.tianyan.app.runtime.ProjectArchiveSource,
+        projectType: ProjectType,
+        source: ProjectArchiveSource,
     ) {
         if (_busy.value) return
         viewModelScope.launch {
@@ -415,9 +413,9 @@ class WorkspaceViewModel @Inject constructor(
     fun importGithubProject(
         name: String,
         directoryPath: String,
-        projectType: top.tianyan.app.runtime.ProjectType,
+        projectType: ProjectType,
         gitUrl: String,
-        transport: top.tianyan.app.runtime.GitTransport,
+        transport: GitTransport,
     ) {
         if (_busy.value) return
         viewModelScope.launch {
@@ -427,15 +425,7 @@ class WorkspaceViewModel @Inject constructor(
                 percent = null,
             )
             val result = workspaceManager.importGithubProject(name, directoryPath, projectType, gitUrl, transport) { chunk ->
-                // git 进度用 \r 原地刷新，取 chunk 内最后一个非空片段作为最新状态
-                val latest = chunk.split('\r', '\n').lastOrNull { it.isNotBlank() }?.trim()
-                if (latest != null) {
-                    _githubImportProgress.value = GithubImportProgress(
-                        text = latest,
-                        percent = GIT_PERCENT_REGEX.findAll(latest).lastOrNull()
-                            ?.groupValues?.get(1)?.toIntOrNull()?.coerceIn(0, 100),
-                    )
-                }
+                workspaceImportProgress(chunk)?.let { _githubImportProgress.value = it }
             }
             _message.value = result.errorOrNull()?.message ?: context.getString(R.string.workspace_project_imported)
             _messageIsError.value = result.isFailure
@@ -459,8 +449,8 @@ class WorkspaceViewModel @Inject constructor(
 
     fun runProject(
         project: WorkspaceProject,
-        buildType: top.tianyan.app.runtime.build.WorkshopBuildType = top.tianyan.app.runtime.build.WorkshopBuildType.DEBUG,
-        keystore: top.tianyan.app.core.datastore.WorkshopKeystore? = null,
+        buildType: WorkshopBuildType = WorkshopBuildType.DEBUG,
+        keystore: WorkshopKeystore? = null,
     ) {
         if (buildCoordinator.state.value?.progress?.isRunning == true) {
             _isBuildDialogVisible.value = true
@@ -494,8 +484,14 @@ class WorkspaceViewModel @Inject constructor(
     // ==================== 文件浏览器操作 ====================
 
     fun loadExplorer(projectName: String, relativePath: String = "") {
+        val nextPath = computeExplorerPath(
+            currentProject = _selectedProject.value,
+            currentPath = _currentPath.value,
+            targetProject = projectName,
+            targetPath = relativePath,
+        )
         _selectedProject.value = projectName
-        _currentPath.value = relativePath.trim().removePrefix("/")
+        _currentPath.value = nextPath
         refreshDirectory()
     }
 
@@ -543,76 +539,80 @@ class WorkspaceViewModel @Inject constructor(
     }
 
     private fun hasSharedStorageAccess(): Boolean =
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            android.os.Environment.isExternalStorageManager()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
         } else {
             androidx.core.content.ContextCompat.checkSelfPermission(
                 context,
-                android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
-            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                Manifest.permission.WRITE_EXTERNAL_STORAGE,
+            ) == PackageManager.PERMISSION_GRANTED
         }
 
     /** 文件增删改的统一模板：取项目 → 执行 → 成功刷新目录/失败写消息 → 复位 busy */
     private fun runFileOp(
         successMessage: suspend () -> String,
         fallbackError: Int,
+        onSuccess: () -> Unit = {},
         op: suspend () -> AppResult<Unit>,
     ) {
-        val proj = _selectedProject.value ?: return
+        if (_selectedProject.value == null || _busy.value) return
+        _busy.value = true
         viewModelScope.launch {
-            _busy.value = true
-            val result = op()
-            if (result.isSuccess) {
-                notify(successMessage())
-                refreshDirectory()
-            } else {
-                notify(result.errorOrNull()?.message ?: context.getString(fallbackError), isError = true)
+            try {
+                val result = op()
+                if (result.isSuccess) {
+                    notify(successMessage())
+                    refreshDirectory()
+                    onSuccess()
+                } else {
+                    notify(result.errorOrNull()?.message ?: context.getString(fallbackError), isError = true)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                notify(e.message ?: context.getString(fallbackError), isError = true)
+            } finally {
+                _busy.value = false
             }
-            _busy.value = false
         }
     }
 
-    fun createFile(name: String) {
-        val proj = _selectedProject.value ?: return
+    private fun validatedEntryName(name: String): String? {
         val trimmed = name.trim()
-        if (trimmed.isBlank()) return
-        if (!isValidWorkspaceEntryName(trimmed)) {
-            notify(context.getString(R.string.workspace_invalid_name), isError = true)
-            return
-        }
+        if (isValidWorkspaceEntryName(trimmed)) return trimmed
+        notify(context.getString(R.string.workspace_invalid_name), isError = true)
+        return null
+    }
+
+    fun createFile(name: String, onSuccess: () -> Unit = {}) {
+        val proj = _selectedProject.value ?: return
+        val trimmed = validatedEntryName(name) ?: return
         val fullRelative = if (_currentPath.value.isBlank()) trimmed else "${_currentPath.value}/$trimmed"
         runFileOp(
             successMessage = { context.getString(R.string.workspace_file_created, trimmed) },
             fallbackError = R.string.workspace_create_file_failed,
+            onSuccess = onSuccess,
         ) { workspaceManager.createFile(proj, fullRelative) }
     }
 
-    fun createDirectory(name: String) {
+    fun createDirectory(name: String, onSuccess: () -> Unit = {}) {
         val proj = _selectedProject.value ?: return
-        val trimmed = name.trim()
-        if (trimmed.isBlank()) return
-        if (!isValidWorkspaceEntryName(trimmed)) {
-            notify(context.getString(R.string.workspace_invalid_name), isError = true)
-            return
-        }
+        val trimmed = validatedEntryName(name) ?: return
         val fullRelative = if (_currentPath.value.isBlank()) trimmed else "${_currentPath.value}/$trimmed"
         runFileOp(
             successMessage = { context.getString(R.string.workspace_directory_created, trimmed) },
             fallbackError = R.string.workspace_create_directory_failed,
+            onSuccess = onSuccess,
         ) { workspaceManager.createDirectory(proj, fullRelative) }
     }
 
-    fun renameItem(oldRelativePath: String, newName: String) {
+    fun renameItem(oldRelativePath: String, newName: String, onSuccess: () -> Unit = {}) {
         val proj = _selectedProject.value ?: return
-        val trimmed = newName.trim()
-        if (trimmed.isBlank()) return
-        if (!isValidWorkspaceEntryName(trimmed)) {
-            notify(context.getString(R.string.workspace_invalid_name), isError = true)
-            return
-        }
+        val trimmed = validatedEntryName(newName) ?: return
         runFileOp(
             successMessage = { context.getString(R.string.workspace_renamed, trimmed) },
             fallbackError = R.string.workspace_rename_failed,
+            onSuccess = onSuccess,
         ) { workspaceManager.renameItem(proj, oldRelativePath, trimmed) }
     }
 
@@ -626,75 +626,18 @@ class WorkspaceViewModel @Inject constructor(
 
     // ==================== 编辑器操作 ====================
 
-    fun openFile(projectName: String, relativePath: String) {
-        _selectedProject.value = projectName
-        _openedFilePath.value = relativePath
-        val ext = relativePath.substringAfterLast('.', "")
-        _openedFileExtension.value = ext
-        viewModelScope.launch {
-            _loadingFiles.value = true
-            val result = workspaceManager.readFile(projectName, relativePath)
-            if (result.isSuccess) {
-                val content = result.getOrNull().orEmpty()
-                originalContent = content
-                _fileContent.value = content
-                _isDirty.value = false
-            } else {
-                notify(result.errorOrNull()?.message ?: context.getString(R.string.workspace_open_file_failed), isError = true)
-            }
-            _loadingFiles.value = false
-        }
-    }
+    fun editorText(project: String, path: String): String = editor.editorText(project, path)
 
-    fun onContentChanged(newText: String) {
-        _fileContent.value = newText
-        _isDirty.value = newText != originalContent
-    }
+    fun openFile(projectName: String, relativePath: String) = editor.openFile(projectName, relativePath)
 
-    fun resetContent() {
-        _fileContent.value = originalContent
-        _isDirty.value = false
-    }
+    fun onContentChanged(newText: String) = editor.onContentChanged(newText)
 
-    fun saveFile(onSuccess: (() -> Unit)? = null) {
-        val proj = _selectedProject.value ?: return
-        val path = _openedFilePath.value ?: return
-        val text = _fileContent.value
-        viewModelScope.launch {
-            _isSaving.value = true
-            val result = workspaceManager.writeFile(proj, path, text)
-            if (result.isSuccess) {
-                originalContent = text
-                _isDirty.value = false
-                notify(context.getString(R.string.workspace_file_saved))
-                onSuccess?.invoke()
-            } else {
-                notify(result.errorOrNull()?.message ?: context.getString(R.string.workspace_save_failed), isError = true)
-            }
-            _isSaving.value = false
-        }
-    }
+    fun resetContent() = editor.resetContent()
 
-    fun closeFile() {
-        _openedFilePath.value = null
-        _fileContent.value = ""
-        originalContent = ""
-        _isDirty.value = false
-    }
+    fun saveFile(content: String? = null, onSuccess: (() -> Unit)? = null) = editor.saveFile(content, onSuccess)
+
+    fun overwriteSaveConflict() = editor.overwriteSaveConflict()
+    fun reloadSaveConflict() = editor.reloadSaveConflict()
+    fun dismissSaveConflict() = editor.dismissSaveConflict()
+    fun closeFile() = editor.closeFile()
 }
-
-/**
- * 文件/文件夹名称合法性校验（UI 与 VM 共用同一规则）：
- * 不允许路径分隔符（/ 与 \\）、首尾空格、以 `.` 开头（隐藏文件）以及 `.` / `..` 等特殊名称。
- */
-internal fun isValidWorkspaceEntryName(name: String): Boolean {
-    if (name.isEmpty()) return false
-    if (name.trim() != name) return false
-    if (name.startsWith(".")) return false
-    if (name == "." || name == "..") return false
-    if (name.contains('/') || name.contains('\\')) return false
-    return true
-}
-
-/** 从 git 克隆进度行提取百分比，如 "Receiving objects: 45% (50/110), 1.2 MiB"。 */
-private val GIT_PERCENT_REGEX = Regex("""(\d{1,3})%""")

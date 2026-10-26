@@ -4,6 +4,8 @@ import android.content.Context
 import android.view.ViewGroup
 import android.webkit.WebSettings
 import android.webkit.WebView
+import java.util.Collections
+import java.util.WeakHashMap
 
 /**
  * WebView 构造工厂，集中处理调试开关 / DOM storage / JavaScript / Cache。
@@ -13,8 +15,8 @@ import android.webkit.WebView
 object AndroidWebViewFactory {
 
     /** 已销毁视图标记（WeakHashMap 弱引用不泄漏视图，使 destroy 幂等）。 */
-    private val destroyedViews = java.util.Collections.newSetFromMap(
-        java.util.Collections.synchronizedMap(java.util.WeakHashMap<WebView, Boolean>())
+    private val destroyedViews = Collections.newSetFromMap(
+        Collections.synchronizedMap(WeakHashMap<WebView, Boolean>())
     )
 
     fun create(
@@ -25,10 +27,6 @@ object AndroidWebViewFactory {
         val s: WebSettings = view.settings
         s.javaScriptEnabled = true
         s.domStorageEnabled = true
-        // databaseEnabled 自 API 35 起弃用：WebView 已默认启用 DOM Storage 数据库，
-        // 显式设置只在旧版本有意义，用版本判断保留兼容、避免弃用警告。
-        @Suppress("DEPRECATION")
-        if (android.os.Build.VERSION.SDK_INT < 35) s.databaseEnabled = true
         s.loadWithOverviewMode = true
         s.useWideViewPort = true
         s.setSupportZoom(true)

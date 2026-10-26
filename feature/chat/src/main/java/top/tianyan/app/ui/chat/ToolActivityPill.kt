@@ -28,16 +28,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import top.tianyan.app.ui.theme.semanticColors
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -46,7 +47,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -68,11 +68,10 @@ import top.tianyan.app.harness.ToolCall
 import top.tianyan.app.harness.ToolResult
 import top.tianyan.app.harness.UserMessage
 import top.tianyan.app.ui.components.RuntimeIcon
-import top.tianyan.app.ui.theme.Radius
-import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeTextButton
 import top.tianyan.app.ui.components.StatusBadge
+import java.util.Locale
 
 /**
  * 🌟 底部悬浮工具活动胶囊 (Floating Tool Activity Strip / Live Pill)
@@ -88,6 +87,7 @@ fun ToolActivityPill(
     workspace: String,
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
 ) {
     var showDetailSheet by remember { mutableStateOf(false) }
 
@@ -130,22 +130,17 @@ fun ToolActivityPill(
         }
     }
 
-    // 脉冲与呼吸光效：仅在运行中才创建无限动画（帧时钟），空闲时不跑任何帧；
-    // 动画值只保留 State 引用，实际读取下沉到 drawBehind 绘制阶段，每帧只重绘状态点
-    val pulseAlphaState: State<Float> = if (running) {
-        val transition = rememberInfiniteTransition(label = "toolPillPulse")
-        transition.animateFloat(
-            initialValue = 0.4f,
-            targetValue = 1.0f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(800, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse,
-            ),
-            label = "pillPulseAlpha",
-        )
-    } else {
-        remember { mutableStateOf(1f) }
-    }
+    // 脉冲与呼吸光效
+    val transition = rememberInfiniteTransition(label = "toolPillPulse")
+    val pulseAlpha by transition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "pillPulseAlpha",
+    )
 
     AnimatedVisibility(
         visible = running,
@@ -154,17 +149,13 @@ fun ToolActivityPill(
         modifier = modifier,
     ) {
         val toolKind = activeToolCall?.tool
-        val toolIcon = when (toolKind) {
-            HarnessTool.BASE, HarnessTool.PROCESS -> RuntimeIconName.Terminal
-            HarnessTool.READ, HarnessTool.WRITE, HarnessTool.EDIT -> RuntimeIconName.Document
-            HarnessTool.SUBAGENT -> RuntimeIconName.Brain
-            else -> RuntimeIconName.Speed
-        }
+        // 与消息流 ToolCard 共用同一套工具语义图标映射
+        val iconName = toolKind?.let { toolIcon(it) } ?: RuntimeIconName.Speed
 
         val pillAccent = when (toolKind) {
-            HarnessTool.BASE, HarnessTool.PROCESS -> Color(0xFF00E5FF)
-            HarnessTool.WRITE, HarnessTool.EDIT -> Color(0xFF10B981)
-            HarnessTool.SUBAGENT -> Color(0xFF8B5CF6)
+            HarnessTool.BASE, HarnessTool.PROCESS -> semanticColors().info
+            HarnessTool.WRITE, HarnessTool.EDIT -> semanticColors().success
+            HarnessTool.SUBAGENT -> semanticColors().agent
             else -> MaterialTheme.colorScheme.primary
         }
 
@@ -172,26 +163,26 @@ fun ToolActivityPill(
 
         Surface(
             onClick = { showDetailSheet = true },
-            shape = Radius.xsShape,
-            color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f),
-            border = androidx.compose.foundation.BorderStroke(
+            shape = RoundedCornerShape(8.dp),
+            color = if (compact) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f),
+            border = if (compact) null else androidx.compose.foundation.BorderStroke(
                 0.5.dp,
                 MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
             ),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = Spacing.xs, vertical = Spacing.xs),
+                .then(if (compact) Modifier.heightIn(min = 48.dp) else Modifier.padding(horizontal = 4.dp, vertical = 1.5.dp)),
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                    .padding(horizontal = 8.dp, vertical = 3.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier.weight(1f),
                 ) {
                     // 运行状态微光指示点（纯颜色补文本语义，TalkBack 可读）
@@ -200,16 +191,13 @@ fun ToolActivityPill(
                         modifier = Modifier
                             .size(5.dp)
                             .clip(CircleShape)
-                            .drawBehind {
-                                // 绘制阶段读取脉冲动画值：每帧只重绘本圆点，不触发胶囊重组
-                                drawCircle(color = pillAccent.copy(alpha = pulseAlphaState.value))
-                            }
+                            .background(pillAccent.copy(alpha = pulseAlpha))
                             .semantics { contentDescription = runningDotLabel },
                     )
 
                     // 图标
                     RuntimeIcon(
-                        name = toolIcon,
+                        name = iconName,
                         modifier = Modifier.size(12.dp),
                         tint = pillAccent,
                     )
@@ -241,24 +229,26 @@ fun ToolActivityPill(
                     }
                 }
 
-                Spacer(Modifier.width(Spacing.xs))
+                if (!compact) {
+                    Spacer(Modifier.width(4.dp))
 
-                // 一键终止极简微型按钮
-                val stopLabel = stringResource(R.string.chat_stop_generation)
-                Box(
-                    modifier = Modifier
-                        .size(16.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.75f))
-                        .clickable(onClick = onStop)
-                        .semantics { contentDescription = stopLabel },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    RuntimeIcon(
-                        name = RuntimeIconName.Close,
-                        modifier = Modifier.size(9.dp),
-                        tint = MaterialTheme.colorScheme.onErrorContainer,
-                    )
+                    // 一键终止极简微型按钮
+                    val stopLabel = stringResource(R.string.chat_stop_generation)
+                    Box(
+                        modifier = Modifier
+                            .size(16.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.75f))
+                            .clickable(onClick = onStop)
+                            .semantics { contentDescription = stopLabel },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        RuntimeIcon(
+                            name = RuntimeIconName.Close,
+                            modifier = Modifier.size(9.dp),
+                            tint = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                    }
                 }
             }
         }
@@ -271,7 +261,7 @@ fun ToolActivityPill(
         val readyStatusText = stringResource(R.string.chat_tool_detail_ready)
         val typeText = stringResource(R.string.chat_tool_detail_type, activeToolCall.tool.name)
         val argsText = remember(activeToolCall.id) { prettyArgs(activeToolCall.args) }
-        ModalBottomSheet(
+        PlainBackdropModalBottomSheet(
             onDismissRequest = { showDetailSheet = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -279,9 +269,9 @@ fun ToolActivityPill(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = Spacing.xl, vertical = Spacing.md)
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(Spacing.md),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -290,7 +280,7 @@ fun ToolActivityPill(
                 ) {
                     Text(
                         text = stringResource(R.string.chat_tool_detail_title),
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        style = MaterialTheme.typography.titleMedium,
                     )
                     StatusBadge(
                         text = if (running) runningStatusText else readyStatusText,
@@ -299,13 +289,13 @@ fun ToolActivityPill(
                 }
 
                 Surface(
-                    shape = Radius.smShape,
+                    shape = RoundedCornerShape(10.dp),
                     color = MaterialTheme.colorScheme.surfaceContainerLowest,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(
-                        modifier = Modifier.padding(Spacing.md),
-                        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Text(
                             text = typeText,
@@ -342,7 +332,7 @@ fun ToolActivityPill(
                     }
                 }
 
-                Spacer(Modifier.height(Spacing.lg))
+                Spacer(Modifier.height(16.dp))
             }
         }
     }
@@ -357,7 +347,7 @@ private fun prettyArgs(args: JsonObject): String =
     }.getOrDefault(args.toString())
 
 private fun formatDuration(ms: Long): String {
-    return String.format(java.util.Locale.getDefault(), "%.1fs", ms / 1000f)
+    return String.format(Locale.getDefault(), "%.1fs", ms / 1000f)
 }
 
 private fun formatToolSummary(call: ToolCall): String {

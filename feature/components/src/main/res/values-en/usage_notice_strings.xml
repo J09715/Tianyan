@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="runtime_notice_title">Disclaimer and usage notes</string>
+    <string name="runtime_notice_summary">Understand AI, command execution, data sharing, and permissions</string>
+    <string name="runtime_notice_close">Got it</string>
+    <string name="runtime_notice_actions_title">Review the impact before acting</string>
+    <string name="runtime_notice_actions_body">The terminal, AI tools, and plugins can change or delete files, install software, or access the network. Only use them on devices and projects you are authorized to manage. Back up important data and review commands and approval requests.</string>
+    <string name="runtime_notice_ai_title">Verify AI output</string>
+    <string name="runtime_notice_ai_body">AI can produce inaccurate information, unsafe commands, or faulty code. Verify results and seek appropriate professional help for important decisions. Tianyan does not guarantee the accuracy or reliability of generated content or third-party tools.</string>
+    <string name="runtime_notice_data_title">Check third-party services and costs</string>
+    <string name="runtime_notice_data_body">When you use online models or networked plugins, submitted content and relevant tool results may be sent to your chosen provider. Check the endpoint, terms, and pricing. Do not submit personal or confidential information you are not authorized to share.</string>
+    <string name="runtime_notice_access_title">You control permissions</string>
+    <string name="runtime_notice_access_body">Notifications, overlays, shared storage, autostart, and battery settings are optional and requested as needed. You can decline or configure them later. PRoot runs Linux but is not a security boundary against malicious code. Shizuku, Root, and full-access mode expand what tools can do; enable them carefully.</string>
+</resources>

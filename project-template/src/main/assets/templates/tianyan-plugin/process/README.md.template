@@ -1,0 +1,53 @@
+# {{pluginName}}
+
+天衍 v2 本地进程插件，身份 `{{pluginId}}`，命令 `{{toolId}}`。
+
+## 初始文件
+
+- `manifest.json`：插件身份、版本、启动及安装配置。
+- `payload/bin/{{toolId}}`：POSIX Shell 入口，支持 `--version` 和 `--mcp`。
+- `payload/lib/plugin_server.py`：Python 标准库离线 MCP 服务，示例工具、Provider 和工作流节点。
+- `tools/package_plugin.py`：使用 Python 3 标准库打包，无需 pip 或网络。
+- `AGENTS.md`：供智能体读取的开发约定。
+
+## 开发与打包
+
+应用内调试：在项目卡片点击“一键导入调试”，天衍直接打包当前 `manifest.json` 与 `payload/`，打开插件中心核对清单后安装，不需要 Python。安装后进入插件详情启动或查看日志；修改后再次点击即可导入新快照。
+
+调试包保存在工程 `dist/`，版本附加 `+tianyan.debug.<内容指纹>.<快照ID>`，替换源版本已有的构建元数据，不改写源清单和示例 `--version` 输出。每次点击生成独立版本，回退代码或安装失败后也能重新导入。调试安装会替换当前系统中同一插件的安装版本，不是并行安装；运行中的实例仍按插件中心原有规则处理。旧快照保留，可手动删除 `dist/*-debug-*.txplugin`；正式发布仍使用下面的命令打包，并递增正式版本号。
+
+命令行打包：
+
+在工程终端执行（需要 Python 3；未安装时先在工具中心准备 Python）：
+
+```sh
+sh payload/bin/{{toolId}} --version
+sh payload/bin/{{toolId}}
+python3 tools/package_plugin.py
+```
+
+生成 `dist/{{toolId}}-{{pluginVersion}}.txplugin`。打包器自动计算 payload 文件的 SHA-256，并写入包内清单的 `plugin.integrity`；源清单不被改写，README、开发脚本和工程文件不进入插件包。
+
+在天衍插件中心选择“导入本地插件”，选取生成的 `.txplugin`，核对清单后安装。安装后可从插件详情启动，也可在终端运行 `{{toolId}}`。同版本不能覆盖导入；发布改动前递增 `manifest.json` 的版本，并同步示例 `--version` 输出。
+
+新增 payload 文件会自动纳入包；符号链接会被拒绝。实际编译二进制时需面向 Linux ARM64。脚本从 `$TIANYAN_PLUGIN_PAYLOAD` 复制到 `$TIANYAN_TOOL_DIR/bin`，数据写入 `$TIANYAN_TOOL_DATA`。
+
+## 边界
+
+本模板用于 PROCESS 进程插件，支持通过 `plugin.harness` 动态注册 MCP 工具、Provider 与工作流节点；原生 Compose 页面和任意 Kotlin 回调仍需编译装配。`offlineOnly` 与能力字段是声明，不构成网络阻断或恶意代码隔离。
+
+v2 不接受自定义卸载脚本。需要共享 SDK 或其它插件时，在 `plugin.dependencies`、`plugin.resources` 中显式声明；全局资源目前只支持 RETAIN，不承诺卸载删除或完整事务回滚。
+
+## 离线 MCP 调试
+
+打包不依赖目标系统的 Python；运行本示例的 MCP 服务需要先在所选 Linux 系统准备 `python3`。也可以将入口换成 Linux ARM64 原生可执行文件。导入并安装后才会注册扩展，仅导入不会启动程序。
+
+- 工具：Agent 通过 `use_capability` 发现插件的版本绑定能力域，再调用 `echo`；调用沿用现有审批。
+- Provider：模型设置中选择 `plugin.{{pluginId}}.offline`，模型名 `plugin-default`，不填 API Key。它只返回 `Offline plugin: ...`，不会联网或调用真实模型。
+- 工作流：`PLUGIN_ACTION` 节点的 `config.plugin` 使用 `{{pluginId}}`，`config.extension` 为 `echo-step`，`config.arguments` 的 JSON 字符串内容为 `{"text":"hello"}`；每次执行都需原生确认。
+
+宿主用入口 `--mcp` 启动进程，以逐行 JSON-RPC stdio 交换消息。工具结果放在 MCP `content` 的 text 中；Provider text 必须为 JSON 对象，字段为 `content`、可选 `reasoning`、`toolCalls`，每项工具调用包含 `id/name/arguments`。示例见 `plugin_server.py`。Provider 的流式接口采用完整响应后分发文字的兼容模式。
+
+每次调用最长 120 秒，返回 UTF-8 数据最多 256 KiB；宿主随后关闭连接。卸载、切换系统或安装版本改变后，旧调用不能继续准入。更改工具 Schema 时同步修改 `plugin.harness`；`plugin.extensions` 必须与声明完全一致。外部插件不会继承宿主全局模型密钥；带有 API Key 的请求会被拒绝。
+
+需要宿主 Shell、安装 APK 或 Logcat 时，在开发者设置针对当前系统、插件与安装版本进行最长 30 分钟的原生确认。开发者开关本身不授权。撤销、关闭开关、超时、重启、安装或卸载均使确认失效；PRoot 同 UID 运行并不构成强安全隔离。

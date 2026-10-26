@@ -1,0 +1,5 @@
+<resources>
+    <string name="package_provider_local_notice">Conversations are handled by the installed local plugin. No endpoint or host API key is needed. The plugin receives conversation content; configure any required credentials within the plugin.</string>
+    <string name="package_harness_extensions">MCP entry: %1$s\nTools %2$d · Providers %3$d · Workflow nodes %4$d</string>
+    <string name="package_harness_provider_scope">Selecting this provider shares the model request transcript with the plugin process. The host default API key is not forwarded; configure credentials within the plugin. Processes use the existing PRoot environment without strong isolation.</string>
+</resources>

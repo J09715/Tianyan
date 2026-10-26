@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="personal_settings_title">设置</string>
+    <string name="personal_appearance_title">外观与体验</string>
+    <string name="personal_color_intro">让色彩、文字和背景，成为你喜欢的样子。</string>
+    <string name="personal_wallpaper_color">壁纸取色</string>
+    <string name="personal_wallpaper_color_description">将壁纸中的色彩融入整个应用</string>
+    <string name="personal_search">搜索设置与功能</string>
+    <string name="personal_environment">功能与环境</string>
+    <string name="personal_application">应用与支持</string>
+    <string name="personal_agents_title">智能体与模型</string>
+    <string name="personal_linux_title">Linux 与存储</string>
+    <string name="personal_diagnostics_title">保活与诊断</string>
+    <string name="personal_phrase_enabled">已启用</string>
+    <string name="personal_phrase_disabled">已停用</string>
+    <string name="personal_mcp_title">MCP 服务</string>
+</resources>

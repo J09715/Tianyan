@@ -239,7 +239,7 @@ class ResponsesApiTest {
         } catch (t: Throwable) {
             thrown = t
         }
-        assertTrue(thrown is IllegalStateException)
+        assertTrue(thrown is TransientHttpException)
         assertTrue(thrown!!.message!!.contains("模型内部错误"))
     }
 

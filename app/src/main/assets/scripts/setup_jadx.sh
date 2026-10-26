@@ -17,15 +17,11 @@ if ! command -v unzip >/dev/null 2>&1 && [ -x "${TIANYAN_TOOL_DIR:-/opt/tianyan/
 fi
 
 JADX_VERSION="v1.5.0"
-JADX_UPSTREAM_URL="https://github.com/skylot/jadx/releases/download/${JADX_VERSION}/jadx-${JADX_VERSION}.zip"
-# 引入共享镜像库，按全量节点构建下载列表（末尾官方直连兜底）
-. /opt/tianyan/scripts/tianyan-mirror-lib.sh
-JADX_URLS=""
-for JADX_BASE in $TIANYAN_MIRROR_NODES; do
-    [ -n "$JADX_BASE" ] || continue
-    JADX_URLS="$JADX_URLS ${JADX_BASE}${JADX_UPSTREAM_URL}"
-done
-JADX_URLS="$JADX_URLS $JADX_UPSTREAM_URL"
+JADX_URLS="
+https://mirror.ghproxy.com/https://github.com/skylot/jadx/releases/download/${JADX_VERSION}/jadx-${JADX_VERSION}.zip
+https://gh-proxy.com/https://github.com/skylot/jadx/releases/download/${JADX_VERSION}/jadx-${JADX_VERSION}.zip
+https://github.com/skylot/jadx/releases/download/${JADX_VERSION}/jadx-${JADX_VERSION}.zip
+"
 
 # Java 运行时预检（jadx 是 Java 程序，无 JVM 时给出明确指引而非静默失败）
 JAVA_OK=0

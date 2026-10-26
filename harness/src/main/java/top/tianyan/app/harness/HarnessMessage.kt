@@ -1,8 +1,10 @@
 package top.tianyan.app.harness
 
+import top.tianyan.app.core.model.ChunkedText
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
+import top.tianyan.app.core.model.ToolImageRef
 
 /** Harness 基础工具，与 LLM tool-calling 协议对齐。 */
 @Serializable
@@ -10,7 +12,6 @@ enum class HarnessTool {
     @SerialName("read") READ,
     @SerialName("write") WRITE,
     @SerialName("edit") EDIT,
-    @SerialName("verify") VERIFY,
     @SerialName("base") BASE,
     @SerialName("process") PROCESS,
     @SerialName("host") HOST,
@@ -24,8 +25,10 @@ enum class HarnessTool {
     @SerialName("invoke_subagent") SUBAGENT,
     @SerialName("mcp") MCP,
     @SerialName("load_rule") LOAD_RULE,
-    @SerialName("redteam") REDTEAM,
-    @SerialName("ask_user_question") ASK_USER,
+    @SerialName("load_skill") LOAD_SKILL,
+    @SerialName("compress") COMPRESS,
+    @SerialName("ask_user") ASK_USER,
+    @SerialName("render_surface") RENDER_SURFACE,
 }
 
 /**
@@ -37,6 +40,24 @@ sealed interface HarnessMessage {
     val id: String
     val createdAt: Long
 }
+
+@Serializable
+@SerialName("skill_suggestion")
+data class SkillSuggestion(
+    override val id: String,
+    override val createdAt: Long,
+    /** create = 沉淀为新技能；update = 修复既有技能的指导规则 */
+    val action: String,
+    val skillName: String,
+    val description: String,
+    val systemPrompt: String,
+    val triggerCommand: String? = null,
+    /** action=update 时的目标技能 id */
+    val targetSkillId: String? = null,
+    val reason: String = "",
+    /** pending = 待处理；applied / dismissed 由 UI 内存态过滤（转写里保留原样） */
+    val status: String = "pending",
+) : HarnessMessage
 
 /** UI-only capability activation event. It is persisted for the transcript but never sent to the model. */
 @Serializable
@@ -52,6 +73,43 @@ data class CapabilityEvent(
     enum class Kind { SKILL, MCP }
 }
 
+/** UI-only model switch record. Persisted in the transcript, never sent to the provider. */
+@Serializable
+@SerialName("model_switch")
+data class ModelSwitchEvent(
+    override val id: String,
+    override val createdAt: Long,
+    val fromLabel: String = "",
+    val toLabel: String,
+    val fromContextTokens: Int? = null,
+    val toContextTokens: Int,
+    val compacted: Boolean = false,
+    val foldedMessageCount: Int = 0,
+    val compactionPending: Boolean = false,
+) : HarnessMessage
+
+/**
+ * UI-only 轮文件改动卡片（借鉴 DSH deliverables：轮结束的快照对比自动得出改动文件）。
+ *
+ * 数据源是 CheckpointStore 的轮快照（write/edit 触碰文件在轮初与最后写入后的内容对），
+ * 不含 shell 命令改动的文件（它们不经写工具，无快照）；id 确定性派生自会话与轮号，
+ * 重复发布（完成即时 + 下一轮开头补发）由存储层同 id 同 payload 幂等复用去重。
+ */
+@Serializable
+@SerialName("turn_changes")
+data class TurnChangesEvent(
+    override val id: String,
+    override val createdAt: Long,
+    /** 0 起始的用户轮次号（与 rewind checkpoint 的轮号同源）。 */
+    val turn: Int,
+    /** 轮初不存在、本轮新建的文件（工作区相对路径）。 */
+    val created: List<String> = emptyList(),
+    /** 轮初存在且内容发生变化的文件。 */
+    val modified: List<String> = emptyList(),
+    /** 被写工具触碰但无改动后凭据（写入失败/超大文件跳过捕获），改动未知。 */
+    val touched: List<String> = emptyList(),
+) : HarnessMessage
+
 @Serializable
 @SerialName("user")
 data class UserMessage(
@@ -59,60 +117,14 @@ data class UserMessage(
     override val createdAt: Long,
     val text: String,
     val imageUrls: List<String> = emptyList(),
-    /**
-     * 本条消息发送时附带的「动态上下文尾部」快照（记忆检索结果、规则路由、
-     * 技能、计划看板等），**持久化**。
-     *
-     * 为什么必须持久化而不是每轮现算：provider 的前缀缓存按精确前缀匹配计费，
-     * 第 N+1 轮请求的前 |请求 N| 字节必须与请求 N 完全一致。若尾部在渲染期
-     * 临时拼接，下一轮那条消息变成历史消息、尾部消失，字节就变了 ——
-     * 断裂点只是从 system 位置 0 搬到第一条 user 消息，缓存依然全量失效。
-     *
-     * 把它作为消息的一部分存下来，渲染就成了「持久化字段的纯函数」：
-     * 字段不变 → 字节不变 → 前缀完整。这与 DSH 用 frozenUserMerged
-     * 为每条 user 消息保留 trailer 快照的做法同源。
-     *
-     * 默认空串保证旧数据可读（反序列化时缺失即空），历史消息渲染结果不变。
-     */
-    val contextTail: String = "",
-    /**
-     * 本条消息附带的附件元信息，**持久化**。
-     *
-     * 为什么必须独立存下来：用户气泡要把它渲染成可点击的文件卡片，而不是把附件
-     * 塞进提示词里变成一行文字。若只在发送时拼进 text，气泡层无法区分「用户写的
-     * 正文」与「附件」，只能整段当文本渲染。
-     *
-     * 只存渲染与复用所需的最小信息（名字/大小/是否图片/沙箱内路径/图片 URL），
-     * 不存 Android content:// Uri —— 它是进程内临时句柄，序列化后不可靠，
-     * 且 harness 层不应依赖 Android 类型。
-     *
-     * 默认空列表保证旧数据可读，历史消息渲染结果不变。
-     */
-    val attachments: List<MessageAttachment> = emptyList(),
 ) : HarnessMessage
-
-/**
- * 消息附件的持久化元信息。与 UI 层 ChatAttachment 对应，但不含 Android 类型。
- */
-@Serializable
-data class MessageAttachment(
-    val name: String,
-    val isImage: Boolean,
-    val sizeBytes: Long,
-    /** 沙箱内绝对路径（如 /attachments/xxx.zip）；模型用 base 读它就在这里。 */
-    val guestPath: String = "",
-    /** 图片的数据 URL（仅图片），供气泡内直接渲染缩略图。 */
-    val imageUrl: String? = null,
-    /** Source MIME type, retained for native ACTION_VIEW playback when available. */
-    val mimeType: String? = null,
-)
 
 @Serializable
 @SerialName("assistant")
 data class AssistantText(
     override val id: String,
     override val createdAt: Long,
-    val text: String,
+    @kotlinx.serialization.SerialName("text") val textContent: ChunkedText,
     /** 推理模型（如 DeepSeek-R1）返回的 reasoning_content，多轮时需原样传回 API。 */
     val reasoning: String? = null,
     /**
@@ -125,7 +137,72 @@ data class AssistantText(
     val promptTokens: Int? = null,
     val completionTokens: Int? = null,
     val cachedTokens: Int? = null,
-) : HarnessMessage
+    /**
+     * 模型思考（reasoning）流的确切耗时（毫秒，从首个 reasoning 增量到 reasoning 结束）。
+     * 用于前端展示「已深度思考 N.N 秒」；旧数据无此字段，默认 null。
+     */
+    val reasoningMs: Long? = null,
+    val responsesTurn: ResponsesTurn? = null,
+) : HarnessMessage {
+    /** Full text is materialized lazily only for persistence and legacy consumers. */
+    val text: String get() = textContent.toString()
+
+    constructor(
+        id: String,
+        createdAt: Long,
+        text: String,
+        reasoning: String? = null,
+        totalMs: Long? = null,
+        modelId: String? = null,
+        providerId: String? = null,
+        promptTokens: Int? = null,
+        completionTokens: Int? = null,
+        cachedTokens: Int? = null,
+        reasoningMs: Long? = null,
+        responsesTurn: ResponsesTurn? = null,
+    ) : this(
+        id = id,
+        createdAt = createdAt,
+        textContent = ChunkedText.of(text),
+        reasoning = reasoning,
+        totalMs = totalMs,
+        modelId = modelId,
+        providerId = providerId,
+        promptTokens = promptTokens,
+        completionTokens = completionTokens,
+        cachedTokens = cachedTokens,
+        reasoningMs = reasoningMs,
+        responsesTurn = responsesTurn,
+    )
+
+    fun copy(
+        id: String = this.id,
+        createdAt: Long = this.createdAt,
+        text: String,
+        reasoning: String? = this.reasoning,
+        totalMs: Long? = this.totalMs,
+        modelId: String? = this.modelId,
+        providerId: String? = this.providerId,
+        promptTokens: Int? = this.promptTokens,
+        completionTokens: Int? = this.completionTokens,
+        cachedTokens: Int? = this.cachedTokens,
+        reasoningMs: Long? = this.reasoningMs,
+        responsesTurn: ResponsesTurn? = this.responsesTurn,
+    ): AssistantText = copy(
+        id = id,
+        createdAt = createdAt,
+        textContent = ChunkedText.of(text),
+        reasoning = reasoning,
+        totalMs = totalMs,
+        modelId = modelId,
+        providerId = providerId,
+        promptTokens = promptTokens,
+        completionTokens = completionTokens,
+        cachedTokens = cachedTokens,
+        reasoningMs = reasoningMs,
+        responsesTurn = responsesTurn,
+    )
+}
 
 @Serializable
 @SerialName("tool_call")
@@ -154,8 +231,29 @@ data class ToolResult(
     val awaitingApproval: Boolean = false,
     val approvalRequestId: String? = null,
     /**
+     * 该调用需要审批，但执行环境无法承载审批暂停（子智能体后台 Lane），因此未执行。
+     * 与 [awaitingApproval] 的区别：这里没有待审批请求可供用户批准，必须由主智能体重新发起。
+     */
+    val approvalDeferred: Boolean = false,
+    /**
      * 工具产物中的图片附件引用列表（如 mcp__browser__screenshot 落盘的 PNG）。
      * 持久化兼容：旧数据无此字段；序列化与 Room payload 默认空数组。
      */
-    val imageAttachments: List<top.tianyan.app.core.model.ToolImageRef> = emptyList(),
+    val imageAttachments: List<ToolImageRef> = emptyList(),
+    /**
+     * 工具结果的结构化元数据（不进入模型上下文）。当前用于 edit 工具：
+     * metadata["diff"] 携带 Unified Diff，供前端 DiffView 渲染对比视图。
+     * 持久化兼容：旧数据无此字段；序列化与 Room payload 默认空表。
+     */
+    val metadata: Map<String, String> = emptyMap(),
+    /**
+     * 沙箱图片多模态直通载荷：`data:image/png;base64,...`。
+     * read 工具识别到图片后缀时写入，由 ApiMessageProjector 在 visionEnabled 时
+     * 追加为图片消息发给多模态模型；非视觉模型会被忽略。旧数据默认 null。
+     */
+    val imageDataUrl: String? = null,
+    /** Stable recovery error code. Old results have no code; success remains false for unknown outcomes. */
+    val errorCode: String? = null,
+    /** Machine-readable suggestions; neither grants authority nor triggers replay. Old history defaults to null. */
+    val recovery: ToolRecoveryAdvice? = null,
 ) : HarnessMessage

@@ -4,20 +4,18 @@ import top.tianyan.app.core.common.files.SafeFileTree
 import top.tianyan.app.core.common.result.AppError
 import top.tianyan.app.core.common.result.AppResult
 import top.tianyan.app.core.common.result.ErrorCode
+import top.tianyan.app.core.model.RuntimeState
 import top.tianyan.app.core.tools.ToolActionResult
 import top.tianyan.app.core.tools.ToolRuntimeAdapter
 import top.tianyan.app.runtime.LinuxRuntime
 import top.tianyan.app.runtime.RuntimePathManager
 import top.tianyan.app.runtime.shell.ShellCommand
 import java.io.File
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
-@Singleton
-class HelloToolInstaller @Inject constructor(
+class HelloToolInstaller(
     private val linuxRuntime: LinuxRuntime,
     private val pathManager: RuntimePathManager,
 ) : ToolRuntimeAdapter {
@@ -29,7 +27,7 @@ class HelloToolInstaller @Inject constructor(
         val targetDir = File(pathManager.tianyanToolsDir(distroId), toolId)
         val stagingDir = File(pathManager.tianyanRootDir(distroId), ".staging-$toolId")
         try {
-            if (linuxRuntime.state.value !is top.tianyan.app.core.model.RuntimeState.Ready) {
+            if (linuxRuntime.state.value !is RuntimeState.Ready) {
                 throw IllegalStateException("Linux Runtime 未就绪，请先初始化 Linux")
             }
             emit(InstallEvent.Progress(toolId, "创建安装事务", 0.25f, InstallEvent.Phase.PREPARING))

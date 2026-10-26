@@ -1,40 +1,42 @@
 package top.tianyan.app.ui.workflow.hud
 
+import org.koin.android.ext.android.inject
+import android.app.Application
 import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.os.Build
+import android.os.Bundle
 import android.os.IBinder
 import android.provider.Settings
 import android.view.Gravity
 import android.view.WindowManager
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
-import dagger.hilt.android.AndroidEntryPoint
-import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import top.tianyan.app.runtime.gui.WorkflowGuiHudBridge
 import top.tianyan.app.ui.theme.TianyanTheme
+import android.app.Activity
 
 /**
- * Workflow run HUD: current step + stop. Detaches from WindowManager while
- * [WorkflowGuiHudBridge.Session.overlayVisible] is false so screen dumps skip the overlay.
+ * Workflow run HUD: pill-shaped status + stop button. Only attached while the
+ * app itself is in the background; also detaches from WindowManager while
+ * [WorkflowGuiHudBridge.Session.overlayVisible] is false so screen dumps skip
+ * the overlay.
  */
-@AndroidEntryPoint
 class WorkflowHudService : Service() {
 
-    @Inject
-    lateinit var hud: WorkflowGuiHudBridge
+    val hud: WorkflowGuiHudBridge by inject()
 
     private var windowManager: WindowManager? = null
     private var composeView: ComposeView? = null
@@ -42,6 +44,36 @@ class WorkflowHudService : Service() {
     private var windowParams: WindowManager.LayoutParams? = null
     private var attached = false
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    /** App 前后台状态：仅当应用退到后台时才显示悬浮窗。 */
+    private var appInForeground = true
+    private var startedActivities = 0
+    private var lastSession: WorkflowGuiHudBridge.Session? = null
+    private var dismissJob: Job? = null
+
+    private val activityCallbacks = object : Application.ActivityLifecycleCallbacks {
+        override fun onActivityStarted(activity: Activity) {
+            startedActivities++
+            if (!appInForeground) {
+                appInForeground = true
+                updateAttachment()
+            }
+        }
+
+        override fun onActivityStopped(activity: Activity) {
+            startedActivities = (startedActivities - 1).coerceAtLeast(0)
+            if (startedActivities == 0 && appInForeground) {
+                appInForeground = false
+                updateAttachment()
+            }
+        }
+
+        override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
+        override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
+        override fun onActivityResumed(activity: Activity) {}
+        override fun onActivityPaused(activity: Activity) {}
+        override fun onActivityDestroyed(activity: Activity) {}
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -55,6 +87,7 @@ class WorkflowHudService : Service() {
             stopSelf()
             return
         }
+        (applicationContext as? Application)?.registerActivityLifecycleCallbacks(activityCallbacks)
 
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -87,17 +120,6 @@ class WorkflowHudService : Service() {
                 TianyanTheme {
                     val session by hud.session.collectAsState()
                     val current = session
-                    LaunchedEffect(current?.active, current?.phase) {
-                        if (current != null && !current.active) {
-                            delay(12_000)
-                            if (hud.session.value?.executionId == current.executionId &&
-                                hud.session.value?.active == false
-                            ) {
-                                hud.dismiss()
-                                stopSelf()
-                            }
-                        }
-                    }
                     if (current != null) {
                         WorkflowHudOverlay(
                             session = current,
@@ -115,17 +137,38 @@ class WorkflowHudService : Service() {
 
         serviceScope.launch {
             hud.session.collect { session ->
+                lastSession = session
                 if (session == null) {
                     stopSelf()
                     return@collect
                 }
-                val shouldShow = when {
-                    !session.active -> true
-                    else -> session.overlayVisible
+                if (session.active) {
+                    dismissJob?.cancel()
+                    dismissJob = null
+                } else if (dismissJob == null) {
+                    // 结束态 12 秒后自动关闭（不依赖悬浮窗是否可见）
+                    dismissJob = launch {
+                        delay(12_000)
+                        val s = hud.session.value
+                        if (s != null && !s.active && s.executionId == session.executionId) {
+                            hud.dismiss()
+                            stopSelf()
+                        }
+                    }
                 }
-                if (shouldShow) attachOverlay() else detachOverlay()
+                updateAttachment()
             }
         }
+    }
+
+    /** 悬浮窗挂载条件：应用在后台 && (结束态恒显 || 运行态未被屏幕操作临时摘除)。 */
+    private fun updateAttachment() {
+        val session = lastSession ?: return
+        val shouldShow = !appInForeground && when {
+            !session.active -> true
+            else -> session.overlayVisible
+        }
+        if (shouldShow) attachOverlay() else detachOverlay()
     }
 
     private fun attachOverlay() {
@@ -153,6 +196,7 @@ class WorkflowHudService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        (applicationContext as? Application)?.unregisterActivityLifecycleCallbacks(activityCallbacks)
         detachOverlay()
         lifecycleOwner?.onDestroy()
         lifecycleOwner = null

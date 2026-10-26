@@ -1,0 +1,16 @@
+<resources>
+    <string name="ui_plugin_manager_title">插件管理</string>
+    <string name="ui_plugin_pages_title">页面功能</string>
+    <string name="ui_plugin_pages_description">选择侧边栏与工作台中的常用功能</string>
+    <string name="ui_plugin_open">打开</string>
+    <string name="ui_plugin_manager_scope">开关仅控制页面入口，已有终端任务和浏览器后台活动不会随开关停止。</string>
+    <string name="ui_plugin_preferences_failed">插件选择无法读取或保存，请重试。</string>
+    <string name="ui_plugin_retry">重试</string>
+    <string name="ui_plugin_ready">等待初始化</string>
+    <string name="ui_plugin_starting">正在启用</string>
+    <string name="ui_plugin_running">已启用</string>
+    <string name="ui_plugin_draining">正在等待使用结束</string>
+    <string name="ui_plugin_stopped">已停用</string>
+    <string name="ui_plugin_blocked">依赖插件尚未启用</string>
+    <string name="ui_plugin_failed">启停失败，可能仍有资源待释放</string>
+</resources>

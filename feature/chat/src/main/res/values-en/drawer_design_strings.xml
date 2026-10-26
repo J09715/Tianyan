@@ -1,0 +1,5 @@
+<resources>
+    <string name="chat_drawer_search">Search chats</string>
+    <string name="chat_drawer_destinations">Features and plugins</string>
+    <string name="chat_drawer_no_matches">No matching chats</string>
+</resources>

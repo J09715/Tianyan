@@ -4,12 +4,15 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.webkit.CookieManager
+import android.util.Log
 import android.webkit.WebView
+import java.util.UUID
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.withTimeoutOrNull
 import top.tianyan.app.core.browser.BrowserFamily
 import top.tianyan.app.core.browser.BrowserPreferences
 import top.tianyan.app.core.browser.PageSnapshot
+import top.tianyan.app.core.browser.BrowserDescriptor
 import top.tianyan.app.core.model.ToolImageRef
 import top.tianyan.app.runtime.browser.BrowserEngine
 import top.tianyan.app.runtime.browser.BrowserEventBus
@@ -25,6 +28,7 @@ import top.tianyan.app.runtime.browser.hook.HookRule
 import top.tianyan.app.runtime.browser.hook.HookRuleInfo
 import top.tianyan.app.runtime.browser.hook.InjectedScript
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 
 /**
@@ -39,7 +43,7 @@ class AndroidInAppBrowserEngine(
     private val pool: WebViewTabPool,
 ) : BrowserEngine, InAppBrowserViewProvider {
 
-    override val descriptor = top.tianyan.app.core.browser.BrowserDescriptor(
+    override val descriptor = BrowserDescriptor(
         family = BrowserFamily.IN_APP,
         displayName = "Tianyan In-App WebView",
         healthy = true,
@@ -241,7 +245,7 @@ class AndroidInAppBrowserEngine(
         // 回调是 JSON 字面量，先解码再 parse；直接 trim('"') 遇转义必失败 → 恒为空列表
         val arr = runCatching { json.parseToJsonElement(JsEvaluator.unwrap(raw)).jsonArray }.getOrNull()
             ?: return emptyList()
-        return arr.mapNotNull { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
+        return arr.mapNotNull { (it as? JsonPrimitive)?.content }
     }
 
     override suspend fun sessionGet(tab: BrowserSessionToken, key: String): String? {
@@ -266,7 +270,7 @@ class AndroidInAppBrowserEngine(
         val raw = JsEvaluator.evaluate(view, "JSON.stringify(Object.keys(sessionStorage))") ?: return emptyList()
         val arr = runCatching { json.parseToJsonElement(JsEvaluator.unwrap(raw)).jsonArray }.getOrNull()
             ?: return emptyList()
-        return arr.mapNotNull { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
+        return arr.mapNotNull { (it as? JsonPrimitive)?.content }
     }
 
     override suspend fun shutdown() {
@@ -347,7 +351,7 @@ class AndroidInAppBrowserEngine(
         if (persistent) {
             val store = requireHookStore()
             val script = InjectedScript(
-                id = "sc_" + java.util.UUID.randomUUID().toString().substring(0, 8),
+                id = "sc_" + UUID.randomUUID().toString().substring(0, 8),
                 name = name.ifBlank { "script" },
                 code = code,
                 scopeTabId = tab.tabId,
@@ -530,7 +534,7 @@ class AndroidInAppBrowserEngine(
         }
         val result = withTimeoutOrNull(timeoutMs) { deferred.await() }
         if (result == null) {
-            android.util.Log.w("TianyanBrowserEngine", "postMain 超时（${timeoutMs}ms）：操作可能已在页面执行，请勿重试同参数操作")
+            Log.w("TianyanBrowserEngine", "postMain 超时（${timeoutMs}ms）：操作可能已在页面执行，请勿重试同参数操作")
         }
         return result
     }

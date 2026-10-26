@@ -1,16 +1,21 @@
 package top.tianyan.app.runtime
 
+import top.tianyan.app.core.common.result.AppError
 import top.tianyan.app.core.common.result.AppResult
+import top.tianyan.app.core.common.result.ErrorCode
 import top.tianyan.app.core.model.InstalledDistro
 import top.tianyan.app.core.model.RuntimeState
 import top.tianyan.app.runtime.shell.CommandResult
+import top.tianyan.app.runtime.shell.InteractiveLaunchSpec
 import top.tianyan.app.runtime.shell.LinuxSession
 import top.tianyan.app.runtime.shell.ManagedProcess
 import top.tianyan.app.runtime.shell.ProcessType
 import top.tianyan.app.runtime.shell.SessionConfig
 import top.tianyan.app.runtime.shell.ShellCommand
 import java.io.File
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.emptyFlow
 
 interface LinuxRuntime {
     val state: StateFlow<RuntimeState>
@@ -26,8 +31,8 @@ interface LinuxRuntime {
     suspend fun switchActiveDistro(distroId: String): AppResult<Unit>
     suspend fun installDistro(request: RuntimeInstallRequest, onProgress: suspend (DownloadProgress) -> Unit = {}): AppResult<Unit>
     suspend fun importDistro(request: RuntimeInstallRequest, archive: File): AppResult<Unit> =
-        AppResult.Failure(top.tianyan.app.core.common.result.AppError(
-            top.tianyan.app.core.common.result.ErrorCode.INSTALLATION_FAILED,
+        AppResult.Failure(AppError(
+            ErrorCode.INSTALLATION_FAILED,
             "当前运行时不支持导入 RootFS",
         ))
     suspend fun uninstallDistro(distroId: String): AppResult<Unit>
@@ -38,6 +43,15 @@ interface LinuxRuntime {
     suspend fun execute(command: ShellCommand, distroId: String? = null): CommandResult
     suspend fun startSession(config: SessionConfig = SessionConfig(), distroId: String? = null): LinuxSession
 
+    /**
+     * Build host argv/env for an interactive console owned by Termux TerminalSession JNI,
+     * without opening our NativePty. Used by the matrix terminal UI.
+     */
+    suspend fun buildInteractiveLaunch(
+        config: SessionConfig = SessionConfig(),
+        distroId: String? = null,
+    ): InteractiveLaunchSpec = error("当前运行时不支持交互式终端启动规格")
+
     suspend fun startBackground(
         id: String,
         command: ShellCommand,
@@ -47,13 +61,19 @@ interface LinuxRuntime {
     ): ManagedProcess
 
     suspend fun stopBackground(id: String): Boolean
+    val supportsBackgroundInstanceStop: Boolean get() = false
+    suspend fun stopBackgroundInstance(process: ManagedProcess): Boolean = false
     fun listBackground(): List<ManagedProcess>
     suspend fun cleanupDeadBackground(): Int
-    fun observeBackgroundLogs(idOrToolId: String): kotlinx.coroutines.flow.Flow<List<String>> = kotlinx.coroutines.flow.emptyFlow()
+    fun observeBackgroundLogs(idOrToolId: String): Flow<List<String>> = emptyFlow()
     fun getBackgroundLogs(idOrToolId: String): List<String> = emptyList()
     fun clearBackgroundLogs(idOrToolId: String) = Unit
 
     suspend fun shutdown()
+    /** Execute file cleanup only while runtime launches and installation are excluded. */
+    suspend fun withStorageCleanup(block: suspend () -> Unit) {
+        error("当前运行时不支持安全存储清理")
+    }
     fun rootfsPath(distroId: String? = null): File
     fun rootfsVersion(distroId: String? = null): String? = null
     fun workspacePath(): File

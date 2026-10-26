@@ -43,7 +43,7 @@ object HostWorkflowActions {
             label = "宿主桥健康检查",
             category = "诊断",
             privilege = HostWorkflowPrivilege.NONE,
-            description = "探测 taixu-host 桥接与无线 ADB 健康状态",
+            description = "探测 tianyan-host 桥接与无线 ADB 健康状态",
         ),
         HostWorkflowActionDef(
             id = "device_status",
@@ -59,7 +59,7 @@ object HostWorkflowActions {
             privilege = HostWorkflowPrivilege.PRIVILEGED,
             description = "抓取近期系统日志（可按 tag 过滤）",
             fields = listOf(
-                HostWorkflowField("tag", "Tag（可选）", "例如 TaiXu"),
+                HostWorkflowField("tag", "Tag（可选）", "例如 Tianyan"),
                 HostWorkflowField("tail_lines", "行数", "默认 200"),
             ),
         ),
@@ -328,7 +328,7 @@ object HostWorkflowActions {
             label = "截取屏幕",
             category = "GUI",
             privilege = HostWorkflowPrivilege.PRIVILEGED,
-            fields = listOf(HostWorkflowField("path", "保存路径", "/sdcard/Download/taixu-screen.png", required = true)),
+            fields = listOf(HostWorkflowField("path", "保存路径", "/sdcard/Download/tianyan-screen.png", required = true)),
         ),
         HostWorkflowActionDef(
             id = "gui_pilot",
@@ -400,7 +400,7 @@ object HostWorkflowActions {
                 HostWorkflowField("args", "参数", "set-wifi-enabled enabled", multiline = true),
             ),
         ),
-    )
+    ) + VirtualScreenWorkflowActions.all
 
     fun find(id: String): HostWorkflowActionDef? = all.firstOrNull { it.id == id }
 

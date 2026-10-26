@@ -34,8 +34,6 @@ class PromptAssetLoaderTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val ids = listOf(
             R.string.harness_prompt_tool_call_disabled,
-            R.string.harness_prompt_thinking_language_zh,
-            R.string.harness_prompt_thinking_language_en,
             R.string.harness_prompt_subagent_none,
             R.string.harness_prompt_subagent_lane_system,
             R.string.harness_prompt_subagent_trigger_manual,
@@ -62,6 +60,10 @@ class PromptAssetLoaderTest {
     @Test
     fun allKnownAssetVariablesCanBeRendered() {
         val variables = mapOf(
+            "CHAR_NAME" to "天衍智枢",
+            "EXECUTION_LOCATION" to "Android 私有 Linux 沙箱",
+            "EXECUTION_ARCH" to "aarch64",
+            "EXECUTION_LAYER" to "PRoot",
             "DISTRO_NAME" to "Debian",
             "PKG_MANAGER" to "apt-get install",
             "ACTIVE_SKILLS" to "",
@@ -78,10 +80,6 @@ class PromptAssetLoaderTest {
             "TASK_PROMPT" to "run tests",
             "WRITE_LINE" to "限定写入范围：app/src/ui",
             "FACTS_PACK" to "## 父级上下文事实包\n- 测试事实",
-            "AGENT_NAME" to "Backend Architect",
-            "AGENT_ID" to "engineering-backend-architect",
-            "AGENT_DEPARTMENT" to "工程研发 / Engineering",
-            "AGENT_PERSONA" to "You design service boundaries before writing code.",
         )
         listMarkdowns("prompts").forEach { path ->
             val rendered = loader.render(path, variables)

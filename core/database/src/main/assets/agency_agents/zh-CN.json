@@ -1,0 +1,549 @@
+{
+  "schemaVersion": 1,
+  "agents": {
+    "agency_engineering_ai_data_remediation_engineer": {
+      "name": "AI 数据修复工程师",
+      "description": "自愈数据管道专家：拦截异常数据，用本地小模型与语义聚类自动分类和修复，保证零数据丢失。"
+    },
+    "agency_engineering_ai_engineer": {
+      "name": "AI 工程师",
+      "description": "负责机器学习模型开发、部署和生产集成，构建可扩展的智能功能与数据管道。"
+    },
+    "agency_engineering_api_platform_engineer": {
+      "name": "API 平台工程师",
+      "description": "契约优先的公共/合作方 API 设计，覆盖版本与弃用策略、SDK、网关鉴权限流与开发者门户。"
+    },
+    "agency_engineering_autonomous_optimization_architect": {
+      "name": "自主优化架构师",
+      "description": "持续对 API 做影子测试，在严格成本和安全的护栏内自动优化系统。"
+    },
+    "agency_engineering_backend_architect": {
+      "name": "后端架构师",
+      "description": "可扩展系统设计、数据库架构、API 与云基础设施，构建安全高性能的服务和微服务。"
+    },
+    "agency_engineering_cms_developer": {
+      "name": "CMS 开发工程师",
+      "description": "Drupal 与 WordPress 主题、插件、内容架构和代码优先的 CMS 实现。"
+    },
+    "agency_engineering_code_reviewer": {
+      "name": "代码审查员",
+      "description": "围绕正确性、可维护性、安全和性能给出可执行反馈，不纠结风格偏好。"
+    },
+    "agency_engineering_codebase_onboarding_engineer": {
+      "name": "代码库入职工程师",
+      "description": "阅读源码、追踪调用路径，帮助新成员快速理解陌生代码库，只陈述有代码依据的事实。"
+    },
+    "agency_engineering_data_engineer": {
+      "name": "数据工程师",
+      "description": "可靠数据管道、湖仓架构、ETL/ELT、Spark、dbt、流处理与云数据平台。"
+    },
+    "agency_engineering_data_visualization_engineer": {
+      "name": "数据可视化工程师",
+      "description": "按数据和问题选择图表，保证感知准确、色盲友好、可访问的交互与大数据渲染性能。"
+    },
+    "agency_engineering_database_optimizer": {
+      "name": "数据库优化师",
+      "description": "PostgreSQL、MySQL、Supabase、PlanetScale 的 schema、查询、索引和性能调优。"
+    },
+    "agency_engineering_database_reliability_engineer": {
+      "name": "数据库可靠性工程师",
+      "description": "高可用与复制、自动故障切换、备份与时间点恢复、在线迁移、连接池和灾备演练。"
+    },
+    "agency_engineering_desktop_app_engineer": {
+      "name": "桌面应用工程师",
+      "description": "Electron/Tauri 安全 IPC、签名公证、自动更新、系统集成和资源占用控制。"
+    },
+    "agency_engineering_developer_tooling_engineer": {
+      "name": "开发者工具工程师",
+      "description": "CLI 与内部开发平台：命令设计、错误提示、补全、快速启动、跨平台分发和可组合接口。"
+    },
+    "agency_engineering_devops_automator": {
+      "name": "DevOps 自动化工程师",
+      "description": "基础设施自动化、CI/CD 流水线建设和云上运维。"
+    },
+    "agency_engineering_drupal_performance": {
+      "name": "Drupal 性能工程师",
+      "description": "Drupal 10/11 的 Core Web Vitals、页面缓存、BigPipe、缓存标签、Views/查询优化与 CDN。"
+    },
+    "agency_engineering_drupal_shopping_cart": {
+      "name": "Drupal 电商工程师",
+      "description": "Drupal Commerce 商品目录、支付、结账流程、订单、税费与促销配置。"
+    },
+    "agency_engineering_email_intelligence_engineer": {
+      "name": "邮件智能工程师",
+      "description": "从原始邮件线程中提取结构化、可推理的数据，供 AI 和自动化系统使用。"
+    },
+    "agency_engineering_embedded_firmware_engineer": {
+      "name": "嵌入式固件工程师",
+      "description": "裸机与 RTOS 固件：ESP32/ESP-IDF、PlatformIO、STM32、nRF、FreeRTOS、Zephyr。"
+    },
+    "agency_engineering_feishu_integration_developer": {
+      "name": "飞书集成开发工程师",
+      "description": "飞书开放平台机器人、小程序、审批、多维表格、消息卡片、Webhook、SSO 与工作流自动化。"
+    },
+    "agency_engineering_filament_optimization_specialist": {
+      "name": "Filament 优化专家",
+      "description": "重构并优化 Filament PHP 管理后台的结构与可用性，而不只是做表面美化。"
+    },
+    "agency_engineering_finops_engineer": {
+      "name": "FinOps 工程师",
+      "description": "AWS/GCP/Azure 成本分摊、规格优化、预留与节省计划、流量存储优化和单位经济看板。"
+    },
+    "agency_engineering_frontend_developer": {
+      "name": "前端工程师",
+      "description": "React/Vue/Angular、现代 Web 技术、UI 实现与前端性能优化。"
+    },
+    "agency_engineering_gaussdb_expert": {
+      "name": "GaussDB 专家",
+      "description": "华为 GaussDB OLTP 的 schema、分布式表、查询与运维优化（非 DWS/openGauss/MySQL 版本）。"
+    },
+    "agency_engineering_git_workflow_master": {
+      "name": "Git 工作流专家",
+      "description": "分支策略、Conventional Commits、rebase、worktree 与适合 CI 的分支管理。"
+    },
+    "agency_engineering_i18n_engineer": {
+      "name": "国际化工程师",
+      "description": "ICU MessageFormat、CLDR 复数、RTL 双向布局、本地化日期数字货币、字符串抽取与伪本地化测试。"
+    },
+    "agency_engineering_identity_access_engineer": {
+      "name": "身份与访问工程师",
+      "description": "OAuth2/OIDC、企业 SSO/SAML、SCIM、Passkey/WebAuthn、会话架构与 RBAC/ABAC。"
+    },
+    "agency_engineering_incident_response_commander": {
+      "name": "事故响应指挥官",
+      "description": "生产事故管理、响应协调、复盘、SLO/SLI 跟踪和 on-call 流程设计。"
+    },
+    "agency_engineering_iot_fleet_engineer": {
+      "name": "IoT 设备集群工程师",
+      "description": "设备注册与身份、MQTT/遥测、分批 OTA 与回滚、边缘计算和弱网环境可观测性。"
+    },
+    "agency_engineering_it_service_manager": {
+      "name": "IT 服务经理",
+      "description": "ITIL 4 服务目录、事故与问题管理、变更控制、SLA 治理、CMDB 和持续改进。"
+    },
+    "agency_engineering_knowledge_graph_engineer": {
+      "name": "知识图谱工程师",
+      "description": "把信息与能力组织成实体和关系网络，支持上下文导航、能力编排并降低 token 与幻觉。"
+    },
+    "agency_engineering_llm_post_training_engineer": {
+      "name": "LLM 后训练工程师",
+      "description": "负责 SFT、偏好优化、RLHF/RLVR、MoE 后训练，以及模型发布前的质量门禁。"
+    },
+    "agency_engineering_minimal_change_engineer": {
+      "name": "最小改动工程师",
+      "description": "只修被要求的问题，拒绝范围蔓延，三行相似代码优于过早抽象。"
+    },
+    "agency_engineering_mobile_app_builder": {
+      "name": "移动应用工程师",
+      "description": "原生 iOS/Android 与跨平台框架的移动应用开发。"
+    },
+    "agency_engineering_mobile_release_engineer": {
+      "name": "移动发布工程师",
+      "description": "iOS/Android 签名、描述文件、fastlane、商店提审、分批发布与崩溃跟踪。"
+    },
+    "agency_engineering_multi_agent_systems_architect": {
+      "name": "多智能体系统架构师",
+      "description": "多智能体拓扑、上下文管理、智能体间信任、故障恢复、人工审批与可观测性。"
+    },
+    "agency_engineering_network_engineer": {
+      "name": "网络工程师",
+      "description": "Cisco IOS/ASA/FTD、Juniper、Palo Alto 的路由、交换、防火墙与故障排查。"
+    },
+    "agency_engineering_orgscript_engineer": {
+      "name": "OrgScript 工程师",
+      "description": "OrgScript 语法、AST 校验与业务逻辑定义的设计和实现。"
+    },
+    "agency_engineering_payments_billing_engineer": {
+      "name": "支付与计费工程师",
+      "description": "Stripe/Adyen/Braintree/PayPal 集成、幂等支付、Webhook、订阅计费、SCA/3DS、PCI 与对账。"
+    },
+    "agency_engineering_privacy_engineer": {
+      "name": "隐私工程师",
+      "description": "PII 发现分类、数据最小化、API 层同意执行、DSAR/删除、假名化与保留策略。"
+    },
+    "agency_engineering_prompt_engineer": {
+      "name": "提示词工程师",
+      "description": "设计、测试并系统优化 LLM 提示词，把模糊指令变成可靠的生产级行为。"
+    },
+    "agency_engineering_rag_pipeline_engineer": {
+      "name": "RAG 管道工程师",
+      "description": "分块策略、检索质量、混合搜索、重排与评测驱动迭代，确保真正检索到正确上下文。"
+    },
+    "agency_engineering_rapid_prototyper": {
+      "name": "快速原型工程师",
+      "description": "用高效工具和框架快速完成概念验证与 MVP。"
+    },
+    "agency_engineering_realtime_collaboration_engineer": {
+      "name": "实时协作工程师",
+      "description": "WebSocket/SSE、在线状态、CRDT/OT 协同编辑、离线同步与可重连的扇出扩展。"
+    },
+    "agency_engineering_rust_refactoring_specialist": {
+      "name": "Rust 重构专家",
+      "description": "仓库级重构、安全重命名、模块调整、去重、panic 加固、所有权改进与 Clippy 修复。"
+    },
+    "agency_engineering_search_relevance_engineer": {
+      "name": "搜索相关性工程师",
+      "description": "Elasticsearch/OpenSearch 索引与分析器、BM25、混合检索、nDCG 和在线实验。"
+    },
+    "agency_engineering_section_508_specialist": {
+      "name": "508 无障碍专家",
+      "description": "美国 Section 508/WCAG 无障碍 Web 开发、ARIA 和合规审查。"
+    },
+    "agency_engineering_senior_developer": {
+      "name": "资深开发工程师",
+      "description": "Laravel/Livewire/FluxUI、高级 CSS、Three.js 集成和高质量实现。"
+    },
+    "agency_engineering_software_architect": {
+      "name": "软件架构师",
+      "description": "系统设计、领域驱动、架构模式和技术决策，构建可扩展、可维护的系统。"
+    },
+    "agency_engineering_solidity_smart_contract_engineer": {
+      "name": "Solidity 智能合约工程师",
+      "description": "EVM 合约架构、Gas 优化、可升级代理、DeFi 协议和安全优先的合约设计。"
+    },
+    "agency_engineering_sre": {
+      "name": "SRE 站点可靠性工程师",
+      "description": "SLO、错误预算、可观测性、混沌工程和减少重复性运维劳动。"
+    },
+    "agency_engineering_technical_writer": {
+      "name": "技术写作",
+      "description": "开发者文档、API 参考、README 和教程，把复杂工程概念写得清晰准确。"
+    },
+    "agency_engineering_uswds_developer": {
+      "name": "USWDS 前端工程师",
+      "description": "美国 Web 设计系统组件与设计令牌、无障碍政府 UI、Sass 主题和 CMS 集成。"
+    },
+    "agency_engineering_video_streaming_engineer": {
+      "name": "视频流媒体工程师",
+      "description": "HLS/DASH、ffmpeg 转码梯度、CMAF 低延迟、DRM、CDN 与播放器 QoE 调优。"
+    },
+    "agency_engineering_voice_ai_integration_engineer": {
+      "name": "语音 AI 集成工程师",
+      "description": "Whisper/云 ASR 的端到端转写：音频预处理、文本清理、字幕、说话人分离与结构化集成。"
+    },
+    "agency_engineering_webassembly_engineer": {
+      "name": "WebAssembly 工程师",
+      "description": "Rust/C++/Go 编译到 Wasm、JS 互操作、WASI/Wasmtime/Wasmer、组件模型与性能调优。"
+    },
+    "agency_engineering_wechat_mini_program_developer": {
+      "name": "微信小程序开发工程师",
+      "description": "微信小程序的页面、组件、登录支付和发布流程实现。"
+    },
+    "agency_engineering_wordpress_performance": {
+      "name": "WordPress 性能工程师",
+      "description": "WordPress 缓存、数据库查询、资源加载和 Core Web Vitals 优化。"
+    },
+    "agency_engineering_wordpress_shopping_cart": {
+      "name": "WordPress 电商工程师",
+      "description": "WooCommerce 商品、支付、结账、订单和促销配置。"
+    },
+    "agency_design_persona_walkthrough": {
+      "name": "角色走查专家",
+      "description": "以真实用户画像走查产品流程，发现体验断点并给出改进建议。"
+    },
+    "agency_design_ui_designer": {
+      "name": "UI 设计师",
+      "description": "负责界面视觉、组件规范和设计系统落地。"
+    },
+    "agency_design_ui_finish_gate_reviewer": {
+      "name": "UI 收口审查员",
+      "description": "发布前逐项检查视觉与交互收口质量，守住最后一道 UI 门禁。"
+    },
+    "agency_design_ux_architect": {
+      "name": "UX 架构师",
+      "description": "负责信息架构、用户流程和交互结构设计。"
+    },
+    "agency_design_ux_researcher": {
+      "name": "UX 研究员",
+      "description": "通过用户研究、访谈和可用性测试输出可执行的产品洞察。"
+    },
+    "agency_design_whimsy_injector": {
+      "name": "趣味注入师",
+      "description": "在不伤害可用性的前提下，为产品加入恰到好处的趣味和品牌个性。"
+    },
+    "agency_product_behavioral_nudge_engine": {
+      "name": "行为助推引擎",
+      "description": "基于行为科学设计引导与提醒，提升用户完成关键动作的比例。"
+    },
+    "agency_product_feedback_synthesizer": {
+      "name": "反馈综合师",
+      "description": "汇总多渠道用户反馈，提炼主题、优先级和可执行建议。"
+    },
+    "agency_product_manager": {
+      "name": "产品经理",
+      "description": "拆解需求、编写 PRD、梳理优先级和验收标准，明确取舍与风险。"
+    },
+    "agency_product_sprint_prioritizer": {
+      "name": "Sprint 优先级规划师",
+      "description": "确定迭代目标，排序 backlog，并做资源取舍。"
+    },
+    "agency_product_trend_researcher": {
+      "name": "趋势研究员",
+      "description": "调研市场与技术趋势，输出机会、风险与适用条件。"
+    },
+    "agency_project_management_experiment_tracker": {
+      "name": "实验跟踪员",
+      "description": "记录实验假设、指标、结果和后续决策。"
+    },
+    "agency_project_management_jira_workflow_steward": {
+      "name": "Jira 流程管家",
+      "description": "维护 Jira 工作流、字段、自动化和团队使用规范。"
+    },
+    "agency_project_management_project_shepherd": {
+      "name": "项目牧羊人",
+      "description": "跨团队推进项目、清除阻塞并跟踪里程碑。"
+    },
+    "agency_project_manager_senior": {
+      "name": "资深项目经理",
+      "description": "负责范围、排期、风险和干系人管理。"
+    },
+    "agency_testing_accessibility_auditor": {
+      "name": "无障碍审计员",
+      "description": "依据 WCAG/ARIA 做审计，验证键盘操作、读屏和对比度。"
+    },
+    "agency_testing_api_tester": {
+      "name": "API 测试工程师",
+      "description": "验证接口契约、边界、错误码和自动化测试覆盖。"
+    },
+    "agency_testing_evidence_collector": {
+      "name": "证据收集员",
+      "description": "为缺陷和验收结论收集可复核的日志、截图与数据。"
+    },
+    "agency_testing_performance_benchmarker": {
+      "name": "性能基准工程师",
+      "description": "建立性能基准、执行压测并做回归对比。"
+    },
+    "agency_testing_reality_checker": {
+      "name": "现实检验员",
+      "description": "用实际运行结果核对方案和声明，拒绝用「应该没问题」代替验证。"
+    },
+    "agency_testing_test_automation_engineer": {
+      "name": "测试自动化工程师",
+      "description": "搭建自动化测试框架、编写用例并接入 CI。"
+    },
+    "agency_testing_test_results_analyzer": {
+      "name": "测试结果分析师",
+      "description": "汇总失败模式、定位根因并评估发布风险。"
+    },
+    "agency_testing_tool_evaluator": {
+      "name": "工具评估师",
+      "description": "对比工具和框架的收益、成本与适用边界。"
+    },
+    "agency_testing_workflow_optimizer": {
+      "name": "流程优化师",
+      "description": "分析研发与测试流程中的等待和返工，持续优化效率。"
+    },
+    "agency_security_ai_generated_code_auditor": {
+      "name": "AI 代码安全审计员",
+      "description": "审查 AI 生成代码中的注入、越权、密钥泄露和依赖风险。"
+    },
+    "agency_security_appsec_engineer": {
+      "name": "应用安全工程师",
+      "description": "负责威胁建模、安全编码、漏洞修复和安全评审。"
+    },
+    "agency_security_architect": {
+      "name": "安全架构师",
+      "description": "设计身份、网络、数据和供应链安全的整体架构。"
+    },
+    "agency_security_blockchain_security_auditor": {
+      "name": "区块链安全审计员",
+      "description": "审计智能合约与链上协议的漏洞和攻击面。"
+    },
+    "agency_security_cloud_security_architect": {
+      "name": "云安全架构师",
+      "description": "建立云账号、网络、IAM 和数据安全基线。"
+    },
+    "agency_security_compliance_auditor": {
+      "name": "合规审计员",
+      "description": "将 SOC2、ISO、等保等合规要求落地并整理证据。"
+    },
+    "agency_security_incident_responder": {
+      "name": "安全事件响应员",
+      "description": "负责安全事件的处置、取证、遏制和复盘。"
+    },
+    "agency_security_penetration_tester": {
+      "name": "渗透测试工程师",
+      "description": "在授权范围内验证漏洞并分析可利用的攻击链。"
+    },
+    "agency_security_secrets_credential_engineer": {
+      "name": "密钥与凭证治理工程师",
+      "description": "负责密钥轮换、最小权限、泄露检测和凭证卫生。"
+    },
+    "agency_security_senior_secops": {
+      "name": "资深 SecOps 工程师",
+      "description": "负责安全运营、检测规则、告警和响应自动化。"
+    },
+    "agency_security_threat_detection_engineer": {
+      "name": "威胁检测工程师",
+      "description": "建设检测规则、日志管道并分析攻击行为。"
+    },
+    "agency_security_threat_intelligence_analyst": {
+      "name": "威胁情报分析师",
+      "description": "收集威胁情报、做归因分析并输出可操作的风险判断。"
+    },
+    "agency_blender_addon_engineer": {
+      "name": "Blender 插件工程师",
+      "description": "开发 Blender 插件和工具链，提升美术与内容生产效率。"
+    },
+    "agency_economy_designer": {
+      "name": "经济系统设计师",
+      "description": "设计游戏货币、掉落、消耗和通胀控制。"
+    },
+    "agency_game_audio_engineer": {
+      "name": "游戏音频工程师",
+      "description": "实现音效、音乐和交互音频系统。"
+    },
+    "agency_game_designer": {
+      "name": "游戏设计师",
+      "description": "负责核心玩法、数值和关卡设计。"
+    },
+    "agency_godot_gameplay_scripter": {
+      "name": "Godot 玩法脚本工程师",
+      "description": "使用 GDScript/Godot 实现玩法与游戏系统。"
+    },
+    "agency_godot_multiplayer_engineer": {
+      "name": "Godot 联机工程师",
+      "description": "负责 Godot 多人同步、网络架构和联机稳定性。"
+    },
+    "agency_godot_shader_developer": {
+      "name": "Godot 着色器工程师",
+      "description": "开发 Godot 材质、着色器和视觉效果。"
+    },
+    "agency_level_designer": {
+      "name": "关卡设计师",
+      "description": "负责关卡布局、节奏和可玩性设计。"
+    },
+    "agency_narrative_designer": {
+      "name": "叙事设计师",
+      "description": "设计剧情、任务和世界观文本。"
+    },
+    "agency_roblox_avatar_creator": {
+      "name": "Roblox 虚拟形象设计师",
+      "description": "制作 Roblox 角色形象与外观资源。"
+    },
+    "agency_roblox_experience_designer": {
+      "name": "Roblox 体验设计师",
+      "description": "设计 Roblox 玩法、循环和整体用户体验。"
+    },
+    "agency_roblox_systems_scripter": {
+      "name": "Roblox 系统脚本工程师",
+      "description": "使用 Roblox Lua 实现游戏系统与玩法脚本。"
+    },
+    "agency_technical_artist": {
+      "name": "技术美术",
+      "description": "连接美术与工程，负责工具、管线和视觉效果实现。"
+    },
+    "agency_unity_architect": {
+      "name": "Unity 架构师",
+      "description": "负责 Unity 项目架构、性能和工程规范。"
+    },
+    "agency_unity_editor_tool_developer": {
+      "name": "Unity 编辑器工具工程师",
+      "description": "开发 Unity Editor 扩展和团队工具链。"
+    },
+    "agency_unity_multiplayer_engineer": {
+      "name": "Unity 联机工程师",
+      "description": "实现 Unity 多人网络、同步和联机体验。"
+    },
+    "agency_unity_shader_graph_artist": {
+      "name": "Unity Shader Graph 美术",
+      "description": "使用 Shader Graph 制作材质与视觉效果。"
+    },
+    "agency_unreal_multiplayer_architect": {
+      "name": "Unreal 联机架构师",
+      "description": "设计 Unreal 多人架构、同步方案与性能优化。"
+    },
+    "agency_unreal_systems_engineer": {
+      "name": "Unreal 系统工程师",
+      "description": "使用 Unreal C++ 实现游戏系统和玩法。"
+    },
+    "agency_unreal_technical_artist": {
+      "name": "Unreal 技术美术",
+      "description": "负责 Unreal 材质、特效和性能优化。"
+    },
+    "agency_unreal_world_builder": {
+      "name": "Unreal 世界构建师",
+      "description": "搭建大世界场景、地形和关卡环境。"
+    },
+    "agency_macos_spatial_metal_engineer": {
+      "name": "macOS 空间/Metal 工程师",
+      "description": "负责 macOS 空间计算与 Metal 渲染开发。"
+    },
+    "agency_terminal_integration_specialist": {
+      "name": "终端集成专家",
+      "description": "把终端和命令行能力集成进宿主环境与产品流程。"
+    },
+    "agency_visionos_spatial_engineer": {
+      "name": "visionOS 空间工程师",
+      "description": "开发 visionOS 空间应用与空间交互。"
+    },
+    "agency_xr_cockpit_interaction_specialist": {
+      "name": "XR 座舱交互专家",
+      "description": "设计 XR 座舱和驾驶场景中的空间交互。"
+    },
+    "agency_xr_immersive_developer": {
+      "name": "XR 沉浸式开发工程师",
+      "description": "开发 XR 沉浸式应用和交互体验。"
+    },
+    "agency_xr_interface_architect": {
+      "name": "XR 界面架构师",
+      "description": "设计 XR 空间界面和信息架构。"
+    },
+    "agency_agentic_identity_trust": {
+      "name": "智能体身份与信任架构师",
+      "description": "设计智能体身份、信任关系和授权边界。"
+    },
+    "agency_agents_orchestrator": {
+      "name": "智能体编排师",
+      "description": "负责任务拆解、多智能体编排和协作推进。"
+    },
+    "agency_automation_governance_architect": {
+      "name": "自动化治理架构师",
+      "description": "为自动化流程建立治理、审计和风险控制机制。"
+    },
+    "agency_data_consolidation_agent": {
+      "name": "数据整合智能体",
+      "description": "清洗、合并多源数据并维护一致性。"
+    },
+    "agency_identity_graph_operator": {
+      "name": "身份图谱运营",
+      "description": "构建和运营身份关系图谱，支持查询与治理。"
+    },
+    "agency_lsp_index_engineer": {
+      "name": "LSP/索引工程师",
+      "description": "建设语言服务器和代码索引，提升代码理解与检索能力。"
+    },
+    "agency_specialized_codebase_archaeologist": {
+      "name": "代码库考古学家",
+      "description": "逆向梳理历史代码、依赖关系和隐含规则。"
+    },
+    "agency_specialized_developer_advocate": {
+      "name": "开发者关系倡导者",
+      "description": "负责开发者文档、社区沟通和生态建设。"
+    },
+    "agency_specialized_document_generator": {
+      "name": "文档生成师",
+      "description": "把结构化信息自动整理成文档和报告。"
+    },
+    "agency_specialized_mcp_builder": {
+      "name": "MCP 构建师",
+      "description": "设计并实现 MCP 服务和工具接入。"
+    },
+    "agency_specialized_model_qa": {
+      "name": "模型质量评估师",
+      "description": "评估模型输出质量、回归风险并维护评测集。"
+    },
+    "agency_specialized_salesforce_architect": {
+      "name": "Salesforce 架构师",
+      "description": "设计 Salesforce 方案、数据模型和系统集成。"
+    },
+    "agency_specialized_workflow_architect": {
+      "name": "工作流架构师",
+      "description": "设计跨系统工作流并完成编排落地。"
+    },
+    "agency_zk_steward": {
+      "name": "ZK 知识管理师",
+      "description": "维护 Zettelkasten 知识库，整理笔记并建立可靠关联。"
+    }
+  }
+}

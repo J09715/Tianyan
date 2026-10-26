@@ -13,18 +13,14 @@ import io.ktor.client.statement.request
 import io.ktor.http.HttpHeaders
 import io.ktor.http.URLProtocol
 import io.ktor.utils.io.readAvailable
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.withTimeout
 
 private const val DEFAULT_DOWNLOAD_MAX_BYTES = 1024L * 1024L * 1024L
-private const val DEFAULT_DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000L // 5 分钟默认超时
 
 data class DownloadRequest(
     val url: String,
@@ -33,7 +29,6 @@ data class DownloadRequest(
     val sha256: String? = null,
     val maxAttempts: Int = 3,
     val maxBytes: Long = DEFAULT_DOWNLOAD_MAX_BYTES,
-    val timeoutMs: Long = DEFAULT_DOWNLOAD_TIMEOUT_MS,
 )
 
 sealed interface DownloadEvent {
@@ -50,8 +45,7 @@ interface FileDownloader {
     fun download(request: DownloadRequest): Flow<DownloadEvent>
 }
 
-@Singleton
-class ResumableFileDownloader @Inject constructor(
+class ResumableFileDownloader(
     private val httpClient: HttpClient,
     private val checksumVerifier: ChecksumVerifier,
 ) : FileDownloader {
@@ -76,10 +70,8 @@ class ResumableFileDownloader @Inject constructor(
         while (attempt < request.maxAttempts) {
             attempt += 1
             try {
-                withTimeout(request.timeoutMs) {
-                    downloadOnce(request) { downloaded, total ->
-                        emit(DownloadEvent.Progress(downloaded, total))
-                    }
+                downloadOnce(request) { downloaded, total ->
+                    emit(DownloadEvent.Progress(downloaded, total))
                 }
                 if (!request.sha256.isNullOrBlank()) {
                     emit(DownloadEvent.Verifying)
@@ -95,9 +87,6 @@ class ResumableFileDownloader @Inject constructor(
                 return@flow
             } catch (cancellation: CancellationException) {
                 throw cancellation
-            } catch (timeout: kotlinx.coroutines.TimeoutCancellationException) {
-                lastError = DownloadError.Network("下载超时（${request.timeoutMs}ms）")
-                if (attempt < request.maxAttempts) delay(RETRY_DELAY_MS * attempt)
             } catch (restart: RestartFromZeroException) {
                 request.partialFile.delete()
                 lastError = restart

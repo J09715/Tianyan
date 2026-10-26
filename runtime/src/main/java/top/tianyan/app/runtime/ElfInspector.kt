@@ -1,13 +1,10 @@
-package top.tianyan.app.runtime
+﻿package top.tianyan.app.runtime
 
 import java.io.File
 import java.io.RandomAccessFile
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /** Minimal ELF64 inspector used to reject a wrong-architecture or incomplete runtime. */
-@Singleton
-class ElfInspector @Inject constructor() {
+class ElfInspector() {
 
     fun inspect(file: File): ElfInfo {
         require(file.isFile) { "ELF 文件不存在：${file.absolutePath}" }

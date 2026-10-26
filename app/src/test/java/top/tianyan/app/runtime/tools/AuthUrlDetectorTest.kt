@@ -1,4 +1,4 @@
-package top.tianyan.app.runtime.tools
+﻿package top.tianyan.app.runtime.tools
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue

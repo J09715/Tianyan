@@ -1,0 +1,5 @@
+<resources>
+    <string name="chat_speech_enable">Enable automatic reading</string>
+    <string name="chat_speech_disable">Disable automatic reading</string>
+    <string name="chat_speech_unavailable">Speech unavailable. Check your system TTS engine and voice data.</string>
+</resources>

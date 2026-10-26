@@ -1,0 +1,108 @@
+name: Architecture baseline ratchet
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test ratchet rules
+        run: python tools/tests/test_architecture_baseline.py
+      - name: Test device benchmark report contracts
+        run: |
+          python tools/tests/test_runtime_benchmark.py
+          bash -n tools/runtime-benchmark-device.sh
+      - name: Check against trusted target commit
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+        run: python tools/check-architecture-baseline.py --base-ref "$BASE_SHA"
+
+  harness-contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+      - name: Offline protocol and output contracts
+        run: |
+          chmod +x gradlew
+          ./gradlew architectureCheck :harness:testDebugUnitTest --no-daemon --console=plain \
+            --tests 'top.tianyan.app.harness.SseFixtureReplayTest' \
+            --tests 'top.tianyan.app.harness.ProviderStreamCompletionTest' \
+            --tests 'top.tianyan.app.harness.effects.*' \
+            --tests 'top.tianyan.app.harness.environment.HarnessCommandOutputTest' \
+            --tests 'top.tianyan.app.harness.WorkspaceTextSearchTest' \
+            --tests 'top.tianyan.app.harness.WorkspaceToolBackendTest' \
+            --tests 'top.tianyan.app.harness.mcp.*' \
+            --tests 'top.tianyan.app.harness.CapabilityScriptRunnerTest' \
+            --tests 'top.tianyan.app.harness.approval.TrustedToolRiskPolicyTest' \
+            --tests 'top.tianyan.app.harness.environment.McpMetadataLifecycleTest' \
+            --tests 'top.tianyan.app.harness.ToolSchedulingPolicyTest' \
+            --tests 'top.tianyan.app.harness.ToolRoundDispatcherGroupTest' \
+            --tests 'top.tianyan.app.harness.projection.SessionStateMirrorsTest' \
+            --tests 'top.tianyan.app.harness.MentionExtractorTest' \
+            --tests 'top.tianyan.app.harness.btw.*' \
+            --tests 'top.tianyan.app.harness.compaction.CompactionStewardTest' \
+            --tests 'top.tianyan.app.harness.groupchat.*' \
+            --tests 'top.tianyan.app.harness.bot.GroupGovernanceGuardTest' \
+            --tests 'top.tianyan.app.harness.bot.GroupGovernanceRuntimeTest' \
+            --tests 'top.tianyan.app.harness.session.SessionEntryPayloadTest' \
+            --tests 'top.tianyan.app.harness.approval.ApprovalAuditTrailTest' \
+            --tests 'top.tianyan.app.harness.checkpoint.TurnChangeCardsTest' \
+            --tests 'top.tianyan.app.harness.ExecutionEnvironmentClassifierTest' \
+            --tests 'top.tianyan.app.harness.bot.AssignmentEffectVerificationTest' \
+            --tests 'top.tianyan.app.harness.session.ProviderActivityTest' \
+            --tests 'top.tianyan.app.harness.session.SessionInputControllerTest' \
+            --tests 'top.tianyan.app.harness.subagent.BackgroundSubagentRegistryTest'
+          # 会话条目版本化 + 审批审计是持久化契约，迁移测试必须进 CI 守门。
+          ./gradlew :core:database:testDebugUnitTest --no-daemon --console=plain \
+            --tests 'top.tianyan.app.core.database.ApprovalAuditMigration80To81Test' \
+            --tests 'top.tianyan.app.core.database.MessageFeedbackMigration81To82Test' \
+            --tests 'top.tianyan.app.core.database.GroupWorkAdmissionTest' \
+            --tests 'top.tianyan.app.core.database.GroupWorkMigrationTest' \
+            --tests 'top.tianyan.app.core.database.MessageFeedbackServiceTest'
+          # 能力白名单切换语义（空集合=锁死回归）必须进 CI 守门。
+          # 像素办公室的相机、场景数据、寻路、无障碍和动效契约同步纳入守门。
+          ./gradlew :feature:bot:testDebugUnitTest --no-daemon --console=plain \
+            --tests 'top.tianyan.app.ui.bot.BotCapabilitySelectionTest' \
+            --tests 'top.tianyan.app.ui.bot.OfficeCameraTest' \
+            --tests 'top.tianyan.app.ui.bot.OfficePathfindingTest' \
+            --tests 'top.tianyan.app.ui.bot.OfficeReducedMotionTest' \
+            --tests 'top.tianyan.app.ui.bot.OfficeSceneSpecTest' \
+            --tests 'top.tianyan.app.ui.bot.OfficeSceneUiTest' \
+            --tests 'top.tianyan.app.ui.bot.OfficeWalkHandoffsTest' \
+            --tests 'top.tianyan.app.ui.bot.GroupCyberStudioTest' \
+            --tests 'top.tianyan.app.ui.bot.PixelOfficeLayoutTest' \
+            --tests 'top.tianyan.app.ui.bot.PixelOfficeAmbientTest' \
+            --tests 'top.tianyan.app.ui.bot.OfficeReportLinksTest'
+          ./gradlew :core:datastore:testDebugUnitTest --no-daemon --console=plain \
+            --tests 'top.tianyan.app.core.datastore.McpClientPreferencesTest'
+          ./gradlew :app:testDebugUnitTest --no-daemon --console=plain \
+            --tests 'top.tianyan.app.di.*'
+          # 沙箱后端构造器的契约测试：droidspaces 与 proot 两侧的 argv 形态都必须进 CI。
+          # 架构棘轮与 harness 契约都不跑 :runtime，缺了这一步实现回归时不会报警。
+          ./gradlew :runtime:testDebugUnitTest --no-daemon --console=plain \
+            --tests 'top.tianyan.app.runtime.droidspaces.*' \
+            --tests 'top.tianyan.app.runtime.proot.ProotCommandBuilderTest'
+          # 开发者诊断按首次出现会话聚合反馈：保序与空白标题回退必须进 CI 守门。
+          ./gradlew :feature:developer:testDebugUnitTest --no-daemon --console=plain \
+            --tests 'top.tianyan.app.ui.developer.FeedbackDiagnosticsGroupingTest'

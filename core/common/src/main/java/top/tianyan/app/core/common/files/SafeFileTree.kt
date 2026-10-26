@@ -1,6 +1,8 @@
 package top.tianyan.app.core.common.files
 
 import java.io.File
+import java.io.IOException
+import java.nio.file.DirectoryNotEmptyException
 import java.nio.file.FileVisitResult
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -65,12 +67,12 @@ object SafeFileTree {
         // 安装回滚时，刚被强杀的 npm/node 子进程可能仍在向目录写入文件，导致
         // walkFileTree 走到 postVisitDirectory 时目录又非空。短暂等待后重试整棵
         // 目录树，消除这类瞬时竞争。
-        var lastError: java.io.IOException? = null
+        var lastError: IOException? = null
         repeat(DELETE_ATTEMPTS) { attempt ->
             try {
                 walkDelete(path)
                 return
-            } catch (notEmpty: java.nio.file.DirectoryNotEmptyException) {
+            } catch (notEmpty: DirectoryNotEmptyException) {
                 lastError = notEmpty
                 if (attempt < DELETE_ATTEMPTS - 1) {
                     Thread.sleep(DELETE_RETRY_DELAY_MS)
@@ -87,7 +89,7 @@ object SafeFileTree {
                 return FileVisitResult.CONTINUE
             }
 
-            override fun postVisitDirectory(dir: Path, error: java.io.IOException?): FileVisitResult {
+            override fun postVisitDirectory(dir: Path, error: IOException?): FileVisitResult {
                 error?.let { throw it }
                 Files.deleteIfExists(dir)
                 return FileVisitResult.CONTINUE

@@ -1,8 +1,6 @@
 package top.tianyan.app.harness.mcp
 
 import java.io.File
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -18,13 +16,17 @@ import kotlinx.coroutines.withContext
  * 只做轻量顶层扫描（不递归、限制条目数），结果供 UI 提示用户一键启用；
  * 不自动启用任何服务，启用决定权始终在用户。
  */
-@Singleton
-class McpWorkspaceRecommender @Inject constructor() {
+class McpWorkspaceRecommender() {
 
     data class Recommendation(
         val presetId: String,
         val presetName: String,
         val reason: String,
+        /**
+         * 该能力不再随 APK 内置，需要先在「设置 → 工具中心 → MCP 能力仓库」安装组件。
+         * UI 据此把"一键启用"换成"先去安装"，避免用户点了开关却发现服务起不来。
+         */
+        val needsInstall: Boolean = false,
     )
 
     suspend fun recommend(workspaceDir: File?): List<Recommendation> = withContext(Dispatchers.IO) {
@@ -61,7 +63,10 @@ class McpWorkspaceRecommender @Inject constructor() {
             recommendations += Recommendation(
                 presetId = "mcp_codegraph",
                 presetName = "CodeGraph 代码知识图谱",
-                reason = "检测到 $codeFileCount 个代码文件，启用后可建立符号索引，减少代码探索的调用轮次",
+                reason = "检测到 $codeFileCount 个代码文件。该能力来自上游 npm 包、不再内置，" +
+                    "需先在「设置 → 工具中心 → MCP 能力仓库」安装组件，装好后可建立符号索引，" +
+                    "减少代码探索的调用轮次",
+                needsInstall = true,
             )
         }
         recommendations

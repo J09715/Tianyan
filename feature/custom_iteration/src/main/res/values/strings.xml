@@ -1,4 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="iteration_error_bootstrap">初始化迭代工作区失败，请检查网络与存储后重试</string>
+    <string name="iteration_build_section_title">云端构建 TianyanDev</string>
+    <string name="iteration_build_section_subtitle">触发 GitHub Actions 自动编译独立 APK</string>
+    <string name="iteration_build_branch_label">特性分支</string>
+    <string name="iteration_build_idle">尚未触发云端构建。构建产物将与正式版独立共存（top.tianyan.app.dev）。</string>
+    <string name="iteration_build_dispatching">正在触发 tianyandev-build.yml（分支 %1$s）…</string>
+    <string name="iteration_build_running">构建运行中（run #%1$s · %2$s），手机息屏也不受影响。</string>
+    <string name="iteration_build_downloading">构建成功，正在下载 TianyanDev-arm64-debug.apk…</string>
+    <string name="iteration_build_success">构建完成：%1$s\nSHA-256 校验通过：%2$s…</string>
+    <string name="iteration_build_failed">构建失败：%1$s</string>
+    <string name="iteration_build_in_progress">构建流水线进行中…</string>
+    <string name="iteration_build_trigger">触发云端构建</string>
 </resources>

@@ -1,14 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Material Symbols Outlined (Apache 2.0) via Google Fonts, converted to Android vector drawable -->
+<!-- Material Symbols Rounded, weight 300, optical size 24; Apache-2.0. Glyph: format_size.
+     Source: google/material-design-icons@49d4db35df873165d6bd6ba09b063c7dafbac2f4; converted from SVG. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp"
-    android:height="24dp"
-    android:viewportWidth="960"
-    android:viewportHeight="960">
-    <group
-        android:translateY="960">
-        <path
-            android:pathData="M560-160v-520H360v-120h520v120H680v520H560Zm-360 0v-320H80v-120h360v120H320v320H200Z"
-            android:fillColor="#FF000000" />
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="960" android:viewportHeight="960">
+    <group android:translateX="-0" android:translateY="960">
+        <path android:fillColor="#FF000000" android:pathData="M576.54-695H420.38q-17.62 0-29.96-12.35-12.34-12.36-12.34-30 0-17.65 12.34-30.15t29.96-12.5h397.31q17.63 0 29.97 12.35 12.34 12.36 12.34 30 0 17.65-12.34 30.15T817.69-695H661.54v472.69q0 17.63-12.36 29.97Q636.83-180 619.19-180q-17.65 0-30.15-12.45t-12.5-30.24V-695ZM219.23-496.92h-76.92q-17.63 0-29.97-12.36-12.34-12.35-12.34-30 0-17.64 12.34-30.14t29.97-12.5h238.46q17.63 0 29.97 12.35t12.34 30q0 17.65-12.34 30.15t-29.97 12.5h-76.93v274.61q0 17.63-12.35 29.97t-30 12.34q-17.64 0-29.95-12.34-12.31-12.34-12.31-29.97v-274.61Z" />
     </group>
 </vector>

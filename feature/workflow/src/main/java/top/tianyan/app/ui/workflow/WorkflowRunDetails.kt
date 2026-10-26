@@ -4,7 +4,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -14,34 +13,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import top.tianyan.app.core.database.AiModelEntity
-import top.tianyan.app.ui.theme.Spacing
-import top.tianyan.app.ui.theme.Radius
 import top.tianyan.app.core.model.workflow.*
 import top.tianyan.app.ui.components.*
-
-@Composable
-internal fun WorkflowNodeDetails(run: WorkflowNodeRunState?) {
-    var expanded by remember { mutableStateOf(false) }
-    val output = run?.output
-    if (run?.status in setOf(NodeRunStatus.RUNNING, NodeRunStatus.STREAMING)) {
-        LinearProgressIndicator(Modifier.fillMaxWidth())
-    }
-    output?.let {
-        Text("耗时 ${it.durationMs / 1000.0} 秒 · 退出码 ${it.exitCode}", style = MaterialTheme.typography.labelSmall)
-        it.error?.let { error -> SelectionContainer { Text(error, color = MaterialTheme.colorScheme.error) } }
-        if (it.artifacts.isNotEmpty()) {
-            Text("产物路径", style = MaterialTheme.typography.labelLarge)
-            SelectionContainer { Text(it.artifacts.joinToString("\n"), fontFamily = FontFamily.Monospace) }
-        }
-    }
-    val log = output?.textOutput?.takeIf { it.isNotBlank() } ?: run?.progressMessage.orEmpty()
-    if (log.isNotBlank()) {
-        RuntimeOutlinedButton(onClick = { expanded = !expanded }) { Text(if (expanded) "收起日志" else "展开日志 / Diff") }
-        if (expanded) SelectionContainer {
-            Text(log, Modifier.fillMaxWidth().heightIn(max = 480.dp).verticalScroll(rememberScrollState()), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
-        }
-    }
-}
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 internal fun WorkflowElapsed(state: WorkflowRuntimeState) {
@@ -123,7 +99,7 @@ internal fun WorkflowStartDialog(
                     .fillMaxWidth()
                     .heightIn(max = 480.dp)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text(definition.description)
                 if (needsModel) {
@@ -145,7 +121,7 @@ internal fun WorkflowStartDialog(
                                         .filter { it.isNotEmpty() }
                                     selectedVariant = nextVariants.firstOrNull().orEmpty()
                                 },
-                                shape = Radius.smShape,
+                                shape = RoundedCornerShape(10.dp),
                                 color = if (selected) {
                                     MaterialTheme.colorScheme.primaryContainer
                                 } else {
@@ -161,7 +137,7 @@ internal fun WorkflowStartDialog(
                                 ),
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
-                                Column(modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm)) {
+                                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
                                     Text(
                                         text = buildString {
                                             append(if (selected) "✓ " else "")
@@ -202,7 +178,7 @@ internal fun WorkflowStartDialog(
                                 ) {
                                     Text(
                                         text = if (selected) "✓ $variant" else variant,
-                                        modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                                         style = MaterialTheme.typography.bodySmall,
                                     )
                                 }
@@ -270,7 +246,7 @@ private fun ApkSelectorSection(
 ) {
     var showManualInput by remember { mutableStateOf(false) }
 
-    Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -278,16 +254,16 @@ private fun ApkSelectorSection(
         ) {
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                 RuntimeIcon(RuntimeIconName.Android, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.width(Spacing.sm))
+                Spacer(Modifier.width(6.dp))
                 Text("选择安装 APK", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
             }
             if (onRefresh != null) {
                 TextButton(
                     onClick = onRefresh,
-                    contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                 ) {
                     RuntimeIcon(RuntimeIconName.Refresh, Modifier.size(14.dp))
-                    Spacer(Modifier.width(Spacing.xs))
+                    Spacer(Modifier.width(4.dp))
                     Text("重新扫描", style = MaterialTheme.typography.labelSmall)
                 }
             }
@@ -300,7 +276,7 @@ private fun ApkSelectorSection(
                     selectedPath == apk.relativePath
                 Surface(
                     onClick = { onSelectApk(apk.sandboxPath) },
-                    shape = Radius.smShape,
+                    shape = RoundedCornerShape(10.dp),
                     color = if (isSelected) {
                         MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
                     } else {
@@ -316,14 +292,14 @@ private fun ApkSelectorSection(
                     ),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Column(modifier = Modifier.padding(Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                         ) {
                             if (isSelected) {
                                 RuntimeIcon(RuntimeIconName.Check, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                                Spacer(Modifier.width(Spacing.sm))
+                                Spacer(Modifier.width(6.dp))
                             }
                             Text(
                                 text = apk.name,
@@ -334,14 +310,14 @@ private fun ApkSelectorSection(
                             )
                             if (index == 0) {
                                 Surface(
-                                    shape = Radius.xsShape,
+                                    shape = RoundedCornerShape(4.dp),
                                     color = MaterialTheme.colorScheme.primary,
                                 ) {
                                     Text(
                                         text = "✨ 最新生成",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onPrimary,
-                                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                     )
                                 }
                             }
@@ -380,7 +356,7 @@ private fun ApkSelectorSection(
                     if (showManualInput) RuntimeIconName.ChevronUp else RuntimeIconName.ChevronDown,
                     Modifier.size(14.dp),
                 )
-                Spacer(Modifier.width(Spacing.xs))
+                Spacer(Modifier.width(4.dp))
                 Text(
                     if (showManualInput) "收起手动输入" else "手动指定其他 APK 路径...",
                     style = MaterialTheme.typography.labelSmall,
@@ -388,15 +364,15 @@ private fun ApkSelectorSection(
             }
         } else {
             Surface(
-                shape = Radius.smShape,
+                shape = RoundedCornerShape(10.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Column(modifier = Modifier.padding(Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                         RuntimeIcon(RuntimeIconName.Info, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.width(Spacing.sm))
+                        Spacer(Modifier.width(6.dp))
                         Text("未在工程中扫描到 APK", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                     }
                     Text(
@@ -429,6 +405,6 @@ private fun formatApkSize(bytes: Long): String = when {
 
 private fun formatApkTime(timestamp: Long): String {
     if (timestamp <= 0L) return ""
-    val sdf = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
-    return sdf.format(java.util.Date(timestamp))
+    val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+    return sdf.format(Date(timestamp))
 }

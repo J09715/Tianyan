@@ -1,0 +1,4 @@
+<resources>
+    <string name="ui_plugin_page_unavailable">This feature is currently unavailable</string>
+    <string name="ui_plugin_page_back">Back</string>
+</resources>

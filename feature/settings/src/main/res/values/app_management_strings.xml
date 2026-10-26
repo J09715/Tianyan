@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_app_inventory_summary">同步设备上的应用。Shizuku / Root 模式可额外读取冻结和联网限制状态，PRoot 模式仅提供应用信息。</string>
+</resources>

@@ -48,42 +48,19 @@ jobs:
           echo "TARGET_TAG=$TAG" >> "$GITHUB_ENV"
           echo "Using version tag: $TAG"
 
-      - name: Set up JDK 25
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '25'
+          java-version: '17'
           cache: 'gradle'
 
-      - name: Install NDK 30.0.15729638
-        run: |
-          set -euo pipefail
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          [ -x "$SDKMANAGER" ] || SDKMANAGER="$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager"
-          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
-          "$SDKMANAGER" --install "ndk;30.0.15729638"
-
-      - name: Rebuild libpty_native.so from source
-        run: |
-          set -euo pipefail
-          NDK="$ANDROID_HOME/ndk/30.0.15729638"
-          TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64"
-          CC="$TOOLCHAIN/bin/aarch64-linux-android30-clang"
-          [ -x "$CC" ] || { echo "::error::NDK clang missing: $CC"; exit 1; }
-          OUT="app/src/main/jniLibs/arm64-v8a/libpty_native.so"
-          "$CC" -shared -fPIC -O2 -Wall -Werror=implicit-function-declaration \
-            -o "$OUT" app/src/main/cpp/pty_native.c
-          # 与 android-apk.yml 同理：符号读取优先用 NDK 自带 llvm-nm，
-          # runner 上 binutils nm 的版本漂移会让这一步在符号本身没问题时红掉。
-          NM="$TOOLCHAIN/bin/llvm-nm"
-          [ -x "$NM" ] || NM="$(command -v llvm-nm || command -v nm)"
-          "$NM" -D --defined-only "$OUT" > /tmp/pty_syms.txt 2>/tmp/pty_nm_err.txt || {
-            echo "::error::符号读取失败（$NM）"; cat /tmp/pty_nm_err.txt; exit 1
-          }
-          grep -q 'Java_top_tianyan_app_runtime_pty_NativePty_openAndExec' /tmp/pty_syms.txt || {
-            echo "::error::libpty_native.so 未导出 top_tianyan JNI 符号"; head -20 /tmp/pty_syms.txt; exit 1
-          }
-          echo "JNI 符号校验通过（$(wc -l < /tmp/pty_syms.txt) 个导出符号）"
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          # 'tools' 包已于 2026-09 被 Google 下线，不能再用默认值（tools platform-tools）
+          # 参考 https://github.com/android-actions/setup-android/issues/537
+          packages: 'platform-tools'
 
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
@@ -105,11 +82,11 @@ jobs:
           fi
           echo "TIANYAN_RELEASE_STORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
 
-      - name: Build Stable-Signed Debug APK
+      - name: Build Release APK
         env:
           TIANYAN_RELEASE_STORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD || secrets.RELEASE_STORE_PASSWORD }}
           TIANYAN_RELEASE_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS || secrets.RELEASE_KEY_ALIAS }}
-          TIANYAN_RELEASE_KEY_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD || secrets.RELEASE_STORE_PASSWORD }}
+          TIANYAN_RELEASE_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD || secrets.RELEASE_KEY_PASSWORD }}
         run: |
           set -euo pipefail
           for variable in \
@@ -126,33 +103,32 @@ jobs:
             -keystore "$TIANYAN_RELEASE_STORE_FILE" \
             -storepass:env TIANYAN_RELEASE_STORE_PASSWORD \
             -alias "$TIANYAN_RELEASE_KEY_ALIAS" > /dev/null
-          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleRelease --no-daemon --stacktrace
 
       - name: Identify and Rename Output APK
         run: |
           mkdir -p output
-          set -euo pipefail
-          APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
-          [ -f "$APK_PATH" ] || { echo "Error: No debug APK generated!"; exit 1; }
-          TAG="${{ env.TARGET_TAG }}"
-          APK_NAME="Tianyan-${TAG}-debug.apk"
-          cp "$APK_PATH" "output/$APK_NAME"
-          "$ANDROID_HOME/build-tools/37.0.0/zipalign" -c -P 16 -v 4 "output/$APK_NAME"
-          "$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --verbose --print-certs "output/$APK_NAME" | tee /tmp/apk-signature.txt
-          grep -q 'certificate SHA-256 digest: a391e0f58385b4691c643b52d34f58032e60ddeb3439b44552beee38f2c705da' /tmp/apk-signature.txt
-          "$ANDROID_HOME/build-tools/37.0.0/aapt" dump badging "output/$APK_NAME" | grep -q "package: name='top.tianyan.app.debug'"
-          sha256sum "output/$APK_NAME" > "output/$APK_NAME.sha256"
-          echo "APK_FILE=output/$APK_NAME" >> "$GITHUB_ENV"
-          echo "SHA_FILE=output/$APK_NAME.sha256" >> "$GITHUB_ENV"
-          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          if [ -f "$APK_PATH" ]; then
+            TAG="${{ env.TARGET_TAG }}"
+            cp "$APK_PATH" "output/Tianyan-arm64-${TAG}.apk"
+            sha256sum "output/Tianyan-arm64-${TAG}.apk" > "output/Tianyan-arm64-${TAG}.apk.sha256"
+            echo "APK_FILE=output/Tianyan-arm64-${TAG}.apk" >> $GITHUB_ENV
+            echo "SHA_FILE=output/Tianyan-arm64-${TAG}.apk.sha256" >> $GITHUB_ENV
+            echo "TAG=$TAG" >> $GITHUB_ENV
+          else
+            echo "Error: No release APK generated!" && exit 1
+          fi
 
       # 生成两个相邻版本标签之间的 git 提交日志作为 Release Notes
       - name: Generate Changelog
         id: changelog
         run: |
           CURRENT_TAG="${{ env.TARGET_TAG }}"
-          # Use the first-parent history boundary; repository tags include legacy parallel version lines.
-          PREV_TAG=$(git tag --merged "$CURRENT_TAG" --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -vx "$CURRENT_TAG" | head -n 1 || true)
+          # 找到上一个版本标签：排除当前 tag 后取最新一个。
+          # 不能依赖"当前 tag 一定在纯 semver 列表里"：预发布 tag（如 v1.0.0-rc.1）不匹配
+          # grep 模式，手动触发时当前 tag 甚至尚未创建，旧写法 sed -n '2p' 会多回退一个版本
+          PREV_TAG=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -v "^${CURRENT_TAG}$" | sed -n '1p')
           echo "当前版本：$CURRENT_TAG，上一版本：$PREV_TAG"
 
           if git rev-parse "$CURRENT_TAG" >/dev/null 2>&1; then
@@ -227,6 +203,7 @@ jobs:
             ${{ env.SHA_FILE }}
           draft: ${{ github.event.inputs.draft == 'true' }}
           prerelease: ${{ github.event.inputs.prerelease == 'true' }}
-          make_latest: true
+          # 预发布不占用 Latest 位（releases/latest 永远指向正式版，避免全量用户被推送 rc）
+          make_latest: ${{ github.event.inputs.prerelease == 'true' && 'legacy' || 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

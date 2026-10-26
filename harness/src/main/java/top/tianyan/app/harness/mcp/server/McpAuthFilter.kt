@@ -37,3 +37,15 @@ object BuiltinBrowserMcpAccess {
     @Volatile var token: String? = null
     @Volatile var port: Int? = null
 }
+
+/**
+ * MCP 被控端（外部 AI 客户端控制本 App）的运行时访问参数供给点（进程内单例）。
+ *
+ * 与 [BuiltinBrowserMcpAccess] 的区别：被控端是**独立端点 + 持久化 token**，
+ * 供外部客户端（Claude Desktop / Cursor 等）长期复用；token 由设置页管理，
+ * 这里只暴露实际绑定端口与运行状态给设置页展示。
+ */
+object AgentMcpAccess {
+    @Volatile var running: Boolean = false
+    @Volatile var port: Int? = null
+}

@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 2,
+  "id": "{{toolId}}",
+  "name": "{{pluginName}}",
+  "description": "天衍本地进程插件示例",
+  "version": "{{pluginVersion}}",
+  "source": "LOCAL",
+  "offlineOnly": true,
+  "installMethod": "LOCAL_PACKAGE",
+  "installSteps": [
+    "cp \"$TIANYAN_PLUGIN_PAYLOAD/bin/{{toolId}}\" \"$TIANYAN_TOOL_DIR/bin/{{toolId}}\" && chmod 755 \"$TIANYAN_TOOL_DIR/bin/{{toolId}}\"",
+    "mkdir -p \"$TIANYAN_TOOL_DIR/lib\" && cp \"$TIANYAN_PLUGIN_PAYLOAD/lib/plugin_server.py\" \"$TIANYAN_TOOL_DIR/lib/plugin_server.py\""
+  ],
+  "launchCommand": "{{toolId}}",
+  "verifyCommand": "{{toolId}} --version",
+  "commandLinks": ["{{toolId}}"],
+  "plugin": {
+    "id": "{{pluginId}}",
+    "api": {"minimum": 1, "maximum": 1},
+    "execution": "PROCESS",
+    "extensions": [{"id": "launch", "point": "PROCESS"}, {"id": "echo", "point": "TOOL"}, {"id": "echo-step", "point": "WORKFLOW"}, {"id": "offline", "point": "PROVIDER"}],
+    "harness": {
+      "entry": "{{toolId}}",
+      "tools": [{"id":"echo","description":"返回离线示例文字","schema":{"type":"object","properties":{"text":{"type":"string","maxLength":1024}},"required":["text"],"additionalProperties":false}}],
+      "nodes": [{"id":"echo-step","rpcTool":"echo","description":"离线工作流示例","schema":{"type":"object","properties":{"text":{"type":"string","maxLength":1024}},"required":["text"],"additionalProperties":false}}],
+      "providers": [{"id":"offline","rpcTool":"provider","api":"OPENAI_COMPLETIONS"}]
+    },
+    "dependencies": [],
+    "capabilities": [],
+    "resources": [],
+    "integrity": {}
+  }
+}

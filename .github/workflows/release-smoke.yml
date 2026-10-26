@@ -1,0 +1,73 @@
+name: Release R8 Smoke
+
+# 为什么需要这个 job：
+# tianyandev-build.yml 只构建 assembleDebug（minify 关闭），所以任何 R8 shrink/rename
+# 相关缺陷都照不出来。v1.3.0 就是这样漏掉了一个 release-only 崩溃——Rhino 的解释器类
+# 按字符串名反射加载（Class.forName("org.mozilla.javascript.Interpreter")），被 R8 改名
+# 后返回 null，codemode 在正式版上一调用就在编译阶段抛裸 NPE，而 debug 包完全正常。
+#
+# 这里用 unsigned 的 assembleRelease（R8 真跑）产出 minify 包，然后对产物做两项断言：
+#   1) 必须保留：org.mozilla.javascript.Interpreter（keep 规则生效）
+#   2) 必须消失：org.mozilla.javascript.Context（证明 minify 真的开着，排除假绿）
+# 断言实现见 tools/verify_r8_keep.py。
+#
+# 只在「影响 shrink 行为的文件」变更时触发，避免给每个 PR 增加十几分钟构建成本。
+
+on:
+  pull_request:
+    paths:
+      - 'harness/consumer-rules.pro'
+      - 'app/proguard-rules.pro'
+      - 'app/build.gradle.kts'
+      - 'gradle/libs.versions.toml'
+      - 'tools/verify_r8_keep.py'
+      - '.github/workflows/release-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-smoke:
+    name: assembleRelease + R8 keep 校验
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          # 'tools' 包已于 2026-09 被 Google 下线，不能再用默认值（tools platform-tools）
+          # 参考 https://github.com/android-actions/setup-android/issues/537
+          packages: 'platform-tools'
+
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x gradlew
+
+      - name: Build minified release APK (unsigned)
+        run: ./gradlew :app:assembleRelease --no-daemon --stacktrace -x lint
+
+      - name: Verify R8 keep rules on the minified dex
+        run: |
+          APK=$(find app/build/outputs/apk/release -name '*.apk' | head -n 1)
+          if [ -z "$APK" ]; then
+            echo "::error::assembleRelease 没有产出 APK，无法校验 R8 行为"
+            exit 1
+          fi
+          echo "校验产物: $APK"
+          python3 tools/verify_r8_keep.py "$APK"

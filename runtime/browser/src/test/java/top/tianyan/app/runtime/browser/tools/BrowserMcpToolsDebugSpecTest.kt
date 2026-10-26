@@ -19,6 +19,8 @@ import top.tianyan.app.runtime.browser.BrowserEventBus
 import top.tianyan.app.runtime.browser.BrowserSessionToken
 import top.tianyan.app.runtime.browser.cdp.DebugBreakpoint
 import top.tianyan.app.runtime.browser.cdp.DebugStep
+import top.tianyan.app.runtime.browser.hook.HookRule
+import top.tianyan.app.runtime.browser.hook.HookRuleInfo
 
 /**
  * debug_* 工具族的 MCP 面规约测试：门禁、参数解析、step 枚举、输出格式、hook 门禁放宽。
@@ -193,7 +195,7 @@ private class FakeDebugEngine : BrowserEngine {
 
     val calls = mutableListOf<String>()
     val setBpCalls = mutableListOf<Pair<String, DebugBreakpoint>>()
-    val installedHooks = mutableListOf<top.tianyan.app.runtime.browser.hook.HookRule>()
+    val installedHooks = mutableListOf<HookRule>()
     var breakpoints: List<DebugBreakpoint> = emptyList()
 
     override suspend fun openTab(url: String?, activate: Boolean) = active
@@ -226,9 +228,9 @@ private class FakeDebugEngine : BrowserEngine {
     override suspend fun sessionDelete(tab: BrowserSessionToken, key: String) = Unit
     override suspend fun sessionKeys(tab: BrowserSessionToken) = emptyList<String>()
 
-    override suspend fun hookInstall(rule: top.tianyan.app.runtime.browser.hook.HookRule) = rule.also { installedHooks += it }
+    override suspend fun hookInstall(rule: HookRule) = rule.also { installedHooks += it }
     override suspend fun hookRemove(id: String) = installedHooks.removeAll { it.id == id }
-    override suspend fun hookList(tabId: String?) = emptyList<top.tianyan.app.runtime.browser.hook.HookRuleInfo>()
+    override suspend fun hookList(tabId: String?) = emptyList<HookRuleInfo>()
     override suspend fun hookReset(tabId: String?) = true
     override suspend fun injectScript(tab: BrowserSessionToken, code: String, persistent: Boolean, name: String) = "ok"
     override suspend fun networkDetail(id: String): String? = null

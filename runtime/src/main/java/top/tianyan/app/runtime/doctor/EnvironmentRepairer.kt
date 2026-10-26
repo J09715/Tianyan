@@ -5,8 +5,6 @@ import top.tianyan.app.core.model.RuntimeState
 import top.tianyan.app.runtime.LinuxRuntime
 import top.tianyan.app.runtime.shell.CommandResult
 import top.tianyan.app.runtime.shell.ShellCommand
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -22,12 +20,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
-@Singleton
-class EnvironmentRepairer @Inject constructor(
+class EnvironmentRepairer(
     private val linuxRuntime: LinuxRuntime,
     private val environmentDoctor: EnvironmentDoctor,
-    private val logger: top.tianyan.app.core.common.logging.AppLogger,
-    private val settingsDataStore: top.tianyan.app.core.datastore.SettingsDataStore,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val _progress = MutableStateFlow<RepairProgress?>(null)
@@ -64,9 +59,6 @@ class EnvironmentRepairer @Inject constructor(
         val logs = mutableListOf<String>()
 
         fun addLog(message: String) {
-            // 双写：UI 日志列表 + AppLogger（logcat Tianyan tag + 公共 Download/Tianyan/runtime.log）
-            // 让「开发者控制台 → 应用日志抓取」和用户直接拷 runtime.log 都能看到自愈全过程。
-            logger.i("[自愈] $message")
             logs.add(message)
             if (logs.size > 200) {
                 logs.removeAt(0)
@@ -102,20 +94,8 @@ class EnvironmentRepairer @Inject constructor(
                     logs = logs.toList(),
                 ),
             )
-            // Step 1.0 死代理清理：内置代理已配置但不可达而直连正常 → 清除设置，
-            // 否则后续 curl/apt 全部先撞死代理干等超时（"探测全部不可达"的头号根因）。
-            val proxyProbe = executeCommand(
-                "P=\"${'$'}{http_proxy:-${'$'}{HTTPS_PROXY:-}}\"; if [ -z \"${'$'}P\" ]; then echo NOPROXY; exit 0; fi; " +
-                    "env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY curl --ipv4 -s -m 5 -o /dev/null https://mirrors.aliyun.com && D=OK || D=FAIL; " +
-                    "curl --ipv4 -s -m 5 -o /dev/null https://mirrors.aliyun.com && X=OK || X=FAIL; echo \"PROXY=${'$'}P DIRECT=${'$'}D VIA=${'$'}X\"",
-                logs, timeoutMs = 16_000L,
-            )
-            if (proxyProbe.stdout.contains("DIRECT=OK") && proxyProbe.stdout.contains("VIA=FAIL")) {
-                addLog("检测到死代理（代理不可达但直连正常），已自动清除内置代理设置")
-                runCatching { settingsDataStore.setSandboxHttpProxy("") }
-            }
-            addLog("[Step 1/5] 写入公共 DNS (223.5.5.5, 114.114.114.114, 8.8.8.8)")
-            val dnsCmd = "mkdir -p /etc && printf 'nameserver 223.5.5.5\\nnameserver 114.114.114.114\\nnameserver 8.8.8.8\\n' > /etc/resolv.conf"
+            addLog("[Step 1/5] 写入公共 DNS (114.114.114.114, 223.5.5.5, 8.8.8.8)")
+            val dnsCmd = "mkdir -p /etc && printf 'nameserver 114.114.114.114\\nnameserver 223.5.5.5\\nnameserver 8.8.8.8\\n' > /etc/resolv.conf"
             val dnsRes = executeCommand(dnsCmd, logs)
             if (!dnsRes.isSuccess) {
                 addLog("警告: 写入 /etc/resolv.conf 失败: ${dnsRes.stderr}")
@@ -126,7 +106,7 @@ class EnvironmentRepairer @Inject constructor(
             // ==========================================
             emit(
                 RepairProgress(
-                    stepTitle = "正在逐个实测国内镜像源（串行选优，直连优先）...",
+                    stepTitle = "正在配置清华大学国内镜像加速源...",
                     stepIndex = 2,
                     totalSteps = totalSteps,
                     progress = 0.35f,
@@ -144,93 +124,22 @@ class EnvironmentRepairer @Inject constructor(
                         mv "${'$'}f" "${'$'}f.tianyan-disabled" 2>/dev/null || true
                     fi
                 done
-                # ============ 自验证换源（严格串行：一次只探测一个镜像，可用即用即停，绝不并发） ============
-                # 任何一张网卡/代理/限流组合下都保证收尾时 apt 处于可用状态，而不是"写完源就信任"。
-                MIRRORS_FILE=/etc/apt/sources.list.d/tianyan-mirrors.list
-                APT_OK=""
-                write_ubuntu() {
-                    printf "deb %s %s main restricted universe multiverse\ndeb %s %s-updates main restricted universe multiverse\ndeb %s %s-security main restricted universe multiverse\ndeb %s %s-backports main restricted universe multiverse\n" "${'$'}1" "${'$'}2" "${'$'}1" "${'$'}2" "${'$'}1" "${'$'}2" "${'$'}1" "${'$'}2" > "${'$'}MIRRORS_FILE"
-                }
-                write_debian() {
-                    printf "deb %s %s main contrib non-free non-free-firmware\ndeb %s %s-updates main contrib non-free non-free-firmware\ndeb %s %s-security main contrib non-free non-free-firmware\n" "${'$'}1" "${'$'}2" "${'$'}1" "${'$'}2" "${'$'}3" "${'$'}2" > "${'$'}MIRRORS_FILE"
-                }
-                write_kali() {
-                    printf "deb %s kali-rolling main contrib non-free\n" "${'$'}1" > "${'$'}MIRRORS_FILE"
-                }
-                # apt 全程 ForceIPv4（手机 IPv6 半残导致 apt 静默等待是慢的头号元凶）+ 收包超时 15s
-                APTOPT="-o Acquire::ForceIPv4=true -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 -o Acquire::Retries=1 -o Acquire::Languages=en"
-                STICKY=$(cat /opt/tianyan/state/apt_mirror.txt 2>/dev/null || true)
-                T0=$(date +%s)
-                el() { echo "+${'$'}(( $(date +%s) - T0 ))s"; }
-                try_apt() {
-                    # 不清 /var/lib/apt/lists：换源后 apt 只增量拉当前源的索引，
-                    # 全删会把 36MB 元数据重下一遍（334s 慢案根因之一）
-                    # 先绕开代理直连（国内镜像绝大多数家用网络可直连；死代理不该拖死 apt）
-                    if env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY DEBIAN_FRONTEND=noninteractive apt-get ${'$'}APTOPT update -y >/dev/null 2>&1; then
-                        echo "apt update 成功 (直连 IPv4)"; return 0
-                    fi
-                    # 直连不行且确实配了代理才走代理路（无代理网络省一轮超时）
-                    if [ -n "${'$'}{http_proxy:-${'$'}{HTTPS_PROXY:-}}" ]; then
-                        if DEBIAN_FRONTEND=noninteractive apt-get ${'$'}APTOPT update -y >/dev/null 2>&1; then
-                            echo "apt update 成功 (经代理)"; return 0
-                        fi
-                    fi
-                    return 1
-                }
                 if [ -f /etc/os-release ]; then
                     . /etc/os-release
                     if [ "${'$'}ID" = "ubuntu" ]; then
                         CN="${'$'}{VERSION_CODENAME:-noble}"
-                        # 老用户快速通道：粘性源未变 + 48h 内有成功索引 → 只探测可达性，
-                        # 跳过整轮 apt update 实测（163s 慢案：验证过的源没必要每次重验）
-                        if [ -n "${'$'}STICKY" ] && grep -q "${'$'}STICKY" "${'$'}MIRRORS_FILE" 2>/dev/null && find /var/lib/apt/lists -name '*Packages*' -mmin -2880 2>/dev/null | grep -q .; then
-                            if env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY curl --ipv4 -fsS -m 4 -o /dev/null "${'$'}STICKY/dists/${'$'}CN/InRelease" 2>/dev/null; then
-                                APT_OK="${'$'}STICKY"
-                                echo "粘性源快速通道: ${'$'}STICKY (源未变+索引新鲜，跳过全量验证) (${'$'}(el))"
-                            fi
-                        fi
-                        if [ -z "${'$'}APT_OK" ]; then
-                            for m in ${'$'}{STICKY:+${'$'}STICKY} https://mirrors.aliyun.com/ubuntu-ports https://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports https://mirrors.ustc.edu.cn/ubuntu-ports https://mirrors.sjtug.sjtu.edu.cn/ubuntu-ports https://ports.ubuntu.com/ubuntu-ports; do
-                                if env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY curl --ipv4 -fsS -m 4 -o /dev/null "${'$'}m/dists/${'$'}CN/InRelease" 2>/dev/null || { [ -n "${'$'}{http_proxy:-${'$'}{HTTPS_PROXY:-}}" ] && curl --ipv4 -fsS -m 4 -o /dev/null "${'$'}m/dists/${'$'}CN/InRelease" 2>/dev/null; }; then
-                                    echo "探测可达: ${'$'}m (${'$'}(el))"
-                                    write_ubuntu "${'$'}m" "${'$'}CN"
-                                    if try_apt; then APT_OK="${'$'}m"; break; fi
-                                    echo "镜像可达但 apt 失败，换下一个: ${'$'}m (${'$'}(el))"
-                                else
-                                    echo "探测不可达: ${'$'}m"
-                                fi
-                            done
-                        fi
-                        [ -z "${'$'}APT_OK" ] && echo "警告: 全部镜像 apt 失败，已保留最后尝试的源"
-                        echo "最终 apt 源: ${'$'}APT_OK (Step2 总耗时 ${'$'}(el))"
+                        printf "deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports %s main restricted universe multiverse\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports %s-updates main restricted universe multiverse\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports %s-security main restricted universe multiverse\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports %s-backports main restricted universe multiverse\n" "${'$'}CN" "${'$'}CN" "${'$'}CN" "${'$'}CN" > /etc/apt/sources.list.d/tianyan-mirrors.list
                     elif [ "${'$'}ID" = "debian" ] || [ "${'$'}ID_LIKE" = "debian" ]; then
                         CN="${'$'}{VERSION_CODENAME:-bookworm}"
-                        for pair in "https://mirrors.tuna.tsinghua.edu.cn/debian https://mirrors.tuna.tsinghua.edu.cn/debian-security" "https://mirrors.aliyun.com/debian https://mirrors.aliyun.com/debian-security" "https://mirrors.ustc.edu.cn/debian https://mirrors.ustc.edu.cn/debian-security" "https://deb.debian.org/debian https://security.debian.org/debian-security"; do
-                            M=${'$'}{pair%% *}; S=${'$'}{pair##* }
-                            if env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY curl --ipv4 -fsS -m 4 -o /dev/null "${'$'}M/dists/${'$'}CN/InRelease" 2>/dev/null || { [ -n "${'$'}{http_proxy:-${'$'}{HTTPS_PROXY:-}}" ] && curl --ipv4 -fsS -m 4 -o /dev/null "${'$'}M/dists/${'$'}CN/InRelease" 2>/dev/null; }; then
-                                echo "探测可达: ${'$'}M"
-                                write_debian "${'$'}M" "${'$'}CN" "${'$'}S"
-                                if try_apt; then APT_OK="${'$'}M"; break; fi
-                            fi
-                        done
-                        [ -z "${'$'}APT_OK" ] && echo "警告: 全部镜像 apt 失败"
-                        echo "最终 apt 源: ${'$'}APT_OK"
+                        printf "deb https://mirrors.tuna.tsinghua.edu.cn/debian %s main contrib non-free non-free-firmware\ndeb https://mirrors.tuna.tsinghua.edu.cn/debian %s-updates main contrib non-free non-free-firmware\ndeb https://mirrors.tuna.tsinghua.edu.cn/debian-security %s-security main contrib non-free non-free-firmware\n" "${'$'}CN" "${'$'}CN" "${'$'}CN" > /etc/apt/sources.list.d/tianyan-mirrors.list
                     elif [ "${'$'}ID" = "kali" ]; then
-                        for m in ${'$'}{STICKY:+${'$'}STICKY} https://mirrors.aliyun.com/kali https://mirrors.tuna.tsinghua.edu.cn/kali https://mirrors.ustc.edu.cn/kali https://mirrors.sjtug.sjtu.edu.cn/kali; do
-                            if env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY curl --ipv4 -fsS -m 4 -o /dev/null "${'$'}m/dists/kali-rolling/InRelease" 2>/dev/null || { [ -n "${'$'}{http_proxy:-${'$'}{HTTPS_PROXY:-}}" ] && curl --ipv4 -fsS -m 4 -o /dev/null "${'$'}m/dists/kali-rolling/InRelease" 2>/dev/null; }; then
-                                write_kali "${'$'}m"
-                                if try_apt; then APT_OK="${'$'}m"; break; fi
-                            fi
-                        done
-                        [ -z "${'$'}APT_OK" ] && echo "警告: 全部镜像 apt 失败"
-                        echo "最终 apt 源: ${'$'}APT_OK"
+                        printf "deb https://mirrors.tuna.tsinghua.edu.cn/kali kali-rolling main contrib non-free\n" > /etc/apt/sources.list.d/tianyan-mirrors.list
                     fi
                 fi
-                # 验证结果落盘：Step 3 据此跳过重复的 apt update（省 20-40s）
-                if [ -n "${'$'}APT_OK" ]; then echo "${'$'}APT_OK" > /tmp/.tianyan_apt_ok; mkdir -p /opt/tianyan/state 2>/dev/null || true; echo "${'$'}APT_OK" > /opt/tianyan/state/apt_mirror.txt 2>/dev/null || true; fi
+                # 清理旧的 apt lists 缓存，确保重新从镜像拉取完整的 index
+                rm -rf /var/lib/apt/lists/* 2>/dev/null || true
             """.trimIndent()
-            // 探测+逐镜像 apt 实测+官方兜底：最坏情况多个镜像各跑一次 update，给足 12 分钟
-            executeCommand(mirrorScript, logs, timeoutMs = 720_000L)
+            executeCommand(mirrorScript, logs)
 
             // ==========================================
             // Step 3: 更新 APT 软件包索引
@@ -244,16 +153,8 @@ class EnvironmentRepairer @Inject constructor(
                     logs = logs.toList(),
                 ),
             )
-            addLog("[Step 3/5] 刷新 APT 索引（Step 2 已实测通过则跳过，节省 20-40s）")
-            // Step 2 的 try_apt 已成功实测过当前源 → 跳过重复 update；仅在 Step 2 未验证成功时补跑
-            val skipUpdate = executeCommand("test -s /tmp/.tianyan_apt_ok && echo yes", mutableListOf(), timeoutMs = 5_000L)
-            val updateRes = if (skipUpdate.stdout.contains("yes")) {
-                addLog("Step 2 已验证源可用，跳过重复 apt-get update")
-                CommandResult(0, "", "", 0)
-            } else {
-                addLog("Step 2 未验证成功，补跑 apt-get update")
-                executeCommand("rm -rf /var/lib/dpkg/updates/* /var/lib/dpkg/lock* 2>/dev/null || true; DEBIAN_FRONTEND=noninteractive dpkg --configure -a 2>/dev/null || true; env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::ForceIPv4=true -o Acquire::Languages=en -o Acquire::http::Timeout=15 -o Acquire::Retries=1 update -y || { [ -n \"${'$'}{http_proxy:-${'$'}{HTTPS_PROXY:-}}\" ] && DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Languages=en -o Acquire::http::Timeout=15 -o Acquire::Retries=1 update -y; }", logs, timeoutMs = 150_000L)
-            }
+            addLog("[Step 3/5] 执行 apt-get update 刷新索引")
+            val updateRes = executeCommand("rm -rf /var/lib/dpkg/updates/* /var/lib/dpkg/lock* 2>/dev/null || true; DEBIAN_FRONTEND=noninteractive dpkg --configure -a 2>/dev/null || true; DEBIAN_FRONTEND=noninteractive apt-get update -y", logs, timeoutMs = 120_000L)
             if (!updateRes.isSuccess) {
                 addLog("提示: apt-get update 产生部分非致命提示")
             }
@@ -270,8 +171,8 @@ class EnvironmentRepairer @Inject constructor(
                     logs = logs.toList(),
                 ),
             )
-            addLog("[Step 4/5] 安装 ca-certificates, curl, git, tar, xz-utils, procps")
-            val installToolsCmd = "env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::ForceIPv4=true -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 -o Acquire::Languages=en -o Acquire::Retries=1 install -y --no-install-recommends ca-certificates curl git tar xz-utils procps || { [ -n \"${'$'}{http_proxy:-${'$'}{HTTPS_PROXY:-}}\" ] && DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::ForceIPv4=true -o Acquire::http::Timeout=15 -o Acquire::Languages=en -o Acquire::Retries=1 install -y --no-install-recommends ca-certificates curl git tar xz-utils procps; }"
+            addLog("[Step 4/5] 安装 ca-certificates, curl, git, tar, xz-utils, procps, file")
+            val installToolsCmd = "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl git tar xz-utils procps file"
             val installToolsRes = executeCommand(installToolsCmd, logs, timeoutMs = 180_000L)
             if (!installToolsRes.isSuccess) {
                 addLog("警告: 基础工具链安装异常: ${installToolsRes.stderr.ifBlank { installToolsRes.stdout }}")
@@ -295,32 +196,20 @@ class EnvironmentRepairer @Inject constructor(
                 if [ -z "${'$'}NODE_VER" ] || [ "${'$'}NODE_VER" -lt 20 ]; then
                     echo "检测到 Node.js 缺失或版本较低 (当前: ${'$'}{NODE_VER:-未安装})，正在下载安装 Node.js v22 (LTS ARM64)..."
                     mkdir -p /tmp/node_setup
-                    env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY curl --ipv4 -fsSL --connect-timeout 6 --max-time 180 https://npmmirror.com/mirrors/node/v22.14.0/node-v22.14.0-linux-arm64.tar.xz -o /tmp/node_setup/node.tar.xz || \
-                    { [ -n "${'$'}{http_proxy:-${'$'}{HTTPS_PROXY:-}}" ] && curl --ipv4 -fsSL --connect-timeout 6 --max-time 180 https://npmmirror.com/mirrors/node/v22.14.0/node-v22.14.0-linux-arm64.tar.xz -o /tmp/node_setup/node.tar.xz; } || \
-                    env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY curl --ipv4 -fsSL --connect-timeout 6 --max-time 180 https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-arm64.tar.xz -o /tmp/node_setup/node.tar.xz || \
-                    { [ -n "${'$'}{http_proxy:-${'$'}{HTTPS_PROXY:-}}" ] && curl --ipv4 -fsSL --connect-timeout 6 --max-time 180 https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-arm64.tar.xz -o /tmp/node_setup/node.tar.xz; } || true
-                    if [ ! -f /tmp/node_setup/node.tar.xz ]; then
-                        env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY curl --ipv4 -fsSL --connect-timeout 6 --max-time 180 https://npmmirror.com/mirrors/node/v22.14.0/node-v22.14.0-linux-arm64.tar.gz -o /tmp/node_setup/node.tar.gz || \
-                        { [ -n "${'$'}{http_proxy:-${'$'}{HTTPS_PROXY:-}}" ] && curl --ipv4 -fsSL --connect-timeout 6 --max-time 180 https://npmmirror.com/mirrors/node/v22.14.0/node-v22.14.0-linux-arm64.tar.gz -o /tmp/node_setup/node.tar.gz; } || true
-                    fi
+                    curl -fsSL --connect-timeout 10 --max-time 180 https://npmmirror.com/mirrors/node/v22.14.0/node-v22.14.0-linux-arm64.tar.xz -o /tmp/node_setup/node.tar.xz || \
+                    curl -fsSL --connect-timeout 10 --max-time 180 https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-arm64.tar.xz -o /tmp/node_setup/node.tar.xz || true
                     if [ -f /tmp/node_setup/node.tar.xz ]; then
                         tar -xJf /tmp/node_setup/node.tar.xz -C /usr/local --strip-components=1
                         rm -rf /tmp/node_setup
                         echo "Node.js v22 升级完成: ${'$'}(node -v 2>/dev/null)"
-                    elif [ -f /tmp/node_setup/node.tar.gz ]; then
-                        tar -xzf /tmp/node_setup/node.tar.gz -C /usr/local --strip-components=1
-                        rm -rf /tmp/node_setup
-                        echo "Node.js v22 升级完成 (gz 兜底，未依赖 xz): ${'$'}(node -v 2>/dev/null)"
                     else
                         echo "预编译包拉取受限，尝试通过系统包管理器就绪基础 Node..."
-                        env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs npm || \
-                        { [ -n "${'$'}{http_proxy:-${'$'}{HTTPS_PROXY:-}}" ] && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs npm; } || true
+                        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs npm || true
                     fi
                 fi
                 which npm >/dev/null 2>&1 && npm config set registry https://registry.npmmirror.com || true
-                mkdir -p ${'$'}HOME/.pip ${'$'}HOME/.config/pip 2>/dev/null || true
+                mkdir -p ${'$'}HOME/.pip
                 printf '[global]\nindex-url = https://pypi.tuna.tsinghua.edu.cn/simple\n' > ${'$'}HOME/.pip/pip.conf 2>/dev/null || true
-                printf '[global]\nindex-url = https://pypi.tuna.tsinghua.edu.cn/simple\n' > ${'$'}HOME/.config/pip/pip.conf 2>/dev/null || true
                 echo "运行时就绪状态: Node ${'$'}(node -v 2>/dev/null || echo '未就绪'), NPM ${'$'}(npm -v 2>/dev/null || echo '未就绪')"
                 if [ -d /opt/android-sdk ] || [ -d /opt/tianyan/toolchains/android ]; then
                     if [ ! -f /etc/profile.d/tianyan-android.sh ]; then
@@ -417,14 +306,14 @@ EOF
             .map { it.trim() }
             .filter { it.isNotBlank() }
             .take(50)
-            .forEach { logs.add(it); logger.i("[自愈][沙箱] $it") }
+            .forEach { logs.add(it) }
 
         if (!result.isSuccess) {
             result.stderr.lineSequence()
                 .map { it.trim() }
                 .filter { it.isNotBlank() }
                 .take(30)
-                .forEach { logs.add("ERR: $it"); logger.i("[自愈][沙箱] ERR: $it") }
+                .forEach { logs.add("ERR: $it") }
         }
 
         return result

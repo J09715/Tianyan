@@ -3,6 +3,7 @@ package top.tianyan.app.runtime.webchat
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
+import top.tianyan.app.core.database.AgentMessageFeedbackEntity
 
 /** Runtime-facing boundary for exposing Tianyan's native Harness to the LAN Web console. */
 interface WebChatAgentGateway {
@@ -11,10 +12,31 @@ interface WebChatAgentGateway {
     suspend fun messages(sessionId: String): List<WebChatMessage>
     suspend fun pendingApprovals(sessionId: String): List<WebChatApproval>
     fun observeSession(sessionId: String): Flow<WebChatSessionSnapshot>
-    suspend fun send(sessionId: String, text: String, imageUrls: List<String>)
+    fun observeTask(sessionId: String, taskId: String): Flow<WebChatTaskState>
+    suspend fun send(sessionId: String, text: String, imageUrls: List<String>,
+        mode: WebChatInputMode = WebChatInputMode.NEXT_RUN): WebChatInputReceipt
     suspend fun resolveApproval(sessionId: String, requestId: String, approved: Boolean): Boolean
+    /** 对单条 assistant 消息写入/覆盖用户反馈（目标校验失败抛 IllegalArgumentException）。 */
+    suspend fun setMessageFeedback(sessionId: String, messageId: String, rating: String, note: String?): AgentMessageFeedbackEntity
+    suspend fun messageFeedbacks(sessionId: String): List<AgentMessageFeedbackEntity>
     fun cancel(sessionId: String)
 }
+
+enum class WebChatTaskState {
+    QUEUED, RUNNING, WAITING_APPROVAL, RECOVERING, SUSPENDED, FAILED, COMPLETED, CANCELLED, MISSING, UNKNOWN
+}
+
+enum class WebChatInputMode(val id: String) {
+    NEXT_RUN("next_run"), STEER("steer"), FOLLOW_UP("follow_up")
+}
+
+/** Admission receipt. Completion is reported by the existing session stream. */
+data class WebChatInputReceipt(
+    val disposition: String,
+    val taskId: String?,
+    val queue: String? = null,
+    val queueItemId: String? = null,
+)
 
 @Serializable
 data class WebChatApproval(

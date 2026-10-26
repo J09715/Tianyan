@@ -1,7 +1,5 @@
 package top.tianyan.app.harness.dual
 
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * 专供 Planner（规划智能体）使用的系统提示词构建器。
@@ -11,8 +9,7 @@ import javax.inject.Singleton
  * 2. 纯规划定位：Planner 不直接调用文件与系统工具，只负责架构规划、单步拆解与成果验收；
  * 3. 严格协议输出：指导模型输出紧凑可解析的 JSON 计划格式。
  */
-@Singleton
-class PlannerPromptBuilder @Inject constructor() {
+class PlannerPromptBuilder() {
 
     fun buildSystemPrompt(workspacePath: String, projectType: String = ""): String = buildString {
         appendLine("你是系统顶层架构与规划智能体（Planner Agent）。")

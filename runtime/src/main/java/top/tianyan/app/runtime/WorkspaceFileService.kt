@@ -1,9 +1,8 @@
 package top.tianyan.app.runtime
 
 import java.io.File
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import top.tianyan.app.core.common.files.SafeFileTree
 import top.tianyan.app.core.common.result.AppError
@@ -12,8 +11,7 @@ import top.tianyan.app.core.common.result.ErrorCode
 import top.tianyan.app.core.database.WorkspaceRepository
 
 /** Boundary-safe file operations for a registered workspace. */
-@Singleton
-class WorkspaceFileService @Inject constructor(
+class WorkspaceFileService(
     private val pathManager: RuntimePathManager,
     private val workspaceRepository: WorkspaceRepository,
 ) {
@@ -42,20 +40,29 @@ class WorkspaceFileService @Inject constructor(
         file.readText(Charsets.UTF_8)
     }
 
-    suspend fun writeFile(projectName: String, relativePath: String, content: String): AppResult<Unit> = ioResult("保存文件失败") {
+    suspend fun writeFile(
+        projectName: String,
+        relativePath: String,
+        content: String,
+        expectedContent: String? = null,
+    ): AppResult<Unit> = ioResult("保存文件失败") {
         require(content.length <= WorkspaceManager.MAX_FILE_WRITE_CHARS) {
             "内容过长（${content.length} 字符，上限 ${WorkspaceManager.MAX_FILE_WRITE_CHARS}）"
         }
         val file = resolve(projectName, relativePath, allowMissing = true)
         require(!file.isDirectory) { "目标是目录：${displayPath(projectName, relativePath)}" }
-        file.parentFile?.mkdirs()
-        val temporary = File(file.parentFile, ".${file.name}.tmp-${System.nanoTime()}")
-        try {
-            temporary.writeText(content, Charsets.UTF_8)
-            if (!temporary.renameTo(file)) temporary.copyTo(file, overwrite = true)
-        } finally {
-            temporary.delete()
+        WorkspaceAtomicWriter.write(file, expectedContent) { it.writeText(content, Charsets.UTF_8) }
+    }
+
+    /** 二进制写入（WebChat 上传等场景）：临时文件 + rename 的原子落盘与 [writeFile] 一致。 */
+    suspend fun writeBytes(projectName: String, relativePath: String, bytes: ByteArray): AppResult<Unit> = ioResult("写入文件失败") {
+        require(bytes.isNotEmpty()) { "内容为空" }
+        require(bytes.size <= MAX_UPLOAD_BYTES) {
+            "文件过大（${bytes.size} 字节，上限 ${MAX_UPLOAD_BYTES / 1024 / 1024} MB）"
         }
+        val file = resolve(projectName, relativePath, allowMissing = true)
+        require(!file.isDirectory) { "目标是目录：${displayPath(projectName, relativePath)}" }
+        WorkspaceAtomicWriter.write(file) { it.writeBytes(bytes) }
     }
 
     suspend fun createFile(projectName: String, relativePath: String): AppResult<Unit> = ioResult("创建文件失败") {
@@ -73,9 +80,12 @@ class WorkspaceFileService @Inject constructor(
 
     suspend fun renameItem(projectName: String, oldRelativePath: String, newName: String): AppResult<Unit> = ioResult("重命名失败") {
         val safeName = newName.trim()
-        require(safeName.isNotBlank() && '/' !in safeName && '\\' !in safeName) { "新名称不合法" }
+        require(safeName.isNotBlank() && safeName !in setOf(".", "..") && '/' !in safeName && '\\' !in safeName) { "新名称不合法" }
         val file = resolve(projectName, oldRelativePath)
+        val root = projectRoot(projectName).canonicalFile
+        check(file.canonicalFile != root) { "不能通过此接口重命名工作区根目录" }
         val target = File(file.parentFile, safeName)
+        require(isInside(root, target.canonicalFile)) { "重命名目标路径越界" }
         check(!target.exists()) { "目标已存在：$safeName" }
         check(file.renameTo(target)) { "重命名失败" }
     }
@@ -131,7 +141,17 @@ class WorkspaceFileService @Inject constructor(
         try {
             AppResult.Success(block())
         } catch (throwable: Throwable) {
-            AppResult.Failure(AppError(ErrorCode.IO, throwable.message ?: fallback, throwable))
+            if (throwable is CancellationException) throw throwable
+            if (throwable is FileWriteConflictException) {
+                AppResult.Failure(AppError(ErrorCode.CONFLICT, throwable.message ?: fallback))
+            } else {
+                AppResult.Failure(AppError(ErrorCode.IO, throwable.message ?: fallback, throwable))
+            }
         }
+    }
+
+    companion object {
+        /** WebChat 上传单文件上限；服务端请求体预读进内存，更大文件走 FTP。 */
+        const val MAX_UPLOAD_BYTES = 32 * 1024 * 1024
     }
 }

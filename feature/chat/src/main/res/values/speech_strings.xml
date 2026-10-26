@@ -1,0 +1,5 @@
+<resources>
+    <string name="chat_speech_enable">开启自动朗读</string>
+    <string name="chat_speech_disable">关闭自动朗读</string>
+    <string name="chat_speech_unavailable">系统朗读不可用，请检查 TTS 引擎和语音包</string>
+</resources>

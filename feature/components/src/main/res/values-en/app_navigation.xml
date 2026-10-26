@@ -1,0 +1,20 @@
+<resources>
+    <string name="components_drawer_tab_chat">Chat</string>
+    <string name="components_drawer_tab_workspace">Files</string>
+    <string name="components_drawer_tab_system">System</string>
+    <string name="components_open_navigation">Open navigation and conversations</string>
+    <string name="components_local_terminal">Local terminal</string>
+    <string name="components_tools">Tool center</string>
+    <string name="components_drawer_chat">AI chat</string>
+    <string name="components_drawer_workspace">Projects and files</string>
+    <string name="components_drawer_system">System overview</string>
+    <string name="components_drawer_settings">Settings</string>
+    <string name="components_rail_sessions">Chats</string>
+    <string name="components_rail_new_session">New</string>
+    <string name="components_rail_terminal">Terminal</string>
+    <string name="components_rail_tools">Tools</string>
+    <string name="components_collapse_sidebar">Collapse sidebar</string>
+    <string name="components_companion_open">Open terminal and browser pane</string>
+    <string name="components_companion_collapse">Collapse side pane</string>
+    <string name="components_companion_resize">Drag to resize panes</string>
+</resources>

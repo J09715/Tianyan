@@ -1,166 +1,103 @@
 package top.tianyan.app.ui.chat
 
-import android.app.Activity
-import android.provider.Settings
-import top.tianyan.app.ui.chat.floating.FloatingChatService
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import top.tianyan.app.ui.components.TianyanBrandBadge
-import top.tianyan.app.ui.theme.Spacing
-import top.tianyan.app.ui.components.RuntimeIconButton as IconButton
+import androidx.compose.ui.draw.shadow
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import top.tianyan.app.feature.chat.R
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import top.tianyan.app.core.database.AiModelEntity
-import top.tianyan.app.core.model.ApprovalMode
-import top.tianyan.app.harness.session.ConversationBranch
-import top.tianyan.app.ui.components.RuntimeIcon
-import top.tianyan.app.ui.components.RuntimeIconName
+import top.tianyan.app.core.model.RunMode
+import top.tianyan.app.feature.chat.R
 import top.tianyan.app.harness.events.HarnessEvent
+import top.tianyan.app.harness.session.ConversationBranch
+import top.tianyan.app.ui.components.*
+import top.tianyan.app.ui.chat.floating.rememberFloatingChatLauncher
 
-/**
- * 顶部栏：品牌标题/工作区状态行 + 工作台工具条（模型·审批·分支·运行）。
- */
+/** Floating navigation and actions; advanced controls unfold on demand. */
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 internal fun ChatTopBar(
-    workspace: String,
-    distroDisplayName: String,
-    activeModel: AiModelEntity?,
-    approvalMode: ApprovalMode,
-    currentBranch: ConversationBranch?,
-    runtimeEvents: List<HarnessEvent>,
-    running: Boolean,
-    onShowFloatingPermissionDialog: () -> Unit,
-    onOpenSessions: () -> Unit,
-    onOpenModels: () -> Unit,
-    onOpenApprovalModes: () -> Unit,
-    onOpenBranches: () -> Unit,
-    onOpenRuntime: () -> Unit,
-    onOpenBrowser: (() -> Unit)? = null,
-    browserHighlight: Boolean = false,
-    onOpenGit: () -> Unit = {},
-    gitUncommittedCount: Int = 0,
-    /** 红队控制台入口；只在红队会话下由调用方传值。 */
-    onOpenRedTeam: (() -> Unit)? = null,
-    redTeamTarget: String? = null,
-    /** 运行日志入口（与浏览器同一条工具条）；为空时不显示该项。 */
-    onOpenLogs: (() -> Unit)? = null,
+    runMode: RunMode, currentBranch: ConversationBranch?,
+    runtimeEvents: List<HarnessEvent>, running: Boolean,
+    onOpenSessions: () -> Unit, onOpenBots: () -> Unit, onOpenWorkshop: () -> Unit,
+    onOpenRunModes: () -> Unit, onOpenBranches: () -> Unit,
+    onOpenRuntime: () -> Unit, onOpenBrowser: (() -> Unit)? = null, browserHighlight: Boolean = false,
+    onOpenRepository: (() -> Unit)? = null, repositoryHighlight: Boolean = false,
+    toolchainHighlight: Boolean = false, onOpenToolchain: () -> Unit,
+    onOpenReasoning: (() -> Unit)? = null, companion: ChatCompanionToggle? = null,
+    speech: ChatSpeechToggle? = null,
 ) {
-    val context = LocalContext.current
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding(),
-        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val openFloatingChat = rememberFloatingChatLauncher()
+    Row(
+        Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        // 第 1 行：品牌 Badge + 标题/工作区 + 右侧模型胶囊与操作按钮
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = Spacing.md, end = Spacing.md, top = Spacing.sm, bottom = Spacing.xs),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            // 左侧：品牌 Badge + 标题/状态
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                modifier = Modifier.weight(1f, fill = false),
-            ) {
-                TianyanBrandBadge(28.dp)
-                Column {
-                    Text(
-                        text = stringResource(R.string.chat_title),
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 16.sp,
-                        ),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = stringResource(
-                            R.string.chat_status,
-                            if (workspace.isNotBlank()) workspace else stringResource(R.string.chat_default_workspace),
-                            distroDisplayName,
-                        ),
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+        if (!LocalRuntimeWidthClass.current.hasPersistentNavigation) {
+            RuntimeCard(modifier = Modifier.shadow(4.dp, CircleShape, ambientColor = MaterialTheme.colorScheme.scrim.copy(alpha = 0.06f), spotColor = MaterialTheme.colorScheme.scrim.copy(alpha = 0.06f)), shape = CircleShape,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+            borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f), contentPadding = PaddingValues(0.dp)) {
+                RuntimeIconButton(onClick = onOpenSessions, modifier = Modifier.size(48.dp),
+                    contentDescription = stringResource(R.string.chat_open_session_list)) {
+                    RuntimeIcon(RuntimeIconName.Menu, Modifier.size(22.dp))
                 }
             }
-
-            // 右侧：Git + 小窗 + 会话抽屉
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
-            ) {
-                // 仓库入口只在下方工作台条上留一个（带未提交改动数）。
-                // 顶栏这里原本还有一个同样的 Git 图标，同一功能两个入口，
-                // 用户看到的是「上方一个、下方一个」的重复，不知道该点哪个。
-
-                // 🌟 1. 智枢悬浮小窗收起按钮 (Collapse to Floating Window)
-                IconButton(
-                    onClick = {
-                        if (Settings.canDrawOverlays(context)) {
-                            FloatingChatService.start(context)
-                            (context as? Activity)?.moveTaskToBack(true)
-                        } else {
-                            onShowFloatingPermissionDialog()
-                        }
-                    },
-                    contentDescription = stringResource(R.string.chat_floating_collapse),
-                ) {
-                    RuntimeIcon(RuntimeIconName.OpenInNew, Modifier.size(19.dp), tint = MaterialTheme.colorScheme.primary)
+        } else Spacer(Modifier.width(48.dp))
+        RuntimeCard(modifier = Modifier.shadow(4.dp, CircleShape, ambientColor = MaterialTheme.colorScheme.scrim.copy(alpha = 0.06f), spotColor = MaterialTheme.colorScheme.scrim.copy(alpha = 0.06f)), shape = CircleShape,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+            borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f), contentPadding = PaddingValues(0.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RuntimeIconButton(onClick = onOpenBots, modifier = Modifier.size(48.dp),
+                    contentDescription = stringResource(MainDestination.Bots.labelRes)) {
+                    RuntimeIcon(MainDestination.Bots.icon, Modifier.size(22.dp))
                 }
-
-                // 🌟 2. 会话抽屉/列表（内部包含「新建会话」功能）
-                IconButton(
-                    onClick = onOpenSessions,
-                    contentDescription = stringResource(R.string.chat_open_session_list),
-                ) {
-                    RuntimeIcon(RuntimeIconName.List, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                RuntimeIconButton(onClick = onOpenWorkshop, modifier = Modifier.size(48.dp),
+                    contentDescription = stringResource(MainDestination.Workspace.labelRes)) {
+                    RuntimeIcon(MainDestination.Workspace.icon, Modifier.size(22.dp))
+                }
+                RuntimeIconButton(onClick = { expanded = true }, modifier = Modifier.size(48.dp),
+                    contentDescription = stringResource(R.string.chat_workbench_controls)) {
+                    RuntimeIcon(RuntimeIconName.More, Modifier.size(22.dp),
+                        if (toolchainHighlight || repositoryHighlight || browserHighlight) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurface)
                 }
             }
         }
-
-        // 第 2 行：全屏极薄无边框矩形 Dev Toolbar (模型 · 审批 · 分支 · 运行)
-        CollapsibleChatWorkbenchStrip(
-            activeModel = activeModel,
-            approvalMode = approvalMode,
-            currentBranch = currentBranch,
-            runtimeEvents = runtimeEvents,
-            running = running,
-            onOpenModels = onOpenModels,
-            onOpenApprovalModes = onOpenApprovalModes,
-            onOpenBranches = onOpenBranches,
-            onOpenRuntime = onOpenRuntime,
-            onOpenBrowser = onOpenBrowser,
-            browserHighlight = browserHighlight,
-            onOpenGit = onOpenGit,
-            gitUncommittedCount = gitUncommittedCount,
-            onOpenRedTeam = onOpenRedTeam,
-            redTeamTarget = redTeamTarget,
-            onOpenLogs = onOpenLogs,
-        )
+    }
+    if (expanded) {
+        val closeThen: (() -> Unit) -> () -> Unit = { action -> { expanded = false; action() } }
+        PlainBackdropModalBottomSheet(onDismissRequest = { expanded = false }) {
+            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(stringResource(R.string.chat_workbench_controls), style = MaterialTheme.typography.titleLarge)
+                Row {
+                    companion?.let { toggle -> RuntimeIconButton(onClick = closeThen(toggle.onToggle),
+                        contentDescription = stringResource(if (toggle.open) top.tianyan.app.feature.components.R.string.components_companion_collapse
+                            else top.tianyan.app.feature.components.R.string.components_companion_open)) {
+                        RuntimeIcon(RuntimeIconName.PanelRightOpen, Modifier.size(24.dp))
+                    } }
+                }
+                ChatWorkspaceBar(
+                    onOpenBrowser = onOpenBrowser?.let(closeThen), browserHighlight = browserHighlight,
+                    onOpenRepository = onOpenRepository?.let(closeThen), repositoryHighlight = repositoryHighlight)
+                Text(stringResource(R.string.chat_workbench_session), Modifier.padding(top = 8.dp),
+                    style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                ChatWorkbenchControls(runMode, currentBranch, runtimeEvents, running,
+                    closeThen(onOpenRunModes), closeThen(onOpenBranches),
+                    closeThen(onOpenRuntime), closeThen(onOpenToolchain), toolchainHighlight,
+                    onReasoning = onOpenReasoning?.let(closeThen), onFloatingChat = openFloatingChat?.let(closeThen),
+                    speech = speech?.copy(onToggle = closeThen(speech.onToggle)))
+            }
+        }
     }
 }

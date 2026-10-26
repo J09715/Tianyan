@@ -1,37 +1,17 @@
 plugins {
-    alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.tianyan.android.library.compose)
 }
 
 android {
     namespace = "top.tianyan.app.feature.theme"
-    resourcePrefix = "theme_"
-    compileSdk = 37
-    defaultConfig { minSdk = 29 }
-    buildFeatures { compose = true }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_25
-        targetCompatibility = JavaVersion.VERSION_25
-    }
-}
-
-kotlin {
-    compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_25) }
 }
 
 dependencies {
     implementation(project(":core:common"))
     implementation(project(":core:model"))
     implementation(libs.androidx.core.ktx)
-    implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.compose.ui)
-    implementation(libs.androidx.compose.ui.graphics)
-    implementation(libs.androidx.compose.material3)
-    // 动效令牌（Motion.kt）的显式来源：见 libs.versions.toml 中的说明
-    implementation(libs.androidx.compose.animation.core)
-    // AndroidLiquidGlass (Kyant0)：澄明(液态玻璃)主题的毛玻璃折射效果
-    implementation(libs.backdrop)
+    implementation(libs.bundles.compose.ui)
+    implementation(libs.material.color.utilities)
     implementation(libs.kotlinx.coroutines.core)
-
-    debugImplementation(libs.androidx.compose.ui.tooling)
+    testImplementation(libs.junit)
 }

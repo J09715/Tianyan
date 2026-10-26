@@ -17,6 +17,7 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketException
 import java.net.SocketTimeoutException
+import java.net.BindException
 import java.nio.file.Files
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -97,11 +98,7 @@ class AndroidFtpServer(
                         }
                     }
                 }
-            } catch (cancellation: CancellationException) {
-                throw cancellation
-            } catch (t: Throwable) {
-                // 接受循环异常退出会让 FTP 服务静默停止服务，必须留下痕迹。
-                onLog("FTP 接受循环异常退出: ${t.message ?: t::class.simpleName}")
+            } catch (_: Throwable) {
             } finally {
                 stop()
             }
@@ -137,9 +134,9 @@ class AndroidFtpServer(
         }
         val msg = lastException?.message ?: "端口 $port 绑定失败"
         if (msg.contains("EADDRINUSE", ignoreCase = true) || msg.contains("already in use", ignoreCase = true)) {
-            throw java.net.BindException("FTP 端口 $port 正在被占用或尚未完全释放，请稍后再试或更换端口。($msg)")
+            throw BindException("FTP 端口 $port 正在被占用或尚未完全释放，请稍后再试或更换端口。($msg)")
         } else {
-            throw (lastException ?: java.net.BindException("FTP 端口 $port 启动失败：$msg"))
+            throw (lastException ?: BindException("FTP 端口 $port 启动失败：$msg"))
         }
     }
 
@@ -290,8 +287,12 @@ internal class FtpSession(
         }
 
         val expectedUser = config.username.ifBlank { "root" }
-        val passwordMatches = config.password.isNullOrBlank() || pass == config.password
-        val userMatches = user.equals(expectedUser, ignoreCase = true) || user.equals("root", ignoreCase = true)
+        // 安全边界：密码未设置（null/blank）时必须拒绝一切密码登录。
+        // 此前 `isNullOrBlank() ||` 直接放行，等于向局域网开放无密码的 rootfs 读写；
+        // 想免密使用应显式开启 anonymousEnabled，而不是漏设密码。
+        // 同时移除 `user.equals("root")` 后备匹配：它会绕过自定义用户名。
+        val passwordMatches = !config.password.isNullOrBlank() && pass == config.password
+        val userMatches = user.equals(expectedUser, ignoreCase = true)
 
         if (userMatches && passwordMatches) {
             authenticated = true
@@ -454,7 +455,18 @@ internal class FtpSession(
         val pasv = passiveServer
         if (pasv != null) {
             return try {
-                pasv.accept().also { closePassiveServer() }
+                val accepted = pasv.accept()
+                // FTP bounce 防护：PASV 端口在 30s 窗口内任何主机都能抢连；
+                // 数据连接必须来自与控制连接相同的来源 IP，否则拒绝。
+                val peer = accepted.inetAddress?.hostAddress
+                if (peer == null || !peer.equals(clientIp, ignoreCase = true)) {
+                    onLog("[${clientIp}] 数据连接来源异常（$peer），已拒绝")
+                    runCatching { accepted.close() }
+                    closePassiveServer()
+                    null
+                } else {
+                    accepted.also { closePassiveServer() }
+                }
             } catch (e: Throwable) {
                 closePassiveServer()
                 null
@@ -864,7 +876,10 @@ internal class FtpSession(
                 config.sdcardDirectory?.canonicalFile,
             )
             val isContained = allowedRoots.any { root ->
-                canonicalTarget.absolutePath.startsWith(root.absolutePath)
+                // 必须带分隔符边界："/data/rootfs" 的纯前缀匹配会把同级目录
+                // rootfs.staging / rootfs.previous 也放进可访问范围
+                canonicalTarget.absolutePath == root.absolutePath ||
+                    canonicalTarget.absolutePath.startsWith(root.absolutePath + File.separator)
             }
             if (isContained) targetFile else null
         } catch (_: Throwable) {

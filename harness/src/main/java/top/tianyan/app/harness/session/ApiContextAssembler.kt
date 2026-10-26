@@ -1,38 +1,56 @@
 package top.tianyan.app.harness.session
 
-import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
+import top.tianyan.app.core.database.AgentApprovalRepository
 import top.tianyan.app.core.datastore.AgentPreferences
-import top.tianyan.app.harness.AssistantText
-import top.tianyan.app.harness.CapabilityEvent
+import top.tianyan.app.core.model.RunMode
+import top.tianyan.app.harness.ApiMessage
 import top.tianyan.app.harness.ContextWindowPolicy
+import top.tianyan.app.harness.ContextBudgetPlanner
+import top.tianyan.app.harness.ImagePayloadCompressor
 import top.tianyan.app.harness.HarnessApiMapper
+import top.tianyan.app.harness.HarnessMessage
 import top.tianyan.app.harness.ModelConfig
-import top.tianyan.app.harness.ProviderClient
+import top.tianyan.app.harness.MentionExtractor
 import top.tianyan.app.harness.ToolCall
 import top.tianyan.app.harness.ToolCallMode
-import top.tianyan.app.harness.ToolResult
 import top.tianyan.app.harness.UserMessage
-import top.tianyan.app.harness.ApiFunctionCall
-import top.tianyan.app.harness.ApiMessage
-import top.tianyan.app.harness.ApiToolCall
-import top.tianyan.app.harness.MentionExtractor
 import top.tianyan.app.harness.compaction.CompactionManager
+import top.tianyan.app.harness.compaction.SummaryRequestContext
+import top.tianyan.app.harness.prompt.MemoryRecallSelector
 import top.tianyan.app.harness.prompt.SystemPromptBuilder
+import top.tianyan.app.harness.operation.OperationCoordinator
+import top.tianyan.app.harness.diagnostics.ContextGovernanceTrace
+import top.tianyan.app.harness.diagnostics.ContextStage
 
 /**
  * API 请求上下文组装器：把会话实时消息投影成提供商协议消息列表。
  *
  * 从原 HarnessLoop.apiMessages 迁移而来，负责：
- * - 系统提示词注入（非纯净聊天模式）
+ * - 系统提示词注入（非纯净聊天模式；逐轮可变内容已全部外移，见下）
+ * - 用户轮前缀块的持久化（recall_context entry：记忆召回 + 任务计划看板，每轮只算一次）
  * - 上下文压缩摘要的头部注入（预算驱动的滑动窗口折叠）
- * - NATIVE / JSON_TEXT 两种工具调用协议的消息形态转换
+ * - NATIVE / JSON_TEXT 两种工具调用协议的消息形态转换（经 [ApiMessageProjector]）
  * - 视觉能力关闭时剥离图片输入
+ *
+ * Prefix cache 稳定性契约：system prompt 内不再含逐轮变化的内容（recall 已移到
+ * user 轮后缀、路由规则块与技能按全会话累计），相邻两轮请求的 system 消息字节级一致；
+ * 变化只出现在本轮新增的消息上（本就未进入缓存）。
  */
-class ApiContextAssembler @Inject constructor(
+class ApiContextAssembler(
     private val compactionManager: CompactionManager,
     private val settingsDataStore: AgentPreferences,
     private val systemPromptBuilder: SystemPromptBuilder,
+    private val sessionStore: SessionTreeStore,
+    private val memoryRecallSelector: MemoryRecallSelector,
+    private val agentApprovalRepository: AgentApprovalRepository,
+    private val operationCoordinator: OperationCoordinator,
+    private val plugins: top.tianyan.app.harness.plugins.HarnessPluginRegistry? = null,
+    private val secretRedactor: top.tianyan.app.core.security.SecretRedactor? = null,
+    private val environments: top.tianyan.app.harness.environment.SessionExecutionEnvironments? = null,
+    /** 上下文管家（DS Bot steward）：压缩触发时判断「换段 vs 窗口压缩」；null = 禁用。 */
+    private val compactionSteward: top.tianyan.app.harness.compaction.CompactionSteward? = null,
 ) {
     suspend fun assemble(
         sessId: String,
@@ -40,297 +58,249 @@ class ApiContextAssembler @Inject constructor(
         workspacePath: String,
         projectTypeOverride: String = "",
         thinkingMode: Boolean = false,
-        agentId: String = "",
+        sessionRunMode: String? = null,
+        trace: ContextGovernanceTrace? = null,
     ): List<ApiMessage> {
         val compactionEnabled = runCatching { settingsDataStore.contextCompactionEnabled.first() }.getOrDefault(true)
-        val budgetTokens = model.contextTokens
-            ?: runCatching { settingsDataStore.contextBudgetTokens.first() }.getOrDefault(128_000)
-        val toolCallMode = if (model.pureChatMode) ToolCallMode.DISABLED else model.toolCallMode
+        // 「历史折叠线比例」：让历史在预算的一部分处就开始折叠。
+        // 与面板同源读取同一个偏好，保证两侧折叠决策一致。
+        val foldingRatioPercent = runCatching { settingsDataStore.contextFoldingRatioPercent.first() }
+            .getOrDefault(ContextWindowPolicy.DEFAULT_FOLDING_RATIO_PERCENT)
+        // 与 SessionModelSwitcher 共用 clampedBudget：占用判定与实际请求必须是同一预算口径
+        val budgetTokens = ContextWindowPolicy.clampedBudget(
+            model.contextTokens,
+            runCatching { settingsDataStore.contextBudgetTokens.first() }.getOrDefault(128_000),
+            modelId = model.model,
+            providerId = model.provider,
+        )
+        val toolCallMode = model.effectiveToolCallMode
+        // 折叠线的工具 schema 预留按模式取：不外发 tools 的会话不该白留这 5,600 token
+        val toolSchemaReserveTokens = ContextWindowPolicy.toolSchemaReserveTokensFor(
+            pureChat = model.pureChatMode,
+            toolDisabled = toolCallMode == ToolCallMode.DISABLED,
+        )
 
-        var compactedContext = compactionManager.project(sessId)
+        val inspected = compactionManager.inspect(sessId)
+        trace?.begin(inspected, budgetTokens, compactionEnabled)
+        var compactedContext = inspected.context()
         var msgs = compactedContext.messages
-        val latestUserText = msgs.filterIsInstance<UserMessage>().lastOrNull()?.text.orEmpty()
-        val mentionedNames = MentionExtractor.parse(latestUserText)
 
-        // 系统提示只放「会话内常量」部分：它位于请求位置 0，前缀缓存是精确前缀匹配，
-        // 位置 0 一旦变化，其后整段对话历史都要重新 prefill。逐轮变化的块
-        // （技能/规则路由/记忆检索/计划看板）改走下方 dynamicTail，追加到最新
-        // user 消息尾部 —— 尾部追加不破坏已缓存前缀。
-        val parts = if (!model.pureChatMode) {
-            systemPromptBuilder.buildParts(
-                workspacePath = workspacePath,
-                toolCallMode = toolCallMode,
-                mentionedNames = mentionedNames,
-                sessionId = sessId,
-                projectTypeOverride = projectTypeOverride,
-                latestUserMessage = latestUserText,
-                mcpTools = model.dynamicMcpTools,
-                agentId = agentId,
+        // 用户轮前缀块（低权威背景资料：记忆召回 + 任务计划看板）：只对最新用户轮计算一次并
+        // 持久化到会话树（appendRecallBlock 幂等），保存的块不重算；请求按预算整块保留或省略。
+        // 这取代了旧的「system prompt 尾部注入」——记忆召回与计划看板都是逐轮变化的内容，
+        // 放在 system prompt 里会让整段前缀每轮/每步失效。
+        // 持久化失败时放弃挂载：未持久化的字节进投影会导致下一轮组装漂移。
+        if (!model.pureChatMode) {
+            val latestUser = msgs.filterIsInstance<UserMessage>().lastOrNull()
+            if (latestUser != null && latestUser.id !in compactedContext.recallBlocks) {
+                val block = try {
+                    memoryRecallSelector.turnPrefixBlock(
+                        projectOwnerId = workspacePath.trim().trimEnd('/'),
+                        sessionId = sessId,
+                        userMessage = latestUser.text,
+                    )
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (throwable: Throwable) {
+                    ""
+                }
+                if (block.isNotBlank() && sessionStore.appendRecallBlock(sessId, latestUser.id, block)) {
+                    compactedContext = compactedContext.copy(
+                        recallBlocks = compactedContext.recallBlocks + (latestUser.id to block),
+                    )
+                }
+            }
+        }
+
+        // 技能 @提及按全会话累计（一旦提及，规则常驻本会话）：避免「下一轮未提及→章节
+        // 撤出」造成的 system prompt 漂移。MCP @ 提及已不裁剪 tools 数组也不动提示词
+        // （只写能力事件，见 HarnessProviderRunner.resolveEffectiveModel）。
+        val mentionedNames = msgs.filterIsInstance<UserMessage>()
+            .flatMapTo(mutableSetOf()) { MentionExtractor.parse(it.text) }
+        val userMessageTexts = msgs.filterIsInstance<UserMessage>().map { it.text }
+
+        val rawSystemPrompt = if (!model.pureChatMode) {
+            // 运行意图与 ToolExecutor 同口径解析：会话级优先，缺失才回落全局默认
+            // （RunMode.fromId 对 null 返回 BUILD，因此必须先做 null 判别再回落）。
+            val runMode = sessionRunMode?.let(RunMode::fromId)
+                ?: runCatching { agentApprovalRepository.currentRunMode() }.getOrDefault(RunMode.BUILD)
+            systemPromptBuilder.build(
+                workspacePath,
+                toolCallMode,
+                mentionedNames,
+                sessId,
+                projectTypeOverride,
+                userMessageTexts,
+                runMode,
             )
         } else {
-            null
+            ""
         }
-        val rawSystemPrompt = parts?.frozenText().orEmpty()
         val systemPrompt = ContextWindowPolicy.fitSystemPrompt(rawSystemPrompt, budgetTokens)
+        var failureMemory = if (model.pureChatMode || toolCallMode == ToolCallMode.DISABLED) "" else operationCoordinator.failureMemoryBlock(sessId)
+        var pluginContext = if (model.pureChatMode || toolCallMode == ToolCallMode.DISABLED || secretRedactor == null || plugins == null) "" else plugins.context(
+            top.tianyan.app.harness.plugins.PluginContextRequest(sessId, workspacePath),
+            top.tianyan.app.harness.environment.executionOutputRedactor(secretRedactor, environments, null, settingsDataStore, sessId, workspacePath),
+        )
+
+        val rawFailureMemory = failureMemory
+        val rawPluginContext = pluginContext
+        var selectedRecall = compactedContext.recallBlocks
+        fun allocateBackground() {
+            if (!compactionEnabled) return
+            val lastUser = msgs.indexOfLast { it is UserMessage }.coerceAtLeast(0)
+            val plan = ContextBudgetPlanner.plan(budgetTokens, systemPrompt, compactedContext.summaryLayer,
+                msgs.drop(lastUser).sumOf(ContextWindowPolicy::tokensOf), model.compactionReserveTokens,
+                toolSchemaReserveTokens, foldingRatioPercent, msgs.filterIsInstance<UserMessage>()
+                    .mapNotNull { user -> compactedContext.recallBlocks[user.id]?.let { user.id to it } }.toMap(),
+                rawFailureMemory, rawPluginContext)
+            selectedRecall = plan.recall
+            failureMemory = plan.failureMemory
+            pluginContext = plan.pluginContext
+            trace?.allocations(plan.allocations)
+            trace?.contribution("recall", selectedRecall.values)
+            trace?.contribution("failure_memory", listOf(failureMemory))
+            trace?.contribution("plugin_context", listOf(pluginContext))
+        }
+        allocateBackground()
+
+        // 召回后缀的 token 计入预算占用：它们会随 user 消息进入 provider 请求
+        fun recallTokens() = ContextWindowPolicy.estimateTokens(selectedRecall.values.joinToString("\n")) +
+            ContextWindowPolicy.estimateTokens(failureMemory) + ContextWindowPolicy.estimateTokens(pluginContext)
+        trace?.contribution("system", listOf(systemPrompt))
+        trace?.contribution("recall", selectedRecall.values)
+        trace?.contribution("failure_memory", listOf(failureMemory))
+        trace?.contribution("plugin_context", listOf(pluginContext))
+
         return buildList {
             if (systemPrompt.isNotEmpty()) {
                 add(ApiMessage(role = "system", content = systemPrompt))
             }
-            val answeredIds = msgs.filterIsInstance<ToolResult>().mapTo(mutableSetOf()) { it.toolCallId }
-            val toolCallDetails = msgs.filterIsInstance<ToolCall>().associate {
-                it.id to ((it.rawToolName ?: HarnessApiMapper.apiName(it.tool)) to it.args)
+
+            // 老轮次工具结果与写入参数缩减（先于压缩判定）：预算线未越过时，大输出（浏览器快照、
+            // 长 read）仍会原样重复发送。最近若干条原样保留，更老的超过按工具阈值即压缩并附
+            // history_read 指针——只影响发给 Provider 的正文，落库 transcript 与 UI 不变。
+            // 关闭上下文压缩 = 用户要原始历史，此时同样不截断。
+            // 顺序必须在压缩判定之前：只需截断即可回到预算线内的会话，不应再触发整段压缩
+            // （一次额外 LLM 调用 + 历史永久降级为摘要）。
+            if (compactionEnabled) {
+                msgs = ContextWindowPolicy.projectForUsage(msgs, compactionEnabled = true).also { trace?.messages(ContextStage.HISTORY, msgs, it) }
             }
 
             // 预算驱动的滑动窗口：从最近一轮往回累加 token，超出预算则更早的历史进入压缩态。
             // 是否裁剪原文只由真实 token 预算决定，不再按用户轮次阈值强制折叠。
+            // 每模型压缩预算覆盖（pi 式 modelOverrides）：keepRecent 收紧 + reserve 预留。
             val computedKeepFromIndex = if (compactionEnabled) {
                 ContextWindowPolicy.computeKeepFromIndex(
                     msgs,
                     budgetTokens,
-                    ContextWindowPolicy.estimateTokens(systemPrompt),
+                    ContextWindowPolicy.estimateTokens(systemPrompt) +
+                        ContextWindowPolicy.estimateTokens(compactedContext.summaryLayer) +
+                        recallTokens(),
+                    keepRecentTokens = model.compactionKeepRecentTokens ?: 0,
+                    reserveTokens = model.compactionReserveTokens,
+                    foldingRatioPercent = foldingRatioPercent,
+                    toolSchemaReserveTokens = toolSchemaReserveTokens,
                 )
             } else {
                 0
             }
             if (computedKeepFromIndex > 0) {
-                compactedContext = compactionManager.compact(sessId, compactedContext, computedKeepFromIndex)
+                // 上下文管家（DS Bot steward）：任务告一段落 → 换段（只保留最后一轮用户消息起的
+                // 原文，其余折叠为交接摘要，前缀重置为 system+摘要+当前轮）；仍在进行 → 维持
+                // 窗口压缩。判定失败一律退化为现状。被折叠原文仍在会话树，可 history_search。
+                var keepFromIndex = computedKeepFromIndex
+                if (compactionSteward != null && compactionEnabled) {
+                    val recent = top.tianyan.app.harness.compaction.CompactionSteward.recentTranscript(msgs)
+                    if (compactionSteward.shouldSwitchSegment(model, recent)) {
+                        keepFromIndex = top.tianyan.app.harness.compaction.CompactionSteward
+                            .switchKeepFromIndex(msgs, computedKeepFromIndex)
+                        trace?.contribution("steward", listOf("switch segment: keepFrom=$keepFromIndex"))
+                    }
+                }
+                // LLM 结构化压缩摘要（pi 式）：当前模型生成，失败回退机械摘要。
+                // summaryContext 让摘要请求重放主对话的 system + 摘要层 + 原始消息前缀，
+                // 命中 provider KV 缓存（cache-replay 形状，对齐 Reasonix）。
+                compactedContext = compactionManager.compact(
+                    sessId,
+                    compactedContext,
+                    keepFromIndex,
+                    model = model,
+                    summaryContext = SummaryRequestContext(
+                        systemPrompt = systemPrompt,
+                        summaryLayer = compactedContext.summaryLayer,
+                        toolCallMode = toolCallMode,
+                        visionEnabled = model.capabilities.images,
+                        recallBlocks = selectedRecall,
+                        // 被折叠区域的 provider 可见形态：截断已发生过，与主对话实际发送的字节一致
+                        replayPrefix = msgs.take(computedKeepFromIndex),
+                    ),
+                ).also { trace?.messages(ContextStage.COMPACTION, msgs, it.messages) }
                 msgs = compactedContext.messages
+                allocateBackground()
+                // compact 返回的保留窗口来自原始 transcript（未截断），重放一次截断，
+                // 保证与压缩判定时同一口径。
+                if (compactionEnabled) {
+                    msgs = ContextWindowPolicy.projectForUsage(msgs, compactionEnabled = true).also { trace?.messages(ContextStage.RETAINED_HISTORY, msgs, it) }
+                }
             }
-            val shouldCompact = !compactedContext.summary.isNullOrBlank()
-            // Compute the message index at which "recent" history begins. Messages before this
-            // boundary are either in the global compaction summary zone (shouldCompact) or subject
-            // to turn-end capping for large tool results. Either way they get compacted.
-            //
-            // recentTurnCutoffIndex is the index of the oldest user message within the last
-            // RECENT_TURNS_FULL_DETAIL user turns — messages before it are "historical" for the
-            // purpose of capping. The value is now a real boundary, not zero.
-            val recentTurnCutoffIndex = computeRecentTurnCutoffIndex(msgs, RECENT_TURNS_FULL_DETAIL)
-
-            if (shouldCompact) {
+            if (compactionEnabled) {
+                // 巨型用户消息兜底（与 computeKeepFromIndex 同一条折叠线，foldingLimitFor
+                // 内部自钳比例）：单条自身超线的用户消息（粘贴长文档/日志）无法按边界折叠，
+                // kept 恒超预算 → 每轮请求必被 provider 400。对保留区超大用户消息做
+                // 投影级头尾截断，落库 transcript 与 UI 不受影响。
+                msgs = ContextWindowPolicy.truncateOversizedUserMessages(
+                    msgs,
+                    ContextWindowPolicy.foldingLimitFor(
+                        budget = budgetTokens,
+                        ratioPercent = foldingRatioPercent,
+                        systemTokens = ContextWindowPolicy.estimateTokens(systemPrompt) +
+                            ContextWindowPolicy.estimateTokens(compactedContext.summaryLayer) +
+                            recallTokens(),
+                        reserveTokens = model.compactionReserveTokens,
+                        toolSchemaReserveTokens = toolSchemaReserveTokens,
+                    ),
+                ).also { trace?.messages(ContextStage.USER_LIMIT, msgs, it) }
+            }
+            // 物理字节预检独立于 token 折叠：关闭压缩时历史仍可能把 Nginx/中转撑到 HTTP 413。
+            msgs = ImagePayloadCompressor.downscaleHarness(msgs).also { trace?.messages(ContextStage.IMAGE_DOWNSCALE, msgs, it) }
+            msgs = ContextWindowPolicy.enforceRequestByteBudget(msgs, toolCallDetailsOf(msgs)).also { trace?.messages(ContextStage.BYTE_LIMIT, msgs, it) }
+            val summaryLayer = compactedContext.summaryLayer
+            trace?.contribution("summary", listOf(summaryLayer))
+            if (summaryLayer.isNotBlank()) {
                 add(
                     ApiMessage(
                         role = "system",
-                        content = compactedContext.summary,
+                        content = summaryLayer,
                     ),
                 )
             }
-
-            // JSON 文本模式：工具调用以文本表达，tool 消息需转成 user 文本（API 不认识 tool 角色）
-            val toolNames = toolCallDetails.mapValuesTo(mutableMapOf()) { it.value.first }
-
-            var i = 0
-            fun apiToolCall(tc: ToolCall) = ApiToolCall(
-                id = tc.id,
-                function = ApiFunctionCall(
-                    name = tc.rawToolName ?: HarnessApiMapper.apiName(tc.tool),
-                    arguments = tc.args.toString(),
-                ),
+            val projectedMessages = ApiMessageProjector.project(
+                msgs = msgs,
+                toolCallMode = toolCallMode,
+                visionEnabled = model.capabilities.images,
+                recallSuffixes = selectedRecall,
+            ).let { it + listOf(failureMemory, pluginContext).filter(String::isNotBlank).map { text -> ApiMessage(role = "user", content = text) } }
+            // Split-Turn 压缩后保留段可能从 assistant / tool_call 中途开始。补一条合成 user
+            // 消息作为角色桥接，满足 provider 的角色交替与「首条消息必须是 user」约束
+            // （Anthropic 尤其严格），并提示模型不要重复已折叠的步骤。
+            if (summaryLayer.isNotBlank() && projectedMessages.isNotEmpty() && projectedMessages.first().role != "user") {
+                add(ApiMessage(role = "user", content = SPLIT_TURN_BRIDGE_MESSAGE))
+            }
+            addAll(
+                ContextWindowPolicy.shrinkApiMessagesToByteBudget(
+                    ImagePayloadCompressor.downscale(projectedMessages),
+                ).also { trace?.api(projectedMessages, it) },
             )
-            val isCollapsed = { index: Int -> shouldCompact && index < recentTurnCutoffIndex }
-            while (i < msgs.size) {
-                val message = msgs[i]
-                if (isCollapsed(i)) {
-                    i++
-                    continue
-                }
-                if (message is CapabilityEvent) {
-                    i++
-                    continue
-                }
-                if (toolCallMode == ToolCallMode.JSON_TEXT) {
-                    when (message) {
-                        is ToolCall -> {
-                            toolNames[message.id] = message.rawToolName ?: HarnessApiMapper.apiName(message.tool)
-                            i++
-                        }
-                        is ToolResult -> {
-                            val name = toolNames[message.toolCallId] ?: "工具"
-                            val status = if (message.success) "成功" else "失败"
-                            val args = toolCallDetails[message.toolCallId]?.second
-                            val content = when {
-                                isCollapsed(i) && message.output.length > ContextWindowPolicy.compactThresholdFor(name) ->
-                                    ContextWindowPolicy.compactToolOutput(name, args, message.output, message.success)
-                                // Turn-end capping for JSON_TEXT mode: same policy as NATIVE.
-                                i < recentTurnCutoffIndex && message.output.length > TURN_END_RESULT_CAP_CHARS ->
-                                    "【工具 $name 执行结果·$status】\n${capToolResultForHistory(message.output)}"
-                                else ->
-                                    "【工具 $name 执行结果·$status】\n${message.output}"
-                            }
-                            add(ApiMessage(role = "user", content = content))
-                            i++
-                        }
-                        else -> {
-                            val mapped = when {
-                                isCollapsed(i) && message is AssistantText && message.text.length > 120 ->
-                                    ApiMessage(
-                                        role = "assistant",
-                                        content = ContextWindowPolicy.foldMessageText(
-                                            "助手",
-                                            ContextWindowPolicy.assistantTextForContext(
-                                                ProviderClient.stripThinkTags(message.text) ?: message.text,
-                                            ),
-                                        ),
-                                        reasoning_content = null,
-                                    )
-                                isCollapsed(i) && message is UserMessage && message.text.length > 120 ->
-                                    ApiMessage(
-                                        role = "user",
-                                        content = ContextWindowPolicy.foldMessageText("用户", message.text),
-                                        imageUrls = message.imageUrls,
-                                    )
-                                isCollapsed(i) && message is AssistantText ->
-                                    HarnessApiMapper.toApiMessage(message).copy(
-                                        content = ContextWindowPolicy.assistantTextForContext(
-                                            ProviderClient.stripThinkTags(message.text) ?: message.text,
-                                        ),
-                                        reasoning_content = null,
-                                    )
-                                message is AssistantText ->
-                                    HarnessApiMapper.toApiMessage(message).copy(
-                                        content = ContextWindowPolicy.assistantTextForContext(
-                                            ProviderClient.stripThinkTags(message.text) ?: message.text,
-                                        ),
-                                        reasoning_content = null,
-                                    )
-                                else -> HarnessApiMapper.toApiMessage(message)
-                            }
-                            add(if (message is UserMessage && !model.visionEnabled) mapped.copy(imageUrls = emptyList()) else mapped)
-                            i++
-                        }
-                    }
-                    continue
-                }
-                if (message is AssistantText || message is ToolCall) {
-                    if (message is ToolCall && message.id !in answeredIds) {
-                        i++
-                        continue
-                    }
-                    // 预算折叠态：早期 assistant 文本压缩为一行占位，避免撑爆上下文。
-                    val text = if (isCollapsed(i) && message is AssistantText && message.text.length > 120) {
-                        ContextWindowPolicy.foldMessageText(
-                            "助手",
-                            ContextWindowPolicy.assistantTextForContext(
-                                ProviderClient.stripThinkTags(message.text) ?: message.text,
-                            ),
-                        )
-                    } else {
-                        (message as? AssistantText)?.text?.let {
-                            ContextWindowPolicy.assistantTextForContext(ProviderClient.stripThinkTags(it) ?: it)
-                        }
-                    }
-                    val toolCalls = mutableListOf<ApiToolCall>()
-                    if (message is ToolCall) toolCalls.add(apiToolCall(message))
-                    var j = i + 1
-                    while (j < msgs.size && msgs[j] is ToolCall) {
-                        val tc = msgs[j] as ToolCall
-                        if (tc.id in answeredIds) toolCalls.add(apiToolCall(tc))
-                        j++
-                    }
-                    // DeepSeek 思考模式（V3.2+/V4）：两个 user 消息之间若有工具调用，
-                    // 中间 assistant 消息的 reasoning_content 必须原样传回，否则
-                    // 400 "The reasoning_content in the thinking mode must be passed back to the API"。
-                    // 纯文本 assistant 轮仍不回传（DeepSeek-R1 规则，防推理循环）。
-                    val reasoning = if (toolCalls.isNotEmpty()) {
-                        (message as? AssistantText)?.reasoning
-                            ?: (message as? ToolCall)?.reasoning
-                            ?: msgs.subList(i, j).filterIsInstance<ToolCall>().firstNotNullOfOrNull { it.reasoning }
-                    } else {
-                        null
-                    }
-                    add(
-                        ApiMessage(
-                            role = "assistant",
-                            content = text,
-                            reasoning_content = reasoning,
-                            tool_calls = toolCalls.takeIf { it.isNotEmpty() },
-                        ),
-                    )
-                    i = j
-                } else if (message is ToolResult) {
-                    val detail = toolCallDetails[message.toolCallId]
-                    val content = when {
-                        isCollapsed(i) && message.output.length > ContextWindowPolicy.compactThresholdFor(detail?.first) ->
-                            ContextWindowPolicy.compactToolOutput(detail?.first, detail?.second, message.output, message.success)
-                        // Turn-end capping: historic results (before the recent-turns boundary)
-                        // that exceed the cap are trimmed to head + ellipsis + tail.
-                        // This runs independently from global compaction (isCollapsed) and fires
-                        // even when shouldCompact is false — preventing a single large read from
-                        // occupying full tokens across dozens of subsequent rounds.
-                        i < recentTurnCutoffIndex && message.output.length > TURN_END_RESULT_CAP_CHARS ->
-                            capToolResultForHistory(message.output)
-                        else -> message.output
-                    }
-                    add(
-                        ApiMessage(
-                            role = "tool",
-                            content = content,
-                            tool_call_id = message.toolCallId,
-                        ),
-                    )
-                    i++
-                } else {
-                    // 用户消息在早期历史中同样折叠，仅保留极简占位。
-                    val folded = if (isCollapsed(i) && message is UserMessage && message.text.length > 120) {
-                        ContextWindowPolicy.foldMessageText("用户", message.text)
-                    } else {
-                        null
-                    }
-                    if (folded != null) {
-                        add(ApiMessage(role = "user", content = folded))
-                    } else {
-                        val mapped = HarnessApiMapper.toApiMessage(message)
-                        add(if (message is UserMessage && !model.visionEnabled) mapped.copy(imageUrls = emptyList()) else mapped)
-                    }
-                    i++
-                }
-            }
-        }
+        }.also { trace?.finish(it) }
     }
 
-    companion object {
-        /**
-         * Maximum character length for a ToolResult that occurred before the recent-turns
-         * boundary. Outputs exceeding this length are capped to head + ellipsis + tail.
-         * ~4096 chars ≈ ~1024 tokens — generous enough for typical tool outputs; small
-         * enough to prevent a single 15 KB `read` from consuming context across 40 rounds.
-         */
-        const val TURN_END_RESULT_CAP_CHARS = 4_096
-
-        /** Number of user-turn boundaries that define "recent" history. */
-        const val RECENT_TURNS_FULL_DETAIL = 3
-
-        /** Head size preserved during turn-end capping. */
-        private const val CAP_HEAD_CHARS = 2_048
-
-        /** Tail size preserved during turn-end capping. */
-        private const val CAP_TAIL_CHARS = 512
-
-        /**
-         * Return the message index of the oldest UserMessage within the last [n] user turns.
-         * If there are fewer than [n] user turns the whole history is "recent" and 0 is returned.
-         */
-        fun computeRecentTurnCutoffIndex(messages: List<top.tianyan.app.harness.HarnessMessage>, n: Int): Int {
-            var remaining = n
-            for (index in messages.indices.reversed()) {
-                if (messages[index] is top.tianyan.app.harness.UserMessage) {
-                    remaining--
-                    if (remaining == 0) return index
-                }
-            }
-            return 0
+    private fun toolCallDetailsOf(msgs: List<HarnessMessage>) =
+        msgs.filterIsInstance<ToolCall>().associate {
+            it.id to ((it.rawToolName ?: HarnessApiMapper.apiName(it.tool)) to it.args)
         }
-
-        /**
-         * Trim a historic tool output to [CAP_HEAD_CHARS] head + ellipsis + [CAP_TAIL_CHARS]
-         * tail. Called only when the output exceeds [TURN_END_RESULT_CAP_CHARS] and the message
-         * is outside the recent-turns boundary — never applied to recent turns.
-         */
-        fun capToolResultForHistory(output: String): String {
-            if (output.length <= TURN_END_RESULT_CAP_CHARS) return output
-            val head = output.take(CAP_HEAD_CHARS)
-            val tail = output.takeLast(CAP_TAIL_CHARS)
-            val omitted = output.length - CAP_HEAD_CHARS - CAP_TAIL_CHARS
-            return "$head\n…[历史工具结果中段已裁剪 $omitted 字节，仅保留首尾]…\n$tail"
-        }
-    }
 }
+
+/** Split-Turn 压缩后的角色桥接消息：当保留段从 assistant / tool_call 中途开始时插入。 */
+private const val SPLIT_TURN_BRIDGE_MESSAGE =
+    "[系统说明] 为避免单个超长任务轮次撑爆上下文，更早的步骤已折叠为上方摘要。以下从当前任务中途继续，请勿重复已完成的工作。"

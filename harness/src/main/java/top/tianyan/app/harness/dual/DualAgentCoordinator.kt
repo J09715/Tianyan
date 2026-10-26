@@ -1,8 +1,7 @@
 package top.tianyan.app.harness.dual
 
 import java.util.UUID
-import javax.inject.Inject
-import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -32,8 +31,7 @@ import top.tianyan.app.harness.subagent.SubagentLaneRunner
  * 5. 单步超时熔断：移动端单步限制 120 秒超时熔断，杜绝进程挂死；
  * 6. 事件总线透出：通过 HarnessEventBus 广播步骤状态变更，赋能 UI 步骤流实时呈现。
  */
-@Singleton
-class DualAgentCoordinator @Inject constructor(
+class DualAgentCoordinator(
     private val providerClient: ProviderClient,
     private val laneRunner: SubagentLaneRunner,
     private val promptBuilder: PlannerPromptBuilder,
@@ -157,10 +155,22 @@ class DualAgentCoordinator @Inject constructor(
 
                 is PlannerDecision.Replan -> {
                     onStatusUpdate("Planner 调整了执行方案：${decision.reason}")
+                    // REPLAN 按 id 保留旧步骤状态：解析器生成的步骤恒为 PENDING，直接清空重置会让
+                    // 已完成步骤被重复执行（写文件等副作用重复发生）。
+                    // COMPLETED 必须保留；FAILED 不保留——配合 EXECUTE_STEP 的 FAILED 可重试语义，
+                    // REPLAN 即是 Planner 对失败步骤的修复意图，失败步骤应按新指令重置为 PENDING 重新执行。
+                    val previousStatus = steps.associate { it.id to it.status }
+                    val previousSummary = steps.associate { it.id to it.resultSummary }
                     steps.clear()
-                    steps.addAll(decision.newSteps)
+                    steps.addAll(decision.newSteps.map { step ->
+                        if (previousStatus[step.id] == StepStatus.COMPLETED) {
+                            step.copy(status = StepStatus.COMPLETED, resultSummary = previousSummary[step.id])
+                        } else {
+                            step
+                        }
+                    })
                     onPlanUpdated(steps)
-                    decision.newSteps.forEach { emitProgress(sessionId, it, it.status) }
+                    steps.forEach { emitProgress(sessionId, it, it.status) }
 
                     // 调度当前已就绪的步骤波次
                     val executedBatch = executeReadyBatch(
@@ -203,10 +213,13 @@ class DualAgentCoordinator @Inject constructor(
                         if (it >= 0) it else { steps.add(currentStep); steps.lastIndex }
                     }
                     val previous = steps[stepIndex]
-                    steps[stepIndex] = currentStep.copy(
-                        status = previous.status,
-                        resultSummary = previous.resultSummary,
-                    )
+                    steps[stepIndex] = when (previous.status) {
+                        // COMPLETED 不可重跑：保留旧状态与摘要，避免写文件等副作用被重复执行
+                        StepStatus.COMPLETED -> currentStep.copy(status = previous.status, resultSummary = previous.resultSummary)
+                        // FAILED 可重试：Planner 重新下发同 id 步骤即重试意图，重置为 PENDING 重新执行
+                        StepStatus.FAILED -> currentStep.copy(status = StepStatus.PENDING, resultSummary = null)
+                        else -> currentStep.copy(status = previous.status, resultSummary = previous.resultSummary)
+                    }
                     onPlanUpdated(steps)
 
                     // 所有 Planner 指令统一进入 DAG 就绪队列；禁止绕过未完成依赖直接执行。
@@ -244,6 +257,8 @@ class DualAgentCoordinator @Inject constructor(
         onPlanUpdated: (List<PlanStep>) -> Unit,
         onStatusUpdate: (String) -> Unit,
     ): List<Pair<PlanStep, StepExecutionResult>> = withContext(Dispatchers.IO) {
+        // 先做级联失败：上一轮遗留的 FAILED 步骤会让其依赖者永不就绪，若不标记会活锁空转烧完 maxSteps
+        cascadeFailures(sessionId, steps)
         val completedStepIds = steps.filter { it.status == StepStatus.COMPLETED }.map { it.id }.toSet()
         val readySteps = steps.filter { it.isReady(completedStepIds) }
 
@@ -273,9 +288,36 @@ class DualAgentCoordinator @Inject constructor(
             val idx = steps.indexOfFirst { it.id == updatedStep.id }
             if (idx >= 0) steps[idx] = updatedStep
         }
+        // 本批失败步骤级联标记其（传递）依赖者，保证步骤集尽快全部终态
+        cascadeFailures(sessionId, steps)
         onPlanUpdated(steps)
 
         results
+    }
+
+    /**
+     * 级联失败：某步骤 FAILED 后，把所有（传递）依赖它的 PENDING 步骤标记为 FAILED，
+     * 避免依赖者永不就绪导致主循环空转烧完 maxSteps。复用 FAILED 而非新增 BLOCKED 状态，
+     * 保持 StepStatus 枚举序列化与既有事件消费方兼容；级联失败的步骤可由 Planner
+     * 通过 EXECUTE_STEP（FAILED 可重试）重新执行。
+     */
+    private fun cascadeFailures(sessionId: String, steps: MutableList<PlanStep>) {
+        val failedIds = steps.filter { it.status == StepStatus.FAILED }.mapTo(hashSetOf()) { it.id }
+        if (failedIds.isEmpty()) return
+        var changed = true
+        while (changed) {
+            changed = false
+            for (index in steps.indices) {
+                val step = steps[index]
+                if (step.status == StepStatus.PENDING && step.dependencies.any { it in failedIds }) {
+                    val cascaded = step.copy(status = StepStatus.FAILED, resultSummary = "前置工序失败，已级联标记为失败")
+                    steps[index] = cascaded
+                    failedIds.add(step.id)
+                    emitProgress(sessionId, cascaded, StepStatus.FAILED)
+                    changed = true
+                }
+            }
+        }
     }
 
     /**
@@ -304,7 +346,7 @@ class DualAgentCoordinator @Inject constructor(
 
         val startedAt = System.currentTimeMillis()
         val stepResult = withTimeoutOrNull(STEP_TIMEOUT_MS) {
-            runCatching {
+            try {
                 laneRunner.run(
                     sessionId = sessionId,
                     laneName = stepLaneName,
@@ -312,7 +354,14 @@ class DualAgentCoordinator @Inject constructor(
                     workspace = workspace,
                     modelConfig = executorModel,
                 )
-            }.getOrNull()
+            } catch (cancellation: CancellationException) {
+                // 外部取消必须向上传播：runCatching 会连 CancellationException 一起吞成 null，
+                // 导致取消被误判为步骤 FAILED。真正的步骤超时由 withTimeoutOrNull 自身捕获并返回 null，
+                // 两者不能混淆。
+                throw cancellation
+            } catch (throwable: Throwable) {
+                null
+            }
         }
 
         val duration = System.currentTimeMillis() - startedAt

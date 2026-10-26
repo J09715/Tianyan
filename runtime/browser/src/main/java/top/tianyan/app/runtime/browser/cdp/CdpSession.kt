@@ -1,5 +1,6 @@
 package top.tianyan.app.runtime.browser.cdp
 
+import android.util.Log
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -61,7 +62,7 @@ class CdpSession(
                 if (droppedEvents > 0) {
                     val d = droppedEvents
                     droppedEvents = 0
-                    android.util.Log.w(TAG, "CDP 事件溢出丢弃 $d 条")
+                    Log.w(TAG, "CDP 事件溢出丢弃 $d 条")
                 }
             }
         }

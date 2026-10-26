@@ -6,8 +6,6 @@ import top.tianyan.app.core.network.FileDownloader
 import top.tianyan.app.core.network.ChecksumVerifier
 import top.tianyan.app.runtime.RuntimePathManager
 import java.io.File
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.flow.collect
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -28,8 +26,7 @@ data class FlutterSdkArchive(
  * checksum verification; the archive is placed in the bind-mounted /opt/tianyan
  * tree so the script can extract it without downloading again.
  */
-@Singleton
-class FlutterSdkDownloader @Inject constructor(
+class FlutterSdkDownloader(
     private val fileDownloader: FileDownloader,
     private val checksumVerifier: ChecksumVerifier,
     private val pathManager: RuntimePathManager,
@@ -124,7 +121,14 @@ class FlutterSdkDownloader @Inject constructor(
         onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
     ) {
         var lastError: Throwable? = null
-        val bases = if (release.absoluteUrl) GITHUB_ARCHIVE_PROXIES else ARCHIVE_BASE_URLS
+        // ARM64 资产（GitHub release 直链）拿不到官方 sha256；此时必须禁用第三方镜像——
+        // 镜像站可篡改字节流且无完整性兜底，"无校验 + 不可信通道"等于盲装。
+        // 只保留 GitHub 直连（HTTPS 保障传输完整与来源一致），直连失败如实报错。
+        val bases = when {
+            !release.absoluteUrl -> ARCHIVE_BASE_URLS
+            release.sha256.isNotBlank() -> GITHUB_ARCHIVE_PROXIES
+            else -> listOf("")
+        }
         for (base in bases) {
             val url = if (release.absoluteUrl) "${base}${release.archive}" else "${base.trimEnd('/')}/${release.archive}"
             try {
@@ -175,86 +179,12 @@ class FlutterSdkDownloader @Inject constructor(
             "https://storage.flutter-io.cn/flutter_infra_release/releases",
             "https://storage.googleapis.com/flutter_infra_release/releases",
         )
-        // GitHub 直连在国内易被墙；下载 ARM64 发布包时优先走代理镜像（github.akams.cn 全量节点），最后回退直连。
+        // GitHub 直连在国内易被墙；下载 ARM64 发布包时优先走代理镜像，最后回退直连。
         val GITHUB_ARCHIVE_PROXIES = listOf(
-            "https://gh.dpik.top/",
-            "https://github.tbap.top/",
-            "https://ghfile.geekertao.top/",
-            "https://ghproxy.net/",
-            "https://gh-proxy.com/",
-            "https://cdn.gh-proxy.com/",
-            "https://github.dpik.top/",
-            "https://j.1lin.dpdns.org/",
-            "https://github.starrlzy.cn/",
-            "https://github-proxy.memory-echoes.cn/",
-            "https://git.yylx.win/",
-            "https://ghm.078465.xyz/",
-            "https://gh.927223.xyz/",
-            "https://ghf.无名氏.top/",
-            "https://gh.felicity.ac.cn/",
-            "https://gh.bugdey.us.kg/",
-            "https://cdn.akaere.online/",
-            "https://jiashu.1win.eu.org/",
-            "https://tvv.tw/",
-            "https://j.1win.ggff.net/",
-            "https://gitproxy.127731.xyz/",
-            "https://gh.inkchills.cn/",
-            "https://gh.catmak.name/",
-            "https://gh.b52m.cn/",
-            "https://down.mxw.xx.kg/",
-            "https://down.mxw.qzz.io/",
-            "https://github.mxw.qzz.io/",
-            "https://gh.acmsz.top/",
-            "https://gh.jjj.gv.uy/",
-            "https://slink.ltd/",
-            "https://github.tmby.shop/",
-            "https://ghpr.cc/",
-            "https://gh.tryxd.cn/",
-            "https://gitproxy.click/",
-            "https://github.chenc.dev/",
-            "https://gh.ddlc.top/",
-            "https://gitproxy.mrhjx.cn/",
-            "https://gh.sixyin.com/",
-            "https://gh.monlor.com/",
-            "https://ghpxy.hwinzniej.top/",
-            "https://git.669966.xyz/",
             "https://ghfast.top/",
-            "https://gh.jasonzeng.dev/",
-            "https://github.geekery.cn/",
-            "https://gp.zkitefly.eu.org/",
-            "https://fastgit.cc/",
-            "https://ghproxy.1888866.xyz/",
-            "https://ghp.arslantu.xyz/",
-            "https://github.ednovas.xyz/",
-            "https://ghproxy.imciel.com/",
-            "https://ghproxy.cxkpro.top/",
-            "https://github.xxlab.tech/",
-            "https://gh.idayer.com/",
-            "https://free.cn.eu.org/",
-            "https://gh.chjina.com/",
-            "https://ghp.keleyaa.com/",
-            "https://proxy.yaoyaoling.net/",
-            "https://ghproxy.monkeyray.net/",
-            "https://gh.noki.icu/",
-            "https://g.blfrp.cn/",
-            "https://githubdog.com/",
-            "https://gh.meali.top/",
-            "https://777.z321.cc.cd/",
-            "https://gg.z321.cc.cd/",
-            "https://g.z321.cc.cd/",
-            "https://js.jiangss.shop/",
-            "https://gap.andyjin.website/",
-            "https://gh.my-website.ccwu.cc/",
-            "https://github.ikgy.top/",
-            "https://gh.07150721.xyz/",
-            "https://cfgh.ikgy.top/",
-            "https://xsadwsd.kdns.fr/",
-            "https://gh.ruan.dpdns.org/",
-            "https://ghproxy.felicity.land/",
-            "https://github.nswrz.cn/",
-            "https://gh.zhai.edu.pl/",
-            "https://gh.qfmc0721.cc.cd/",
-            "https://github-cf.947563.xyz/",
+            "https://ghproxy.net/",
+            "https://gh.llkk.cc/",
+            "https://gh-proxy.com/",
             "",
         )
     }

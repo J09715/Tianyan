@@ -2,9 +2,11 @@ package top.tianyan.app.harness
 
 import java.io.File
 import java.nio.file.Files
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assume
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -25,7 +27,7 @@ class WorkspaceFileAccessTest {
     }
 
     private fun runTest(block: suspend () -> Unit) =
-        kotlinx.coroutines.runBlocking { block() }
+        runBlocking { block() }
 
     @Test
     fun `write then read round trip`() = runTest {
@@ -70,7 +72,7 @@ class WorkspaceFileAccessTest {
         } catch (throwable: Throwable) {
             false // Windows 无开发者模式时无法创建符号链接，跳过
         }
-        org.junit.Assume.assumeTrue("symlink creation unsupported", created)
+        Assume.assumeTrue("symlink creation unsupported", created)
         assertFalse(access.read("escape").isSuccess)
     }
 

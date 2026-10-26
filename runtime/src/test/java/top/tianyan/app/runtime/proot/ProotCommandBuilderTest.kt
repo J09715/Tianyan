@@ -144,42 +144,6 @@ class ProotCommandBuilderTest {
         assertBinding(args, "$l2sBackingStore:$l2sBackingStore")
     }
 
-    @Test
-    fun rawTerminalSessionDisablesEchoInTheScriptFallback() {
-        val args = ProotCommandBuilder(EnvironmentResolver()).buildInteractive(
-            prootBinary = File("/p"),
-            rootfsDir = File("/r"),
-            workspaceDir = File("/w"),
-            config = SessionConfig(
-                commandLine = "exec /opt/tianyan/bin/claude-agent-acp",
-                allowSttyResize = false,
-                rawTerminal = true,
-            ),
-            ptyMarker = "/opt/tianyan/.pty-12345678",
-        )
-
-        // script 创建的 PTY 默认开 ECHO，协议会话必须显式关掉，否则宿主写出的
-        // JSON 帧被回显读回，握手会被自己的回显打成 -32601。
-        assert(args.last().contains("stty -echo -icanon -opost"))
-    }
-
-    @Test
-    fun interactiveTerminalKeepsEchoSoTypedInputIsVisible() {
-        val args = ProotCommandBuilder(EnvironmentResolver()).buildInteractive(
-            prootBinary = File("/p"),
-            rootfsDir = File("/r"),
-            workspaceDir = File("/w"),
-            config = SessionConfig(
-                commandLine = "/bin/bash -i",
-                allowSttyResize = false,
-                rawTerminal = false,
-            ),
-            ptyMarker = "/opt/tianyan/.pty-12345678",
-        )
-
-        assert(!args.last().contains("stty -echo"))
-    }
-
     @Test(expected = IllegalArgumentException::class)
     fun rejectsUnsafePtyMarker() {
         ProotCommandBuilder(EnvironmentResolver()).buildInteractive(
@@ -204,11 +168,9 @@ class ProotCommandBuilderTest {
         assert(args.none { it.contains(":/sdcard") })
     }
 
-    @Test
-    fun skipsMountOverCriticalGuestPathWithoutThrowing() {
-        // 非法绑定只跳过不抛异常：require 抛出会沿 build() 冒到运行时初始化，
-        // 让 App 启动即闪退且用户进不去设置删绑定（真实回归）。
-        val args = ProotCommandBuilder(EnvironmentResolver()).build(
+    @Test(expected = IllegalArgumentException::class)
+    fun rejectsMountOverCriticalGuestPath() {
+        ProotCommandBuilder(EnvironmentResolver()).build(
             prootBinary = File("/p"),
             rootfsDir = File("/r"),
             workspaceDir = File("/w"),
@@ -217,39 +179,86 @@ class ProotCommandBuilderTest {
                 StorageMountBinding("bad", "bad", "/storage/emulated/0", "/root", enabled = true),
             ),
         )
-        assert(args.none { it.endsWith(":/root") && it.startsWith("/storage") })
     }
 
     @Test
-    fun nonexistentHostPathNeverThrowsAndNeverBinds() {
-        // 用户填了尚未创建的宿主路径：要么自动补建后生效，要么安全跳过——绝不崩溃。
-        val host = "/storage/emulated/0/tianyan-mount-regression"
+    fun skipsUnreadableStorageMountGracefully() {
         val args = ProotCommandBuilder(EnvironmentResolver()).build(
             prootBinary = File("/p"),
             rootfsDir = File("/r"),
             workspaceDir = File("/w"),
             command = ShellCommand(commandLine = "true"),
             mounts = listOf(
-                StorageMountBinding("t", "t", host, "/mnt/regress", enabled = true),
-                StorageMountBinding("evil", "evil", "/etc/sensitive-outside-root", "/mnt/evil", enabled = true),
-                StorageMountBinding("colons", "colons", "/storage/emulated/0/a:b", "/mnt/colon", enabled = true),
+                StorageMountBinding("download", "下载", "/storage/emulated/0/Download", "/sdcard/Download", enabled = true),
             ),
         )
-        // 越界/含冒号的绑定绝不出现
-        assert(args.none { it.contains("/etc/sensitive-outside-root") })
-        assert(args.none { it.contains("a:b") })
-        // 越界路径绝不自动创建
-        assert(!File("/etc/sensitive-outside-root").exists())
-        // 共享存储内的缺失路径：自动补建成功则必须绑定（绑定值用 canonical 绝对路径，
-        // 与 validateStorageMount 输出一致），失败则跳过——两种都合法，绝不许抛
-        val canonicalHost = File(host).canonicalFile.absolutePath
-        if (File(host).isDirectory) assertBinding(args, "$canonicalHost:/mnt/regress") else assert(args.none { it.endsWith(":/mnt/regress") })
-        File(host).delete()
+
+        assert(args.none { it.contains(":/sdcard/Download") })
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun rejectsMountEscapingSharedStorageRoot() {
+        ProotCommandBuilder(EnvironmentResolver()).build(
+            prootBinary = File("/p"),
+            rootfsDir = File("/r"),
+            workspaceDir = File("/w"),
+            command = ShellCommand(commandLine = "true"),
+            mounts = listOf(
+                StorageMountBinding("escape", "escape", "/data/data/top.tianyan.app", "/sdcard/escape", enabled = true),
+            ),
+        )
     }
 
     private fun assertBinding(args: List<String>, binding: String) {
         val index = args.indexOf(binding)
         assert(index > 0)
         assertEquals("-b", args[index - 1])
+    }
+
+    @Test
+    fun hostCredentialIsInjectedLastAndOverridesProviderEnvironment() {
+        val args = ProotCommandBuilder(EnvironmentResolver()).build(
+            prootBinary = File("/p"),
+            rootfsDir = File("/r"),
+            workspaceDir = File("/w"),
+            command = ShellCommand(
+                commandLine = "tianyan-host health",
+                environment = mapOf("TIANYAN_BRIDGE_TOKEN" to "provider-forged"),
+            ),
+            hostCredential = mapOf(
+                "TIANYAN_BRIDGE_TOKEN" to "native-issued",
+                "TIANYAN_BRIDGE_ACTIONS" to "host.install-apk,host.logcat",
+            ),
+        )
+
+        val resolved = args.last()
+        assert(!resolved.contains("provider-forged"))
+        assert(resolved.contains("export TIANYAN_BRIDGE_TOKEN='native-issued'"))
+        assert(resolved.contains("export TIANYAN_BRIDGE_ACTIONS='host.install-apk,host.logcat'"))
+    }
+
+    @Test
+    fun interactiveBuildAlsoCarriesHostCredential() {
+        val args = ProotCommandBuilder(EnvironmentResolver()).buildInteractive(
+            prootBinary = File("/p"),
+            rootfsDir = File("/r"),
+            workspaceDir = File("/w"),
+            config = SessionConfig(commandLine = "/bin/bash -i"),
+            nativePty = true,
+            hostCredential = mapOf("TIANYAN_BRIDGE_TOKEN" to "native-issued"),
+        )
+
+        assert(args.last().contains("export TIANYAN_BRIDGE_TOKEN='native-issued'"))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun rejectsIllegalHostCredentialKeyNames() {
+        ProotCommandBuilder(EnvironmentResolver()).build(
+            prootBinary = File("/p"),
+            rootfsDir = File("/r"),
+            workspaceDir = File("/w"),
+            command = ShellCommand(commandLine = "true"),
+            hostCredential = mapOf("BAD-NAME" to "value"),
+        )
     }
 }

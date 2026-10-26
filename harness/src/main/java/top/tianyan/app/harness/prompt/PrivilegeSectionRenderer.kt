@@ -1,11 +1,9 @@
 package top.tianyan.app.harness.prompt
 
 import android.content.Context
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import javax.inject.Singleton
 import top.tianyan.app.core.model.ExecutionMode
 import top.tianyan.app.runtime.privilege.PrivilegeManager
+import top.tianyan.app.harness.R
 
 /**
  * 系统提示词中"执行权限章节"的渲染端口。
@@ -18,9 +16,8 @@ fun interface PrivilegeSectionRenderer {
 }
 
 /** 默认实现：根据当前 PrivilegeManager 状态选择 PROOT / Shizuku / Root 章节。 */
-@Singleton
-class DefaultPrivilegeSectionRenderer @Inject constructor(
-    @ApplicationContext private val context: Context,
+class DefaultPrivilegeSectionRenderer(
+    private val context: Context,
     private val privilegeManager: PrivilegeManager,
     private val promptAssets: PromptAssetLoader,
 ) : PrivilegeSectionRenderer {
@@ -29,9 +26,9 @@ class DefaultPrivilegeSectionRenderer @Inject constructor(
         val privilegeInfo = runCatching { privilegeManager.getPrivilegeInfo() }.getOrNull()
         return when {
             privilegeInfo == null ->
-                context.getString(top.tianyan.app.harness.R.string.harness_prompt_privilege_unavailable)
+                context.getString(R.string.harness_prompt_privilege_unavailable)
             privilegeInfo.mode == ExecutionMode.PROOT || !privilegeInfo.modeActive ->
-                context.getString(top.tianyan.app.harness.R.string.harness_prompt_privilege_proot)
+                context.getString(R.string.harness_prompt_privilege_proot)
             privilegeInfo.mode == ExecutionMode.SHIZUKU ->
                 promptAssets.render("prompts/privilege_shizuku.md")
             else ->

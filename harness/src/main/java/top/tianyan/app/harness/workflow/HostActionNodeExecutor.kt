@@ -5,11 +5,10 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import top.tianyan.app.core.common.shell.ShellQuote
 import top.tianyan.app.core.model.ExecutionMode
 import top.tianyan.app.core.model.workflow.HostWorkflowActions
 import top.tianyan.app.core.model.workflow.HostWorkflowPrivilege
@@ -20,12 +19,16 @@ import top.tianyan.app.core.model.workflow.WorkflowNode
 import top.tianyan.app.core.model.workflow.WorkflowNodeType
 import top.tianyan.app.core.model.workflow.WorkflowRuntimeContext
 import top.tianyan.app.core.model.workflow.previousOutput
+import top.tianyan.app.harness.capHostOutput
 import top.tianyan.app.runtime.LinuxRuntime
 import top.tianyan.app.runtime.gui.HostGuiController
 import top.tianyan.app.runtime.privilege.PrivilegeManager
 import top.tianyan.app.runtime.shell.ShellCommand
+import android.R
+import kotlinx.coroutines.CancellationException
+import top.tianyan.app.runtime.gui.ScrollDirection
 
-class ConditionNodeExecutor @Inject constructor() : NodeExecutor {
+class ConditionNodeExecutor() : NodeExecutor {
     override val supportedTypes = setOf(WorkflowNodeType.CONDITION_BRANCH)
 
     override suspend fun execute(
@@ -59,29 +62,7 @@ class ConditionNodeExecutor @Inject constructor() : NodeExecutor {
     }
 }
 
-class DelayNodeExecutor @Inject constructor() : NodeExecutor {
-    override val supportedTypes = setOf(WorkflowNodeType.DELAY)
-
-    override suspend fun execute(
-        node: WorkflowNode,
-        context: WorkflowRuntimeContext,
-        onProgress: suspend (NodeRunStatus, String) -> Unit,
-    ): NodeExecutionOutput {
-        val seconds = interpolate(node.config["seconds"] ?: node.config["delaySeconds"] ?: "1", context)
-            .trim().toDoubleOrNull()?.coerceIn(0.0, 600.0) ?: 1.0
-        val millis = (seconds * 1000).toLong().coerceAtLeast(0L)
-        onProgress(NodeRunStatus.RUNNING, "等待 ${seconds}s…")
-        delay(millis)
-        return NodeExecutionOutput(
-            status = NodeRunStatus.SUCCESS,
-            textOutput = "已等待 ${seconds}s",
-            variables = mapOf("DELAY_SECONDS" to seconds.toString()),
-            durationMs = millis,
-        )
-    }
-}
-
-class SetVariableNodeExecutor @Inject constructor() : NodeExecutor {
+class SetVariableNodeExecutor() : NodeExecutor {
     override val supportedTypes = setOf(WorkflowNodeType.SET_VARIABLE)
 
     override suspend fun execute(
@@ -123,12 +104,13 @@ class SetVariableNodeExecutor @Inject constructor() : NodeExecutor {
     }
 }
 
-class HostActionNodeExecutor @Inject constructor(
-    @ApplicationContext private val appContext: Context,
+class HostActionNodeExecutor(
+    private val appContext: Context,
     private val gui: HostGuiController,
     private val privilegeManager: PrivilegeManager,
     private val linuxRuntime: LinuxRuntime,
     private val guiPilot: WorkflowGuiPilot,
+    private val virtualScreen: VirtualScreenWorkflowExecutor,
 ) : NodeExecutor {
     override val supportedTypes = setOf(WorkflowNodeType.HOST_ACTION)
 
@@ -145,11 +127,14 @@ class HostActionNodeExecutor @Inject constructor(
                 return@withContext NodeExecutionOutput(NodeRunStatus.FAILED, exitCode = 13, error = err)
             }
         }
-        runCatching { dispatch(action, node, context, onProgress) }
+        runCatching {
+            if (VirtualScreenWorkflowExecutor.handles(action)) virtualScreen.execute(node, context)
+            else dispatch(action, node, context, onProgress)
+        }
             .fold(
                 onSuccess = { it },
                 onFailure = { err ->
-                    if (err is kotlinx.coroutines.CancellationException) throw err
+                    if (err is CancellationException) throw err
                     NodeExecutionOutput(
                         status = NodeRunStatus.FAILED,
                         exitCode = 1,
@@ -185,13 +170,13 @@ class HostActionNodeExecutor @Inject constructor(
                     ),
                 )
             }
-            "health" -> shellViaBridge("taixu-host health", context)
+            "health" -> shellViaBridge("tianyan-host health", context)
             "install-apk" -> {
                 val artifact = node.config["artifactFrom"]?.let { context.nodeOutputs[it]?.artifacts?.lastOrNull() }
                     ?: context.globalVariables["APK_PATH"]?.takeIf { it.isNotBlank() }
                     ?: cfg("path").takeIf { it.isNotBlank() }
                     ?: error("未找到 APK：请配置 artifactFrom、path 或变量 APK_PATH")
-                shellViaBridge("taixu-host install-apk ${posixQuote(artifact)}", context, artifacts = listOf(artifact))
+                shellViaBridge("tianyan-host install-apk ${ShellQuote.of(artifact)}", context, artifacts = listOf(artifact))
             }
             "device_status" -> privileged(
                 "echo '[battery]'; dumpsys battery | grep -E 'level|status|temperature'" +
@@ -203,7 +188,7 @@ class HostActionNodeExecutor @Inject constructor(
                 val lines = cfg("tail_lines").toIntOrNull()?.coerceIn(1, 2_000) ?: 200
                 val tag = cfg("tag")
                 val cmd = if (tag.isBlank()) "/system/bin/logcat -d -t $lines"
-                else "/system/bin/logcat -d -t $lines -s ${shellQuote("$tag:*")}"
+                else "/system/bin/logcat -d -t $lines -s ${ShellQuote.of("$tag:*")}"
                 privileged(cmd)
             }
             "app_launch" -> gui.launchApp(requireCfg("package")).toOutput()
@@ -211,17 +196,17 @@ class HostActionNodeExecutor @Inject constructor(
             "app_clear_data" -> gui.clearAppData(requireCfg("package")).toOutput()
             "app_freeze", "package_disable" -> {
                 val user = cfg("user").ifBlank { "0" }
-                privileged("/system/bin/pm disable-user --user $user ${shellQuote(requireCfg("package"))}")
+                privileged("/system/bin/pm disable-user --user $user ${ShellQuote.of(requireCfg("package"))}")
             }
             "app_unfreeze", "package_enable" -> {
                 val user = cfg("user").ifBlank { "0" }
-                privileged("/system/bin/pm enable --user $user ${shellQuote(requireCfg("package"))}")
+                privileged("/system/bin/pm enable --user $user ${ShellQuote.of(requireCfg("package"))}")
             }
             "app_grant_permission" -> privileged(
-                "/system/bin/pm grant ${shellQuote(requireCfg("package"))} ${shellQuote(requireCfg("permission"))}",
+                "/system/bin/pm grant ${ShellQuote.of(requireCfg("package"))} ${ShellQuote.of(requireCfg("permission"))}",
             )
             "app_revoke_permission" -> privileged(
-                "/system/bin/pm revoke ${shellQuote(requireCfg("package"))} ${shellQuote(requireCfg("permission"))}",
+                "/system/bin/pm revoke ${ShellQuote.of(requireCfg("package"))} ${ShellQuote.of(requireCfg("permission"))}",
             )
             "wait_foreground" -> {
                 val timeout = (cfg("timeoutSeconds").toDoubleOrNull() ?: 15.0).coerceIn(1.0, 120.0)
@@ -236,8 +221,8 @@ class HostActionNodeExecutor @Inject constructor(
                 val fg = cfg("foreground").equals("true", true)
                 val verb = if (fg) "start-foreground-service" else "startservice"
                 val cmd = buildString {
-                    append("/system/bin/am $verb -n ${shellQuote(component)}")
-                    cfg("intentAction").takeIf { it.isNotBlank() }?.let { append(" -a ${shellQuote(it)}") }
+                    append("/system/bin/am $verb -n ${ShellQuote.of(component)}")
+                    cfg("intentAction").takeIf { it.isNotBlank() }?.let { append(" -a ${ShellQuote.of(it)}") }
                     append(amExtras(parseExtras(cfg("extras"))))
                 }
                 privileged(cmd)
@@ -245,7 +230,7 @@ class HostActionNodeExecutor @Inject constructor(
             "settings_get" -> {
                 val ns = requireNamespace(cfg("namespace"))
                 val key = requireCfg("key")
-                val result = privileged("/system/bin/settings get $ns ${shellQuote(key)}")
+                val result = privileged("/system/bin/settings get $ns ${ShellQuote.of(key)}")
                 val value = result.textOutput.lines().lastOrNull { it.isNotBlank() }.orEmpty().trim()
                 val varName = cfg("outputVariable").ifBlank { "SETTINGS_VALUE" }
                 result.copy(variables = result.variables + mapOf(varName to value, "SETTINGS_KEY" to key))
@@ -258,12 +243,12 @@ class HostActionNodeExecutor @Inject constructor(
                     ok("[Android API] settings put system $key = $value")
                 } else {
                     val cmd = if (ns == "system" && key == "screen_brightness") {
-                        val quoted = shellQuote(value)
+                        val quoted = ShellQuote.of(value)
                         "/system/bin/settings put system screen_brightness_mode 0; " +
                             "/system/bin/settings put system screen_brightness $quoted; " +
                             "echo \"requested=$quoted actual=\$(/system/bin/settings get system screen_brightness)\""
                     } else {
-                        "/system/bin/settings put $ns ${shellQuote(key)} ${shellQuote(value)}"
+                        "/system/bin/settings put $ns ${ShellQuote.of(key)} ${ShellQuote.of(value)}"
                     }
                     privileged(cmd)
                 }
@@ -314,10 +299,10 @@ class HostActionNodeExecutor @Inject constructor(
             ).toOutput()
             "screen_scroll" -> {
                 val direction = when (requireCfg("direction").lowercase()) {
-                    "up" -> top.tianyan.app.runtime.gui.ScrollDirection.UP
-                    "down" -> top.tianyan.app.runtime.gui.ScrollDirection.DOWN
-                    "left" -> top.tianyan.app.runtime.gui.ScrollDirection.LEFT
-                    "right" -> top.tianyan.app.runtime.gui.ScrollDirection.RIGHT
+                    "up" -> ScrollDirection.UP
+                    "down" -> ScrollDirection.DOWN
+                    "left" -> ScrollDirection.LEFT
+                    "right" -> ScrollDirection.RIGHT
                     else -> error("direction 仅支持 up/down/left/right")
                 }
                 val ratio = cfg("distanceRatio").toFloatOrNull()?.coerceIn(0.15f, 0.8f) ?: 0.45f
@@ -378,9 +363,9 @@ class HostActionNodeExecutor @Inject constructor(
         }
         requirePrivilege()?.let { error(it) }
         val cmd = buildString {
-            append("/system/bin/am broadcast -a ${shellQuote(action)}")
-            pkg?.let { append(" -p ${shellQuote(it)}") }
-            component?.let { append(" -n ${shellQuote(it)}") }
+            append("/system/bin/am broadcast -a ${ShellQuote.of(action)}")
+            pkg?.let { append(" -p ${ShellQuote.of(it)}") }
+            component?.let { append(" -n ${ShellQuote.of(it)}") }
             append(amExtras(extras))
         }
         return privileged(cmd)
@@ -401,10 +386,10 @@ class HostActionNodeExecutor @Inject constructor(
         requirePrivilege()?.let { error(it) }
         val cmd = buildString {
             append("/system/bin/am start")
-            component?.let { append(" -n ${shellQuote(it)}") }
-            intentAction?.let { append(" -a ${shellQuote(it)}") }
-            dataUri?.let { append(" -d ${shellQuote(it)}") }
-            mime?.let { append(" -t ${shellQuote(it)}") }
+            component?.let { append(" -n ${ShellQuote.of(it)}") }
+            intentAction?.let { append(" -a ${ShellQuote.of(it)}") }
+            dataUri?.let { append(" -d ${ShellQuote.of(it)}") }
+            mime?.let { append(" -t ${ShellQuote.of(it)}") }
             append(amExtras(extras))
         }
         return privileged(cmd)
@@ -412,14 +397,14 @@ class HostActionNodeExecutor @Inject constructor(
 
     private fun postNotification(title: String, text: String): NodeExecutionOutput {
         val manager = appContext.getSystemService(NotificationManager::class.java)
-        val channelId = "taixu_workflow"
+        val channelId = "tianyan_workflow"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             manager.createNotificationChannel(
                 NotificationChannel(channelId, "天衍工作流", NotificationManager.IMPORTANCE_DEFAULT),
             )
         }
         val notification = Notification.Builder(appContext, channelId)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(R.drawable.ic_dialog_info)
             .setContentTitle(title)
             .setContentText(text)
             .setStyle(Notification.BigTextStyle().bigText(text))
@@ -436,7 +421,11 @@ class HostActionNodeExecutor @Inject constructor(
         return NodeExecutionOutput(
             status = if (result.success) NodeRunStatus.SUCCESS else NodeRunStatus.FAILED,
             exitCode = result.exitCode,
-            textOutput = listOf(result.stdout, result.stderr).filter { it.isNotBlank() }.joinToString("\n").trim(),
+            // dumpsys 等宿主命令输出可达数 MB：workflow 节点输出会常驻执行状态与变量表，
+            // 不截断会把 256MB 的 Java 堆直接拖爆（target footprint OOM）。
+            textOutput = capHostOutput(
+                listOf(result.stdout, result.stderr).filter { it.isNotBlank() }.joinToString("\n").trim(),
+            ),
             error = result.stderr.takeIf { !result.success }?.ifBlank { "宿主命令失败 exit=${result.exitCode}" },
         )
     }
@@ -508,29 +497,13 @@ class HostActionNodeExecutor @Inject constructor(
                 else -> rawKey to "string"
             }
             when (type) {
-                "int" -> append(" --ei ${shellQuote(key)} ${value.toInt()}")
-                "long" -> append(" --el ${shellQuote(key)} ${value.toLong()}")
-                "bool", "boolean" -> append(" --ez ${shellQuote(key)} ${parseBool(value)}")
-                "float" -> append(" --ef ${shellQuote(key)} ${value.toFloat()}")
-                "uri" -> append(" --eu ${shellQuote(key)} ${shellQuote(value)}")
-                else -> append(" --es ${shellQuote(key)} ${shellQuote(value)}")
+                "int" -> append(" --ei ${ShellQuote.of(key)} ${value.toInt()}")
+                "long" -> append(" --el ${ShellQuote.of(key)} ${value.toLong()}")
+                "bool", "boolean" -> append(" --ez ${ShellQuote.of(key)} ${parseBool(value)}")
+                "float" -> append(" --ef ${ShellQuote.of(key)} ${value.toFloat()}")
+                "uri" -> append(" --eu ${ShellQuote.of(key)} ${ShellQuote.of(value)}")
+                else -> append(" --es ${ShellQuote.of(key)} ${ShellQuote.of(value)}")
             }
         }
     }
-
-    private fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
-    private fun posixQuote(value: String): String = "'" + value.replace("'", "'\"'\"'") + "'"
 }
-
-internal fun interpolate(template: String, context: WorkflowRuntimeContext): String =
-    HOST_VARIABLE.replace(template) { match ->
-        val key = match.groupValues[1]
-        when {
-            key == "WORKSPACE_PATH" -> context.workspacePath
-            key == "previous.output" -> context.previousOutput()
-            key.endsWith(".output") -> context.nodeOutputs[key.removeSuffix(".output")]?.textOutput.orEmpty()
-            else -> context.globalVariables[key].orEmpty()
-        }
-    }
-
-private val HOST_VARIABLE = Regex("\\$\\{([A-Za-z0-9_.\\-]+)\\}")

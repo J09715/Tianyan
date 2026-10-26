@@ -1,7 +1,5 @@
 package top.tianyan.app.harness.task
 
-import javax.inject.Inject
-import javax.inject.Singleton
 import top.tianyan.app.core.common.logging.AppLogger
 import top.tianyan.app.core.database.task.AgentTaskCheckpoint
 import top.tianyan.app.core.database.task.AgentTaskEntity
@@ -13,8 +11,7 @@ import top.tianyan.app.core.database.task.AgentTaskTransition
  * Durable task lifecycle only. Execution belongs to HarnessLoop; this class owns validated,
  * compare-and-set persistence transitions so process recovery can never report phantom success.
  */
-@Singleton
-class AgentStateMachine @Inject constructor(
+class AgentStateMachine(
     private val repository: AgentTaskRepository,
     private val logger: AppLogger? = null,
 ) {
@@ -26,8 +23,9 @@ class AgentStateMachine @Inject constructor(
         autoResume: Boolean = true,
         maxAttempts: Int = DEFAULT_MAX_ATTEMPTS,
         nowMs: Long = System.currentTimeMillis(),
+        groupWorkId: String? = null,
+        groupId: String? = null,
     ): AgentTaskEntity {
-        require(id.isNotBlank()) { "Durable task requires an id" }
         require(sessionId.isNotBlank()) { "Durable task requires a session id" }
         require(description.isNotBlank()) { "Durable task requires a prompt" }
         val task = AgentTaskEntity(
@@ -41,6 +39,7 @@ class AgentStateMachine @Inject constructor(
             maxAttempts = maxAttempts.coerceIn(1, MAX_ATTEMPTS),
             autoResume = autoResume,
             statusDetail = "等待执行",
+            groupWorkId = groupWorkId, groupId = groupId,
         )
         repository.upsert(task)
         return task

@@ -1,6 +1,7 @@
 package top.tianyan.app.harness
 
 import kotlinx.coroutines.runBlocking
+import top.tianyan.app.harness.core.TurnOutcome
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -9,6 +10,57 @@ import org.junit.Test
 
 class TurnRunnerTest {
     private val runner = TurnRunner(ProviderResponseNormalizer(Json { ignoreUnknownKeys = true }))
+
+    @Test
+    fun `successful tool on last round still requires another model turn`() = runBlocking {
+        var executed = false
+        val marker = "[[tool_call]]{\"name\":\"read\",\"arguments\":{\"path\":\"file.txt\"}}[[/tool_call]]"
+        val outcome = runner.run(
+            toolsEnabled = true,
+            callProvider = { TurnProviderOutcome.Success(ChatResult(marker, emptyList()), marker) },
+            persistAssistant = {}, consumeFollowUps = { error("must not consume") },
+            enforceToolLimit = { calls, _ -> calls }, executeTools = { _, _ -> executed = true; true },
+            remainingRounds = 1,
+        )
+        assertTrue(executed)
+        assertTrue(outcome is TurnOutcome.RoundLimit)
+    }
+
+    @Test
+    fun `last round with pending follow up is not reported complete`() = runBlocking {
+        val outcome = runner.run(
+            toolsEnabled = true,
+            callProvider = { TurnProviderOutcome.Success(ChatResult(content = "done", toolCalls = emptyList()), "done") },
+            persistAssistant = {}, consumeFollowUps = { 1 },
+            enforceToolLimit = { calls, _ -> calls }, executeTools = { _, _ -> true },
+            remainingRounds = 1,
+        )
+        assertTrue(outcome is TurnOutcome.RoundLimit)
+    }
+
+    @Test
+    fun `final answer on last allowed round can complete`() = runBlocking {
+        val outcome = runner.run(
+            toolsEnabled = true,
+            callProvider = { TurnProviderOutcome.Success(ChatResult(content = "done", toolCalls = emptyList()), "done") },
+            persistAssistant = {}, consumeFollowUps = { 0 },
+            enforceToolLimit = { calls, _ -> calls }, executeTools = { _, _ -> true },
+            remainingRounds = 1,
+        )
+        assertEquals(TurnOutcome.Complete, outcome)
+    }
+
+    @Test
+    fun `exhausted budget does not call provider`() = runBlocking {
+        val outcome = runner.run(
+            toolsEnabled = true,
+            callProvider = { error("must not call provider") },
+            persistAssistant = {}, consumeFollowUps = { error("must not consume queue") },
+            enforceToolLimit = { calls, _ -> calls }, executeTools = { _, _ -> error("must not execute") },
+            remainingRounds = 0,
+        )
+        assertTrue(outcome is TurnOutcome.RoundLimit)
+    }
 
     @Test
     fun `provider failure stops before publication and effects`() = runBlocking {
@@ -81,102 +133,6 @@ class TurnRunnerTest {
     }
 
     @Test
-    fun `empty provider response fails instead of marking the task complete`() = runBlocking {
-        val events = mutableListOf<String>()
-        val outcome = runner.run(
-            toolsEnabled = true,
-            callProvider = {
-                TurnProviderOutcome.Success(ChatResult(content = null, toolCalls = emptyList()), "")
-            },
-            persistAssistant = { events += "persisted" },
-            consumeFollowUps = { events += "follow-ups"; 0 },
-            enforceToolLimit = { calls, _ -> calls },
-            executeTools = { _, _ -> error("must not execute") },
-        )
-
-        assertEquals(
-            TurnOutcome.Failed(
-                "执行失败：模型未产出任何可展示内容（上游未返回输出 token）；如持续出现，请检查模型端点是否正常、切换模型或稍后重试",
-                retryable = true,
-            ),
-            outcome,
-        )
-        assertEquals(listOf("persisted"), events)
-    }
-
-    /**
-     * 只输出思考内容的回复必须算成功，而不是「空响应」。
-     *
-     * 这条测试此前断言的是相反的行为（要求 Failed），把一个真实缺陷锁死成了「预期」：
-     * 推理模型（DeepSeek-R1 类）有时只产出 reasoningContent 而不给正文，
-     * 界面上用户能看到整段「推理思考过程」，却被告知「模型返回了空响应，执行失败」。
-     * 用户实测的报错就是这个。
-     */
-    @Test
-    fun `reasoning-only response completes instead of failing`() = runBlocking {
-        val events = mutableListOf<String>()
-        val outcome = runner.run(
-            toolsEnabled = true,
-            callProvider = {
-                TurnProviderOutcome.Success(ChatResult(content = null, toolCalls = emptyList(), reasoningContent = "thinking"), "")
-            },
-            persistAssistant = { events += "persisted" },
-            consumeFollowUps = { 0 },
-            enforceToolLimit = { calls, _ -> calls },
-            executeTools = { _, _ -> error("must not execute") },
-        )
-
-        assertEquals(TurnOutcome.Complete, outcome)
-        assertEquals("思考内容也要落库，否则界面连思考过程都看不到", listOf("persisted"), events)
-    }
-
-    /** 真·空响应（无正文、无思考、无工具调用）仍然必须失败关闭。 */
-    @Test
-    fun `truly empty response still fails closed`() = runBlocking {
-        val outcome = runner.run(
-            toolsEnabled = true,
-            callProvider = {
-                TurnProviderOutcome.Success(ChatResult(content = null, toolCalls = emptyList()), "")
-            },
-            persistAssistant = {},
-            consumeFollowUps = { 0 },
-            enforceToolLimit = { calls, _ -> calls },
-            executeTools = { _, _ -> error("must not execute") },
-        )
-
-        assertEquals(
-            TurnOutcome.Failed(
-                "执行失败：模型未产出任何可展示内容（上游未返回输出 token）；如持续出现，请检查模型端点是否正常、切换模型或稍后重试",
-                retryable = true,
-            ),
-            outcome,
-        )
-    }
-
-    /** 空字符串的 reasoning 不算内容，不能拿它绕过失败关闭。 */
-    @Test
-    fun `blank reasoning is not treated as content`() = runBlocking {
-        val outcome = runner.run(
-            toolsEnabled = true,
-            callProvider = {
-                TurnProviderOutcome.Success(ChatResult(content = null, toolCalls = emptyList(), reasoningContent = "   "), "")
-            },
-            persistAssistant = {},
-            consumeFollowUps = { 0 },
-            enforceToolLimit = { calls, _ -> calls },
-            executeTools = { _, _ -> error("must not execute") },
-        )
-
-        assertEquals(
-            TurnOutcome.Failed(
-                "执行失败：模型未产出任何可展示内容（上游未返回输出 token）；如持续出现，请检查模型端点是否正常、切换模型或稍后重试",
-                retryable = true,
-            ),
-            outcome,
-        )
-    }
-
-    @Test
     fun `plain answer completes only after durable publication`() = runBlocking {
         val events = mutableListOf<String>()
         val outcome = runner.run(
@@ -227,5 +183,73 @@ class TurnRunnerTest {
 
         assertEquals(TurnOutcome.Complete, outcome)
         assertEquals(marker, published)
+    }
+
+    @Test
+    fun `blank provider response fails instead of completing silently`() = runBlocking {
+        var published = false
+        var consumed = false
+        val outcome = runner.run(
+            toolsEnabled = true,
+            callProvider = { TurnProviderOutcome.Success(ChatResult(null, emptyList()), "") },
+            observeResponse = {},
+            persistAssistant = { published = true },
+            consumeFollowUps = { consumed = true; 0 },
+            enforceToolLimit = { calls, _ -> calls },
+            executeTools = { _, _ -> error("must not execute") },
+        )
+
+        // 空响应必须变成可见失败：不能走"无工具调用 → Complete"，否则前台零提示。
+        assertEquals(TurnOutcome.Failed(ProviderClient.EMPTY_RESPONSE_MESSAGE), outcome)
+        assertTrue(published)
+        assertFalse(consumed)
+    }
+
+    @Test
+    fun `near blank response with residual reasoning fails instead of completing silently`() = runBlocking {
+        var consumed = false
+        val outcome = runner.run(
+            toolsEnabled = true,
+            callProvider = {
+                // 复现线上事故：中转截断产生的空壳响应——正文与工具全空，reasoning 只剩 2~3 字符残渣。
+                TurnProviderOutcome.Success(
+                    ChatResult(content = null, toolCalls = emptyList(), reasoningContent = "\n\n"),
+                    "",
+                )
+            },
+            observeResponse = {},
+            persistAssistant = {},
+            consumeFollowUps = { consumed = true; 0 },
+            enforceToolLimit = { calls, _ -> calls },
+            executeTools = { _, _ -> error("must not execute") },
+        )
+
+        // 残渣级思考不能算"有内容"：否则会走"无工具调用 → Complete"，把静默失败记成完成。
+        assertEquals(TurnOutcome.Failed(ProviderClient.EMPTY_RESPONSE_MESSAGE), outcome)
+        assertFalse(consumed)
+    }
+
+    @Test
+    fun `substantive reasoning alone is not treated as blank`() = runBlocking {
+        val outcome = runner.run(
+            toolsEnabled = true,
+            callProvider = {
+                // 成段思考 + 无正文 + 无工具是模型自主收束的合法形态，不得被残渣阈值误杀。
+                TurnProviderOutcome.Success(
+                    ChatResult(
+                        content = null,
+                        toolCalls = emptyList(),
+                        reasoningContent = "这是一段明显超过残渣阈值长度的正常推理内容，应当被视为有效产出",
+                    ),
+                    "",
+                )
+            },
+            persistAssistant = {},
+            consumeFollowUps = { 0 },
+            enforceToolLimit = { calls, _ -> calls },
+            executeTools = { _, _ -> error("must not execute") },
+        )
+
+        assertEquals(TurnOutcome.Complete, outcome)
     }
 }

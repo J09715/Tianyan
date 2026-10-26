@@ -1,0 +1,8 @@
+<resources>
+    <string name="workspace_project_tianyan_plugin">Tianyan local plugin</string>
+    <string name="workspace_plugin_debug_import">Import for debugging</string>
+    <string name="workspace_plugin_debug_failed">Debug packaging failed</string>
+    <string name="workspace_plugin_debug_dismiss">OK</string>
+    <string name="workspace_plugin_debug_preparing">Packaging the project and preparing the installation preview…</string>
+    <string name="workspace_plugin_debug_cancel">Cancel</string>
+</resources>

@@ -2,12 +2,13 @@ package top.tianyan.app.core.tools
 
 import top.tianyan.app.runtime.RuntimePathManager
 import java.io.File
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import java.security.MessageDigest
 
 sealed interface LocalPluginPreparationEvent {
     data class Copying(
@@ -27,14 +28,14 @@ sealed interface LocalPluginPreparationEvent {
 }
 
 /** Copies an imported plugin payload into the distro-owned /opt/tianyan tree. */
-@Singleton
-class LocalPluginPayloadManager @Inject constructor(
+class LocalPluginPayloadManager(
     private val registry: ToolRegistry,
     private val pathManager: RuntimePathManager,
 ) {
-    fun prepare(toolId: String, distroId: String): Flow<LocalPluginPreparationEvent> = flow {
-        val source = registry.localPayloadRoot(toolId)?.takeIf { it.isDirectory }
+    fun prepare(toolId: String, distroId: String, version: String? = null, integrity: Map<String, String>? = null): Flow<LocalPluginPreparationEvent> = flow {
+        val source = registry.localPayloadRoot(toolId, version)?.takeIf { it.isDirectory }
         if (source == null) {
+            require(integrity == null) { "v2 插件 payload 不存在" }
             emit(LocalPluginPreparationEvent.Ready(null))
             return@flow
         }
@@ -44,24 +45,35 @@ class LocalPluginPayloadManager @Inject constructor(
         require(target.canonicalFile.toPath().startsWith(canonicalRoot.toPath())) { "非法插件 ID：$toolId" }
         target.deleteRecursively()
 
-        val sourceFiles = source.walkTopDown().filter { it.isFile }.toList()
+        val sourceFiles = source.walkTopDown().onEach {
+            require(!java.nio.file.Files.isSymbolicLink(it.toPath())) { "payload 不能包含符号链接" }
+        }.filter { it.isFile }.take(LocalPluginArchive.MAX_ENTRIES + 1).toList()
+        require(sourceFiles.size < LocalPluginArchive.MAX_ENTRIES)
+        require(integrity == null || sourceFiles.map { it.relativeTo(source).invariantSeparatorsPath }.toSet() == integrity.keys) { "payload 文件集合已变化" }
         val totalBytes = sourceFiles.sumOf { it.length() }
         var copiedBytes = 0L
         var nextProgressReport = 0L
         target.mkdirs()
 
         for (sourceFile in sourceFiles) {
+            currentCoroutineContext().ensureActive()
             val relativePath = sourceFile.relativeTo(source).invariantSeparatorsPath
             val targetFile = File(target, relativePath)
+            require(sourceFile.canonicalFile.toPath().startsWith(source.canonicalFile.toPath()))
+            require(targetFile.canonicalFile.toPath().startsWith(target.canonicalFile.toPath()))
+            val digest = MessageDigest.getInstance("SHA-256")
             targetFile.parentFile?.mkdirs()
             sourceFile.inputStream().use { input ->
                 targetFile.outputStream().use { output ->
                     val buffer = ByteArray(COPY_BUFFER_BYTES)
                     while (true) {
+                        currentCoroutineContext().ensureActive()
                         val read = input.read(buffer)
                         if (read < 0) break
                         output.write(buffer, 0, read)
+                        digest.update(buffer, 0, read)
                         copiedBytes += read
+                        require(copiedBytes <= LocalPluginArchive.MAX_BYTES)
                         if (copiedBytes >= nextProgressReport || copiedBytes == totalBytes) {
                             emit(
                                 LocalPluginPreparationEvent.Copying(
@@ -76,8 +88,9 @@ class LocalPluginPayloadManager @Inject constructor(
                     }
                 }
             }
+            require(integrity == null || digest.digest().joinToString("") { "%02x".format(it) } == integrity[relativePath]) { "payload SHA-256 校验失败" }
             targetFile.setReadable(true, false)
-            if (targetFile.extension.equals("sh", ignoreCase = true)) {
+            if (integrity == null && targetFile.extension.equals("sh", ignoreCase = true)) {
                 normalizeShellScript(targetFile)
             }
             if (targetFile.extension.equals("sh", ignoreCase = true) || "/bin/" in targetFile.invariantSeparatorsPath) {

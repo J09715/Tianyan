@@ -1,16 +1,17 @@
 package top.tianyan.app.service.adb
 
+import org.koin.core.component.inject
+import org.koin.core.component.KoinComponent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
 import androidx.core.app.RemoteInput
-import dagger.hilt.android.AndroidEntryPoint
-import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import top.tianyan.app.core.datastore.RuntimePreferences
 import top.tianyan.app.runtime.bridge.adb.EmbeddedAdbManager
 
 /**
@@ -18,17 +19,13 @@ import top.tianyan.app.runtime.bridge.adb.EmbeddedAdbManager
  * 1. 提取 RemoteInput 输入的 6 位配对码并异步发起 TLS + SPAKE2 配对与连接；
  * 2. 处理直接连接、断开连接与关闭通知请求。
  */
-@AndroidEntryPoint
-class AdbNotificationReceiver : BroadcastReceiver() {
+class AdbNotificationReceiver : BroadcastReceiver(), KoinComponent {
 
-    @Inject
-    lateinit var embeddedAdbManager: EmbeddedAdbManager
+    val embeddedAdbManager: EmbeddedAdbManager by inject()
 
-    @Inject
-    lateinit var adbNotificationManager: AdbNotificationManager
+    val adbNotificationManager: AdbNotificationManager by inject()
 
-    @Inject
-    lateinit var preferences: top.tianyan.app.core.datastore.RuntimePreferences
+    val preferences: RuntimePreferences by inject()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -42,8 +43,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import top.tianyan.app.feature.components.R
-import top.tianyan.app.ui.theme.Spacing
-import top.tianyan.app.ui.theme.Radius
 
 /**
  * 🎯 首次使用引导（Coach Mark）通用工具。
@@ -160,14 +159,14 @@ fun SpotlightGuideOverlay(
                     end = if (anchorOnRight) 16.dp else 0.dp,
                 )
                 .fillMaxWidth(tooltipWidthFraction)
-                .clip(Radius.mdShape)
+                .clip(RoundedCornerShape(16.dp))
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                .padding(Spacing.lg),
-            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 if (icon != null) {
                     RuntimeIcon(
@@ -190,7 +189,7 @@ fun SpotlightGuideOverlay(
             RuntimeTextButton(
                 onClick = onDismiss,
                 modifier = Modifier.align(Alignment.End),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = Spacing.md, vertical = 0.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 0.dp),
             ) {
                 Text(resolvedConfirmText, style = MaterialTheme.typography.labelMedium)
             }

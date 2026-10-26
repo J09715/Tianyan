@@ -1,0 +1,21 @@
+<resources>
+    <string name="fbot_team_import">导入团队模板</string>
+    <string name="fbot_template_hint">导入后创建独立团队组，包含成员、上下级和审议规则。可以继续创作调整，再让群聊引用此团队。</string>
+    <string name="fbot_template_existing_hint">保留当前群主控，新增模板成员与组织、审议规则。已有成员不变，导入后可微调。</string>
+    <string name="fbot_template_members">成员与直属上级</string>
+    <string name="fbot_template_importing">正在导入…</string>
+    <string name="fbot_governance_title">审议与制衡</string>
+    <string name="fbot_governance_hint">团队组统一配置上下级管理与审议权限。引用本团队的群聊中，普通发言、起草和审核仅阅读与协调；实际执行必须派给指定成员及下属并绑定已通过的方案版本。修改方案或规则后须重新审核。修改上限后交群主控裁决。移除规则会解除对应的执行门禁。</string>
+    <string name="fbot_rule_name">规则名称</string>
+    <string name="fbot_rule_author">起草：%1$s</string>
+    <string name="fbot_rule_reviewer">审核：%1$s</string>
+    <string name="fbot_rule_executor">执行负责人：%1$s</string>
+    <string name="fbot_rule_rounds">最多 %1$d 轮审议</string>
+    <string name="fbot_rule_add">添加审议规则</string>
+    <string name="fbot_proposals_title">方案与审核记录</string>
+    <string name="fbot_market_team_templates">团队模板</string>
+    <string name="fbot_market_team_meta">%1$d 名成员 · 已配置上下级与审议规则</string>
+    <string name="fbot_market_import_whole_team">整队导入</string>
+    <string name="fbot_market_individual_members">单个成员</string>
+    <string name="fbot_template_review_chain">起草：%1$s → 审核：%2$s → 执行：%3$s</string>
+</resources>

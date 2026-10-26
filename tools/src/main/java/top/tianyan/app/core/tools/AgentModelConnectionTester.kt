@@ -1,7 +1,5 @@
 package top.tianyan.app.core.tools
 
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -9,8 +7,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
-@Singleton
-class AgentModelConnectionTester @Inject constructor(private val http: OkHttpClient) {
+class AgentModelConnectionTester(private val http: OkHttpClient, private val external: ExternalProviderProbe? = null) {
     suspend fun test(
         baseUrl: String,
         model: String,
@@ -19,6 +16,11 @@ class AgentModelConnectionTester @Inject constructor(private val http: OkHttpCli
         protocol: ProviderProtocol = ProviderProtocol.OPENAI,
         providerName: String? = null,
     ) = withContext(Dispatchers.IO) {
+        if (providerName?.startsWith("plugin.") == true) {
+            require(apiKey.isNullOrBlank()) { "外部 Provider 请在插件内配置凭据" }
+            requireNotNull(external) { "外部 Provider 尚未接入" }.test(providerName, model.ifBlank { "plugin-default" })
+            return@withContext
+        }
         val cleanBaseUrl = ProviderEndpointPolicy.normalizeUrl(baseUrl)
         require(cleanBaseUrl.isNotBlank() && ProviderEndpointPolicy.isSafeBaseUrl(cleanBaseUrl)) { "Base URL 不安全或为空" }
         val isAnthropic = protocol == ProviderProtocol.ANTHROPIC ||
@@ -37,35 +39,21 @@ class AgentModelConnectionTester @Inject constructor(private val http: OkHttpCli
     }
 
     private fun testModelCatalog(baseUrl: String, apiKey: String?, isAnthropic: Boolean) {
-        val endpoints = AgentModelEndpoints.forBaseUrl(baseUrl)
-        var lastFailure: Throwable? = null
-        for (endpoint in endpoints) {
-            try {
-                val isOllama = endpoint.trimEnd('/').endsWith("/api/tags", ignoreCase = true)
-                val request = Request.Builder().url(endpoint)
-                    .apply {
-                        if (isAnthropic) {
-                            header("anthropic-version", "2023-06-01")
-                            if (!apiKey.isNullOrBlank()) header("x-api-key", apiKey)
-                        } else if (!apiKey.isNullOrBlank()) {
-                            header("Authorization", "Bearer $apiKey")
-                        }
-                    }
-                    .get()
-                    .build()
-                http.newCall(request).execute().use { response ->
-                    val text = response.body.string()
-                    check(response.isSuccessful) { "连接失败 HTTP ${response.code}：${text.take(240)}" }
-                    if (isOllama) {
-                        check(text.contains("\"models\"")) { "Ollama /api/tags 未返回 models 列表" }
-                    }
+        val request = Request.Builder().url("${baseUrl.trimEnd('/')}/models")
+            .apply {
+                if (isAnthropic) {
+                    header("anthropic-version", "2023-06-01")
+                    if (!apiKey.isNullOrBlank()) header("x-api-key", apiKey)
+                } else if (!apiKey.isNullOrBlank()) {
+                    header("Authorization", "Bearer $apiKey")
                 }
-                return
-            } catch (failure: Exception) {
-                lastFailure = failure
             }
+            .get()
+            .build()
+        http.newCall(request).execute().use { response ->
+            val text = response.body.string()
+            check(response.isSuccessful) { "连接失败 HTTP ${response.code}：${text.take(240)}" }
         }
-        throw IllegalStateException("连接失败，已尝试模型列表端点：${endpoints.joinToString()}。${lastFailure?.message.orEmpty()}", lastFailure)
     }
 
     private fun testOpenAi(baseUrl: String, model: String, apiKey: String?) {

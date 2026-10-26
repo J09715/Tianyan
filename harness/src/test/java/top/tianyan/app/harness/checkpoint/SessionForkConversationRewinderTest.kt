@@ -17,10 +17,16 @@ import top.tianyan.app.core.database.HarnessLaneEntity
 import top.tianyan.app.core.database.HarnessOperationEntity
 import top.tianyan.app.core.database.HarnessQueueItemEntity
 import top.tianyan.app.core.database.HarnessRuntimeRepository
+import top.tianyan.app.core.database.UsageLedgerSessionRow
+import top.tianyan.app.core.database.UsageLedgerRow
 import top.tianyan.app.core.database.HarnessSessionEntity
 import top.tianyan.app.core.database.HarnessSessionRepository
 import top.tianyan.app.core.database.HarnessUsageEntity
+import top.tianyan.app.core.database.UsageLedgerBotRow
 import top.tianyan.app.harness.WorkspaceFileAccess
+import top.tianyan.app.core.database.DailyCountRow
+import top.tianyan.app.core.database.HarnessLaneResultEntity
+import top.tianyan.app.core.database.UsageAggregateRow
 
 class SessionForkConversationRewinderTest {
 
@@ -41,12 +47,10 @@ class SessionForkConversationRewinderTest {
         }
 
         override suspend fun touch(id: String, updatedAt: Long) = Unit
-        override suspend fun updateWorkspace(id: String, workspace: String) {
-            sessions[id]?.let { sessions[id] = it.copy(workspace = workspace) }
-        }
         override suspend fun rename(id: String, title: String, updatedAt: Long) = Unit
         override suspend fun setApprovalMode(id: String, approvalMode: String, updatedAt: Long) = Unit
         override suspend fun setApprovalModeForAll(approvalMode: String, updatedAt: Long) = Unit
+        override suspend fun setRunMode(id: String, runMode: String, updatedAt: Long) = Unit
         override suspend fun setModelSelection(id: String, modelId: String?, modelVariant: String?, updatedAt: Long) = Unit
         override suspend fun deleteSession(id: String) { sessions.remove(id) }
         override suspend fun countInRange(start: Long?, end: Long?): Int = 0
@@ -54,6 +58,40 @@ class SessionForkConversationRewinderTest {
     }
 
     private class FakeRuntimeRepository : HarnessRuntimeRepository {
+        // 账本聚合（SQL 层）：本 Fake 不模拟聚合语义，返回空列表即可——
+        // 这两个测试都不涉及用量统计，与 aggregateUsageInRange 的处理保持一致。
+        override suspend fun aggregateUsageLedger(
+            start: Long?,
+            end: Long?,
+            tzOffsetMs: Long,
+            modelId: String?,
+            provider: String?,
+            sessionId: String?,
+        ): List<UsageLedgerRow> = emptyList()
+        override suspend fun aggregateUsageLedgerByBot(start: Long?, end: Long?, sessionId: String?): List<UsageLedgerBotRow> = emptyList()
+
+        override suspend fun aggregateUsageLedgerForSessions(start: Long?, end: Long?, tzOffsetMs: Long, sessionIds: List<String>): List<UsageLedgerRow> = emptyList()
+
+        override suspend fun listRecentUsageForSessions(start: Long?, end: Long?, limit: Int, sessionIds: List<String>): List<HarnessUsageEntity> = emptyList()
+
+        override suspend fun aggregateUsageLedgerBySession(
+            start: Long?,
+            end: Long?,
+            modelId: String?,
+            provider: String?,
+            sessionId: String?,
+        ): List<UsageLedgerSessionRow> = emptyList()
+
+        override suspend fun listRecentUsage(
+            start: Long?,
+            end: Long?,
+            limit: Int,
+            modelId: String?,
+            provider: String?,
+            sessionId: String?,
+        ): List<HarnessUsageEntity> = emptyList()
+
+
         val lanes = LinkedHashMap<Pair<String, String>, HarnessLaneEntity>()
         val entries = mutableListOf<HarnessEntryEntity>()
 
@@ -71,6 +109,14 @@ class SessionForkConversationRewinderTest {
             entries.filter { (start == null || it.createdAt >= start) && (end == null || it.createdAt < end) }
 
         override suspend fun countEntriesInRange(start: Long?, end: Long?) = listEntriesInRange(start, end).size
+
+        // 用量聚合（SQL 层）：生产实现走 json_extract + GROUP BY 以避免 OOM。
+        // 本 Fake 不模拟聚合语义，返回空列表即可——本测试不涉及用量统计。
+        override suspend fun aggregateUsageInRange(start: Long?, end: Long?) =
+            emptyList<UsageAggregateRow>()
+
+        override suspend fun aggregateDailyCounts(start: Long?, end: Long?, tzOffsetMs: Long) =
+            emptyList<DailyCountRow>()
         override suspend fun branch(sessionId: String, leafId: String?): List<HarnessEntryEntity> {
             if (leafId == null) return emptyList()
             val byId = entries.associateBy { it.id }
@@ -99,7 +145,7 @@ class SessionForkConversationRewinderTest {
         override suspend fun beginOperation(lane: HarnessLaneEntity, operation: HarnessOperationEntity) = Unit
         override suspend fun saveOperation(operation: HarnessOperationEntity) = Unit
         override suspend fun settleEffect(entry: HarnessEntryEntity?, usage: HarnessUsageEntity?, operation: HarnessOperationEntity, lane: HarnessLaneEntity) = Unit
-        override suspend fun finishOperation(result: top.tianyan.app.core.database.HarnessLaneResultEntity, lane: HarnessLaneEntity) = Unit
+        override suspend fun finishOperation(result: HarnessLaneResultEntity, lane: HarnessLaneEntity) = Unit
         override suspend fun enqueue(item: HarnessQueueItemEntity) = Unit
         override suspend fun listQueue(sessionId: String, laneName: String, queueType: String) = emptyList<HarnessQueueItemEntity>()
         override suspend fun listAllQueues(sessionId: String, laneName: String) = emptyList<HarnessQueueItemEntity>()

@@ -14,7 +14,7 @@ class McpCommandBuilderTest {
         name = "Git",
         transportType = McpTransportType.STDIO,
         command = "python3",
-        args = listOf("-u", "/opt/taixu/scripts/git_mcp_server.py", "--repository", repository),
+        args = listOf("-u", "/opt/tianyan/scripts/git_mcp_server.py", "--repository", repository),
     )
 
     @Test

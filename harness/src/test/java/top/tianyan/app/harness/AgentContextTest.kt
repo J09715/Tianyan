@@ -126,6 +126,42 @@ class AgentContextTest {
         val (advOk, advMsg) = executor.executePlan(advanceArgs, "session-1")
         assertTrue(advOk)
         assertTrue(advMsg.contains("completed"))
+        // 自然语言/步骤状态不得覆盖计划生命周期；仍须能再次 getActive
+        assertTrue(advMsg.contains("状态：active"))
+        val (getAfterAdvOk, _) = executor.executePlan(getArgs, "session-1")
+        assertTrue(getAfterAdvOk)
+    }
+
+    @Test
+    fun `plan advance ignores natural language status so active plan stays findable`() = runBlocking {
+        val (createOk, _) = executor.executePlan(
+            buildJsonObject {
+                put("action", "replace_active")
+                put("goal", "构建 APK")
+                put("steps", json.parseToJsonElement("""[{"id":"1","title":"编译","status":"in_progress"}]"""))
+            },
+            "session-nl",
+        )
+        assertTrue(createOk)
+
+        val (advOk, advMsg) = executor.executePlan(
+            buildJsonObject {
+                put("action", "advance")
+                put("status", "Rust 37项已过，进入APK构建")
+                put("steps", json.parseToJsonElement("""[{"id":"1","title":"编译","status":"completed"}]"""))
+            },
+            "session-nl",
+        )
+        assertTrue(advOk)
+        assertTrue(advMsg.contains("状态：active"))
+
+        val (getOk, getMsg) = executor.executePlan(
+            buildJsonObject { put("action", "get_active") },
+            "session-nl",
+        )
+        assertTrue(getOk)
+        assertTrue(getMsg.contains("构建 APK"))
+        assertFalse(getMsg.contains("暂无活跃"))
     }
 
     @Test
@@ -359,7 +395,7 @@ private class FakeAgentContextDao : AgentContextRepository {
     override suspend fun getPlanBySession(sessionId: String): AgentPlanEntity? = plans[sessionId]
 
     override suspend fun getActivePlan(sessionId: String): AgentPlanEntity? =
-        plans[sessionId]?.takeIf { it.status == "active" || it.status == "in_progress" }
+        plans[sessionId]?.takeIf { it.status == "active" }
 
     override suspend fun deletePlanBySession(sessionId: String) {
         plans.remove(sessionId)

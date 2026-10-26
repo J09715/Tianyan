@@ -22,13 +22,20 @@ data class GuiNode(
 
     fun toCompactString(): String = buildString {
         append("[$id] ")
-        if (text.isNotBlank()) append("text=\"$text\" ")
-        if (contentDesc.isNotBlank()) append("desc=\"$contentDesc\" ")
-        if (resourceId.isNotBlank()) append("id=\"$resourceId\" ")
+        // text 与 content-desc 同值时合并：大量控件两者本就重复，逐行重复输出纯属浪费
+        if (text.isNotBlank() && text == contentDesc) {
+            append("text=\"$text\" ")
+        } else {
+            if (text.isNotBlank()) append("text=\"$text\" ")
+            if (contentDesc.isNotBlank()) append("desc=\"$contentDesc\" ")
+        }
+        // resource-id 去掉包名前缀（多为 com.xxx:id/）；click_text 命中判断仍按完整 resourceId 做 contains，不受影响
+        if (resourceId.isNotBlank()) append("id=\"${resourceId.substringAfterLast('/')}\" ")
         if (clickable) append("clickable ")
         if (editable) append("editable ")
         if (scrollable) append("scrollable ")
-        append("bounds=[${bounds.left},${bounds.top}][${bounds.right},${bounds.bottom}] (center: $centerX, $centerY)")
+        // bounds 四元组与中心点信息重复，只保留点击实际使用的中心坐标
+        append("@$centerX,$centerY")
     }
 }
 

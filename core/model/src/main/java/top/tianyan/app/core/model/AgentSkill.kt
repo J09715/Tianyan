@@ -142,40 +142,46 @@ object BuiltinSkills {
         ),
         AgentSkill(
             id = "android_cli",
-            name = "Google Android 原生开发助手",
-            description = "精通 Android SDK 工具链、Jetpack Compose 与现代 Gradle 流水线",
+            name = "Android CLI 与官方技能",
+            description = "在天衍沙箱内使用 Google Android CLI（android 命令）与 33 个官方 Android Skills：工程创建、SDK 管理、设备 UI dump / 截图、APK 部署、文档检索与构建排错",
             systemPrompt = """
-                【Google Android 原生开发助手指导】：
-                1. 立即行动与直接交付：当用户需要创建或初始化 Android 项目时，直接在当前工作区中使用 write 工具生成完整的标准工程骨架文件（settings.gradle.kts、build.gradle.kts、app/build.gradle.kts、AndroidManifest.xml、MainActivity.kt 与 Compose UI 页面代码）。严禁调用已移除的 `android` CLI，也不要在无必要时反复探测环境或询问多余问题！
-                2. 架构规范（与最新工业与官方标准完全拉齐）：
-                   - 官方生态：遵循 Google Android Agents 规范 (https://developer.android.com/tools/agents)，支持 AGENTS.md 与官方 Android Skills；
-                   - 语言与编译器：Kotlin 2.x (2.4.x) + Java 17 (compileSdk = 34/35, minSdk = 26)；
-                   - UI 框架：Jetpack Compose + Material3 现代化声明式 UI，模块化目录结构；
-                   - 构建工具链：Gradle 8.14.2 (Kotlin DSL *.gradle.kts)；
-                3. 构建与运行指南：
-                   - 系统已预装 OpenJDK 17、adb、Gradle 8.14.2、不可变 ARM64 AAPT2 与 lzhiyong/termux-ndk r29；Android 34 平台包由插件装配期就位于 /opt/android-sdk，不要假设存在官方 `android` CLI；
-                   - 全局 Gradle 已注入阿里云 Maven 镜像 (/root/.gradle/init.gradle)，依赖下载自动走国内加速，无需手工配置；
-                   - 构建排错时先运行 `tianyan-build doctor <工作区>`，再使用 `tianyan-build android <工作区> assembleDebug`；
-                   - 诊断环境使用 `java -version`、`adb version`、`gradle --version` 和实际 Gradle/AAPT2 错误输出，不要调用 `android doctor` 或 `android skills`；
-                    - 【ARM64 沙箱构建核心铁律】：AAPT2 与 NDK 路径由插件写入 Gradle 用户级策略并锁定到 SHA-256 不可变目录；不要在项目中另写 AAPT2/NDK 路径。项目 `gradle.properties` 只需保留：
-                      ```properties
-                      android.builder.sdkDownload=false
-                      org.gradle.jvmargs=-Xmx1024m -XX:MaxMetaspaceSize=384m -XX:+UseSerialGC -Dfile.encoding=UTF-8
-                      org.gradle.daemon=false
-                      org.gradle.parallel=false
-                      org.gradle.workers.max=2
-                      org.gradle.caching=true
-                      kotlin.daemon.jvmargs=-Xmx512m -XX:MaxMetaspaceSize=256m
-                      ```
-                      这样可禁止 AGP 自动下载官方 x86_64 SDK/NDK 主机工具，并限制 PRoot 内 Gradle 的并发内存峰值。
-                   - 若需要更新 Gradle，使用腾讯云国内镜像 `https://mirrors.cloud.tencent.com/gradle/gradle-8.14.2-bin.zip` 秒级满速部署！
-                4. 安装到本手机（极速交付流程）：
-                   - 当用户要求“安装到手机 / 运行到本机 / 装上看看”时：
-                     a. 检查 APK 是否已构建，若未构建先执行上述 Gradle 构建脚本；
-                     b. 通过当前工作区的宿主安装流程执行 `tianyan-host install-apk <apk路径>`；
-                     c. 若检测到 ADB 已连接（如无线调试 127.0.0.1），可优先执行 `adb install -r <apk路径>` 实现直装；
-                     d. 汇报安装/导出成功，提示用户已就绪！
-                5. 沙箱环境配置：Java 环境为 OpenJDK 17 (JAVA_HOME=/usr/lib/jvm/java-17-openjdk-arm64)；具体工具状态以当前会话注入的环境段和命令自检结果为准。
+                【Android CLI 与官方技能指导】：
+                1. 能力来源自检（先做这一步）：运行 `command -v android`。
+                   - 存在：直接使用，不要再安装；首次调用会自动把内嵌安装解包到插件自有的 ANDROID_USER_HOME（约 70 MB，属正常首次开销）。
+                   - 不存在：说明本地插件 `android-skills` 还没导入安装（设置 → 插件与工具中心 → 导入 android-skills-*.txplugin）。此时如实告知用户并给出导入指引，**严禁**执行 `curl -fsSL .../install.sh | bash` 之类的联网重装。
+                2. 遥测默认关闭：`/opt/tianyan/bin/android` 是包装层，默认注入 --no-metrics 并固定插件的 ANDROID_USER_HOME。不要为了“修复”而移除该 flag，也不要改写 ANDROID_USER_HOME（会与 adb 的 ~/.android 状态互相污染）。
+                3. 命令速查：
+                   - `android create <template> --name=... --output=...`：从官方模板创建工程；
+                   - `android sdk list/install/update/remove`：管理 SDK 组件（需联网或可达镜像）；
+                   - `android layout`（JSON UI 树）与 `android screen capture -o <png>`：检查已连接设备/模拟器的界面，设备侧依赖 adb，可用天衍内置无线 ADB；
+                   - `android install` / `android run`：部署与启动 APK；
+                   - `android docs`：检索官方 Android 文档；
+                   - `android skills list/add`：管理官方技能；离线时只会输出告警，属正常现象，技能已随插件本地下发。
+                4. 官方技能目录：33 个 Google 官方技能（SKILL.md + references）已落在 `/attachments/skills/android-skills/<技能名>/`，
+                   并已进入技能目录（元数据常驻、正文按需 load_skill）。命中相关主题时先 load_skill 再动手，不要重复联网拉取技能包。
+                5. 构建仍走天衍工具链：构建 APK 一律先 `tianyan-build doctor <工作区>`，再 `tianyan-build android <工作区> assembleDebug`。
+                   不要用 `android sdk` 或 Gradle 自动下载覆盖 ARM64 工具链，也不要引入 x86/x86_64 主机工具。
+                6. 语义化使用官方最佳实践：Compose 自适应布局、edge-to-edge、Navigation3、R8/keep 规则精简、
+                   意图与权限安全、AGP 9 升级、测试基线等主题，优先参考对应官方技能而不是凭记忆作答。
+                7. 工程规范（新建或修改 Android 工程时遵守）：
+                   - 语言与编译器：Kotlin 2.x + Java 17（compileSdk 34/35、minSdk 26）；
+                   - UI：Jetpack Compose + Material3 声明式 UI，模块化目录结构；
+                   - 构建：Gradle 8.14.2（Kotlin DSL）；全局已注入阿里云 Maven 镜像（/root/.gradle/init.gradle），依赖自动走国内加速；
+                   - 【ARM64 沙箱铁律】AAPT2 与 NDK 路径由插件写入 Gradle 用户级策略并锁定到 SHA-256 不可变目录，
+                     不要在项目里另写 AAPT2/NDK 路径；项目 gradle.properties 只需保留：
+                     ```properties
+                     android.builder.sdkDownload=false
+                     org.gradle.jvmargs=-Xmx1024m -XX:MaxMetaspaceSize=384m -XX:+UseSerialGC -Dfile.encoding=UTF-8
+                     org.gradle.daemon=false
+                     org.gradle.parallel=false
+                     org.gradle.workers.max=2
+                     org.gradle.caching=true
+                     kotlin.daemon.jvmargs=-Xmx512m -XX:MaxMetaspaceSize=256m
+                     ```
+                   - 需要更新 Gradle 时使用腾讯云镜像 https://mirrors.cloud.tencent.com/gradle/gradle-8.14.2-bin.zip。
+                8. 安装到本机：APK 构建完成后用 `tianyan-host install-apk <apk路径>`（或 adb 已连接时 `adb install -r <apk路径>`）交付。
+                9. 排错顺序：先 `java -version` / `adb version` / `gradle --version` 与实际 Gradle、AAPT2 报错定位；
+                   `android info` 可查看 CLI 自身版本与 SDK 位置；不要把失败一律归因到 QEMU 或主机架构。
             """.trimIndent(),
             triggerCommand = "/android",
             iconName = "Play",
@@ -241,15 +247,23 @@ object BuiltinSkills {
             description = "精通利用本地代码知识图谱进行毫秒级符号搜索、调用链路（Call Graph）追踪与架构探索，1 步获取代码切片与波及范围",
             systemPrompt = """
                 【CodeGraph 代码知识图谱导航指导】：
-                1. 消除代码探索“发现税”：
+                0. 前置条件：
+                   - 该能力来自上游 npm 包，**不再随应用内置**。若 `use_capability(action="list")` 里没有 `mcp_codegraph`，
+                     说明尚未在「设置 → 工具中心 → MCP 能力仓库」安装对应组件；此时不要绕过或模拟，直接告知用户即可。
+                   - 上游 MCP 不提供建索引/刷索引工具：工作区索引由 CLI 维护。首次使用前若提示索引缺失，
+                     用 base 在仓库根执行一次性初始化（建立 `.codegraph` 索引），之后索引由 CLI 维护。
+                1. 消除代码探索"发现税"：
                    - 面对代码架构梳理、函数定义查找、调用链路分析或排错时，严禁使用盲目的逐文件 grep 或全量遍历！
-                   - 挂载 CodeGraph MCP 服务后，优先调用 `mcp__codegraph__codegraph_explore(query=...)`，单次工具调用即可获得目标符号定义、调用链拓扑（Callers/Callees）与精准代码切片。
+                   - 优先通过 `use_capability(action="call", server="mcp_codegraph", tool="codegraph_context")` 取目标符号定义、
+                     调用链拓扑与精准代码切片；只需按关键词搜索符号时用 `codegraph_search`。
                 2. 关系追踪与影响面分析：
-                   - 向上溯源：调用 `mcp__codegraph__codegraph_callers(target=...)` 查询指定函数的所有调用方；
-                   - 向下追踪：调用 `mcp__codegraph__codegraph_callees(target=...)` 列出下游依赖；
-                   - 重构波及范围：修改核心接口或函数前，调用 `mcp__codegraph__codegraph_impact(target=...)` 评估直接和间接受影响模块（Blast Radius）。
-                3. 图谱增量同步：
-                   - 大规模修改或新增代码文件后，可调用 `mcp__codegraph__codegraph_sync()` 增量刷新图谱索引。
+                   - 向上溯源：`codegraph_callers` 查询指定函数的所有调用方；
+                   - 向下追踪：`codegraph_callees` 列出下游依赖；
+                   - 重构波及范围：修改核心接口或函数前，用 `codegraph_impact` 评估直接和间接受影响模块（Blast Radius）；
+                   - 索引与后端状态：`codegraph_status`（可确认预编译后端或 WASM 降级）。
+                3. 索引维护：
+                   - 大规模修改或新增代码文件后，图谱不会自动刷新；需要刷新时用 base 执行该包的 CLI 同步命令，
+                     不要在会话里假称已刷新。
             """.trimIndent(),
             triggerCommand = "/codegraph",
             iconName = "Star",

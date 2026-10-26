@@ -1,4 +1,4 @@
-package top.tianyan.app.core.model
+﻿package top.tianyan.app.core.model
 
 enum class CpuArch {
     ARM64,

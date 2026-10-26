@@ -1,4 +1,4 @@
-package top.tianyan.app.runtime.browser.tools
+﻿package top.tianyan.app.runtime.browser.tools
 
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json

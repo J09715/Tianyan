@@ -27,6 +27,13 @@ data class AgentSubagentIndexEntry(
     val departmentId: String,
 )
 
+/** 内置角色目录的界面本地化文案（不落入数据库，避免同步覆盖用户数据）。 */
+@Serializable
+data class AgentSubagentLocalization(
+    val name: String,
+    val description: String,
+)
+
 @Serializable
 data class AgentDepartmentCount(
     val departmentId: String,
@@ -56,6 +63,7 @@ object AgentDepartments {
         AgentDepartment("game-development", "Game Development", "游戏开发", "Gamepad2", 0xFFA855F7, 6),
         AgentDepartment("spatial-computing", "Spatial Computing", "空间计算", "Boxes", 0xFF06B6D4, 7),
         AgentDepartment("specialized", "Specialized", "研发专项", "Sparkles", 0xFF6366F1, 8),
+        AgentDepartment("sanshengliubu", "Three Departments & Six Ministries", "三省六部", "Landmark", 0xFFD97706, 9),
     )
 
     val custom = AgentDepartment(CUSTOM_ID, "Custom", "自定义", "Bot", 0xFF64748B, Int.MAX_VALUE)

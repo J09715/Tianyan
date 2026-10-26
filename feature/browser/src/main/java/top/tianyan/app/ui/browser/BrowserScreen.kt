@@ -1,8 +1,9 @@
 package top.tianyan.app.ui.browser
-
+import top.tianyan.app.ui.components.previewOrNull
+import top.tianyan.app.ui.components.previewStateOf
+import org.koin.compose.viewmodel.koinViewModel
 import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -11,16 +12,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -48,33 +47,30 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.tianyan.app.ui.components.RuntimeIcon
-import top.tianyan.app.ui.theme.Spacing
-import top.tianyan.app.ui.theme.Radius
-import top.tianyan.app.ui.theme.TianyanTheme
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeIconButton
 import top.tianyan.app.ui.components.RuntimeTopBar
 import top.tianyan.app.ui.browser.network.NetworkTimelineSheet
 import top.tianyan.app.ui.browser.snapshot.SnapshotSheet
-
+import androidx.compose.runtime.collectAsState
+import top.tianyan.app.runtime.browser.cdp.DebugPausedState
 @Composable
 fun BrowserScreen(
     onBack: () -> Unit,
-    viewModel: BrowserViewModel = hiltViewModel(),
+    viewModel: BrowserViewModel? = previewOrNull { koinViewModel() },
 ) {
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val state by viewModel?.uiState?.collectAsStateWithLifecycle() ?: previewStateOf(BrowserUiState.Empty)
     // 系统返回优先走 WebView 历史栈；无法后退时才退出浏览器页
-    BackHandler(enabled = state.canGoBack) { viewModel.onBack(onExhausted = onBack) }
+    BackHandler(enabled = state.canGoBack) { viewModel?.onBack(onExhausted = onBack) }
     Column(modifier = Modifier.fillMaxSize()) {
         RuntimeTopBar(
             title = "内置浏览器",
             statusText = state.title.takeIf { it.isNotBlank() } ?: state.url.takeIf { it.isNotBlank() } ?: "—",
             onBack = onBack,
         )
-        BrowserPane(viewModel = viewModel, modifier = Modifier.fillMaxSize(), showHomePage = true)
+        BrowserPane(viewModel = viewModel, modifier = Modifier.fillMaxSize())
     }
 }
 
@@ -90,46 +86,45 @@ fun BrowserScreen(
  */
 @Composable
 fun BrowserPane(
-    viewModel: BrowserViewModel,
+    viewModel: BrowserViewModel?,
     modifier: Modifier = Modifier,
     onExit: (() -> Unit)? = null,
-    showHomePage: Boolean = false,
 ) {
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val networkRequests by viewModel.network.collectAsStateWithLifecycle()
-    val networkSheetVisible by viewModel.networkSheetVisible.collectAsStateWithLifecycle()
-    val networkDetail by viewModel.networkDetail.collectAsStateWithLifecycle()
-    val debugPaused by viewModel.debugPaused.collectAsStateWithLifecycle()
+    val state by viewModel?.uiState?.collectAsStateWithLifecycle() ?: previewStateOf(BrowserUiState.Empty)
+    val networkRequests by viewModel?.network?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val networkSheetVisible by viewModel?.networkSheetVisible?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val networkDetail by viewModel?.networkDetail?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val debugPaused by viewModel?.debugPaused?.collectAsStateWithLifecycle() ?: previewStateOf(null)
     val snackbarHostState = remember { SnackbarHostState() }
     // 面板可见性上报：可见时才补建活跃 tab / 轮询状态，避免 app 启动即常驻 WebView
     DisposableEffect(Unit) {
-        viewModel.onPaneVisible(true)
-        onDispose { viewModel.onPaneVisible(false) }
+        viewModel?.onPaneVisible(true)
+        onDispose { viewModel?.onPaneVisible(false) }
     }
     val toolMessage = state.toolMessage
     if (toolMessage != null) {
         LaunchedEffect(toolMessage) {
             // Short ≈ 4s 自动消失，随后清理消息源，避免重复弹出
             snackbarHostState.showSnackbar(toolMessage, duration = SnackbarDuration.Short)
-            viewModel.dismissToolMessage()
+            viewModel?.dismissToolMessage()
         }
     }
     Column(modifier = modifier) {
         BrowserStatusBar(
             coBrowsingEnabled = state.coBrowsingEnabled,
-            onCoBrowsingToggle = { viewModel.onCoBrowsingToggle(!state.coBrowsingEnabled) },
+            onCoBrowsingToggle = { viewModel?.onCoBrowsingToggle(!state.coBrowsingEnabled) },
             tabs = state.tabs,
-            onSelect = viewModel::selectTab,
-            onClose = viewModel::closeTab,
-            onShowSnapshot = viewModel::onOpenSnapshot,
-            onShowNetwork = viewModel::showNetworkSheet,
+            onSelect = { arg0 -> viewModel?.selectTab(arg0) },
+            onClose = { arg0 -> viewModel?.closeTab(arg0) },
+            onShowSnapshot = { viewModel?.onOpenSnapshot() },
+            onShowNetwork = { viewModel?.showNetworkSheet() },
             networkCount = networkRequests.size,
             onExit = onExit,
         )
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             state.activeTab?.let { tab ->
                 key(tab.tabId) {
-                    viewModel.activeWebView()?.let { webView ->
+                    viewModel?.activeWebView()?.let { webView ->
                         AndroidView(
                             factory = {
                                 (webView.parent as? ViewGroup)?.removeView(webView)
@@ -144,7 +139,7 @@ fun BrowserPane(
             debugPaused?.let { paused ->
                 DebugPausedBanner(
                     paused = paused,
-                    onResume = viewModel::resumeDebugger,
+                    onResume = { viewModel?.resumeDebugger() },
                     modifier = Modifier.align(Alignment.TopCenter),
                 )
             }
@@ -155,26 +150,26 @@ fun BrowserPane(
             state.snapshotSheet?.let { sheet ->
                 SnapshotSheet(
                     state = sheet,
-                    onDismiss = viewModel::dismissSnapshot,
+                    onDismiss = { viewModel?.dismissSnapshot() },
                 )
             }
             if (networkSheetVisible) {
                 NetworkTimelineSheet(
                     requests = networkRequests,
-                    hookHits = viewModel.hookHits.value,
+                    hookHits = viewModel?.hookHits?.collectAsState()?.value.orEmpty(),
                     detail = networkDetail,
-                    onLoadDetail = viewModel::loadNetworkDetail,
-                    onDismiss = viewModel::dismissNetworkSheet,
+                    onLoadDetail = { arg0 -> viewModel?.loadNetworkDetail(arg0) },
+                    onDismiss = { viewModel?.dismissNetworkSheet() },
                 )
             }
         }
         BrowserUrlBar(
             urlInput = state.urlInput,
-            onUrlChange = viewModel::onUrlInputChanged,
-            onNavigate = viewModel::onNavigate,
-            onBack = { viewModel.onBack() },
-            onForward = viewModel::onForward,
-            onRefresh = viewModel::onRefresh,
+            onUrlChange = { arg0 -> viewModel?.onUrlInputChanged(arg0) },
+            onNavigate = { viewModel?.onNavigate() },
+            onBack = { viewModel?.onBack() },
+            onForward = { viewModel?.onForward() },
+            onRefresh = { viewModel?.onRefresh() },
             canGoBack = state.canGoBack,
             canGoForward = state.canGoForward,
         )
@@ -205,14 +200,12 @@ private fun BrowserStatusBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState())
-                .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                .padding(horizontal = 10.dp, vertical = 3.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.xs, Alignment.Start),
+            horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.Start),
         ) {
             // 1. 共浏览状态：AI 是否与用户共享浏览（点击切换）
-            // 共浏览开=蓝（进行中）、关=橙（已暂停）：这两个是「浏览器自身的
-            // 状态指示色」，取语义色 info / warning，深浅主题都有对比度保证。
-            val coTint = if (coBrowsingEnabled) TianyanTheme.colors.info else TianyanTheme.colors.warning
+            val coTint = if (coBrowsingEnabled) Color(0xFF3F8FFF) else Color(0xFFFF8F3F)
             BrowserStatusItem(
                 icon = if (coBrowsingEnabled) RuntimeIconName.Visibility else RuntimeIconName.VisibilityOff,
                 label = if (coBrowsingEnabled) "共浏览中" else "已暂停",
@@ -279,13 +272,13 @@ private fun BrowserTabChip(
     val tint = if (tab.active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
     Surface(
         onClick = onSelect,
-        shape = Radius.xsShape,
+        shape = RoundedCornerShape(4.dp),
         color = if (tab.active) tint.copy(alpha = 0.14f) else Color.Transparent,
     ) {
         Row(
-            modifier = Modifier.padding(start = Spacing.xs, top = Spacing.xs, bottom = Spacing.xs, end = Spacing.xs),
+            modifier = Modifier.padding(start = 4.dp, top = 1.dp, bottom = 1.dp, end = 1.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             RuntimeIcon(RuntimeIconName.Globe, Modifier.size(11.dp), tint = tint)
             Text(
@@ -311,7 +304,7 @@ private fun BrowserTabChip(
 private fun StatusDivider() {
     Box(
         modifier = Modifier
-            .padding(horizontal = Spacing.xs)
+            .padding(horizontal = 2.dp)
             .size(width = 1.dp, height = 9.dp)
             .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
     )
@@ -323,7 +316,7 @@ private fun StatusDivider() {
  */
 @Composable
 private fun DebugPausedBanner(
-    paused: top.tianyan.app.runtime.browser.cdp.DebugPausedState,
+    paused: DebugPausedState,
     onResume: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -331,19 +324,17 @@ private fun DebugPausedBanner(
     val location = frame?.let {
         "${it.functionName.ifEmpty { "<anonymous>" }} @ ${it.url.substringAfterLast('/')}:${it.lineNumber + 1}"
     } ?: "无调用栈"
-    // 调试暂停横幅是「盖在浏览器之上的告警条」：琥珀底 + 白字必须成立，
-    // 因此固定色值，不随主题走（深色主题的 warning 是浅黄，白字压不住）。
     Surface(
         color = Color(0xCCB45309),
-        shape = Radius.smShape,
+        shape = RoundedCornerShape(10.dp),
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = Spacing.md, vertical = Spacing.sm),
+            .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             RuntimeIcon(RuntimeIconName.Alert, Modifier.size(16.dp), tint = Color.White)
             Column(modifier = Modifier.weight(1f)) {
@@ -364,13 +355,13 @@ private fun DebugPausedBanner(
             }
             Surface(
                 onClick = onResume,
-                shape = Radius.mdShape,
+                shape = RoundedCornerShape(14.dp),
                 color = Color.White,
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     RuntimeIcon(RuntimeIconName.Play, Modifier.size(12.dp), tint = Color(0xFFB45309))
                     Text(
@@ -395,13 +386,13 @@ private fun BrowserStatusItem(
 ) {
     Surface(
         onClick = onClick,
-        shape = Radius.xsShape,
+        shape = RoundedCornerShape(4.dp),
         color = if (highlight) tint.copy(alpha = 0.14f) else Color.Transparent,
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             RuntimeIcon(
                 name = icon,
@@ -445,9 +436,9 @@ private fun BrowserUrlBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = Spacing.sm, vertical = Spacing.sm),
+                .padding(horizontal = 6.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             RuntimeIconButton(onClick = onBack, enabled = canGoBack, contentDescription = "后退") {
                 RuntimeIcon(RuntimeIconName.Back, Modifier.size(17.dp))
@@ -460,15 +451,15 @@ private fun BrowserUrlBar(
             }
             // URL 输入胶囊：占满剩余宽度，右侧内嵌跳转圆钮
             Surface(
-                shape = Radius.lgShape,
+                shape = RoundedCornerShape(18.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
                 modifier = Modifier.weight(1f),
             ) {
                 Row(
-                    modifier = Modifier.padding(start = Spacing.md, end = Spacing.xs, top = Spacing.xs, bottom = Spacing.xs),
+                    modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     BasicTextField(
                         value = input,

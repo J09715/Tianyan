@@ -7,7 +7,7 @@
 APK 内嵌 `assets/dexopt/baseline.prof`（由 `app/src/release/generated/baselineProfiles/` 编译打包）。
 首次安装后 `androidx.profileinstaller` 在后台把它提交给 ART 预编译，覆盖：
 
-- `Application.onCreate` → Hilt 图构建 → 首屏 Compose 组合的完整启动路径
+- `Application.onCreate` → Koin 图构建 → 首屏 Compose 组合的完整启动路径
 - 首帧 LazyColumn 滚动路径
 
 ## 模块结构
@@ -24,7 +24,7 @@ APK 内嵌 `assets/dexopt/baseline.prof`（由 `app/src/release/generated/baseli
 前置：一台已连接、已解锁的设备/模拟器（真机或 AVD 均可）。
 
 ```powershell
-$env:JAVA_HOME="F:\AndroidDev\jdk\jdk-25.0.3+9"
+$env:JAVA_HOME="C:\Program Files\Android\Android Studio\jbr"
 .\gradlew.bat :app:generateBaselineProfile --console=plain
 ```
 
@@ -59,7 +59,9 @@ x86_64 模拟器可以运行 arm64-only 应用（模拟器 37+ 自动二进制�
 ## 收益验证
 
 ```powershell
-adb install -r app/build/outputs/apk/release/tianyan-v0.12.0-release.apk
+adb install -r app/build/outputs/apk/release/tianyan-v0.6.0-release.apk
 adb shell am start -W top.tianyan.app/.MainActivity   # 对比 TotalTime
 adb logcat -s TianyanStartup                            # splash dismissed 耗时
 ```
+
+Koin 迁移已移除旧 DI 生成类的 profile 条目；完整的新启动热点需按本文流程在 ARM64 设备上重新采集，不能仅替换类名。

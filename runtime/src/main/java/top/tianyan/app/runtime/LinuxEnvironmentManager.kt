@@ -3,15 +3,16 @@ package top.tianyan.app.runtime
 import java.nio.charset.StandardCharsets
 import java.util.Base64
 import java.util.UUID
-import javax.inject.Inject
-import javax.inject.Singleton
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import top.tianyan.app.core.common.shell.ShellQuote
 import top.tianyan.app.core.datastore.RuntimePreferences
 import top.tianyan.app.core.model.EnvironmentVariable
+import top.tianyan.app.runtime.environment.ExecutionEnvironmentContext
 import top.tianyan.app.runtime.shell.ShellCommand
 
 private const val ENV_SNAPSHOT_BEGIN = "__TIANYAN_ENV_SNAPSHOT_BEGIN__"
@@ -23,8 +24,7 @@ private const val ENV_SNAPSHOT_END = "__TIANYAN_ENV_SNAPSHOT_END__"
  * The profile fragment is the source of truth. Android preferences intentionally do not keep a
  * second copy, so terminal sessions, agent commands, and the settings screen observe the same data.
  */
-@Singleton
-class LinuxEnvironmentManager @Inject constructor(
+class LinuxEnvironmentManager(
     private val linuxRuntime: LinuxRuntime,
     private val runtimePreferences: RuntimePreferences,
 ) {
@@ -49,6 +49,24 @@ class LinuxEnvironmentManager @Inject constructor(
         return mutex.withLock {
             if (loadedDistroId == distroId) Result.success(Unit) else refreshLocked(distroId)
         }
+    }
+
+    /**
+     * Settings variables for an SSH session. [values] is published from the same records as [variables].
+     * An SSH coroutine must not re-enter the phone runtime; a local refresh would be rejected there.
+     * Callers still have to drop `TIANYAN_BRIDGE_*` before the map leaves the device.
+     */
+    suspend fun snapshotForSsh(): Map<String, String> {
+        if (currentCoroutineContext()[ExecutionEnvironmentContext]?.environment?.id?.backend != "ssh") {
+            refreshIfNeeded()
+        }
+        return values.value.toMap()
+    }
+
+    /** Refresh and snapshot under one lock so another world's refresh cannot replace these values. */
+    suspend fun redactionSecrets(distroId: String): Collection<String> = mutex.withLock {
+        if (loadedDistroId != distroId) refreshLocked(distroId).getOrThrow()
+        _values.value.values.toList()
     }
 
     suspend fun add(
@@ -120,6 +138,7 @@ class LinuxEnvironmentManager @Inject constructor(
 
     private suspend fun refreshLocked(distroId: String): Result<Unit> = runCatching {
         if (loadedDistroId != distroId) {
+            loadedDistroId = null
             _variables.value = emptyList()
             _values.value = emptyMap()
             _effectiveEnvironment.value = emptyList()
@@ -161,7 +180,7 @@ class LinuxEnvironmentManager @Inject constructor(
         val command = buildString {
             append("umask 077 && mkdir -p '/etc/profile.d' && ")
             append("printf '%s' ")
-            append(shellQuote(content))
+            append(ShellQuote.of(content))
             append(" > '$TEMP_PROFILE_PATH' && ")
             append("chmod 600 '$TEMP_PROFILE_PATH' && ")
             append("mv -f '$TEMP_PROFILE_PATH' '$PROFILE_PATH' && ")
@@ -204,8 +223,6 @@ class LinuxEnvironmentManager @Inject constructor(
 
     private fun isReservedKey(key: String): Boolean = key in RESERVED_KEYS ||
         key.startsWith("TIANYAN_") || key.startsWith("ANDROID_")
-
-    private fun shellQuote(value: String): String = "'${value.replace("'", "'\\''")}'"
 
     private companion object {
         const val PROFILE_PATH = "/etc/profile.d/zz-tianyan-user-env.sh"
@@ -293,7 +310,7 @@ internal object LinuxEnvironmentProfile {
             append("export ")
             append(record.metadata.key)
             append('=')
-            appendLine(shellQuote(record.value))
+            appendLine(ShellQuote.of(record.value))
         }
     }
 
@@ -306,6 +323,4 @@ internal object LinuxEnvironmentProfile {
     } else {
         String(Base64.getUrlDecoder().decode(value), StandardCharsets.UTF_8)
     }
-
-    private fun shellQuote(value: String): String = "'${value.replace("'", "'\\''")}'"
 }

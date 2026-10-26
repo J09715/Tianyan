@@ -1,11 +1,11 @@
 package top.tianyan.app.harness.workflow
 
-import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import top.tianyan.app.core.common.shell.ShellQuote
 import top.tianyan.app.core.model.workflow.NodeExecutionOutput
 import top.tianyan.app.core.model.workflow.NodeRunStatus
 import top.tianyan.app.core.model.workflow.WorkflowApprovalRequest
@@ -13,11 +13,13 @@ import top.tianyan.app.core.model.workflow.WorkflowNode
 import top.tianyan.app.core.model.workflow.WorkflowNodeType
 import top.tianyan.app.core.model.workflow.WorkflowRuntimeContext
 import top.tianyan.app.core.model.workflow.previousOutput
+import top.tianyan.app.core.model.workflow.resultReference
+import top.tianyan.app.core.model.workflow.WorkflowResultSchema
 import top.tianyan.app.runtime.LinuxRuntime
 import top.tianyan.app.runtime.shell.ProcessType
 import top.tianyan.app.runtime.shell.ShellCommand
 
-class PassthroughNodeExecutor @Inject constructor() : NodeExecutor {
+class PassthroughNodeExecutor() : NodeExecutor {
     override val supportedTypes = setOf(WorkflowNodeType.TRIGGER, WorkflowNodeType.TERMINAL_OUTPUT)
 
     override suspend fun execute(
@@ -39,7 +41,7 @@ class PassthroughNodeExecutor @Inject constructor() : NodeExecutor {
     }
 }
 
-class ApprovalNodeExecutor @Inject constructor(
+class ApprovalNodeExecutor(
     private val broker: WorkflowApprovalBroker,
 ) : NodeExecutor {
     override val supportedTypes = setOf(WorkflowNodeType.HUMAN_APPROVAL)
@@ -68,13 +70,13 @@ class ApprovalNodeExecutor @Inject constructor(
     }
 }
 
-class LinuxNodeExecutor @Inject constructor(
+class LinuxNodeExecutor(
     private val linuxRuntime: LinuxRuntime,
 ) : NodeExecutor {
     override val supportedTypes = setOf(
         WorkflowNodeType.BASH_COMMAND,
         WorkflowNodeType.PROCESS_SERVICE,
-        WorkflowNodeType.TAIXU_BUILD,
+        WorkflowNodeType.TIANYAN_BUILD,
     )
 
     override suspend fun execute(
@@ -113,7 +115,7 @@ class LinuxNodeExecutor @Inject constructor(
                 workingDirectory = node.config["workingDirectory"]?.let { interpolate(it, context) }
                     ?: context.workspacePath,
                 timeoutMs = node.timeoutSeconds * 1_000L,
-                forcePty = node.type == WorkflowNodeType.TAIXU_BUILD,
+                forcePty = node.type == WorkflowNodeType.TIANYAN_BUILD,
                 onOutput = { line -> synchronized(streamed) {
                     streamed.appendLine(line)
                     if (streamed.length > 2_000_000) streamed.delete(0, streamed.length - 2_000_000)
@@ -138,10 +140,10 @@ class LinuxNodeExecutor @Inject constructor(
 
     private fun commandFor(node: WorkflowNode, context: WorkflowRuntimeContext): String? = when (node.type) {
         WorkflowNodeType.BASH_COMMAND, WorkflowNodeType.PROCESS_SERVICE -> node.config["command"]?.let { interpolate(it, context) }
-        WorkflowNodeType.TAIXU_BUILD -> when (node.config["mode"]?.lowercase()) {
-            "doctor" -> "taixu-build doctor ."
-            "analyze" -> "taixu-build analyze ."
-            else -> "taixu-build ${node.config["projectType"] ?: "android"} . ${node.config["task"] ?: "assembleDebug"} --offline"
+        WorkflowNodeType.TIANYAN_BUILD -> when (node.config["mode"]?.lowercase()) {
+            "doctor" -> "tianyan-build doctor ."
+            "analyze" -> "tianyan-build analyze ."
+            else -> "tianyan-build ${node.config["projectType"] ?: "android"} . ${node.config["task"] ?: "assembleDebug"} --offline"
         }
         else -> null
     }
@@ -149,15 +151,14 @@ class LinuxNodeExecutor @Inject constructor(
     private fun interpolate(template: String, context: WorkflowRuntimeContext): String = VARIABLE.replace(template) { match ->
         val key = match.groupValues[1]
         val value = when {
+            context.resultReference(key) != null -> context.resultReference(key).orEmpty()
             key == "WORKSPACE_PATH" -> context.workspacePath
             key == "previous.output" -> context.previousOutput()
             key.endsWith(".output") -> context.nodeOutputs[key.removeSuffix(".output")]?.textOutput.orEmpty()
             else -> context.globalVariables[key].orEmpty()
         }
-        posixQuote(value)
+        ShellQuote.of(value)
     }
-
-    private fun posixQuote(value: String): String = "'" + value.replace("'", "'\"'\"'") + "'"
 
     private companion object {
         // Android ICU treats an unescaped closing brace as a syntax error, while the
@@ -168,7 +169,7 @@ class LinuxNodeExecutor @Inject constructor(
     }
 }
 
-class AgentNodeExecutor @Inject constructor(
+class AgentNodeExecutor(
     private val agentExecution: WorkflowAgentExecutionPort,
 ) : NodeExecutor {
     override val supportedTypes = setOf(WorkflowNodeType.AGENT_INFERENCE, WorkflowNodeType.SUBAGENT_DELEGATE)
@@ -178,6 +179,13 @@ class AgentNodeExecutor @Inject constructor(
         context: WorkflowRuntimeContext,
         onProgress: suspend (NodeRunStatus, String) -> Unit,
     ): NodeExecutionOutput {
+        val schema = node.config[WorkflowResultSchema.CONFIG_KEY]?.let { raw ->
+            try { WorkflowResultSchema.parse(raw) } catch (error: IllegalArgumentException) {
+                return NodeExecutionOutput(NodeRunStatus.FAILED, exitCode = 2, error = "结果 schema 无效：${error.message}")
+            } catch (error: IllegalStateException) {
+                return NodeExecutionOutput(NodeRunStatus.FAILED, exitCode = 2, error = "结果 schema 无效：${error.message}")
+            }
+        }
         val promptTemplate = node.config["prompt"]
             ?.takeIf(String::isNotBlank)
             ?: node.description.takeIf(String::isNotBlank)
@@ -191,7 +199,8 @@ class AgentNodeExecutor @Inject constructor(
             executionId = context.executionId,
             nodeId = node.id,
             nodeTitle = node.title,
-            prompt = interpolateAgentPrompt(promptTemplate, context),
+            prompt = interpolateAgentPrompt(promptTemplate, context) + if (schema == null) "" else
+                "\n\n最终答复必须仅包含符合以下 schema 的 JSON 对象，不要使用 Markdown 围栏或附加说明：\n$schema",
             workspacePath = context.workspacePath,
             modelId = node.config["modelId"]?.takeIf(String::isNotBlank)
                 ?: context.globalVariables["WORKFLOW_MODEL_ID"]?.takeIf(String::isNotBlank),
@@ -216,6 +225,13 @@ class AgentNodeExecutor @Inject constructor(
             WorkflowNodeType.SUBAGENT_DELEGATE -> agentExecution.delegate(request)
             else -> error("Unsupported agent node ${node.type}")
         }
+        val structuredResult = if (result.success && schema != null) {
+            try { WorkflowResultSchema.validateResult(result.output, schema) } catch (error: IllegalArgumentException) {
+                return NodeExecutionOutput(NodeRunStatus.FAILED, exitCode = 2, textOutput = result.output, error = "结构化结果校验失败：${error.message}")
+            } catch (error: IllegalStateException) {
+                return NodeExecutionOutput(NodeRunStatus.FAILED, exitCode = 2, textOutput = result.output, error = "结构化结果校验失败：${error.message}")
+            }
+        } else null
         return NodeExecutionOutput(
             status = if (result.success) NodeRunStatus.SUCCESS else NodeRunStatus.FAILED,
             exitCode = if (result.success) 0 else 1,
@@ -225,19 +241,10 @@ class AgentNodeExecutor @Inject constructor(
                 result.toolCallCount?.let { put("AGENT_TOOL_CALL_COUNT", it.toString()) }
             },
             error = result.output.takeIf { !result.success },
+            structuredResult = structuredResult,
         )
     }
 }
 
 internal fun interpolateAgentPrompt(template: String, context: WorkflowRuntimeContext): String =
-    AGENT_VARIABLE.replace(template) { match ->
-        val key = match.groupValues[1]
-        when {
-            key == "WORKSPACE_PATH" -> context.workspacePath
-            key == "previous.output" -> context.previousOutput()
-            key.endsWith(".output") -> context.nodeOutputs[key.removeSuffix(".output")]?.textOutput.orEmpty()
-            else -> context.globalVariables[key].orEmpty()
-        }
-    }
-
-private val AGENT_VARIABLE = Regex("\\$\\{([A-Za-z0-9_.\\-]+)\\}")
+    interpolate(template, context)

@@ -18,3 +18,18 @@ internal fun syncGuestGroups(rootfsDir: File, hostGroupIds: List<Int>) {
     if (missing.isEmpty()) return
     groupFile.appendText(missing.joinToString("") { gid -> "host_g$gid:x:$gid:\n" })
 }
+
+/**
+ * App 进程在宿主上携带的补充组列表（含 inet/everybody/OEM 组等）。
+ * android.system.Os 未暴露 getgroups，改从 /proc/self/status 的 Groups 行解析。
+ */
+internal fun hostSupplementaryGroupIds(): List<Int> =
+    runCatching {
+        File("/proc/self/status").useLines { lines ->
+            lines.firstOrNull { it.startsWith("Groups:") }
+                ?.removePrefix("Groups:")
+                ?.split(' ', '\t')
+                ?.mapNotNullTo(mutableListOf()) { it.trim().toIntOrNull() }
+                .orEmpty()
+        }
+    }.getOrElse { emptyList() }

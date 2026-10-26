@@ -5,6 +5,7 @@ import top.tianyan.app.harness.HarnessMessage
 import top.tianyan.app.harness.CapabilityEvent
 import top.tianyan.app.harness.ToolCall
 import top.tianyan.app.harness.UserMessage
+import java.util.Locale
 
 /** 消息流渲染的通用纯函数工具：间距判定 / 推理去重 / 时长与 token 格式化。 */
 internal fun isThinkingOrActionItem(item: ChatRenderItem?): Boolean {
@@ -32,7 +33,7 @@ internal fun reasoningAlreadyShown(messages: List<HarnessMessage>, index: Int, r
 internal fun formatChatDuration(ms: Long): String {
     val totalSeconds = ms / 1000
     return when {
-        totalSeconds < 10 -> String.format(java.util.Locale.US, "%.1fs", ms / 1000.0)
+        totalSeconds < 10 -> String.format(Locale.US, "%.1fs", ms / 1000.0)
         totalSeconds < 60 -> "${totalSeconds}s"
         else -> "${totalSeconds / 60}m${totalSeconds % 60}s"
     }
@@ -40,7 +41,15 @@ internal fun formatChatDuration(ms: Long): String {
 
 /** Token 计数紧凑格式：1234 → 1.2k，用于气泡底部的用量明细。 */
 internal fun formatTokenCount(tokens: Int): String = when {
-    tokens >= 10_000 -> String.format(java.util.Locale.US, "%.1fk", tokens / 1000f)
-    tokens >= 1_000 -> String.format(java.util.Locale.US, "%.2fk", tokens / 1000f)
+    tokens >= 10_000 -> String.format(Locale.US, "%.1fk", tokens / 1000f)
+    tokens >= 1_000 -> String.format(Locale.US, "%.2fk", tokens / 1000f)
+    else -> tokens.toString()
+}
+
+internal fun formatContextWindow(tokens: Int): String = when {
+    tokens >= 1_000_000 && tokens % 1_000_000 == 0 -> "${tokens / 1_000_000}M"
+    tokens >= 1_000_000 -> String.format(Locale.US, "%.1fM", tokens / 1_000_000.0)
+    tokens >= 1_000 && tokens % 1_000 == 0 -> "${tokens / 1_000}K"
+    tokens >= 1_000 -> String.format(Locale.US, "%.1fK", tokens / 1_000.0)
     else -> tokens.toString()
 }

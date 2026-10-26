@@ -1,5 +1,4 @@
 package top.tianyan.app.core.datastore
-
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -8,22 +7,25 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import dagger.hilt.android.qualifiers.ApplicationContext
+import top.tianyan.app.core.model.AgentPlugin
+import top.tianyan.app.core.model.BuiltinPlugins
+import top.tianyan.app.core.model.EnvironmentVariable
+import top.tianyan.app.core.model.ExecutionMode
+import top.tianyan.app.core.model.RunningSendMode
 import top.tianyan.app.core.security.SecretManager
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
-
-private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
-
-@Singleton
-class SettingsDataStore @Inject constructor(
-    @ApplicationContext private val context: Context,
+internal val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
+class SettingsDataStore(
+    private val context: Context,
     private val secretManager: SecretManager,
 ) {
+    internal val appearanceDataStore get() = context.settingsDataStore
     // 工坊 Android/Flutter 工具链覆盖配置。空值表示使用当前套件的标准路径。
     private val workshopAndroidSdkPathKey = stringPreferencesKey("workshop_android_sdk_path")
     private val workshopNdkPathKey = stringPreferencesKey("workshop_ndk_path")
@@ -40,8 +42,6 @@ class SettingsDataStore @Inject constructor(
     private val workshopFlutterScriptKey = stringPreferencesKey("workshop_flutter_script")
     // 工坊 Android 签名（keystore）注册表；整表 JSON 密文存储，口令不落明文。
     private val workshopKeystoresKey = stringPreferencesKey("workshop_keystores_ciphertext")
-    // Git HTTPS 凭证（GitHub/Gitee/GitLab 私有仓库 PAT）；同样整表加密，不落明文。
-    private val gitCredentialsKey = stringPreferencesKey("git_credentials_ciphertext")
     // ===== 内置浏览器偏好：数据源（datastore key 集中放在 BrowserPreferencesKeys） =====
     private val browserDefaultFamilyKey = BrowserPreferencesKeys.DefaultFamily
     private val browserHomeUrlKey = BrowserPreferencesKeys.HomeUrl
@@ -50,6 +50,7 @@ class SettingsDataStore @Inject constructor(
     private val browserAllowEvalJsKey = BrowserPreferencesKeys.AllowEvalJs
     private val browserAllowHooksKey = BrowserPreferencesKeys.AllowHooks
     private val browserAllowCdpKey = BrowserPreferencesKeys.AllowCdp
+    private val browserAllowVConsoleKey = BrowserPreferencesKeys.AllowVConsole
     private val browserDesktopUserAgentKey = BrowserPreferencesKeys.DesktopUserAgent
     private val browserMaxCaptureBytesKey = BrowserPreferencesKeys.MaxCaptureBytes
 
@@ -67,10 +68,39 @@ class SettingsDataStore @Inject constructor(
     suspend fun setBrowserAllowHooks(value: Boolean) { context.settingsDataStore.edit { it[browserAllowHooksKey] = value } }
     val browserAllowCdp: Flow<Boolean> = context.settingsDataStore.data.map { it[browserAllowCdpKey] ?: false }
     suspend fun setBrowserAllowCdp(value: Boolean) { context.settingsDataStore.edit { it[browserAllowCdpKey] = value } }
+    val browserAllowVConsole: Flow<Boolean> = context.settingsDataStore.data.map { it[browserAllowVConsoleKey] ?: false }
+    suspend fun setBrowserAllowVConsole(value: Boolean) { context.settingsDataStore.edit { it[browserAllowVConsoleKey] = value } }
     val browserDesktopUserAgent: Flow<Boolean> = context.settingsDataStore.data.map { it[browserDesktopUserAgentKey] ?: false }
     suspend fun setBrowserDesktopUserAgent(value: Boolean) { context.settingsDataStore.edit { it[browserDesktopUserAgentKey] = value } }
     val browserMaxCaptureBytes: Flow<Int> = context.settingsDataStore.data.map { it[browserMaxCaptureBytesKey] ?: (6 * 1024 * 1024) }
     suspend fun setBrowserMaxCaptureBytes(value: Int) { context.settingsDataStore.edit { it[browserMaxCaptureBytesKey] = value } }
+
+    // ===== MCP 被控端（外部 AI 客户端控制本 App）偏好：数据源 =====
+    private val agentServerEnabledKey = AgentServerPreferencesKeys.Enabled
+    private val agentServerPortKey = AgentServerPreferencesKeys.Port
+    private val agentServerAllowRemoteKey = AgentServerPreferencesKeys.AllowRemote
+    private val agentServerTokenKey = AgentServerPreferencesKeys.Token
+    private val agentServerAllowWriteToolsKey = AgentServerPreferencesKeys.AllowWriteTools
+
+    val agentServerEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[agentServerEnabledKey] ?: false }
+    suspend fun setAgentServerEnabled(value: Boolean) { context.settingsDataStore.edit { it[agentServerEnabledKey] = value } }
+    val agentServerPort: Flow<Int> = context.settingsDataStore.data.map { it[agentServerPortKey] ?: AgentServerPreferences.DEFAULT_PORT }
+    suspend fun setAgentServerPort(value: Int) { context.settingsDataStore.edit { it[agentServerPortKey] = value } }
+    val agentServerAllowRemote: Flow<Boolean> = context.settingsDataStore.data.map { it[agentServerAllowRemoteKey] ?: false }
+    suspend fun setAgentServerAllowRemote(value: Boolean) { context.settingsDataStore.edit { it[agentServerAllowRemoteKey] = value } }
+    val agentServerToken: Flow<String> = context.settingsDataStore.data.map {
+        // 与其他凭据一致走 Keystore 密文；decode 兼容历史明文值，下次保存自动升级为密文
+        it[agentServerTokenKey]?.let(::decodeProtectedValue).orEmpty()
+    }
+    suspend fun setAgentServerToken(value: String) {
+        if (value.isBlank()) {
+            context.settingsDataStore.edit { it.remove(agentServerTokenKey) }
+        } else {
+            context.settingsDataStore.edit { it[agentServerTokenKey] = encodeProtectedValue(value) }
+        }
+    }
+    val agentServerAllowWriteTools: Flow<Boolean> = context.settingsDataStore.data.map { it[agentServerAllowWriteToolsKey] ?: false }
+    suspend fun setAgentServerAllowWriteTools(value: Boolean) { context.settingsDataStore.edit { it[agentServerAllowWriteToolsKey] = value } }
 
 
     val workshopAndroidSdkPath: Flow<String> = context.settingsDataStore.data.map { it[workshopAndroidSdkPathKey].orEmpty() }
@@ -113,46 +143,17 @@ class SettingsDataStore @Inject constructor(
 
     suspend fun setWorkshopKeystores(value: List<WorkshopKeystore>) {
         context.settingsDataStore.edit { prefs ->
+            val current = prefs[workshopKeystoresKey]
+            if (current != null && secretManager.decrypt(current) == null) {
+                // Keystore 短暂故障导致存量密文解密失败时，内存里的"空表"不可信；
+                // 此时任何覆盖写（尤其 clear）都会把全部签名密文永久销毁——拒绝写入。
+                return@edit
+            }
             if (value.isEmpty()) {
                 prefs.remove(workshopKeystoresKey)
             } else {
                 prefs[workshopKeystoresKey] = secretManager.encrypt(WorkshopKeystoreCodec.encode(value))
             }
-        }
-    }
-
-    /** Git 凭证列表（解密后的明文记录，仅本机内存中使用）。解密失败视为空表。 */
-    val gitCredentials: Flow<List<GitCredential>> = context.settingsDataStore.data.map { prefs ->
-        val ciphertext = prefs[gitCredentialsKey]
-        if (ciphertext.isNullOrBlank()) {
-            emptyList()
-        } else {
-            GitCredentialCodec.decode(secretManager.decrypt(ciphertext))
-        }
-    }
-
-    suspend fun setGitCredentials(value: List<GitCredential>) {
-        context.settingsDataStore.edit { prefs ->
-            if (value.isEmpty()) {
-                prefs.remove(gitCredentialsKey)
-            } else {
-                prefs[gitCredentialsKey] = secretManager.encrypt(GitCredentialCodec.encode(value))
-            }
-        }
-    }
-
-    /** 最近 5 条克隆过的仓库 URL（新→旧），clone dialog 下拉快速选。明文（URL 不敏感）。 */
-    private val gitRecentCloneUrlsKey = stringPreferencesKey("git_recent_clone_urls")
-    val gitRecentCloneUrls: Flow<List<String>> = context.settingsDataStore.data.map { p ->
-        p[gitRecentCloneUrlsKey]?.split("\n")?.filter { it.isNotBlank() } ?: emptyList()
-    }
-    suspend fun pushRecentCloneUrl(url: String) {
-        val trimmed = url.trim()
-        if (trimmed.isBlank()) return
-        context.settingsDataStore.edit { p ->
-            val cur = p[gitRecentCloneUrlsKey]?.split("\n")?.filter { it.isNotBlank() }.orEmpty()
-            val updated = (listOf(trimmed) + cur.filter { it != trimmed }).take(5)
-            p[gitRecentCloneUrlsKey] = updated.joinToString("\n")
         }
     }
 
@@ -173,44 +174,75 @@ class SettingsDataStore @Inject constructor(
     }
 
     suspend fun resetWorkshopScripts() {
-        context.settingsDataStore.edit {
-            it.remove(workshopAndroidScriptKey)
-            it.remove(workshopFlutterScriptKey)
-        }
+        context.settingsDataStore.edit { it.remove(workshopAndroidScriptKey); it.remove(workshopFlutterScriptKey) }
     }
 
-    private suspend fun setWorkshopValue(key: androidx.datastore.preferences.core.Preferences.Key<String>, value: String) {
-        context.settingsDataStore.edit { prefs ->
-            if (value.isBlank()) prefs.remove(key) else prefs[key] = value
-        }
+    private suspend fun setWorkshopValue(key: Preferences.Key<String>, value: String) {
+        context.settingsDataStore.edit { prefs -> if (value.isBlank()) prefs.remove(key) else prefs[key] = value }
     }
     private val developerModeKey = booleanPreferencesKey("developer_mode")
     private val qemuCompatibilityEnabledKey = booleanPreferencesKey("qemu_compatibility_enabled")
     private val themeModeKey = stringPreferencesKey("theme_mode")
-    private val themeStyleKey = stringPreferencesKey("theme_style")
-    private val chengmingBackgroundUriKey = stringPreferencesKey("chengming_background_uri")
+    private val dynamicColorEnabledKey = booleanPreferencesKey("dynamic_color_enabled")
     private val onboardingCompletedKey = booleanPreferencesKey("onboarding_completed")
     private val selectedDistributionKey = stringPreferencesKey("selected_distribution")
     private val mirrorPolicyKey = stringPreferencesKey("mirror_policy")
     private val providerKey = stringPreferencesKey("provider")
     private val providerBaseUrlKey = stringPreferencesKey("provider_base_url")
     private val providerModelKey = stringPreferencesKey("provider_model")
+    private val phoneAgentConfigKey = stringPreferencesKey("phone_agent_config")
     private val apiKeyCiphertextKey = stringPreferencesKey("api_key_ciphertext")
     private val registryManifestUrlKey = stringPreferencesKey("registry_manifest_url")
     private val registrySignatureUrlKey = stringPreferencesKey("registry_signature_url")
     private val registryPublicKeyKey = stringPreferencesKey("registry_public_key")
     private val thinkingExpandedKey = booleanPreferencesKey("thinking_blocks_expanded")
+    private val thinkingAutoTranslateKey = booleanPreferencesKey("thinking_auto_translate")
     private val defaultReasoningDepthKey = stringPreferencesKey("agent_default_reasoning_depth")
     private val agentLoggingEnabledKey = booleanPreferencesKey("agent_local_logging_enabled")
     private val executionModeKey = stringPreferencesKey("execution_mode")
     private val preferredExecutionModeKey = stringPreferencesKey("preferred_execution_mode")
-    private val thinkingLanguageKey = stringPreferencesKey("thinking_language")
     private val customSystemPromptEnabledKey = booleanPreferencesKey("custom_system_prompt_enabled")
     private val customSystemPromptKey = stringPreferencesKey("custom_system_prompt")
+    private val agentCharNameKey = stringPreferencesKey("agent_char_name")
+    private val agentUserNameKey = stringPreferencesKey("agent_user_name")
     private val legacyEnvironmentVariablesKey = stringPreferencesKey("environment_variables_json")
     private val environmentPrivacyModeKey = booleanPreferencesKey("environment_privacy_mode")
-    private val environmentJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
+    /** 对话结束后自动建议「沉淀新技能 / 修复既有技能」（自进化闭环） */
+    private val skillEvolutionSuggestionsKey = booleanPreferencesKey("skill_evolution_suggestions")
+    /** 已忽略或已应用的技能进化建议 id 集合（防止杀进程后重复展示） */
+    private val dismissedSkillSuggestionsKey = stringSetPreferencesKey("dismissed_skill_suggestions")
+    private val environmentJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     val environmentPrivacyMode: Flow<Boolean> = context.settingsDataStore.data.map { it[environmentPrivacyModeKey] ?: true }
+
+    /** 对话结束后自动建议「沉淀新技能 / 修复既有技能」（自进化闭环） */
+    val skillEvolutionSuggestions: Flow<Boolean> = context.settingsDataStore.data.map { it[skillEvolutionSuggestionsKey] ?: true }
+
+    suspend fun setSkillEvolutionSuggestions(enabled: Boolean) {
+        context.settingsDataStore.edit { it[skillEvolutionSuggestionsKey] = enabled }
+    }
+
+    /** 已忽略或已应用的技能进化建议 id 集合流（持久化） */
+    val dismissedSkillSuggestions: Flow<Set<String>> = context.settingsDataStore.data.map {
+        it[dismissedSkillSuggestionsKey].orEmpty()
+    }
+
+    /** 记录已忽略或已应用的技能建议 id（持久化落盘，且限制最大容量防止无限膨胀） */
+    suspend fun dismissSkillSuggestion(id: String) {
+        val trimmed = id.trim()
+        if (trimmed.isEmpty()) return
+        context.settingsDataStore.edit { prefs ->
+            val current = prefs[dismissedSkillSuggestionsKey].orEmpty()
+            if (trimmed !in current) {
+                val updated = if (current.size >= MAX_DISMISSED_SKILL_SUGGESTIONS) {
+                    current.drop(current.size - (MAX_DISMISSED_SKILL_SUGGESTIONS - 1)).toSet() + trimmed
+                } else {
+                    current + trimmed
+                }
+                prefs[dismissedSkillSuggestionsKey] = updated
+            }
+        }
+    }
 
     suspend fun setEnvironmentPrivacyMode(enabled: Boolean) {
         context.settingsDataStore.edit { it[environmentPrivacyModeKey] = enabled }
@@ -234,22 +266,12 @@ class SettingsDataStore @Inject constructor(
         context.settingsDataStore.edit { it.remove(legacyEnvironmentVariablesKey) }
     }
 
-    @kotlinx.serialization.Serializable
+    @Serializable
     private data class StoredEnvironmentVariable(
-        val metadata: top.tianyan.app.core.model.EnvironmentVariable,
+        val metadata: EnvironmentVariable,
         val encryptedValue: String,
     )
 
-
-    val thinkingLanguage: Flow<String> = context.settingsDataStore.data.map { preferences ->
-        preferences[thinkingLanguageKey] ?: "zh"
-    }
-
-    suspend fun setThinkingLanguage(lang: String) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[thinkingLanguageKey] = lang
-        }
-    }
 
     val customSystemPromptEnabled: Flow<Boolean> = context.settingsDataStore.data.map { preferences ->
         preferences[customSystemPromptEnabledKey] ?: false
@@ -271,41 +293,63 @@ class SettingsDataStore @Inject constructor(
         }
     }
 
+    /** 模型自称（{{char}} 宏与默认提示词人设名），空串回退默认。 */
+    val agentCharName: Flow<String> = context.settingsDataStore.data.map { preferences ->
+        preferences[agentCharNameKey].orEmpty().ifBlank { DEFAULT_AGENT_CHAR_NAME }
+    }
+
+    suspend fun setAgentCharName(name: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[agentCharNameKey] = name.trim()
+        }
+    }
+
+    /** 模型对用户的称呼（{{user}}/{{nickname}} 宏），空串回退默认。 */
+    val agentUserName: Flow<String> = context.settingsDataStore.data.map { preferences ->
+        preferences[agentUserNameKey].orEmpty().ifBlank { DEFAULT_AGENT_USER_NAME }
+    }
+
+    suspend fun setAgentUserName(name: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[agentUserNameKey] = name.trim()
+        }
+    }
+
     /** 实际生效模式；高权限失效时可临时回落为 PRoot。 */
-    val effectiveExecutionMode: Flow<top.tianyan.app.core.model.ExecutionMode> = context.settingsDataStore.data.map { preferences ->
-        top.tianyan.app.core.model.ExecutionMode.fromId(preferences[executionModeKey] ?: top.tianyan.app.core.model.ExecutionMode.PROOT.id)
+    val effectiveExecutionMode: Flow<ExecutionMode> = context.settingsDataStore.data.map { preferences ->
+        ExecutionMode.fromId(preferences[executionModeKey] ?: ExecutionMode.PROOT.id)
     }
 
     /** 用户最后一次成功选择的模式；缺少新键时从旧 execution_mode 无损迁移。 */
-    val preferredExecutionMode: Flow<top.tianyan.app.core.model.ExecutionMode> = context.settingsDataStore.data.map { preferences ->
-        top.tianyan.app.core.model.ExecutionMode.fromId(
+    val preferredExecutionMode: Flow<ExecutionMode> = context.settingsDataStore.data.map { preferences ->
+        ExecutionMode.fromId(
             preferences[preferredExecutionModeKey]
                 ?: preferences[executionModeKey]
-                ?: top.tianyan.app.core.model.ExecutionMode.PROOT.id,
+                ?: ExecutionMode.PROOT.id,
         )
     }
 
     /** 兼容旧消费者：executionMode 始终表示实际生效模式。 */
-    val executionMode: Flow<top.tianyan.app.core.model.ExecutionMode> = effectiveExecutionMode
+    val executionMode: Flow<ExecutionMode> = effectiveExecutionMode
 
-    suspend fun setExecutionMode(mode: top.tianyan.app.core.model.ExecutionMode) {
+    suspend fun setExecutionMode(mode: ExecutionMode) {
         context.settingsDataStore.edit { preferences ->
             preferences[executionModeKey] = mode.id
             preferences[preferredExecutionModeKey] = mode.id
         }
     }
 
-    suspend fun setPreferredExecutionMode(mode: top.tianyan.app.core.model.ExecutionMode) {
+    suspend fun setPreferredExecutionMode(mode: ExecutionMode) {
         context.settingsDataStore.edit { it[preferredExecutionModeKey] = mode.id }
     }
 
-    suspend fun setEffectiveExecutionMode(mode: top.tianyan.app.core.model.ExecutionMode) {
+    suspend fun setEffectiveExecutionMode(mode: ExecutionMode) {
         context.settingsDataStore.edit { it[executionModeKey] = mode.id }
     }
 
     suspend fun setExecutionModes(
-        preferred: top.tianyan.app.core.model.ExecutionMode,
-        effective: top.tianyan.app.core.model.ExecutionMode,
+        preferred: ExecutionMode,
+        effective: ExecutionMode,
     ) {
         context.settingsDataStore.edit {
             it[preferredExecutionModeKey] = preferred.id
@@ -323,36 +367,6 @@ class SettingsDataStore @Inject constructor(
         }
     }
 
-    /**
-     * 外观设置的一次性同步快照。
-     *
-     * 为什么要这个：主题风格、壁纸、字号缩放三项此前都用
-     * `collectAsStateWithLifecycle(initialValue = 默认值)` 读取，于是首帧必然按
-     * 「玄同 + 无壁纸 + 缩放 1.0」布局，等 DataStore 读完后整棵树再按真实值重排一次。
-     * 用户看到的就是「启动时界面是错的，过一会儿自己好了」——
-     * 澄明主题下尤其明显（背景层与覆盖层渐变都会突变）。
-     *
-     * 在 setContent 之前同步读一次，首帧就用真实值，从根上消掉这次跳变。
-     * 只在冷启动读一次，不在每帧调用；读失败时回落到与 Flow 相同的默认值。
-     */
-    suspend fun appearanceSnapshot(): AppearanceSnapshot {
-        val prefs = runCatching { context.settingsDataStore.data.first() }.getOrNull()
-        return AppearanceSnapshot(
-            themeMode = prefs?.get(themeModeKey) ?: "system",
-            themeStyle = prefs?.get(themeStyleKey) ?: "xuantong",
-            chengmingBackgroundUri = prefs?.get(chengmingBackgroundUriKey),
-            appFontScale = (prefs?.get(appFontScaleKey) ?: 1.0f).coerceIn(0.8f, 1.3f),
-        )
-    }
-
-    /** 外观设置快照；字段与各自的 Flow 同源同默认值，避免两处口径漂移。 */
-    data class AppearanceSnapshot(
-        val themeMode: String,
-        val themeStyle: String,
-        val chengmingBackgroundUri: String?,
-        val appFontScale: Float,
-    )
-
     val themeMode: Flow<String> = context.settingsDataStore.data.map { preferences ->
         preferences[themeModeKey] ?: "system"
     }
@@ -363,33 +377,22 @@ class SettingsDataStore @Inject constructor(
         }
     }
 
-    /** 主题风格（玄同 / 澄明），默认玄同。 */
-    val themeStyle: Flow<String> = context.settingsDataStore.data.map { preferences ->
-        preferences[themeStyleKey] ?: "xuantong"
+    /** 动态取色（Monet 引擎，跟随系统壁纸色调），默认开启（在 Android 12+ 下生效）。 */
+    val dynamicColorEnabled: Flow<Boolean> = context.settingsDataStore.data.map { preferences ->
+        preferences[dynamicColorEnabledKey] ?: true
     }
 
-    suspend fun setThemeStyle(style: String) {
+    suspend fun setDynamicColorEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
-            preferences[themeStyleKey] = style
-        }
-    }
-
-    val chengmingBackgroundUri: Flow<String?> = context.settingsDataStore.data.map { preferences ->
-        preferences[chengmingBackgroundUriKey]
-    }
-
-    suspend fun setChengmingBackgroundUri(uri: String?) {
-        context.settingsDataStore.edit { preferences ->
-            if (uri.isNullOrBlank()) preferences.remove(chengmingBackgroundUriKey)
-            else preferences[chengmingBackgroundUriKey] = uri
+            preferences[dynamicColorEnabledKey] = enabled
         }
     }
 
     // 终端外观与显示定制
-    private val terminalFontSizeKey = androidx.datastore.preferences.core.intPreferencesKey("terminal_font_size")
+    private val terminalFontSizeKey = intPreferencesKey("terminal_font_size")
     private val terminalColorSchemeKey = stringPreferencesKey("terminal_color_scheme")
     private val terminalHapticsEnabledKey = booleanPreferencesKey("terminal_haptics_enabled")
-    private val appFontScaleKey = androidx.datastore.preferences.core.floatPreferencesKey("app_font_scale")
+    private val appFontScaleKey = floatPreferencesKey("app_font_scale")
 
     val terminalFontSize: Flow<Int> = context.settingsDataStore.data.map { prefs ->
         prefs[terminalFontSizeKey] ?: 13
@@ -431,32 +434,15 @@ class SettingsDataStore @Inject constructor(
         }
     }
 
-    /**
-     * **沙箱内置代理**：用户在设置里填 `http://host:port` → EnvironmentResolver 注入沙箱环境变量
-     * （`http_proxy` / `https_proxy` / `HTTP_PROXY` / `HTTPS_PROXY`），让沙箱里的 `git` / `curl` / `apt-get`
-     * 全部走这个代理。**优先于 Android 系统级 `Settings.Global.http_proxy`**（后者只对 Android WebView/
-     * OkHttp 生效，对 PRoot 里的 libcurl 完全没用，就是用户提的"内置代理"的痛点）。
-     * 空字符串 = 不启用内置代理 → 回落到 Android 全局 → 都没有则不注入。
-     */
-    private val sandboxHttpProxyKey = stringPreferencesKey("sandbox_http_proxy")
-    val sandboxHttpProxy: Flow<String> = context.settingsDataStore.data.map { it[sandboxHttpProxyKey].orEmpty() }
-    suspend fun setSandboxHttpProxy(value: String) {
-        context.settingsDataStore.edit { it[sandboxHttpProxyKey] = value.trim() }
+    private val autoCheckUpdatesKey = booleanPreferencesKey("auto_check_updates")
+
+    val autoCheckUpdates: Flow<Boolean> = context.settingsDataStore.data.map { preferences ->
+        preferences[autoCheckUpdatesKey] ?: true
     }
 
-    private val cloudConfigJsonKey = stringPreferencesKey("tianyan_cloud_config_json")
-    private val cloudConfigFetchedAtKey = androidx.datastore.preferences.core.longPreferencesKey("tianyan_cloud_config_fetched_at")
-
-    /** 最近一次成功拉取的云端配置（JSON 序列化的 Map<String,String>），离线兜底用。 */
-    val cloudConfigJson: Flow<String> = context.settingsDataStore.data.map { it[cloudConfigJsonKey].orEmpty() }
-
-    /** 最近一次云端配置拉取成功的毫秒时间戳。 */
-    val cloudConfigFetchedAt: Flow<Long> = context.settingsDataStore.data.map { it[cloudConfigFetchedAtKey] ?: 0L }
-
-    suspend fun setCloudConfig(json: String) {
+    suspend fun setAutoCheckUpdates(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
-            preferences[cloudConfigJsonKey] = json
-            preferences[cloudConfigFetchedAtKey] = System.currentTimeMillis()
+            preferences[autoCheckUpdatesKey] = enabled
         }
     }
 
@@ -537,6 +523,9 @@ class SettingsDataStore @Inject constructor(
         }
     }
 
+    val phoneAgentConfig: Flow<PhoneAgentEndpoint> = context.settingsDataStore.data.map { decodePhoneAgentConfig(it[phoneAgentConfigKey], secretManager) }
+    suspend fun setPhoneAgentConfig(value: PhoneAgentEndpoint) { context.settingsDataStore.edit { val encoded = encodePhoneAgentConfig(value, secretManager); if (encoded == null) it.remove(phoneAgentConfigKey) else it[phoneAgentConfigKey] = encoded } }
+
     suspend fun setApiKey(value: String) {
         context.settingsDataStore.edit {
             if (value.isBlank()) it.remove(apiKeyCiphertextKey)
@@ -616,35 +605,61 @@ class SettingsDataStore @Inject constructor(
     /** 聊天里“思考过程”块是否默认展开（记忆用户上次的选择）。 */
     val thinkingExpanded: Flow<Boolean> = context.settingsDataStore.data.map { it[thinkingExpandedKey] ?: false }
 
-    suspend fun setThinkingExpanded(value: Boolean) {
-        context.settingsDataStore.edit { it[thinkingExpandedKey] = value }
-    }
+    suspend fun setThinkingExpanded(value: Boolean) { context.settingsDataStore.edit { it[thinkingExpandedKey] = value } }
+
+    /** 是否在展开思考过程时自动翻译为中文（需下载本地语种模型）。 */
+    val thinkingAutoTranslate: Flow<Boolean> = context.settingsDataStore.data.map { it[thinkingAutoTranslateKey] ?: false }
+
+    suspend fun setThinkingAutoTranslate(value: Boolean) { context.settingsDataStore.edit { it[thinkingAutoTranslateKey] = value } }
+
+    /** 历史轮次中间过程自动折叠（默认关闭）。实现见 ChatRoundCollapsePreferences.kt。 */
+    val chatRoundCollapse: Flow<Boolean> = context.chatRoundCollapsePreference
+    suspend fun setChatRoundCollapse(value: Boolean) { context.setChatRoundCollapsePreference(value) }
+    val autoReadReplies: Flow<Boolean> = context.autoReadRepliesPreference
+    suspend fun setAutoReadReplies(value: Boolean) = context.setAutoReadRepliesPreference(value)
+
+    /** 运行中发送方式：排队 / 引导（默认排队）。实现见 RunningSendModePreferences.kt。 */
+    val runningSendMode: Flow<RunningSendMode> = context.runningSendModePreference
+    suspend fun setRunningSendMode(value: RunningSendMode) { context.setRunningSendModePreference(value) }
 
     /** 全局推理深度：auto / disabled / low / medium / high（作用于未单独设置强度的模型）。 */
     val defaultReasoningDepth: Flow<String> = context.settingsDataStore.data.map { it[defaultReasoningDepthKey] ?: "auto" }
-    suspend fun setDefaultReasoningDepth(value: String) {
-        context.settingsDataStore.edit { it[defaultReasoningDepthKey] = value }
-    }
+    suspend fun setDefaultReasoningDepth(value: String) { context.settingsDataStore.edit { it[defaultReasoningDepthKey] = value } }
 
+    val firstResponseTimeoutSeconds: Flow<Int> = context.firstResponseTimeoutSecondsPreference
+    suspend fun setFirstResponseTimeoutSeconds(value: Int) { context.setFirstResponseTimeoutSecondsPreference(value) }
     // ==================== Agent 智能体核心配置 ====================
 
     private val contextCompactionEnabledKey = booleanPreferencesKey("agent_context_compaction_enabled")
-    private val contextCompactionThresholdKey = androidx.datastore.preferences.core.intPreferencesKey("agent_context_compaction_threshold")
-    private val maxToolRoundsKey = androidx.datastore.preferences.core.intPreferencesKey("agent_max_tool_rounds")
+    private val maxConcurrentAgentTurnsKey = intPreferencesKey("agent_max_concurrent_turns")
+    private val maxToolRoundsKey = intPreferencesKey("agent_max_tool_rounds")
+    private val roundLimitAutoContinuationsKey =
+        intPreferencesKey("agent_round_limit_auto_continuations")
     private val autoWorkspaceCwdKey = booleanPreferencesKey("agent_auto_workspace_cwd")
     private val commandOutputCompressionEnabledKey = booleanPreferencesKey("agent_command_output_compression_enabled")
-    private val baseCommandTimeoutSecondsKey = androidx.datastore.preferences.core.intPreferencesKey("agent_base_command_timeout_seconds")
+    private val baseCommandTimeoutSecondsKey = intPreferencesKey("agent_base_command_timeout_seconds")
+
+    /** 全局最大并发 Agent 轮次数（默认 2，受移动端性能/API 限流制约） */
+    val maxConcurrentAgentTurns: Flow<Int> = context.settingsDataStore.data.map {
+        it[maxConcurrentAgentTurnsKey] ?: DEFAULT_MAX_CONCURRENT_AGENT_TURNS
+    }
+    suspend fun setMaxConcurrentAgentTurns(value: Int) {
+        context.settingsDataStore.edit { it[maxConcurrentAgentTurnsKey] = value.coerceIn(1, 4) }
+    }
 
     val contextCompactionEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[contextCompactionEnabledKey] ?: true }
     suspend fun setContextCompactionEnabled(value: Boolean) { context.settingsDataStore.edit { it[contextCompactionEnabledKey] = value } }
 
-    /** 触发上下文压缩的历史轮数阈值（默认 15 轮） */
-    val contextCompactionThreshold: Flow<Int> = context.settingsDataStore.data.map { it[contextCompactionThresholdKey] ?: 15 }
-    suspend fun setContextCompactionThreshold(value: Int) { context.settingsDataStore.edit { it[contextCompactionThresholdKey] = value.coerceIn(5, 50) } }
-
     /** 最大工具执行轮次（默认 100 轮） */
     val maxToolRounds: Flow<Int> = context.settingsDataStore.data.map { it[maxToolRoundsKey] ?: 100 }
     suspend fun setMaxToolRounds(value: Int) { context.settingsDataStore.edit { it[maxToolRoundsKey] = value.coerceIn(10, 300) } }
+
+    /** 轮次预算用尽后自动续跑的次数（默认 2 次，0 表示触顶即停） */
+    val roundLimitAutoContinuations: Flow<Int> =
+        context.settingsDataStore.data.map { it[roundLimitAutoContinuationsKey] ?: DEFAULT_ROUND_LIMIT_AUTO_CONTINUATIONS }
+    suspend fun setRoundLimitAutoContinuations(value: Int) {
+        context.settingsDataStore.edit { it[roundLimitAutoContinuationsKey] = value.coerceIn(0, MAX_ROUND_LIMIT_AUTO_CONTINUATIONS) }
+    }
 
     /** 执行命令时是否自动注入工作区路径为 cwd */
     val autoWorkspaceCwd: Flow<Boolean> = context.settingsDataStore.data.map { it[autoWorkspaceCwdKey] ?: true }
@@ -677,15 +692,25 @@ class SettingsDataStore @Inject constructor(
      * 上下文 Token 预算（默认 128000）。当模型未单独配置 contextTokens 时作为兜底，
      * apiMessages 据此做滑动窗口裁剪，防止长会话撞上下文窗口上限。
      */
-    private val contextBudgetTokensKey = androidx.datastore.preferences.core.intPreferencesKey("agent_context_budget_tokens")
+    private val contextBudgetTokensKey = intPreferencesKey("agent_context_budget_tokens")
     val contextBudgetTokens: Flow<Int> = context.settingsDataStore.data.map { it[contextBudgetTokensKey] ?: 128_000 }
     suspend fun setContextBudgetTokens(value: Int) { context.settingsDataStore.edit { it[contextBudgetTokensKey] = value.coerceIn(4_000, 2_000_000) } }
+
+    /**
+     * 历史折叠线比例（百分比，默认 100，必须与引擎 ContextWindowPolicy.DEFAULT_FOLDING_RATIO_PERCENT 同步）。
+     *
+     * 100 = 对齐主流 harness：`contextWindow - reserveTokens - toolSchemaReserve - systemTokens`；
+     * 低于 100 会让历史更早进入摘要，主要用于主动节省 input token 成本。
+     */
+    private val contextFoldingRatioPercentKey = intPreferencesKey("agent_context_folding_ratio_percent")
+    val contextFoldingRatioPercent: Flow<Int> = context.settingsDataStore.data.map { it[contextFoldingRatioPercentKey] ?: 100 }
+    suspend fun setContextFoldingRatioPercent(value: Int) { context.settingsDataStore.edit { it[contextFoldingRatioPercentKey] = value.coerceIn(10, 100) } }
 
     /**
      * 单轮最多允许执行的工具调用数量（默认 12）。超过则本轮回填占位结果并提示模型，
      * 防止一次爆发大量工具调用耗尽上下文或陷入失控循环。
      */
-    private val maxToolsPerRoundKey = androidx.datastore.preferences.core.intPreferencesKey("agent_max_tools_per_round")
+    private val maxToolsPerRoundKey = intPreferencesKey("agent_max_tools_per_round")
     val maxToolsPerRound: Flow<Int> = context.settingsDataStore.data.map { it[maxToolsPerRoundKey] ?: 12 }
     suspend fun setMaxToolsPerRound(value: Int) { context.settingsDataStore.edit { it[maxToolsPerRoundKey] = value.coerceIn(1, 50) } }
 
@@ -693,13 +718,13 @@ class SettingsDataStore @Inject constructor(
      * 连续失败熔断阈值（默认 8）。当连续 N 轮工具调用全部失败时，主动终止循环并提示用户，
      * 避免模型在"调用→失败→再调用"中死循环空转。
      */
-    private val maxConsecutiveFailuresKey = androidx.datastore.preferences.core.intPreferencesKey("agent_max_consecutive_failures")
+    private val maxConsecutiveFailuresKey = intPreferencesKey("agent_max_consecutive_failures")
     val maxConsecutiveFailures: Flow<Int> = context.settingsDataStore.data.map { it[maxConsecutiveFailuresKey] ?: 8 }
     suspend fun setMaxConsecutiveFailures(value: Int) { context.settingsDataStore.edit { it[maxConsecutiveFailuresKey] = value.coerceIn(1, 50) } }
 
-        // ==================== 内置 ADB（宿主桥接插件） ====================
+    // ==================== 内置 ADB（宿主桥接插件） ====================
 
-    private val adbWirelessPortKey = androidx.datastore.preferences.core.intPreferencesKey("adb_wireless_debug_port")
+    private val adbWirelessPortKey = intPreferencesKey("adb_wireless_debug_port")
     private val adbPairedOnceKey = booleanPreferencesKey("adb_wireless_paired_once")
     private val adbNotificationEnabledKey = booleanPreferencesKey("adb_notification_enabled")
 
@@ -855,26 +880,20 @@ class SettingsDataStore @Inject constructor(
         .first()
         ?.let(::decodeProtectedValue)
 
-    /** 同步读取插件启用状态（供运行时启停判断）。 */
-    suspend fun isPluginEnabled(pluginId: String): Boolean = allPlugins.first().any { it.id == pluginId && it.isEnabled }
-
-    /** 插件启用状态的响应式流。 */
-    fun isPluginEnabledFlow(pluginId: String): Flow<Boolean> = allPlugins.map { list -> list.any { it.id == pluginId && it.isEnabled } }
-
     /** 获取所有 Plugin（预置），根据用户启用状态计算 isEnabled */
     private val enabledPluginsKey = stringSetPreferencesKey("agent_enabled_plugin_ids")
 
-    val allPlugins: Flow<List<top.tianyan.app.core.model.AgentPlugin>> = context.settingsDataStore.data.map { prefs ->
-        val defaults = top.tianyan.app.core.model.BuiltinPlugins.presets
+    val allPlugins: Flow<List<AgentPlugin>> = context.settingsDataStore.data.map { prefs ->
+        val defaults = BuiltinPlugins.presets
             .filter { it.isEnabled }
             .mapTo(mutableSetOf()) { it.id }
         val enabledIds = prefs[enabledPluginsKey] ?: defaults
-        top.tianyan.app.core.model.BuiltinPlugins.presets.map { plugin -> plugin.copy(isEnabled = plugin.id in enabledIds) }
+        BuiltinPlugins.presets.map { plugin -> plugin.copy(isEnabled = plugin.id in enabledIds) }
     }
 
     suspend fun setPluginEnabled(pluginId: String, enabled: Boolean) {
         context.settingsDataStore.edit { prefs ->
-            val defaults = top.tianyan.app.core.model.BuiltinPlugins.presets
+            val defaults = BuiltinPlugins.presets
                 .filter { it.isEnabled }
                 .mapTo(mutableSetOf()) { it.id }
             val current = (prefs[enabledPluginsKey] ?: defaults).toMutableSet()
@@ -947,8 +966,15 @@ class SettingsDataStore @Inject constructor(
 
     companion object {
         private const val PROTECTED_VALUE_PREFIX = "enc:v1:"
+        const val DEFAULT_MAX_CONCURRENT_AGENT_TURNS = 2
+        const val DEFAULT_AGENT_CHAR_NAME = "天衍智枢"
+        const val DEFAULT_AGENT_USER_NAME = "用户"
         const val DEFAULT_BASE_COMMAND_TIMEOUT_SECONDS = 10 * 60
+
         const val MIN_BASE_COMMAND_TIMEOUT_SECONDS = 60
         const val MAX_BASE_COMMAND_TIMEOUT_SECONDS = 60 * 60
+        const val DEFAULT_ROUND_LIMIT_AUTO_CONTINUATIONS = 2
+        const val MAX_ROUND_LIMIT_AUTO_CONTINUATIONS = 10
+        const val MAX_DISMISSED_SKILL_SUGGESTIONS = 1000
     }
 }

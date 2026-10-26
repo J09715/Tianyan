@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="onboarding_welcome">欢迎来到天衍</string>
+    <string name="onboarding_welcome_description">把 Linux、AI 与创造力，装进口袋。</string>
+    <string name="onboarding_feature_linux">随身的 Linux</string>
+    <string name="onboarding_feature_linux_description">无需 Root，选择发行版即可开始。</string>
+    <string name="onboarding_feature_agent">与你协作的 AI</string>
+    <string name="onboarding_feature_agent_description">对话、编写代码，让想法一步步实现。</string>
+    <string name="onboarding_feature_workspace">自己的工作空间</string>
+    <string name="onboarding_feature_workspace_description">管理项目，在终端中探索与构建。</string>
+    <string name="onboarding_start">开始探索</string>
+    <string name="onboarding_back">返回上一步</string>
+    <string name="onboarding_step">%1$d / 5</string>
+    <string name="onboarding_notice_intro">开始配置前，请了解天衍的能力与使用边界。这些说明也可在设置中随时查看。</string>
+    <string name="onboarding_notice_acknowledge">我已阅读并理解以上免责声明与使用须知</string>
+    <string name="onboarding_notice_continue">确认并继续</string>
+</resources>

@@ -6,6 +6,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import top.tianyan.app.harness.AssistantText
+import top.tianyan.app.harness.CapabilityEvent
+import top.tianyan.app.harness.HarnessMessage
 import top.tianyan.app.harness.HarnessTool
 import top.tianyan.app.harness.ToolCall
 import top.tianyan.app.harness.ToolResult
@@ -16,11 +18,11 @@ class RoundCollapseTest {
     private fun makeUser(id: String, text: String = "query") =
         UserMessage(id = id, createdAt = 1000L, text = text)
 
-    private fun makeAssistant(id: String, text: String, reasoning: String? = null) =
-        AssistantText(id = id, createdAt = 1000L, text = text, reasoning = reasoning)
+    private fun makeAssistant(id: String, text: String) =
+        AssistantText(id = id, createdAt = 1000L, text = text)
 
-    private fun makeToolCall(id: String, tool: HarnessTool = HarnessTool.READ, reasoning: String? = null) =
-        ToolCall(id = id, createdAt = 1000L, tool = tool, args = buildJsonObject {}, reasoning = reasoning)
+    private fun makeToolCall(id: String, tool: HarnessTool = HarnessTool.READ) =
+        ToolCall(id = id, createdAt = 1000L, tool = tool, args = buildJsonObject {})
 
     private fun makeToolResult(toolCallId: String, durationMs: Long? = 1000L) =
         ToolResult(
@@ -31,6 +33,22 @@ class RoundCollapseTest {
             output = "ok",
             durationMs = durationMs,
         )
+
+    private fun makeCapability(id: String) =
+        CapabilityEvent(
+            id = id,
+            createdAt = 1000L,
+            kind = CapabilityEvent.Kind.SKILL,
+            name = "tianyan-custom-iteration",
+        )
+
+    private fun messageIds(items: List<ChatRenderItem>): List<String> =
+        items.filterIsInstance<ChatRenderItem.MessageItem>().map { it.message.id }
+
+    private fun buttons(items: List<ChatRenderItem>): List<ChatRenderItem.CollapseButtonItem> =
+        items.filterIsInstance<ChatRenderItem.CollapseButtonItem>()
+
+    // ==================== 默认行为：关闭自动折叠（自然单行流） ====================
 
     @Test
     fun `empty messages returns empty list`() {
@@ -55,8 +73,7 @@ class RoundCollapseTest {
         val buttons = items.filterIsInstance<ChatRenderItem.CollapseButtonItem>()
         assertTrue("≤ 2 步的历史轮不应该有折叠按钮", buttons.isEmpty())
 
-        val messageIds = items.filterIsInstance<ChatRenderItem.MessageItem>().map { it.message.id }
-        assertEquals(listOf("u1", "t1", "t2", "a1", "u2", "a2"), messageIds)
+        assertEquals(listOf("u1", "t1", "t2", "a1", "u2", "a2"), messageIds(items))
     }
 
     @Test
@@ -68,8 +85,7 @@ class RoundCollapseTest {
             makeAssistant("a1", "Done"),
         )
         val items = projectChatMessages(messages)
-        val messageIds = items.filterIsInstance<ChatRenderItem.MessageItem>().map { it.message.id }
-        assertEquals(listOf("u1", "t1", "a1"), messageIds)
+        assertEquals(listOf("u1", "t1", "a1"), messageIds(items))
     }
 
     @Test
@@ -86,84 +102,318 @@ class RoundCollapseTest {
             makeAssistant("a2", "Next"),
         )
         val items = projectChatMessages(messages)
-        val messageIds = items.filterIsInstance<ChatRenderItem.MessageItem>().map { it.message.id }
-        assertEquals(listOf("a_init", "u1", "t1", "t2", "a1", "u2", "a2"), messageIds)
-    }
-
-    // ==================== showReasoning 投影期预计算（P7：列表项零回扫） ====================
-
-    private fun showReasoningOf(items: List<ChatRenderItem>, id: String): Boolean {
-        val item = items.filterIsInstance<ChatRenderItem.MessageItem>().first { it.message.id == id }
-        return item.showReasoning
+        assertEquals(listOf("a_init", "u1", "t1", "t2", "a1", "u2", "a2"), messageIds(items))
     }
 
     @Test
-    fun `tool call without reasoning has showReasoning false`() {
+    fun `disabled collapse keeps flat stream even when a historical round has many steps`() {
         val messages = listOf(
             makeUser("u1"),
             makeToolCall("t1"),
+            makeToolResult("t1"),
+            makeToolCall("t2"),
+            makeToolResult("t2"),
+            makeToolCall("t3"),
+            makeToolResult("t3"),
             makeAssistant("a1", "Done"),
-        )
-        val items = projectChatMessages(messages)
-        assertFalse("无 reasoning 的工具卡不应展示思考链", showReasoningOf(items, "t1"))
-    }
-
-    @Test
-    fun `tool call with fresh reasoning has showReasoning true`() {
-        val messages = listOf(
-            makeUser("u1"),
-            makeAssistant("a1", "Let me check", reasoning = "thinking-A"),
-            makeToolCall("t1", reasoning = "thinking-B"),
-        )
-        val items = projectChatMessages(messages)
-        assertTrue("前文未出现过的 reasoning 应展示", showReasoningOf(items, "t1"))
-    }
-
-    @Test
-    fun `tool call reasoning already shown by earlier assistant in same round is hidden`() {
-        val messages = listOf(
-            makeUser("u1"),
-            makeAssistant("a1", "Let me check", reasoning = "same-thinking"),
-            makeToolCall("t1", reasoning = "same-thinking"),
-        )
-        val items = projectChatMessages(messages)
-        assertFalse("同轮前文已展示过的 reasoning 不应重复展示", showReasoningOf(items, "t1"))
-    }
-
-    @Test
-    fun `duplicate reasoning across consecutive tool calls is deduplicated`() {
-        val messages = listOf(
-            makeUser("u1"),
-            makeToolCall("t1", reasoning = "dup"),
-            makeToolCall("t2", reasoning = "dup"),
-        )
-        val items = projectChatMessages(messages)
-        assertTrue("首个携带者应展示", showReasoningOf(items, "t1"))
-        assertFalse("后续重复者不应展示", showReasoningOf(items, "t2"))
-    }
-
-    @Test
-    fun `reasoning dedup does not cross previous user message boundary`() {
-        val messages = listOf(
-            makeUser("u1"),
-            makeToolCall("t1", reasoning = "round-thinking"),
-            makeAssistant("a1", "Done"),
-            // 新一轮：相同 reasoning 字符串，但前文在上一轮，不应被去重
             makeUser("u2"),
-            makeToolCall("t2", reasoning = "round-thinking"),
+            makeAssistant("a2", "Hello"),
         )
-        val items = projectChatMessages(messages)
-        assertTrue("跨轮（越过用户消息边界）的 reasoning 不应被去重", showReasoningOf(items, "t2"))
+        // 显式传 false 与使用默认值必须完全等价
+        val explicitOff = projectChatMessages(messages, emptyMap(), emptyMap(), collapseEnabled = false)
+        val implicitOff = projectChatMessages(messages)
+        assertTrue("关闭折叠时不得产生任何折叠按钮", buttons(explicitOff).isEmpty())
+        assertEquals(messageIds(implicitOff), messageIds(explicitOff))
+        assertEquals(listOf("u1", "t1", "t2", "t3", "a1", "u2", "a2"), messageIds(explicitOff))
+    }
+
+    // ==================== 开启自动折叠 ====================
+
+    @Test
+    fun `enabled collapse folds historical round keeping the newest two steps`() {
+        val messages = listOf(
+            makeUser("u1"),
+            makeToolCall("t1"),
+            makeToolResult("t1", 1200L),
+            makeToolCall("t2"),
+            makeToolResult("t2", 300L),
+            makeToolCall("t3"),
+            makeToolResult("t3", 500L),
+            makeAssistant("a1", "Done"),
+            makeUser("u2"),
+            makeAssistant("a2", "Hello"),
+        )
+        val toolResults = mapOf(
+            "t1" to makeToolResult("t1", 1200L),
+            "t2" to makeToolResult("t2", 300L),
+            "t3" to makeToolResult("t3", 500L),
+        )
+        val items = projectChatMessages(messages, toolResults, emptyMap(), collapseEnabled = true)
+
+        val foldButtons = buttons(items)
+        assertEquals(1, foldButtons.size)
+        assertEquals("u1", foldButtons[0].roundKey)
+        assertEquals("仅隐藏最旧的 1 步", 1, foldButtons[0].hiddenSteps)
+        assertEquals(3, foldButtons[0].totalSteps)
+        assertEquals("隐藏步骤耗时应累加对应 ToolResult 的 durationMs", 1200L, foldButtons[0].hiddenDurationMs)
+        assertFalse(foldButtons[0].isExpanded)
+
+        // 用户气泡 + 折叠按钮 + 最新 2 步 + 最终正文；下一轮不受影响
+        assertEquals(listOf("u1", "t2", "t3", "a1", "u2", "a2"), messageIds(items))
     }
 
     @Test
-    fun `non tool call messages always have showReasoning true`() {
+    fun `enabled collapse keeps never collapsing a round with two or fewer steps`() {
         val messages = listOf(
-            makeAssistant("a1", "text", reasoning = "r"),
             makeUser("u1"),
+            makeToolCall("t1"),
+            makeToolResult("t1"),
+            makeToolCall("t2"),
+            makeToolResult("t2"),
+            makeAssistant("a1", "Done"),
+            makeUser("u2"),
+            makeAssistant("a2", "Hello"),
         )
-        val items = projectChatMessages(messages)
-        assertTrue(showReasoningOf(items, "a1"))
-        assertTrue(showReasoningOf(items, "u1"))
+        val items = projectChatMessages(messages, emptyMap(), emptyMap(), collapseEnabled = true)
+        assertTrue(buttons(items).isEmpty())
+        assertEquals(listOf("u1", "t1", "t2", "a1", "u2", "a2"), messageIds(items))
+    }
+
+    @Test
+    fun `last round is never collapsed even when it has many steps`() {
+        val messages = listOf(
+            makeUser("u1"),
+            makeToolCall("t1"),
+            makeToolResult("t1"),
+            makeToolCall("t2"),
+            makeToolResult("t2"),
+            makeToolCall("t3"),
+            makeToolResult("t3"),
+            makeToolCall("t4"),
+            makeToolResult("t4"),
+            makeToolCall("t5"),
+            makeToolResult("t5"),
+            makeAssistant("a1", "Done"),
+        )
+        val items = projectChatMessages(messages, emptyMap(), emptyMap(), collapseEnabled = true)
+        assertTrue("进行中的最后一轮必须始终摊开", buttons(items).isEmpty())
+        assertEquals(listOf("u1", "t1", "t2", "t3", "t4", "t5", "a1"), messageIds(items))
+    }
+
+    @Test
+    fun `manual expand override reveals every step and shows expanded button`() {
+        val messages = listOf(
+            makeUser("u1"),
+            makeToolCall("t1"),
+            makeToolResult("t1"),
+            makeToolCall("t2"),
+            makeToolResult("t2"),
+            makeToolCall("t3"),
+            makeToolResult("t3"),
+            makeAssistant("a1", "Done"),
+            makeUser("u2"),
+            makeAssistant("a2", "Hello"),
+        )
+        val items = projectChatMessages(
+            messages,
+            emptyMap(),
+            mapOf("u1" to true),
+            collapseEnabled = true,
+        )
+        val foldButtons = buttons(items)
+        assertEquals(1, foldButtons.size)
+        assertTrue(foldButtons[0].isExpanded)
+        assertEquals("摊开态不隐藏任何步骤", 0, foldButtons[0].hiddenSteps)
+        assertEquals(listOf("u1", "t1", "t2", "t3", "a1", "u2", "a2"), messageIds(items))
+    }
+
+    @Test
+    fun `manual collapse override wins over the last-round rule`() {
+        val messages = listOf(
+            makeUser("u1"),
+            makeToolCall("t1"),
+            makeToolResult("t1"),
+            makeToolCall("t2"),
+            makeToolResult("t2"),
+            makeToolCall("t3"),
+            makeToolResult("t3"),
+            makeAssistant("a1", "Done"),
+        )
+        val items = projectChatMessages(
+            messages,
+            emptyMap(),
+            mapOf("u1" to false),
+            collapseEnabled = true,
+        )
+        val foldButtons = buttons(items)
+        assertEquals(1, foldButtons.size)
+        assertFalse("用户显式收拢的意图优先于末轮规则", foldButtons[0].isExpanded)
+        assertEquals(listOf("u1", "t2", "t3", "a1"), messageIds(items))
+    }
+
+    @Test
+    fun `middle assistant text follows its preceding hidden tool call`() {
+        val messages = listOf(
+            makeUser("u1"),
+            makeToolCall("t1"),
+            makeToolResult("t1"),
+            makeAssistant("a_mid", "Let me keep digging"),
+            makeToolCall("t2"),
+            makeToolResult("t2"),
+            makeToolCall("t3"),
+            makeToolResult("t3"),
+            makeAssistant("a_final", "Done"),
+            makeUser("u2"),
+            makeAssistant("a2", "Hello"),
+        )
+        val items = projectChatMessages(messages, emptyMap(), emptyMap(), collapseEnabled = true)
+        // t1 被隐藏 → 紧随其后的中间正文 a_mid 一并隐藏；最终正文永远可见
+        assertEquals(listOf("u1", "t2", "t3", "a_final", "u2", "a2"), messageIds(items))
+    }
+
+    @Test
+    fun `leading assistant text before any tool call always stays visible`() {
+        val messages = listOf(
+            makeUser("u1"),
+            makeAssistant("a_intro", "I will inspect the repo"),
+            makeToolCall("t1"),
+            makeToolResult("t1"),
+            makeToolCall("t2"),
+            makeToolResult("t2"),
+            makeToolCall("t3"),
+            makeToolResult("t3"),
+            makeAssistant("a_final", "Done"),
+            makeUser("u2"),
+            makeAssistant("a2", "Hello"),
+        )
+        val items = projectChatMessages(messages, emptyMap(), emptyMap(), collapseEnabled = true)
+        assertEquals(
+            listOf("u1", "a_intro", "t2", "t3", "a_final", "u2", "a2"),
+            messageIds(items),
+        )
+    }
+
+    @Test
+    fun `capability event stays visible inside a collapsed round`() {
+        val messages = listOf(
+            makeUser("u1"),
+            makeToolCall("t1"),
+            makeToolResult("t1"),
+            makeCapability("cap1"),
+            makeToolCall("t2"),
+            makeToolResult("t2"),
+            makeToolCall("t3"),
+            makeToolResult("t3"),
+            makeAssistant("a_final", "Done"),
+            makeUser("u2"),
+            makeAssistant("a2", "Hello"),
+        )
+        val items = projectChatMessages(messages, emptyMap(), emptyMap(), collapseEnabled = true)
+        assertEquals(
+            listOf("u1", "cap1", "t2", "t3", "a_final", "u2", "a2"),
+            messageIds(items),
+        )
+    }
+
+    @Test
+    fun `rawIndex always points into the original message list in both modes`() {
+        val messages = listOf(
+            makeUser("u1"),
+            makeToolCall("t1"),
+            makeToolResult("t1"),
+            makeToolCall("t2"),
+            makeToolResult("t2"),
+            makeToolCall("t3"),
+            makeToolResult("t3"),
+            makeAssistant("a1", "Done"),
+            makeUser("u2"),
+            makeAssistant("a2", "Hello"),
+        )
+
+        fun rawIndexById(items: List<ChatRenderItem>, id: String): Int =
+            items.filterIsInstance<ChatRenderItem.MessageItem>()
+                .first { it.message.id == id }
+                .rawIndex
+
+        val flat = projectChatMessages(messages)
+        assertEquals(3, rawIndexById(flat, "t2"))
+        assertEquals(7, rawIndexById(flat, "a1"))
+
+        val folded = projectChatMessages(messages, emptyMap(), emptyMap(), collapseEnabled = true)
+        assertEquals("折叠态下 rawIndex 语义必须与单行流一致", 3, rawIndexById(folded, "t2"))
+        assertEquals(7, rawIndexById(folded, "a1"))
+    }
+
+    // ==================== 分帧揭示（revealLimits） ====================
+
+    /** 3 步轮次里，被折叠时会消失的渲染条目 = 最旧 1 个工具卡 + 跟随它的中间正文 = 2 条。 */
+    private fun revealFixtures(): List<HarnessMessage> = listOf(
+        makeUser("u1"),
+        makeToolCall("t1"),
+        makeToolResult("t1"),
+        makeAssistant("a_mid", "Let me keep digging"),
+        makeToolCall("t2"),
+        makeToolResult("t2"),
+        makeToolCall("t3"),
+        makeToolResult("t3"),
+        makeAssistant("a_final", "Done"),
+        makeUser("u2"),
+        makeAssistant("a2", "Hello"),
+    )
+
+    @Test
+    fun `revealLimits caps how many hidden items are released per frame`() {
+        val items = projectChatMessages(
+            revealFixtures(),
+            emptyMap(),
+            mapOf("u1" to true),
+            collapseEnabled = true,
+            revealLimits = mapOf("u1" to 1),
+        )
+        val button = buttons(items).single()
+        assertTrue(button.isExpanded)
+        assertEquals("隐藏段总条目数应上报给 UI 用于分帧步长", 2, button.hiddenItemCount)
+        // 只放出第 1 条隐藏项（t1），紧随其后的中间正文 a_mid 仍被压住
+        assertEquals(listOf("u1", "t1", "t2", "t3", "a_final", "u2", "a2"), messageIds(items))
+    }
+
+    @Test
+    fun `revealLimits default releases every hidden item at once`() {
+        val items = projectChatMessages(
+            revealFixtures(),
+            emptyMap(),
+            mapOf("u1" to true),
+            collapseEnabled = true,
+        )
+        val button = buttons(items).single()
+        assertEquals(2, button.hiddenItemCount)
+        assertEquals(
+            listOf("u1", "t1", "a_mid", "t2", "t3", "a_final", "u2", "a2"),
+            messageIds(items),
+        )
+    }
+
+    @Test
+    fun `collapsed round reports hidden item count of items revealed on expand`() {
+        val items = projectChatMessages(revealFixtures(), emptyMap(), emptyMap(), collapseEnabled = true)
+        val button = buttons(items).single()
+        assertFalse(button.isExpanded)
+        assertEquals("收拢态必须上报展开后会出现的隐藏条目数，供分帧揭示启动", 2, button.hiddenItemCount)
+    }
+
+    @Test
+    fun `collapsed and expanded rounds report the same hidden item count`() {
+        val fixtures = revealFixtures()
+        val collapsed = projectChatMessages(fixtures, emptyMap(), emptyMap(), collapseEnabled = true)
+        val expanded = projectChatMessages(
+            fixtures,
+            emptyMap(),
+            mapOf("u1" to true),
+            collapseEnabled = true,
+        )
+        val collapsedCount = buttons(collapsed).single().hiddenItemCount
+        val expandedCount = buttons(expanded).single().hiddenItemCount
+        assertEquals("同一轮次收拢与展开的隐藏条目数必须一致", expandedCount, collapsedCount)
+        assertEquals(2, collapsedCount)
     }
 }

@@ -1,8 +1,8 @@
 package top.tianyan.app.runtime.browser
 
 import kotlinx.serialization.Serializable
-import top.tianyan.app.core.browser.BROWSER_HOME_URL
 import top.tianyan.app.core.browser.BrowserFamily
+import top.tianyan.app.core.browser.TianyanNewTab
 
 /**
  * 一个浏览器 tab 的"逻辑身份"。Harness 工具的 args 中传 `tab: String`（字符串 ID），
@@ -13,7 +13,7 @@ data class BrowserSessionToken(
     val tabId: String,
     val family: BrowserFamily,
     val title: String = "",
-    val url: String = BROWSER_HOME_URL,
+    val url: String = TianyanNewTab.URL,
     val createdAt: Long = System.currentTimeMillis(),
 ) {
     companion object {

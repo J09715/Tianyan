@@ -1,7 +1,5 @@
 package top.tianyan.app.harness.workflow
 
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonArray
@@ -46,8 +44,7 @@ interface WorkflowAgentExecutionPort {
  * foreground session. Coroutine cancellation is propagated into the lane runner, which
  * records an aborted operation before unwinding.
  */
-@Singleton
-class HarnessWorkflowAgentExecutionPort @Inject constructor(
+class HarnessWorkflowAgentExecutionPort(
     private val sessions: HarnessSessionRepository,
     private val models: AiModelRepository,
     private val laneRunner: SubagentLaneRunner,
@@ -64,6 +61,9 @@ class HarnessWorkflowAgentExecutionPort @Inject constructor(
             workspace = request.workspacePath,
             modelId = request.modelId ?: session.modelId,
             modelVariant = request.modelVariant ?: session.modelVariant,
+            // 节点声明了写范围才启用闸门；未声明的推理节点维持原有可写行为，
+            // 否则存量工作流里"生成文件"类推理节点会被静默降级成只读。
+            writePaths = request.writePaths.takeIf { it.isNotEmpty() },
         )
         return WorkflowAgentResult(result.success, result.summary, result.toolCallCount)
     }

@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f7f7f8">
-  <meta name="description" content="天衍插件开发指南：本地与在线来源、manifest.json、.txplugin、ARM64 离线资源、实时进度和发布检查。">
+  <meta name="description" content="天衍插件开发指南：.txplugin v2 PROCESS 与 WEB 包、作者 CLI、严格 SemVer、SHA-256 完整性、安装事务与页面授权。">
   <title>插件开发指南 · 天衍 Tianyan</title>
   <link rel="icon" href="assets/tianyan-logo.png">
-  <link rel="stylesheet" href="styles.css">
-  <script src="script.js" defer></script>
+  <link rel="stylesheet" href="styles.css?v=20261021">
+  <script src="script.js?v=20261021" defer></script>
 </head>
 <body class="docs-page">
   <a class="skip-link" href="#main">跳到主要内容</a>
@@ -20,19 +20,19 @@
 
   <main id="main" class="docs-main">
     <section class="docs-hero reveal">
-      <div class="section-index">TIANYAN PLUGIN GUIDE / SCHEMA 1</div>
+      <div class="section-index">TIANYAN PLUGIN GUIDE / SCHEMA 2</div>
       <h1>把你的工具，<br>装进天衍。</h1>
-      <p>用在线 Registry 或一个自包含的 <code>.txplugin</code>，把命令、SDK、脚本和本地服务带进 ARM64 Linux 沙箱。这里记录的是当前导入器与安装器的真实约束。</p>
+      <p>用自包含的 <code>.txplugin</code> 把命令、SDK、服务或 Web 页面带进天衍。新插件推荐使用 v2，旧版 v1 工具包继续兼容。本页按当前源码整理，安装包能力以所用版本为准。</p>
     </section>
 
     <div class="docs-layout">
-      <aside class="docs-toc"><b>目录</b><a href="#sources">插件来源</a><a href="#format">包格式</a><a href="#manifest">清单字段</a><a href="#hello">Hello 示例</a><a href="#package">打包与版本</a><a href="#runtime">精简 RootFS</a><a href="#progress">进度与日志</a><a href="#limits">限制与事务</a><a href="#checklist">发布检查</a></aside>
+      <aside class="docs-toc"><b>目录</b><a href="#sources">插件类型</a><a href="#format">包格式</a><a href="#manifest">v2 清单</a><a href="#hello">Hello 示例</a><a href="#package">CLI 与版本</a><a href="#web">Web 页面包</a><a href="#runtime">精简 RootFS</a><a href="#progress">进度与日志</a><a href="#limits">限制与事务</a><a href="#checklist">发布检查</a></aside>
       <article class="docs-content">
         <section id="sources" class="reveal">
-          <h2>01 / 本地插件与在线插件</h2>
-          <table><thead><tr><th>来源</th><th>清单</th><th>资源</th></tr></thead><tbody><tr><td>在线插件</td><td><code>REMOTE + SCRIPT</code></td><td>内置或签名 Registry</td></tr><tr><td>本地插件</td><td><code>LOCAL + LOCAL_PACKAGE</code></td><td>用户导入的 <code>.txplugin</code></td></tr></tbody></table>
-          <p>导入器会把本地包强制标记为 <code>source=LOCAL</code>、<code>offlineOnly=true</code>、<code>installMethod=LOCAL_PACKAGE</code>。本地插件与在线插件使用相同 ID 时，本地版本优先显示。</p>
-          <p class="callout"><code>permissions</code> 目前用于清单校验与界面展示，不是安装脚本的权限沙箱。插件脚本仍能修改 PRoot 内当前用户可写的路径。</p>
+          <h2>01 / 选择插件类型</h2>
+          <table><thead><tr><th>类型</th><th>用途</th><th>使用入口</th></tr></thead><tbody><tr><td>PROCESS</td><td>ARM64 命令、SDK、本地服务及受限 Harness 扩展</td><td>工具中心导入并安装</td></tr><tr><td>WEB</td><td>静态页面及白名单原生能力</td><td>设置 → 应用功能插件 → 外部 Web 插件</td></tr><tr><td>v1 兼容工具</td><td>原有清单与安装配方</td><td>原工具详情、启动和卸载入口</td></tr></tbody></table>
+          <p>本地包使用 <code>LOCAL + LOCAL_PACKAGE</code> 并标记 <code>offlineOnly=true</code>。在线 Registry 工具仍通过工具中心管理。v2 本地包不能覆盖内置或在线工具。</p>
+          <p class="callout">PROCESS 的权限和资源声明用于校验、展示与冲突检查，不构成恶意脚本隔离。PRoot 进程仍以 App UID 运行，脚本可以修改该身份可写的路径；WEB 页面能力另由原生代理授权。</p>
         </section>
 
         <section id="format" class="reveal">
@@ -42,38 +42,49 @@
 ├── manifest.json
 └── payload/
     ├── archives/       # SDK、NDK、Flutter 等归档
-    ├── scripts/        # 安装、验证、卸载脚本
+    ├── scripts/        # 安装、验证脚本
     ├── config/         # 配置模板
     └── bin/            # ARM64 文件</code></pre>
-          <ul><li>只允许 <code>manifest.json</code> 和 <code>payload/</code>，不得包含绝对路径或 <code>..</code>。</li><li><code>manifest.json</code> 最大 1 MiB。</li><li>解包条目累计最大 8 GiB。</li><li>安装前，payload 会复制到 <code>/opt/tianyan/imports/&lt;id&gt;</code>。</li></ul>
+          <ul><li>只允许 <code>manifest.json</code> 和 <code>payload/</code>，不得包含绝对路径或 <code>..</code>。</li><li><code>manifest.json</code> 最大 1 MiB；PROCESS 解压合计最大 8 GiB，最多 20,001 个条目。</li><li>v2 严格拒绝未知字段，包版本目录不可覆盖。</li><li><code>plugin.integrity</code> 必须精确列出所有 payload 普通文件及小写 SHA-256；键相对于 payload，例如 <code>bin/hello</code>。</li><li>WEB 使用更小的容量和文件类型限制，见下方页面包说明。</li></ul>
         </section>
 
         <section id="manifest" class="reveal">
-          <h2>03 / 编写 manifest.json</h2>
+          <h2>03 / 编写 v2 PROCESS 清单</h2>
+          <p>下面的完整示例使用空 <code>payload/</code>，安装时生成可执行脚本。携带文件的工程由作者 CLI 生成完整性清单。</p>
           <pre><code>{
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "hello-arm64",
   "name": "Hello ARM64",
   "description": "Tianyan 本地插件示例",
   "version": "1.0.0",
-  "publisher": "Your Name",
-  "category": "DEVELOPER",
   "launchType": "command",
   "architectures": ["ARM64"],
-  "permissions": [],
   "source": "LOCAL",
   "offlineOnly": true,
   "installMethod": "LOCAL_PACKAGE",
+  "installSteps": [
+    "printf '#!/bin/sh\\necho hello\\n' &gt; \"$TIANYAN_TOOL_DIR/bin/hello\"; chmod 755 \"$TIANYAN_TOOL_DIR/bin/hello\""
+  ],
   "launchCommand": "hello",
   "verifyCommand": "hello",
-  "commandLinks": ["hello"]
+  "commandLinks": ["hello"],
+  "plugin": {
+    "id": "example.hello",
+    "api": {"minimum": 1, "maximum": 1},
+    "execution": "PROCESS",
+    "extensions": [{"id": "launch", "point": "PROCESS"}],
+    "dependencies": [],
+    "capabilities": [],
+    "resources": [],
+    "integrity": {}
+  }
 }</code></pre>
-          <table><thead><tr><th>字段</th><th>当前约束</th></tr></thead><tbody><tr><td><code>id</code></td><td>小写字母、数字和连字符，长度 2～64。</td></tr><tr><td><code>version</code></td><td>必须非空，建议使用规范的 <code>x.y.z</code>。</td></tr><tr><td><code>launchType</code></td><td><code>one_shot</code>、<code>command</code>、<code>pty</code>、<code>web</code> 或 <code>service</code>。</td></tr><tr><td><code>architectures</code></td><td>必须包含 <code>ARM64</code>。</td></tr><tr><td><code>permissions</code></td><td>NETWORK、WORKSPACE_READ、WORKSPACE_WRITE、LOCAL_WEB。</td></tr><tr><td><code>commandLinks</code></td><td>默认链接到 <code>$TIANYAN_TOOL_DIR/bin/&lt;command&gt;</code>。</td></tr></tbody></table>
+          <table><thead><tr><th>字段</th><th>当前约束</th></tr></thead><tbody><tr><td><code>id</code></td><td>工具存储键：小写字母、数字和连字符。</td></tr><tr><td><code>plugin.id</code></td><td>独立的点分身份；第三方不能使用 <code>tianyan.*</code> 或 <code>legacy.*</code>。</td></tr><tr><td><code>version</code></td><td>严格 SemVer，如 <code>1.0.0</code>；升级须递增。</td></tr><tr><td><code>plugin.api</code></td><td>声明兼容 API 范围，当前示例为 1～1。</td></tr><tr><td><code>commandLinks</code></td><td>链接到工具私有 <code>bin/</code> 目录；每个入口都必须能验证。</td></tr><tr><td><code>plugin.integrity</code></td><td>文件集合及内容哈希必须完全匹配。</td></tr></tbody></table>
         </section>
 
         <section id="hello" class="reveal">
           <h2>04 / 从零制作 Hello 插件</h2>
-          <p>将脚本放在 <code>payload/bin/hello</code>：</p>
+          <p>也可以把脚本放在 <code>payload/bin/hello</code>，并用下面的步骤替换上例的 <code>installSteps</code>：</p>
           <pre><code>#!/bin/sh
 echo "hello from Tianyan"</code></pre>
           <p>安装步骤必须创建工具目录并恢复执行权限：</p>
@@ -83,26 +94,32 @@ echo "hello from Tianyan"</code></pre>
   "cp \"$TIANYAN_PLUGIN_PAYLOAD/bin/hello\" \"$TIANYAN_TOOL_DIR/bin/hello\"",
   "chmod 755 \"$TIANYAN_TOOL_DIR/bin/hello\""
 ]</code></pre>
-          <p>安装器提供 <code>TIANYAN_TOOL_ID</code>、<code>TIANYAN_TOOL_DIR</code>、<code>TIANYAN_TOOL_DATA</code> 和本地插件专用的 <code>TIANYAN_PLUGIN_PAYLOAD</code>。</p>
+          <p>安装器提供 <code>TIANYAN_TOOL_ID</code>、<code>TIANYAN_TOOL_DIR</code>、<code>TIANYAN_TOOL_DATA</code> 和本地插件专用的 <code>TIANYAN_PLUGIN_PAYLOAD</code>。v2 按原始字节校验，不自动修复脚本换行或 BOM；请保存为 UTF-8、LF 换行。</p>
         </section>
 
         <section id="package" class="reveal">
-          <h2>05 / 打包、版本与快速更新</h2>
-          <h3>Windows PowerShell</h3>
-          <pre><code>Compress-Archive `
-  -LiteralPath .\hello-arm64\manifest.json, .\hello-arm64\payload `
-  -DestinationPath .\hello-arm64.zip -Force
-Move-Item .\hello-arm64.zip .\hello-arm64.txplugin</code></pre>
-          <h3>Linux / macOS</h3>
-          <pre><code>cd hello-arm64
-zip -r ../hello-arm64.txplugin manifest.json payload</code></pre>
+          <h2>05 / 用作者 CLI 校验与打包</h2>
+          <p>在项目仓库中构建纯 JVM 作者工具，再对插件工程执行：</p>
+          <pre><code>.\gradlew.bat :plugin:cli:installDist
+.\plugin\cli\build\install\tianyan-plugin\bin\tianyan-plugin.bat pack .\hello-arm64 --write-manifest
+.\plugin\cli\build\install\tianyan-plugin\bin\tianyan-plugin.bat check .\hello-arm64
+.\plugin\cli\build\install\tianyan-plugin\bin\tianyan-plugin.bat inspect .\hello-arm64\dist\hello-arm64-1.0.0.txplugin</code></pre>
+          <p>Linux / macOS 使用 <code>./gradlew</code> 与同目录无 <code>.bat</code> 后缀的可执行脚本。<code>pack</code> 重算 payload 哈希；<code>--write-manifest</code> 同时更新工程清单。默认输出到插件工程的 <code>dist/</code>，校验与打包不会执行安装脚本或调用模型。</p>
           <p>大型插件使用支持 Zip64 的工具；对已经压缩的 <code>.zip</code>、<code>.tar.gz</code> 和 <code>.deb</code> 条目优先使用 Store/NoCompression。</p>
-          <p class="callout"><code>.txplugin</code> 就是 ZIP。只更新清单或脚本时，可以复制旧包并替换少量 ZIP 条目，不必解压、重压缩所有大型归档；替换归档或改变压缩格式时才需要处理对应大文件。</p>
-          <ul><li>相同 <code>id + version</code> 会提示已导入，不重复解包或安装。</li><li>相同 ID 的不同版本当前会共存。</li><li>当前版本目录按字符串排序，并非完整 SemVer；修复前避免同时使用 <code>1.0.9</code> 与 <code>1.0.10</code>。</li><li>确认新包后，界面会连续执行导入与安装。</li></ul>
+          <p class="callout">修改 payload 后必须同步更新哈希并递增版本，不能直接替换已导入的同版本文件。建议重新通过 CLI 打包，避免清单与实际字节不一致。</p>
+          <ul><li>v2 按严格 SemVer 排序，支持预发布优先级；build metadata 不影响版本优先级。</li><li>升级不能改变插件身份、切换 PROCESS / WEB 或降为 v1。</li><li>插件依赖范围下界包含、上界不包含；依赖必须先安装，不会自动下载。</li><li>缺失依赖、循环、资源冲突或破坏已安装依赖者的升级会被拒绝；被依赖插件不能卸载。</li><li>导入只是选择安装候选；PROCESS 的启动和卸载按实际安装版本读取配置。</li></ul>
+        </section>
+
+        <section id="web" class="reveal">
+          <h2>06 / 制作 Web 页面包</h2>
+          <p>WEB 使用同一 v2 容器，<code>plugin.execution=WEB</code>，扩展固定为 <code>[{"id":"main","point":"PAGE"}]</code>。默认静态入口是 <code>payload/index.html</code>，导入后即可从外部 Web 插件页面打开，无需 Linux 配方安装。</p>
+          <ul><li>静态 payload 最多 63 个普通文件、合计 2 MiB；含清单解压总量最多 3 MiB，归档最多 129 个条目。</li><li>文件名与目录使用普通 ASCII；不能包含查询串、百分号编码或保留的根 <code>theme.css</code>。</li><li>不接受安装步骤、Shell 命令、环境变量、旧权限字段、全局资源或插件依赖。</li><li>可声明 APP_INFO、CLIPBOARD_WRITE、INSTALL_APK、LOGCAT 白名单能力；原生侧确认后调用，剪贴板写入和 APK 安装每次确认。</li><li>升级或移除后旧页面授权失效；能力授权不随导入自动授予。</li></ul>
+          <p>还支持固定的受管理 PRoot 来源与已安装服务来源，具体字段和限制请按完整规范选用，包不能自行提供任意地址、端口或命令。</p>
+          <a class="text-link" href="https://github.com/J09715/Tianyan/blob/main/docs/PLUGIN_WEB_EXTENSIONS.md" target="_blank" rel="noreferrer">查看完整 WEB 示例与消息协议 ↗</a>
         </section>
 
         <section id="runtime" class="reveal">
-          <h2>06 / 精简 RootFS 与大型依赖</h2>
+          <h2>07 / 精简 RootFS 与大型依赖</h2>
           <p>不要假设系统带有 <code>unzip</code>、<code>xz</code>、<code>file</code>、<code>readelf</code>、<code>jq</code>、Python 或 Node。优先使用 <code>.tar.gz</code>，并通过 SHA-256 校验归档。</p>
           <pre><code>archive="$TIANYAN_PLUGIN_PAYLOAD/archives/flutter-arm64.tar.gz"
 test -s "$archive"
@@ -119,7 +136,7 @@ is_aarch64_elf() {
         </section>
 
         <section id="progress" class="reveal">
-          <h2>07 / 实时百分比与安装日志</h2>
+          <h2>08 / 实时百分比与安装日志</h2>
           <p>插件脚本可以输出单调递增的结构化相对进度，应用会映射到完整安装进度条：</p>
           <pre><code>[TIANYAN_PROGRESS:47] [EXTRACT] 正在解压 Android NDK r29
 [TIANYAN_PROGRESS:75] [COMMAND] 正在配置 ADB
@@ -128,18 +145,20 @@ is_aarch64_elf() {
         </section>
 
         <section id="limits" class="reveal">
-          <h2>08 / 超时、空间与回滚边界</h2>
+          <h2>09 / 超时、空间与回滚边界</h2>
           <ul><li>安装脚本默认超时 15 分钟，验证命令默认超时 60 秒。</li><li>大包需要同时容纳私有插件副本、沙盒 payload 副本、staging 和最终目录。</li><li>框架事务只快照 <code>/opt/tianyan/tools/&lt;id&gt;</code>。</li><li><code>/opt/android-sdk</code>、<code>/opt/flutter</code>、<code>/root/.gradle</code> 等全局路径必须由插件自行 staging 和清理。</li><li>日志出现 <code>ROLLED_BACK</code> 不代表所有全局文件都已恢复。</li><li><code>verifyCommand</code> 应返回 0；不要依赖旧插件兼容用的命令入口兜底。</li></ul>
+          <p>v2 全局资源当前只接受 <code>RETAIN</code>，禁止自定义卸载脚本；卸载由框架清理工具目录、可选数据与命令入口。声明的全局目录不会自动删除。安装与升级基于同一发行版的实际安装收据复核依赖和资源，失败后保留旧版本运行配置。</p>
         </section>
 
         <section id="checklist" class="reveal">
-          <h2>09 / 发布前检查</h2>
-          <ul><li>ZIP 根目录、1 MiB manifest 和 8 GiB 解包限制均满足。</li><li>本地/在线来源、ID、版本、ARM64、启动类型与权限字段正确。</li><li>所有大文件都有固定 SHA-256。</li><li>不依赖未声明的 unzip、xz、file、readelf 等可选命令。</li><li>ELF、符号链接和 ZIP 可执行位均已处理。</li><li>断网完成导入、安装、验证和启动。</li><li>全新安装、同版本重复导入、新版本升级和卸载均验证。</li><li>结构化进度单调递增且日志不包含敏感信息。</li><li>失败时 staging 可清理，并已核算全部磁盘副本。</li></ul>
+          <h2>10 / 发布前检查</h2>
+          <ul><li>CLI check / pack / inspect 均通过，完整性清单与所有 payload 文件精确对应。</li><li>身份、SemVer、API 范围和扩展类型正确；满足 PROCESS 或 WEB 各自容量限制。</li><li>PROCESS：ARM64、启动入口和依赖正确；不依赖未声明的可选命令。</li><li>PROCESS：执行位与 ABI 已核对，离线安装、验证和启动通过；失败时 staging 可清理。</li><li>WEB：默认静态入口可打开，原生能力确认、拒绝、撤销与升级失效均验证。</li><li>重复导入、新版本升级和卸载或移除均验证。</li><li>安装进度单调递增，日志与页面资源不包含凭据。</li><li>大型包已核算私有副本、payload、staging 和最终目录的总空间。</li></ul>
           <a class="button button-primary" href="https://github.com/J09715/Tianyan/blob/main/docs/PLUGIN_DEVELOPMENT_GUIDELINES.md" target="_blank" rel="noreferrer">阅读完整规范 <span>↗</span></a>
+          <p><a class="text-link" href="https://github.com/J09715/Tianyan/blob/main/docs/PLUGIN_PACKAGE_V2.md" target="_blank" rel="noreferrer">v2 包协议、资源声明与安装收据 ↗</a></p>
         </section>
       </article>
     </div>
   </main>
-  <footer><div class="footer-brand"><strong>天衍</strong><span>TIANYAN / LINUX AI RUNTIME</span></div><p>于方寸之间，构建一整个世界。</p><div class="footer-links"><a href="index.html">首页</a><a href="templates.html">模板教程</a><a href="https://github.com/J09715/Tianyan">GitHub</a></div><small>© <span data-year></span> Tianyan Project. Open source on GitHub.</small></footer>
+  <footer><div class="footer-brand"><strong>天衍</strong><span>TIANYAN / LINUX AI RUNTIME</span></div><p>于天衍中立极，于方寸间创世。</p><div class="footer-links"><a href="index.html">首页</a><a href="templates.html">模板教程</a><a href="https://github.com/J09715/Tianyan">GitHub</a></div><small>© <span data-year></span> Tianyan Project. Open source on GitHub.</small></footer>
 </body>
 </html>

@@ -10,9 +10,6 @@ import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -21,6 +18,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import top.tianyan.app.MainActivity
 import top.tianyan.app.R
+import top.tianyan.app.core.datastore.RuntimePreferences
 import top.tianyan.app.runtime.bridge.adb.EmbeddedAdbManager
 
 /**
@@ -29,11 +27,10 @@ import top.tianyan.app.runtime.bridge.adb.EmbeddedAdbManager
  * 解决在手机「开发者选项 ➔ 使用配对码配对设备」弹窗时，一旦切出应用弹窗自动关闭且配对码失效的问题。
  * 在通知栏常驻展示包含 RemoteInput 输入框与连接控制动作的通知，让用户直接下拉通知栏即可完成 6 位配对码输入与连接。
  */
-@Singleton
-class AdbNotificationManager @Inject constructor(
-    @ApplicationContext private val context: Context,
+class AdbNotificationManager(
+    private val context: Context,
     private val embeddedAdbManager: EmbeddedAdbManager,
-    private val preferences: top.tianyan.app.core.datastore.RuntimePreferences,
+    private val preferences: RuntimePreferences,
 ) {
     private val notificationManager: NotificationManager =
         context.getSystemService(NotificationManager::class.java)
@@ -75,6 +72,7 @@ class AdbNotificationManager @Inject constructor(
     /** 开启与 EmbeddedAdbManager 状态的自动同步。进入无线 ADB 页面或需要配对时调用。 */
     fun startSync() {
         isManuallyDismissed = false
+        embeddedAdbManager.startDiscovery(EmbeddedAdbManager.TAG_NOTIFICATION)
         if (syncJob?.isActive == true) return
         syncJob = scope.launch {
             combine(
@@ -110,6 +108,7 @@ class AdbNotificationManager @Inject constructor(
     fun stopSync() {
         syncJob?.cancel()
         syncJob = null
+        embeddedAdbManager.stopDiscovery(EmbeddedAdbManager.TAG_NOTIFICATION)
         dismiss()
     }
 

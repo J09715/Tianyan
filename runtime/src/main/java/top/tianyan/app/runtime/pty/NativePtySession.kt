@@ -1,126 +1,114 @@
 package top.tianyan.app.runtime.pty
 
-import top.tianyan.app.runtime.shell.LinuxSession
-import top.tianyan.app.runtime.shell.SessionConfig
-import top.tianyan.app.runtime.shell.TerminalOutput
-import top.tianyan.app.runtime.shell.TerminalStream
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
+import kotlin.coroutines.AbstractCoroutineContextElement
+import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import top.tianyan.app.runtime.shell.*
 
-/**
- * 真正的 PTY 会话：JNI forkpty 打开 master/slave，命令直接 exec 在 slave 上
- * （setsid + 控制终端），App 通过 master fd 读写。与 Termux 的 PTY 语义一致：
- * Ctrl+C / 任务控制 / SIGWINCH 缩放 / raw mode 全部可用。
- */
-class NativePtySession(
-    command: List<String>,
-    hostEnvironment: Map<String, String>,
-    private val config: SessionConfig,
+/** JNI master I/O and child reaping remain owned until every shutdown step succeeds. */
+class NativePtySession internal constructor(
+    private val masterFd: Int,
+    private val childPid: Int,
+    private val backend: NativePtyBackend,
     private val cleanupCallback: suspend () -> Unit = {},
+    scope: CoroutineScope = CoroutineScope(Dispatchers.IO),
+    private val shutdownTimeoutMs: Long = 500,
 ) : LinuxSession {
-
-    private val pair: IntArray = NativePty.openAndExec(
-        command.toTypedArray(),
-        hostEnvironment.entries.map { "${it.key}=${it.value}" }.toTypedArray(),
-        "/",
-        config.columns,
-        config.rows,
-        config.rawTerminal,
+    constructor(command: List<String>, hostEnvironment: Map<String, String>, config: SessionConfig,
+        cleanupCallback: suspend () -> Unit = {}) : this(
+        NativePty.openAndExec(command.toTypedArray(), hostEnvironment.entries.map { "${it.key}=${it.value}" }.toTypedArray(),
+            "/", config.columns, config.rows), cleanupCallback,
     )
-    private val masterFd: Int = pair[0]
-    private val childPid: Int = pair[1]
+    private constructor(pair: IntArray, cleanup: suspend () -> Unit) :
+        this(pair[0], pair[1], JniNativePtyBackend, cleanup)
 
+    private val child = NativePtyChild(backend, childPid)
+    private val closing = AtomicBoolean(false)
+    private val closeMutex = Mutex()
+    private val inputMutex = Mutex()
+    private var fdReleased = false
+    private var cleanupReleased = false
     private val outputChannel = Channel<TerminalOutput>(OUTPUT_BUFFER_CAPACITY)
-    private val closed = AtomicBoolean(false)
-    private val sessionScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val utf8Decoder = IncrementalUtf8Decoder(8192)
-
-    private val readerJob: Job = sessionScope.launch {
+    private val sessionScope = CoroutineScope(scope.coroutineContext.minusKey(Job) + SupervisorJob(scope.coroutineContext[Job]))
+    private val decoder = IncrementalUtf8Decoder(8192)
+    private val readerJob = sessionScope.launch {
         val buffer = ByteArray(8192)
         try {
-            while (!closed.get()) {
-                val n = NativePty.readFd(masterFd, buffer)
-                if (n < 0) break
-                if (n > 0) {
-                    val text = decodeUtf8(buffer, n)
-                    if (text.isNotEmpty()) {
-                        outputChannel.send(TerminalOutput(TerminalStream.STDOUT, text))
-                    }
+            while (!closing.get()) {
+                currentCoroutineContext().ensureActive()
+                val length = backend.read(masterFd, buffer)
+                if (length < 0) break
+                if (length > 0) decoder.decode(buffer, length).takeIf { it.isNotEmpty() }?.let {
+                    outputChannel.send(TerminalOutput(TerminalStream.STDOUT, it))
                 }
+                if (length == 0) yield()
             }
+            if (!closing.get()) decoder.finish().takeIf { it.isNotEmpty() }?.let {
+                outputChannel.send(TerminalOutput(TerminalStream.STDOUT, it))
+            }
+            // EOF can precede child exit; poll without preventing close from signalling it.
+            while (!closing.get() && child.isAlive) delay(10)
         } catch (cancellation: CancellationException) {
             throw cancellation
-        } catch (io: IOException) {
-            // fd 在关闭时被另一线程 close，视为 EOF
-        }
-        decodeUtf8End().takeIf { it.isNotEmpty() }?.let {
-            outputChannel.send(TerminalOutput(TerminalStream.STDOUT, it))
-        }
-        NativePty.waitPid(childPid)
-        outputChannel.close()
-    }
-
-    /** 流式 UTF-8 解码，避免多字节字符跨 read 被截断。 */
-    private fun decodeUtf8(buffer: ByteArray, length: Int): String {
-        return utf8Decoder.decode(buffer, length)
-    }
-
-    private fun decodeUtf8End(): String = utf8Decoder.finish()
+        } catch (_: IOException) {
+            // A terminated slave or a concurrently closing master ends the output stream.
+        } finally { outputChannel.close() }
+    }.also { it.invokeOnCompletion { outputChannel.close() } }
 
     override val output: Flow<TerminalOutput> = outputChannel.receiveAsFlow()
-
-    override val pid: Long? get() = childPid.toLong()
-
-    override val isAlive: Boolean
-        get() = !closed.get() && NativePty.killPid(childPid, 0) == 0
+    override val pid: Long get() = childPid.toLong()
+    override val isAlive: Boolean get() = child.isAlive
 
     override suspend fun write(data: ByteArray) = withContext(Dispatchers.IO) {
-        if (!closed.get()) {
+        inputMutex.withLock {
             var offset = 0
-            while (offset < data.size) {
-                val written = NativePty.writeFd(masterFd, data, offset, data.size - offset)
-                if (written <= 0) break
+            while (!closing.get() && offset < data.size) {
+                currentCoroutineContext().ensureActive()
+                val written = backend.write(masterFd, data, offset, data.size - offset)
+                if (written < 0) throw IOException("PTY write failed")
                 offset += written
+                if (written == 0) yield()
             }
         }
     }
-
     override suspend fun resize(columns: Int, rows: Int) = withContext(Dispatchers.IO) {
-        if (!closed.get()) {
-            NativePty.resizeFd(masterFd, columns.coerceIn(20, 400), rows.coerceIn(5, 200))
-        }
+        inputMutex.withLock { if (!closing.get()) backend.resize(masterFd, columns.coerceIn(20, 400), rows.coerceIn(5, 200)) }
     }
-
     override suspend fun interrupt() = write(byteArrayOf(3))
 
-    override suspend fun close() = withContext(Dispatchers.IO) {
-        if (closed.compareAndSet(false, true)) {
-            readerJob.cancel()
-            sessionScope.cancel()
-            // SIGHUP 让 shell 优雅退出；proot --kill-on-exit 负责整棵进程树。
-            NativePty.killPid(childPid, 1)
-            // 硬停止兜底：setsid 后 -pid 覆盖整个会话进程组。
-            NativePty.killPid(childPid, 9)
-            NativePty.waitPid(childPid)
-            NativePty.closeFd(masterFd)
-            outputChannel.close()
-            runCatching { cleanupCallback() }
+    override suspend fun close() {
+        val active = currentCoroutineContext()[ClosingSessions]?.sessions.orEmpty()
+        check(this !in active) { "PTY 清理不能递归关闭所属会话" }
+        withContext(NonCancellable + Dispatchers.IO + ClosingSessions(active + this)) {
+            closeMutex.withLock {
+                closing.set(true)
+                readerJob.cancel()
+                sessionScope.cancel()
+                outputChannel.close()
+                val failures = mutableListOf<Throwable>()
+                var stopped = false
+                try { child.stop(shutdownTimeoutMs); stopped = true } catch (failure: Throwable) { failures += failure }
+                // Native read/write polls are bounded, even if signalling failed.
+                readerJob.join()
+                inputMutex.withLock {
+                    if (!fdReleased) try { backend.close(masterFd); fdReleased = true }
+                    catch (failure: Throwable) { failures += failure }
+                }
+                if (stopped && !cleanupReleased) try { cleanupCallback(); cleanupReleased = true }
+                catch (failure: Throwable) { failures += failure }
+                if (failures.isNotEmpty()) throw ProcessCleanupException(failures)
+            }
         }
     }
-
-    companion object {
-        // 输出缓冲：~8KB/帧 × 1024 ≈ 8MB 上限，配合 send 背压可在高负载下不丢数据。
-        const val OUTPUT_BUFFER_CAPACITY = 1024
+    private class ClosingSessions(val sessions: Set<NativePtySession>) : AbstractCoroutineContextElement(Key) {
+        companion object Key : CoroutineContext.Key<ClosingSessions>
     }
+    companion object { const val OUTPUT_BUFFER_CAPACITY = 1024 }
 }

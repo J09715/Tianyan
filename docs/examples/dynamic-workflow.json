@@ -1,0 +1,37 @@
+{
+  "id": "dynamic_echo_demo",
+  "name": "动态追加打印步骤",
+  "description": "智能体生成提案，经确认后才追加执行；需选择模型。",
+  "nodes": [
+    {
+      "id": "plan",
+      "type": "AGENT_INFERENCE",
+      "title": "提出打印步骤",
+      "config": {
+        "prompt": "只返回 JSON 提案，不调用任何工具。生成恰好一个 BASH_COMMAND 节点，id 为 review.echo，命令为 printf \"dynamic workflow confirmed\\\\n\"；生成一条 id 为 added_echo 的边，从 review 的 success 端口连到 review.echo。顶层只能包含 nodes 和 edges。",
+        "resultSchema": "{\"properties\":{\"nodes\":{\"items\":{\"properties\":{\"config\":{\"properties\":{\"command\":{\"type\":\"string\"}},\"additionalProperties\":false,\"required\":[\"command\"],\"type\":\"object\"},\"id\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"type\":{\"enum\":[\"BASH_COMMAND\"],\"type\":\"string\"}},\"additionalProperties\":false,\"required\":[\"id\",\"type\",\"title\",\"config\"],\"type\":\"object\"},\"type\":\"array\"},\"edges\":{\"items\":{\"properties\":{\"fromPort\":{\"enum\":[\"success\"],\"type\":\"string\"},\"toNodeId\":{\"type\":\"string\"},\"id\":{\"type\":\"string\"},\"fromNodeId\":{\"enum\":[\"review\"],\"type\":\"string\"}},\"additionalProperties\":false,\"required\":[\"id\",\"fromNodeId\",\"fromPort\",\"toNodeId\"],\"type\":\"object\"},\"type\":\"array\"}},\"additionalProperties\":false,\"required\":[\"nodes\",\"edges\"],\"type\":\"object\"}"
+      },
+      "canvasX": 40,
+      "canvasY": 40
+    },
+    {
+      "id": "review",
+      "type": "HUMAN_APPROVAL",
+      "title": "核对新增步骤",
+      "description": "核对命令后才确认执行。",
+      "config": {
+        "expansionResultNode": "plan"
+      },
+      "canvasX": 300,
+      "canvasY": 40
+    }
+  ],
+  "edges": [
+    {
+      "fromPort": "success",
+      "toNodeId": "review",
+      "id": "plan_to_review",
+      "fromNodeId": "plan"
+    }
+  ]
+}

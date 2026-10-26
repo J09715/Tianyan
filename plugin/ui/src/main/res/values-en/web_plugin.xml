@@ -1,0 +1,26 @@
+<resources>
+    <string name="ui_web_plugin_title">Web plugin example</string>
+    <string name="ui_web_plugin_description">Try Web pages with native capability permissions</string>
+    <string name="ui_web_plugin_scope">Requests for app capabilities require confirmation. Permissions expire when you leave.</string>
+    <string name="ui_web_plugin_revoke">Revoke page permissions</string>
+    <string name="ui_web_plugin_unavailable">This WebView does not support plugin messaging. Update Android System WebView.</string>
+    <string name="ui_web_plugin_loading">Loading page…</string>
+    <string name="ui_web_plugin_load_failed">Plugin page resources are unavailable. Go back and try again.</string>
+    <string name="ui_web_plugin_permission">Allow this plugin to read app information?</string>
+    <string name="ui_web_plugin_permission_detail">Returns only the app package name, Android API and plugin API versions. Permission is scoped to the plugin, action, target and environment below.</string>
+    <string name="ui_web_plugin_allow_once">Allow once</string>
+    <string name="ui_web_plugin_allow_session">Allow on this page (read-only, up to 30 minutes)</string>
+    <string name="ui_web_plugin_deny">Deny</string>
+    <string name="ui_web_plugin_text_preview">Text to copy (replaces the clipboard; invisible characters are escaped):
+%1$s</string>
+    <string name="ui_web_service_title">Managed Web service demo</string>
+    <string name="ui_web_service_description">Starts a local asset service on opening and releases it when the page closes</string>
+    <string name="ui_web_proot_title">PRoot Web service demo</string>
+    <string name="ui_web_proot_description">Requires ready local Linux and /usr/bin/python3. Opens a dedicated asset process; switching systems or closing the page releases it. Dependencies are not installed automatically.</string>
+    <string name="ui_web_service_request_title">Read this page\'s service data</string>
+    <string name="ui_web_service_request_detail">Sends one read-only request to the local service this plugin itself is bound to, returning at most 32768 characters. No host, port, scheme or credential may be chosen, and no other service is reachable.</string>
+    <string name="ui_web_service_stream_title">Stream this page\'s service data</string>
+    <string name="ui_web_service_stream_detail">Reads the local service this plugin itself is bound to in bounded chunks, at most 65536 characters per stream; a spent budget or a revoked grant stops it. Also read-only, with no host, port, scheme or credential to choose.</string>
+    <string name="ui_web_plugin_service_preview">Read-only access to this plugin\'s own service path:
+%1$s</string>
+</resources>

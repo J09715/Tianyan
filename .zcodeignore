@@ -1,0 +1,111 @@
+# Gradle and Kotlin caches
+.gradle/
+.kotlin/
+**/build/
+!runtime/src/main/java/top/tianyan/app/runtime/build/
+!runtime/src/main/java/top/tianyan/app/runtime/build/*.kt
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+captures/
+
+# Android native build outputs
+.externalNativeBuild/
+.cxx/
+**/.externalNativeBuild/
+**/.cxx/
+
+# Machine-local Android configuration
+local.properties
+
+# Signing credentials and service configuration
+*.jks
+*.keystore
+keystore.properties
+google-services.json
+
+# Logs, diagnostics, and heap dumps
+*.log
+*.hprof
+
+# Operating system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Locally downloaded offline-plugin SDK archives (about 1.6 GiB).
+# Keep manifests, scripts, checksums and download instructions versioned.
+assets/plugins/android-suite-offline/payload/archives/
+
+# Locally downloaded QEMU x86_64 user-mode plugin archives (~47 MiB).
+# Keep manifests, scripts, checksums and download instructions versioned.
+assets/plugins/qemu-x86-64-compat/payload/archives/
+
+# Locally downloaded RTK offline plugin binary (~8.7 MiB) and dist artifacts.
+# Keep manifests, scripts, checksums, config and download instructions versioned.
+assets/plugins/rtk-suite-offline/payload/bin/
+assets/plugins/cc-switch/payload/lib/
+
+# Locally fetched Android CLI binaries for the android-skills plugin (~90 MiB).
+assets/plugins/android-skills/payload/bin/
+dist/
+.workbuddy/
+.trae/
+.codegraph/
+.tmp_unusedscan/
+webchat/node_modules/
+__pycache__/
+*.pyc
+webchat/dist/
+
+# 运行时崩溃帧调试产物（不入库）
+.crash_frames/
+
+# 临时调试产物与脚本（不入库）
+*_tmp/
+_*.py
+build-output.txt
+scripts_patch/
+
+# Harness transient tool/subagent artifacts (may contain project output or logs)
+.tianyan-outputs/
+.tianyan-subagent/
+
+
+
+# ===== ↑ 以上同步自 .gitignore（「从 .gitignore 同步」只重写以上部分）=====
+.git/
+.hg/
+.svn/
+node_modules/
+bower_components/
+jspm_packages/
+site-packages/
+venv/
+coverage/
+htmlcov/
+lcov-report/
+cmakefiles/
+cmake-build-*/
+bazel-*/
+pods/
+deriveddata/
+storybook-static/
+playwright-report/
+test-results/
+allure-results/
+allure-report/
+cdk.out/
+*.egg-info/
+*.dist-info/
+eggs/
+pip-wheel-metadata/
+wheels/
+# ----- ↑ 以上为 ZCode 默认排除规则（自定义规则请写在本行下方，不会被同步/恢复改动）-----
+# 自定义规则写在下方（本行提示可删除）

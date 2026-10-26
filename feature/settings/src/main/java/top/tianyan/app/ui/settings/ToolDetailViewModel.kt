@@ -2,7 +2,6 @@ package top.tianyan.app.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -28,7 +27,7 @@ import top.tianyan.app.core.tools.ToolManager
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.util.UUID
-import javax.inject.Inject
+import top.tianyan.app.runtime.LinuxRuntime
 
 data class ToolDetailUiState(
     val tool: ToolEntity? = null,
@@ -72,14 +71,13 @@ data class ToolDetailUiState(
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
-@HiltViewModel
-class ToolDetailViewModel @Inject constructor(
+class ToolDetailViewModel(
     private val toolManager: ToolManager,
     private val settingsDataStore: ToolPreferences,
     private val providerRepository: ProviderRepository,
     private val aiModelDao: AiModelRepository,
     private val toolSettingsRepository: ToolSettingsRepository,
-    private val linuxRuntime: top.tianyan.app.runtime.LinuxRuntime,
+    private val linuxRuntime: LinuxRuntime,
     private val logger: AppLogger,
 ) : ViewModel() {
 

@@ -1,0 +1,26 @@
+<resources>
+    <string name="ui_web_plugin_title">Web 插件示例</string>
+    <string name="ui_web_plugin_description">体验 Web 页面与应用能力授权</string>
+    <string name="ui_web_plugin_scope">页面请求应用能力时需要确认。离开页面后授权失效。</string>
+    <string name="ui_web_plugin_revoke">撤销页面授权</string>
+    <string name="ui_web_plugin_unavailable">当前 WebView 不支持插件消息通道，请更新系统 WebView。</string>
+    <string name="ui_web_plugin_loading">正在加载页面…</string>
+    <string name="ui_web_plugin_load_failed">插件页面资源不可用，请返回后重试。</string>
+    <string name="ui_web_plugin_permission">允许插件读取应用信息？</string>
+    <string name="ui_web_plugin_permission_detail">仅返回应用包名、Android API 和插件 API 版本。授权只适用于下面的插件、动作、目标和执行环境。</string>
+    <string name="ui_web_plugin_allow_once">仅允许一次</string>
+    <string name="ui_web_plugin_allow_session">允许此页面（只读能力，最长 30 分钟）</string>
+    <string name="ui_web_plugin_deny">拒绝</string>
+    <string name="ui_web_plugin_text_preview">将复制以下文本（覆盖当前剪贴板，不可见字符以转义显示）：
+%1$s</string>
+    <string name="ui_web_service_title">受管理 Web 服务示例</string>
+    <string name="ui_web_service_description">打开时启动本地资源服务，关闭页面后回收服务</string>
+    <string name="ui_web_proot_title">PRoot Web 服务示例</string>
+    <string name="ui_web_proot_description">需要已就绪的本地 Linux 和 /usr/bin/python3。打开后启动独立资源进程，切换系统或关闭页面后回收；不会自动安装依赖。</string>
+    <string name="ui_web_service_request_title">读取本页服务数据</string>
+    <string name="ui_web_service_request_detail">向本插件自身绑定的本地服务发起一次只读请求，返回内容不超过 32768 字。不允许指定主机、端口、协议或凭据，也不会访问其它服务。</string>
+    <string name="ui_web_service_stream_title">持续接收本页服务数据</string>
+    <string name="ui_web_service_stream_detail">按块持续读取本插件自身绑定的本地服务，单次最多 65536 字，超过或撤销授权即停止。同样是只读，不允许指定主机、端口、协议或凭据。</string>
+    <string name="ui_web_plugin_service_preview">将只读访问本插件自身服务的以下路径：
+%1$s</string>
+</resources>

@@ -1,0 +1,13 @@
+<resources>
+    <string name="host_access_developer">Developer diagnostics</string>
+    <string name="host_access_developer_detail">Enable diagnostics and consent controls. Host shell requires separate consent; disabling revokes it immediately.</string>
+    <string name="host_access_sandbox">Local terminal and sandbox sessions</string>
+    <string name="host_access_target">System %1$s · %2$s · %3$s</string>
+    <string name="host_access_active">Allowed · tap to revoke</string>
+    <string name="host_access_request">Allow temporary host access</string>
+    <string name="host_access_title">Temporary host access consent</string>
+    <string name="host_access_confirmation">Allow “%1$s” on local system %2$s to request host shell, APK installation, and Logcat access for up to 30 minutes?\nPlugin: %3$s\nVersion: %4$s\n\nCommands can change host files. Android permissions and existing approvals still apply. Consent is not saved and expires on revocation, timeout, restart, or disabling developer mode. Existing effects cannot be rolled back. PRoot shares the app UID and does not provide strong isolation.</string>
+    <string name="host_access_allow">Allow for 30 minutes</string>
+    <string name="host_access_revoke">Revoke now</string>
+    <string name="host_access_cancel">Cancel</string>
+</resources>

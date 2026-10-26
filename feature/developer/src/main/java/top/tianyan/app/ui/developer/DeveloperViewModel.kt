@@ -4,7 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import top.tianyan.app.core.common.logging.AppLogger
 import top.tianyan.app.core.common.result.AppResult
-import top.tianyan.app.core.datastore.SettingsDataStore
+import top.tianyan.app.core.datastore.AgentPreferences
+import top.tianyan.app.core.datastore.OnboardingPreferences
+import top.tianyan.app.core.datastore.RegistryPreferences
+import top.tianyan.app.core.datastore.RuntimePreferences
 import top.tianyan.app.core.model.RuntimeState
 import top.tianyan.app.core.model.InstalledRuntime
 import top.tianyan.app.core.tools.RuntimeManager
@@ -18,8 +21,6 @@ import top.tianyan.app.runtime.shell.CommandResult
 import top.tianyan.app.runtime.shell.ShellCommand
 import top.tianyan.app.runtime.shell.ManagedProcess
 import top.tianyan.app.runtime.bridge.adb.EmbeddedAdbManager
-import dagger.hilt.android.lifecycle.HiltViewModel
-import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -28,17 +29,27 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
-@HiltViewModel
-class DeveloperViewModel @Inject constructor(
+class DeveloperViewModel(
     private val linuxRuntime: LinuxRuntime,
     private val runtimeManager: RuntimeManager,
-    private val settingsDataStore: SettingsDataStore,
+    private val runtimePreferences: RuntimePreferences,
+    private val agentPreferences: AgentPreferences,
+    private val registryPreferences: RegistryPreferences,
+    private val onboardingPreferences: OnboardingPreferences,
     private val toolRegistry: ToolRegistry,
     private val toolManager: ToolManager,
     private val logger: AppLogger,
-    private val crashReporter: top.tianyan.app.core.common.logging.CrashReporter,
     private val embeddedAdbManager: EmbeddedAdbManager,
 ) : ViewModel() {
+
+    init {
+        embeddedAdbManager.startDiscovery(EmbeddedAdbManager.TAG_DEVELOPER_UI)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        embeddedAdbManager.stopDiscovery(EmbeddedAdbManager.TAG_DEVELOPER_UI)
+    }
 
     val runtimeState: StateFlow<RuntimeState> = linuxRuntime.state
 
@@ -84,12 +95,12 @@ class DeveloperViewModel @Inject constructor(
     private val _logcatOutput = MutableStateFlow("")
     val logcatOutput: StateFlow<String> = _logcatOutput.asStateFlow()
 
-    val adbNotificationEnabled: StateFlow<Boolean> = settingsDataStore.adbNotificationEnabled
+    val adbNotificationEnabled: StateFlow<Boolean> = runtimePreferences.adbNotificationEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     fun setAdbNotificationEnabled(enabled: Boolean) {
         viewModelScope.launch {
-            settingsDataStore.setAdbNotificationEnabled(enabled)
+            runtimePreferences.setAdbNotificationEnabled(enabled)
         }
     }
 
@@ -122,8 +133,7 @@ class DeveloperViewModel @Inject constructor(
     }
 
     fun restartAdbDiscovery() {
-        embeddedAdbManager.stopDiscovery()
-        embeddedAdbManager.startDiscovery()
+        embeddedAdbManager.restartDiscovery()
         _adbMessage.value = "已重新启动 mDNS 端口探测。"
     }
 
@@ -157,11 +167,11 @@ class DeveloperViewModel @Inject constructor(
         }
     }
 
-    val registryManifestUrl: StateFlow<String> = settingsDataStore.registryManifestUrl
+    val registryManifestUrl: StateFlow<String> = registryPreferences.manifestUrl
         .stateIn(viewModelScope, SharingStarted.Eagerly, "")
-    val registrySignatureUrl: StateFlow<String> = settingsDataStore.registrySignatureUrl
+    val registrySignatureUrl: StateFlow<String> = registryPreferences.signatureUrl
         .stateIn(viewModelScope, SharingStarted.Eagerly, "")
-    val registryPublicKey: StateFlow<String> = settingsDataStore.registryPublicKey
+    val registryPublicKey: StateFlow<String> = registryPreferences.publicKey
         .stateIn(viewModelScope, SharingStarted.Eagerly, "")
     private val _registryStatus = MutableStateFlow<String?>(null)
     val registryStatus: StateFlow<String?> = _registryStatus.asStateFlow()
@@ -175,7 +185,7 @@ class DeveloperViewModel @Inject constructor(
         _registryStatusIsError.value = isError
     }
 
-    val agentLoggingEnabled: StateFlow<Boolean> = settingsDataStore.agentLoggingEnabled
+    val agentLoggingEnabled: StateFlow<Boolean> = agentPreferences.agentLoggingEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
     private val _agentLogSize = MutableStateFlow(0L)
     val agentLogSize: StateFlow<Long> = _agentLogSize.asStateFlow()
@@ -184,7 +194,7 @@ class DeveloperViewModel @Inject constructor(
 
     fun setAgentLoggingEnabled(enabled: Boolean) {
         viewModelScope.launch {
-            settingsDataStore.setAgentLoggingEnabled(enabled)
+            agentPreferences.setAgentLoggingEnabled(enabled)
             refreshAgentLogSize()
         }
     }
@@ -202,38 +212,9 @@ class DeveloperViewModel @Inject constructor(
         setMessage("智能体日志已清空。")
     }
 
-    private val _logSize = MutableStateFlow(0L)
-    val logSize: StateFlow<Long> = _logSize.asStateFlow()
-    private val _logLocation = MutableStateFlow("")
-    val logLocation: StateFlow<String> = _logLocation.asStateFlow()
-    private val _crashLocation = MutableStateFlow("")
-    val crashLocation: StateFlow<String> = _crashLocation.asStateFlow()
-
-    /** 运行日志与崩溃报告都落在应用私有目录（必要时镜像到 Download/Tianyan），刷新时一并取路径。 */
-    fun refreshRuntimeLogInfo() {
-        _logSize.value = logger.getLogSizeBytes()
-        _logLocation.value = logger.getLogLocation()
-        _crashLocation.value = crashReporter.reportLocation()
-    }
-
-    fun readRuntimeLogs(): String = logger.readLogs()
-
-    fun clearRuntimeLogs() {
-        logger.clearLogs()
-        refreshRuntimeLogInfo()
-        setMessage("运行日志已清空。")
-    }
-
-    fun readLatestCrashReport(): String = crashReporter.latestReport() ?: "暂无崩溃记录"
-
-    fun clearCrashReports() {
-        crashReporter.clearReports()
-        setMessage("崩溃报告已清空。")
-    }
-
     fun saveRegistryConfig(manifestUrl: String, signatureUrl: String, publicKey: String) {
         viewModelScope.launch {
-            settingsDataStore.setRegistryConfig(manifestUrl, signatureUrl, publicKey)
+            registryPreferences.setRegistryConfig(manifestUrl, signatureUrl, publicKey)
             setRegistryStatus("工具清单配置已保存。")
         }
     }
@@ -417,7 +398,7 @@ class DeveloperViewModel @Inject constructor(
                 // A factory-style runtime reset intentionally restarts the
                 // complete first-run flow: environment download, then model
                 // selection/configuration.
-                settingsDataStore.setOnboardingCompleted(false)
+                onboardingPreferences.setOnboardingCompleted(false)
                 result
             }
                 .onSuccess { result ->

@@ -1,7 +1,5 @@
 package top.tianyan.app.harness.events
 
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -112,29 +110,13 @@ sealed interface HarnessEvent {
         val dependencies: List<String> = emptyList(),
         val resultSummary: String? = null,
     ) : HarnessEvent
-
-    data class RedTeamFactChanged(
-        override val sessionId: String,
-        override val timestamp: Long,
-        val factId: String,
-        val kind: String,
-        val status: String,
-    ) : HarnessEvent
-
-    data class RedTeamPhaseChanged(
-        override val sessionId: String,
-        override val timestamp: Long,
-        val phase: String,
-        val detail: String? = null,
-    ) : HarnessEvent
 }
 
 /**
  * 进程内事件总线。尽力投递：订阅者处理慢不阻塞运行链路，
  * 溢出时丢弃最旧事件（事件是观察侧数据，不是控制面信号）。
  */
-@Singleton
-class HarnessEventBus @Inject constructor() {
+class HarnessEventBus() {
     private val _events = MutableSharedFlow<HarnessEvent>(
         replay = 0,
         extraBufferCapacity = 256,

@@ -1,6 +1,7 @@
 package top.tianyan.app.core.model
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 /**
  * MCP (Model Context Protocol) 传输协议类型
@@ -31,13 +32,26 @@ data class McpServerConfig(
     val env: Map<String, String> = emptyMap(),
     /** 远程 MCP 服务的 HTTP 端点 URL（例如 http://127.0.0.1:8000/mcp 或 .../sse） */
     val serverUrl: String = "",
+    /** 自定义 HTTP 请求头；仓储单独加密，不参与通用序列化或导出。 */
+    @Transient val headers: Map<String, String> = emptyMap(),
+    /** Authentication mode for remote HTTP MCP services. */
+    val authMode: McpAuthMode = McpAuthMode.NONE,
+    /** Public OAuth client configuration; secrets are never stored here. */
+    val oauthClientId: String = "",
+    val oauthAuthorizationEndpoint: String = "",
+    val oauthTokenEndpoint: String = "",
+    val oauthRedirectUri: String = "tianyan://oauth/mcp",
+    val oauthScope: String = "",
+    val oauthResource: String = "",
     /**
-     * 远程 HTTP MCP 服务的 Bearer token（发送 `Authorization: Bearer <token>`）。
+     * 远程 MCP 服务的 Bearer token（发送 `Authorization: Bearer <token>`）。
      * 运行时注入用（例如内置 browser server 的自环凭据）：@Transient 保证不参与序列化，
      * 既不落 Room 也不随 [toExportJsonConfig] 导出。
      */
-    @kotlinx.serialization.Transient
+    @Transient
     val authToken: String = "",
+    @Transient val pluginIdentity: PluginExecutionIdentity? = null,
+    @Transient val pluginDistribution: String? = null,
     /** 是否启用 */
     val isEnabled: Boolean = true,
     /** 是否为内置预设服务 */
@@ -46,6 +60,20 @@ data class McpServerConfig(
     val builtinRisk: String = "low",
     /** 内置 server bootstrap 优先级。< 0 表示排在所有用户 MCP server 之前；>= 0 表示标准用户配置。 */
     val bootstrapOrder: Int = if (isBuiltin) -1 else 0,
+    /**
+     * 该能力需要先安装开发套件组件才能运行（例如改成上游 npm 包之后的 WebSearch / CodeGraph）。
+     *
+     * 出厂默认 [isEnabled] = false，且设置页禁止在组件就绪前开启；这样「已注册但文件不存在」
+     * 不会再演成 `discoverTools()` 超时阻塞启动（见 MIGRATION_35_36 的事故记录）。
+     */
+    val requiresInstall: Boolean = false,
+    /** 提供该能力的开发套件组件 id（由 [McpCatalog] 绑定）。空串表示随 APK 直接可用。 */
+    val installComponentId: String = "",
+    /** 启停偏好与当前环境就绪状态分别表达；二者均不随配置导出。 */
+    @Transient val userToggled: Boolean = false,
+    @Transient val installationReady: Boolean? = null,
+    @Transient val catalogDistribution: String = "",
+    @Transient val catalogRevision: Long = 0L,
 
 ) {
     /** 导出为 mcpServers JSON 配置片段（键为服务 id）；配置格式约定归模型层，View 只读展示 */
@@ -81,8 +109,48 @@ enum class McpConnectionState {
     CHECKING,
     /** 已连通，服务在线可用 */
     ONLINE,
+    /** Tool metadata remains ready; the idle STDIO subprocess has been reclaimed. */
+    SLEEPING,
+    /** Starting or initializing a STDIO subprocess for a real request. */
+    WAKING,
     /** 检测失败 / 服务离线不可达 */
     OFFLINE,
+}
+
+/**
+ * MCP 工具注解（MCP 规范 tool.annotations 的提示性声明）：
+ * 服务端对工具风险特征的自述，**未经本端验证**。审批策略只采信显式声明来提高审批等级
+ * （escalation-only）；降低审批要求必须来自本地可信规则（如内置浏览器风险矩阵），
+ * 外部声明一律不得放行。缺省（null）按 MCP 规范默认语义是"可能破坏/非只读/可达外部"，
+ * 但为避免对存量服务的行为回归，缺省值不参与升级，仅显式 `true` 参与。
+ */
+@Serializable
+data class McpToolAnnotations(
+    val readOnlyHint: Boolean? = null,
+    val destructiveHint: Boolean? = null,
+    val idempotentHint: Boolean? = null,
+    val openWorldHint: Boolean? = null,
+)
+
+/**
+ * 单个 MCP 工具的本地策略。
+ *
+ * - [enabled]：关闭后模型可见面（inspect / @ 挂载）与执行入口都会拒绝该工具；
+ * - [riskOverride]：本地用户显式覆盖审批风险等级；null = 继承基础策略。
+ *   覆盖会先替换基础等级，再应用服务端注解升级——本地可降级，但服务端
+ *   声明的破坏性特征仍会把等级抬回去。
+ */
+@Serializable
+data class McpToolPolicy(
+    val enabled: Boolean = true,
+    val riskOverride: String? = null,
+) {
+    companion object {
+        val RISK_LEVELS = setOf("low", "normal", "medium", "high", "critical")
+
+        fun normalizeRisk(value: String?): String? =
+            value?.trim()?.lowercase()?.takeIf { it in RISK_LEVELS }
+    }
 }
 
 /**
@@ -95,6 +163,7 @@ data class McpToolInfo(
     val name: String,
     val description: String,
     val parametersJson: String = "{}",
+    val annotations: McpToolAnnotations? = null,
 )
 
 /**
@@ -114,6 +183,12 @@ data class SubagentTaskSpec(
     val writePaths: List<String> = emptyList(),
     /** 可选：已保存模型档案的 ID/名称，或该档案中已配置的具体模型名；null/"inherit" 继承父会话。 */
     val model: String? = null,
+    /**
+     * 可选：续跑目标（对齐 opencode task 工具的 task_id resume）。
+     * 填入上次 invoke_subagent 汇总中的 task_id（即子任务 Lane 名）时，
+     * 本次在该 Lane 已有对话上继续执行（prompt 为续跑指令），而不是创建全新 Lane。
+     */
+    val taskId: String? = null,
 )
 
 /**
@@ -155,29 +230,6 @@ object BuiltinMcpPresets {
             isBuiltin = true,
         ),
         McpServerConfig(
-            id = "mcp_codegraph",
-            name = "CodeGraph 代码知识图谱",
-            description = "毫秒级索引工作区符号定义、调用链与影响面（支持 Python/Java/Kotlin/C/C++/JS/TS/Smali），大幅减少代码探索的 Token 与工具调用轮次",
-            transportType = McpTransportType.STDIO,
-            command = "python3",
-            args = listOf("-u", "/opt/tianyan/scripts/codegraph_mcp_server.py", "--repository", "/workspace"),
-            isEnabled = true,
-            isBuiltin = true,
-        ),
-        McpServerConfig(
-            id = "mcp_websearch",
-            name = "Web 搜索（Open-WebSearch）",
-            description = "免 API Key 的多引擎网络搜索与网页正文抓取（天衍内置零依赖 MCP 服务）：支持 Baidu、Bing、DuckDuckGo 等多引擎直连搜索与正文清洗提取，毫秒级响应，无需 Node.js/npx，开箱即用",
-            transportType = McpTransportType.STDIO,
-            command = "python3",
-            args = listOf("-u", "/opt/tianyan/scripts/websearch_mcp_server.py"),
-            env = mapOf(
-                "DEFAULT_SEARCH_ENGINE" to "baidu",
-            ),
-            isEnabled = true,
-            isBuiltin = true,
-        ),
-        McpServerConfig(
             id = BROWSER_BUILTIN_ID,
             name = "Tianyan Browser (Built-in)",
             description = "Tianyan 内置 in-app WebView 的 MCP server（in-process loopback 127.0.0.1:8787，Streamable HTTP POST /mcp 请求-响应，Bearer 认证）；由 harness 层 BrowserMcpBootstrap 启动，暴露 mcp__browser__* 工具给 Agent 与外接 IDE。",
@@ -188,5 +240,15 @@ object BuiltinMcpPresets {
             builtinRisk = "medium",
             bootstrapOrder = -100,
         ),
-    )
+    ) + McpCatalog.installable.map { it.serverPreset() }
+
+    private val byId: Map<String, McpServerConfig> = presets.associateBy { it.id }
+
+    /**
+     * 按 id 取预设定义。
+     *
+     * 预设里的 [McpServerConfig.requiresInstall] / [McpServerConfig.installComponentId] 等
+     * "代码侧元数据"不落数据库，仓库层从数据库读回后用本方法叠加回去。
+     */
+    fun find(id: String): McpServerConfig? = byId[id]
 }

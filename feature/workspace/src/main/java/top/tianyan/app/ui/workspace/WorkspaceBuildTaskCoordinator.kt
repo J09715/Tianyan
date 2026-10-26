@@ -1,10 +1,7 @@
 package top.tianyan.app.ui.workspace
 
-import javax.inject.Inject
-import dagger.hilt.android.qualifiers.ApplicationContext
 import android.content.Context
 import top.tianyan.app.feature.workspace.R
-import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,6 +16,11 @@ import top.tianyan.app.runtime.WorkspaceProject
 import top.tianyan.app.runtime.BackgroundTaskRegistry
 import top.tianyan.app.runtime.build.BuildRunProgress
 import top.tianyan.app.runtime.build.WorkspaceBuildRunner
+import top.tianyan.app.harness.workflow.WorkflowSignal
+import top.tianyan.app.harness.workflow.WorkflowSignalBus
+import java.io.File
+import top.tianyan.app.core.datastore.WorkshopKeystore
+import top.tianyan.app.runtime.build.WorkshopBuildType
 
 data class WorkspaceBuildTaskState(
     val project: WorkspaceProject,
@@ -26,12 +28,12 @@ data class WorkspaceBuildTaskState(
 )
 
 /** Keeps a workspace build alive while the workspace destination is recreated. */
-@Singleton
-class WorkspaceBuildTaskCoordinator @Inject constructor(
-    @ApplicationContext private val context: Context,
+class WorkspaceBuildTaskCoordinator(
+    private val context: Context,
     private val runner: WorkspaceBuildRunner,
     private val notifier: ToolNotificationNotifier,
     private val backgroundTaskRegistry: BackgroundTaskRegistry,
+    private val workflowSignals: WorkflowSignalBus,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val _state = MutableStateFlow<WorkspaceBuildTaskState?>(null)
@@ -41,8 +43,8 @@ class WorkspaceBuildTaskCoordinator @Inject constructor(
     @Synchronized
     fun start(
         project: WorkspaceProject,
-        buildType: top.tianyan.app.runtime.build.WorkshopBuildType = top.tianyan.app.runtime.build.WorkshopBuildType.DEBUG,
-        keystore: top.tianyan.app.core.datastore.WorkshopKeystore? = null,
+        buildType: WorkshopBuildType = WorkshopBuildType.DEBUG,
+        keystore: WorkshopKeystore? = null,
     ): Boolean {
         if (job?.isActive == true || _state.value?.progress?.isRunning == true) return false
         val initial = BuildRunProgress(step = context.getString(R.string.workspace_prepare_build))
@@ -56,7 +58,7 @@ class WorkspaceBuildTaskCoordinator @Inject constructor(
                 // 把已呈现的“运行就绪/编译失败”覆盖回“正在构建”转圈态。
                 var finished = false
                 runner.runProject(project, buildType, keystore).collect { progress ->
-                    if (finished && progress.isRunning) return@collect
+                    if (finished) return@collect
                     if (!progress.isRunning) finished = true
                     _state.value = WorkspaceBuildTaskState(project, progress)
                     if (progress.isRunning) {
@@ -64,8 +66,13 @@ class WorkspaceBuildTaskCoordinator @Inject constructor(
                     } else {
                         if (progress.isSuccess == true) {
                             notifier.showBuildSuccess(project.name, progress.apkPath)
+                            progress.apkPath?.takeIf(String::isNotBlank)?.let { apkPath ->
+                                workflowSignals.emit(WorkflowSignal.ApkGenerated(project.name, project.linuxPath, apkPath))
+                            }
                         } else {
-                            notifier.showBuildFailed(project.name, progress.message ?: context.getString(R.string.workspace_unknown_error))
+                            val error = progress.message ?: context.getString(R.string.workspace_unknown_error)
+                            notifier.showBuildFailed(project.name, error)
+                            workflowSignals.emit(WorkflowSignal.BuildFailed(project.name, project.linuxPath, error))
                         }
                     }
                 }
@@ -79,7 +86,9 @@ class WorkspaceBuildTaskCoordinator @Inject constructor(
                     message = error.message ?: context.getString(R.string.workspace_build_exception),
                 )
                 _state.value = WorkspaceBuildTaskState(project, failed)
-                notifier.showBuildFailed(project.name, failed.message ?: context.getString(R.string.workspace_unknown_exception))
+                val message = failed.message ?: context.getString(R.string.workspace_unknown_exception)
+                notifier.showBuildFailed(project.name, message)
+                workflowSignals.emit(WorkflowSignal.BuildFailed(project.name, project.linuxPath, message))
             } finally {
                 backgroundTaskRegistry.finish(BUILD_TASK_ID)
                 job = null
@@ -109,7 +118,7 @@ class WorkspaceBuildTaskCoordinator @Inject constructor(
     }
 
     fun launchPackageInstaller(apkPath: String) {
-        runner.launchPackageInstaller(java.io.File(apkPath))
+        runner.launchPackageInstaller(File(apkPath))
     }
 
     private companion object {

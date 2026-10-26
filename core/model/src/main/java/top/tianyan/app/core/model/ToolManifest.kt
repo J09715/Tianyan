@@ -33,6 +33,7 @@ data class ToolManifest(
     val source: String = "REMOTE",
     /** Local packages must be self-contained and may use TIANYAN_PLUGIN_PAYLOAD. */
     val offlineOnly: Boolean = false,
+    val plugin: PluginPackageSpec? = null,
 ) {
     val installScript: String?
         get() = installSteps.takeIf { it.isNotEmpty() }?.joinToString("\n")

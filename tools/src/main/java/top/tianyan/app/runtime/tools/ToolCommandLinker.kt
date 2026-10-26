@@ -1,14 +1,12 @@
 package top.tianyan.app.runtime.tools
 
+import top.tianyan.app.core.common.shell.ShellQuote
 import top.tianyan.app.runtime.LinuxRuntime
 import top.tianyan.app.runtime.shell.CommandResult
 import top.tianyan.app.runtime.shell.ShellCommand
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /** Creates stable `/opt/tianyan/bin` shims without exposing arbitrary commands. */
-@Singleton
-class ToolCommandLinker @Inject constructor(
+class ToolCommandLinker(
     private val linuxRuntime: LinuxRuntime,
 ) {
     suspend fun link(
@@ -22,10 +20,10 @@ class ToolCommandLinker @Inject constructor(
         // 自指守卫：shim 的 exec 目标绝不能是 shim 自身（直接相等或经软链解析
         // 回自身）。脚本 exec 自己在 PRoot 下是零输出的无限 ptrace 循环。
         require(target != link) { "工具命令目标不能指向自身: $link" }
-        val scriptLine = shellQuote("exec $target \"\$@\"")
-        val quotedLink = shellQuote(link)
-        val quotedTarget = shellQuote(target)
-        val quotedBin = shellQuote(ToolLayout.BIN)
+        val scriptLine = ShellQuote.of("exec $target \"\$@\"")
+        val quotedLink = ShellQuote.of(link)
+        val quotedTarget = ShellQuote.of(target)
+        val quotedBin = ShellQuote.of(ToolLayout.BIN)
         return linuxRuntime.execute(
             ShellCommand(
                 // ⚠️ 必须先 rm -f 再重定向：shell 的 `>` 会跟随符号链接。
@@ -50,13 +48,11 @@ class ToolCommandLinker @Inject constructor(
         require(SAFE_NAME.matches(command)) { "工具命令名称无效" }
         return linuxRuntime.execute(
             ShellCommand(
-                commandLine = "rm -f ${shellQuote(ToolLayout.commandPath(command))}",
+                commandLine = "rm -f ${ShellQuote.of(ToolLayout.commandPath(command))}",
                 environment = environment,
             ),
         )
     }
-
-    private fun shellQuote(value: String): String = "'${value.replace("'", "'\\\"'\\\"'")}'"
 
     private companion object {
         val SAFE_NAME = Regex("[a-z0-9][a-z0-9._+-]{0,63}")

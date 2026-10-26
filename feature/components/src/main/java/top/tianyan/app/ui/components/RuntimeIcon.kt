@@ -13,19 +13,22 @@ enum class RuntimeIconName {
     Refresh, Shield, Storage, Globe, Trash, Close, Check, Alert, Logs,
     Download, Play, Stop, More, Plus, Chat, List, Copy,
     Folder, File, Code, Edit, Save, ArrowUp, Cpu, Search, Info,
-    Image, Attach,
+    Image, Attach, VolumeOn, VolumeOff,
     // 官方精准品牌与系统/框架 Logo
     Linux, Debian, Ubuntu, Arch, Kali, Fedora, Alpine, Void,
     Android, Flutter,
-    Github, Qq, GitBranch, Activity, GitCommit, Tag, Cloud,
+    Github, Qq,
     Bot, Palette, FontSize, Battery, Bug, Update, Extension, Hub, Mount, OpenInNew, Key, Tune,
     Brain, Sparkles, Vibrate, FolderDownload, Document, SdCard, Server, Compress,
     Prompt, Wrench, Model, Network, Community, FolderOpen, Speed, Cable, Admin, Link,
     Reverse, PowerSettingsNew, Visibility, VisibilityOff, Sponsor, Mail,
+    GitBranch, GitCommit, Alarm,
+    Phone, Bookmark, Checklist, StickyNote, History, Hammer, BookOpen,
+    Menu, Sessions, PanelLeftClose, PanelRightOpen, WriteDocument,
 }
 
 /**
- * 统一图标入口：全部走 res/drawable 单轨渲染（Material Symbols Outlined + Lucide + 品牌 Logo），
+ * 统一图标入口：全部走 res/drawable 单轨渲染（Material Symbols Rounded + 品牌 Logo），
  * 单色图标默认跟随内容色 tint，彩色品牌 Logo 保持原色。
  */
 @Composable
@@ -76,6 +79,8 @@ fun RuntimeIcon(
         RuntimeIconName.Info -> R.drawable.components_ic_info
         RuntimeIconName.Image -> R.drawable.components_ic_image
         RuntimeIconName.Attach -> R.drawable.components_ic_attach
+        RuntimeIconName.VolumeOn -> R.drawable.components_ic_volume_on
+        RuntimeIconName.VolumeOff -> R.drawable.components_ic_volume_off
         RuntimeIconName.Linux -> R.drawable.components_ic_logo_linux
         RuntimeIconName.Debian -> R.drawable.components_ic_logo_debian
         RuntimeIconName.Ubuntu -> R.drawable.components_ic_logo_ubuntu
@@ -87,11 +92,6 @@ fun RuntimeIcon(
         RuntimeIconName.Android -> R.drawable.components_ic_logo_android
         RuntimeIconName.Flutter -> R.drawable.components_ic_logo_flutter
         RuntimeIconName.Github -> R.drawable.components_ic_github
-        RuntimeIconName.GitBranch -> R.drawable.components_ic_gitbranch
-        RuntimeIconName.Activity -> R.drawable.components_ic_activity
-        RuntimeIconName.GitCommit -> R.drawable.components_ic_gitcommit
-        RuntimeIconName.Tag -> R.drawable.components_ic_tag
-        RuntimeIconName.Cloud -> R.drawable.components_ic_cloud
         RuntimeIconName.Qq -> R.drawable.components_ic_qq
         RuntimeIconName.Bot -> R.drawable.components_ic_bot
         RuntimeIconName.Palette -> R.drawable.components_ic_palette
@@ -129,6 +129,21 @@ fun RuntimeIcon(
         RuntimeIconName.VisibilityOff -> R.drawable.components_ic_visibilityoff
         RuntimeIconName.Sponsor -> R.drawable.components_ic_sponsor
         RuntimeIconName.Mail -> R.drawable.components_ic_mail
+        RuntimeIconName.GitBranch -> R.drawable.components_ic_gitbranch
+        RuntimeIconName.GitCommit -> R.drawable.components_ic_gitcommit
+        RuntimeIconName.Alarm -> R.drawable.components_ic_alarm
+        RuntimeIconName.Phone -> R.drawable.components_ic_phone
+        RuntimeIconName.Bookmark -> R.drawable.components_ic_bookmark
+        RuntimeIconName.Checklist -> R.drawable.components_ic_checklist
+        RuntimeIconName.StickyNote -> R.drawable.components_ic_stickynote
+        RuntimeIconName.History -> R.drawable.components_ic_history
+        RuntimeIconName.Hammer -> R.drawable.components_ic_hammer
+        RuntimeIconName.BookOpen -> R.drawable.components_ic_bookopen
+        RuntimeIconName.Menu -> R.drawable.components_ic_menu
+        RuntimeIconName.Sessions -> R.drawable.components_ic_sessions
+        RuntimeIconName.PanelLeftClose -> R.drawable.components_ic_panel_left_close
+        RuntimeIconName.PanelRightOpen -> R.drawable.components_ic_panel_right_open
+        RuntimeIconName.WriteDocument -> R.drawable.components_ic_write_document
     }
 
     // 彩色品牌 Logo 保持原色；单色图标跟随内容色，可被显式 tint 覆盖

@@ -1,0 +1,32 @@
+<resources>
+    <string name="harness_plugins_counts">Tools %1$d · Context %2$d · Providers %3$d · Workflow %4$d</string>
+    <string name="harness_plugins_title">Built-in extensions</string>
+    <string name="harness_plugins_core_title">Agent core</string>
+    <string name="harness_plugins_scope">Agent, model and workflow capabilities included with the app</string>
+    <string name="package_confirm_title">Install local plugin</string>
+    <string name="package_dependencies">Plugin dependencies (must be installed)</string>
+    <string name="package_resources">Resource ownership declarations</string>
+    <string name="package_new_capabilities">New capability requests since the installed version</string>
+    <string name="package_none">None</string>
+    <string name="package_install">Install</string>
+    <string name="package_confirm_scope">Confirmation extracts the package and runs its install scripts. Capabilities and resources are declarations, not a process sandbox; scripts retain PRoot permissions. Shared resources are retained on removal.</string>
+    <string name="packaged_plugins_title">Plugins and tools</string>
+    <string name="packaged_plugins_scope">Local tools for the current system. Select for details; long-press for diagnostics.</string>
+    <string name="packaged_plugins_diagnostics_title">Plugin diagnostics</string>
+    <string name="packaged_plugins_diagnostics_copy">Copy diagnostics</string>
+    <string name="packaged_plugins_diagnostics_copied">Diagnostics copied</string>
+    <string name="packaged_plugins_close">Close</string>
+    <string name="packaged_plugins_filter_installed">Installed</string>
+    <string name="packaged_plugins_filter_all">All</string>
+    <string name="packaged_plugins_empty">No matching plugins. Install tools from the tool center.</string>
+    <string name="packaged_plugins_display_version">Version %1$s</string>
+    <string name="packaged_plugins_installed">Installed</string>
+    <string name="packaged_plugins_update">Update</string>
+    <string name="packaged_plugins_installing">Installing</string>
+    <string name="packaged_plugins_check">Check</string>
+    <string name="packaged_plugins_disabled">Disabled</string>
+    <string name="packaged_plugins_failed">Unable to read the plugin catalog. Return and try again.</string>
+    <string name="packaged_plugins_version">Catalog %1$s · Installed %2$s</string>
+    <string name="packaged_plugins_uninstalled">Not installed</string>
+    <string name="packaged_plugins_details">Open tool details</string>
+</resources>

@@ -8,13 +8,10 @@ import top.tianyan.app.runtime.service.LocalServiceSpec
 import top.tianyan.app.runtime.shell.ManagedProcess
 import java.net.InetSocketAddress
 import java.net.Socket
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlin.coroutines.coroutineContext
 
 /** Owns background-tool lifecycle and readiness probing independently from install transactions. */
-@Singleton
-class ToolServiceController @Inject constructor(
+class ToolServiceController(
     private val linuxRuntime: LinuxRuntime,
 ) {
     fun isRunning(toolId: String, spec: LocalServiceSpec?): Boolean =
@@ -22,10 +19,16 @@ class ToolServiceController @Inject constructor(
             it.toolId == toolId && it.session.isAlive && (spec == null || isPortOpen(spec.port))
         }
 
-    suspend fun stop(toolId: String) {
+    suspend fun stop(toolId: String, spec: LocalServiceSpec? = null) {
         linuxRuntime.listBackground()
             .filter { it.toolId == toolId }
             .forEach { linuxRuntime.stopBackground(it.id) }
+        if (spec != null) {
+            val deadline = System.currentTimeMillis() + 2500L
+            while (isPortOpen(spec.port) && System.currentTimeMillis() < deadline) {
+                delay(150)
+            }
+        }
     }
 
     suspend fun restart(
@@ -33,7 +36,7 @@ class ToolServiceController @Inject constructor(
         adapter: ToolRuntimeAdapter,
         spec: LocalServiceSpec?,
     ): ManagedProcess {
-        stop(toolId)
+        stop(toolId, spec)
         return start(toolId, adapter, spec)
     }
 
@@ -42,6 +45,12 @@ class ToolServiceController @Inject constructor(
         adapter: ToolRuntimeAdapter,
         spec: LocalServiceSpec?,
     ): ManagedProcess {
+        if (spec != null && isPortOpen(spec.port)) {
+            val deadline = System.currentTimeMillis() + 2000L
+            while (isPortOpen(spec.port) && System.currentTimeMillis() < deadline) {
+                delay(150)
+            }
+        }
         val process = requireNotNull(adapter.startService()) { "工具不提供后台服务：$toolId" }
         if (spec != null) awaitPortOrThrow(toolId, process, spec)
         return process
@@ -62,16 +71,26 @@ class ToolServiceController @Inject constructor(
         while (true) {
             coroutineContext.ensureActive()
             if (!process.session.isAlive) {
+                val logs = linuxRuntime.getBackgroundLogs(toolId)
+                    .filter { it.isNotBlank() }
+                    .takeLast(10)
+                    .joinToString("\n")
                 linuxRuntime.stopBackground(process.id)
-                throw IllegalStateException("网关进程启动后立即退出，请查看服务日志：$toolId")
+                val detail = if (logs.isNotBlank()) "：\n$logs" else ""
+                throw IllegalStateException("网关进程启动后立即退出，服务日志$detail")
             }
             if (isPortOpen(spec.port)) return
             if (System.currentTimeMillis() > deadline) break
             delay(spec.pollIntervalMs)
         }
+        val timeoutLogs = linuxRuntime.getBackgroundLogs(toolId)
+            .filter { it.isNotBlank() }
+            .takeLast(10)
+            .joinToString("\n")
         linuxRuntime.stopBackground(process.id)
+        val timeoutDetail = if (timeoutLogs.isNotBlank()) "：\n$timeoutLogs" else ""
         throw IllegalStateException(
-            "网关未在 ${spec.startupTimeoutMs / 1000} 秒内就绪（端口 ${spec.port} 未监听），已自动停止：$toolId",
+            "网关未在 ${spec.startupTimeoutMs / 1000} 秒内就绪（端口 ${spec.port} 未监听），已自动停止$timeoutDetail",
         )
     }
 

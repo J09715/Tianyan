@@ -1,8 +1,6 @@
-package top.tianyan.app.runtime.tools
+﻿package top.tianyan.app.runtime.tools
 
 import java.net.URI
-import javax.inject.Inject
-import javax.inject.Singleton
 
 data class LoginUrl(
     val url: String,
@@ -10,8 +8,7 @@ data class LoginUrl(
 )
 
 /** Finds explicit browser-login links in CLI output without opening them automatically. */
-@Singleton
-class AuthUrlDetector @Inject constructor() {
+class AuthUrlDetector() {
     fun find(text: String): List<LoginUrl> = URL_PATTERN.findAll(text)
         .mapNotNull { match ->
             val candidate = match.value.trimEnd('.', ',', ';', ':', ')', ']', '}')

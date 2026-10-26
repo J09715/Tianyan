@@ -1,32 +1,13 @@
 plugins {
-    alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.serialization)
-    alias(libs.plugins.ksp)
-    alias(libs.plugins.hilt)
+    alias(libs.plugins.tianyan.android.library)
 }
 
 android {
     namespace = "top.tianyan.app.tools"
-    resourcePrefix = "tools_"
-    compileSdk = 37
-
-    defaultConfig {
-        minSdk = 29
-    }
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_25
-        targetCompatibility = JavaVersion.VERSION_25
-    }
-}
-
-kotlin {
-    compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_25)
-    }
 }
 
 dependencies {
+    api(project(":plugin:packages"))
     api(project(":core:common"))
     api(project(":core:model"))
     implementation(project(":core:database"))
@@ -35,12 +16,12 @@ dependencies {
     implementation(project(":core:datastore"))
     implementation(project(":runtime"))
     implementation(libs.androidx.core.ktx)
-    implementation(libs.hilt.android)
-    ksp(libs.hilt.compiler)
+    implementation(libs.koin.core)
     implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.xz)
     testImplementation(libs.junit)
     testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(libs.bundles.test.robolectric)
 }

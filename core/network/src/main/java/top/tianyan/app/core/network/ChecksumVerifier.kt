@@ -1,12 +1,9 @@
-package top.tianyan.app.core.network
+﻿package top.tianyan.app.core.network
 
 import java.io.File
 import java.security.MessageDigest
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class ChecksumVerifier @Inject constructor() {
+class ChecksumVerifier() {
     fun sha256(file: File): String {
         require(file.isFile) { "文件不存在：${file.absolutePath}" }
         val digest = MessageDigest.getInstance("SHA-256")

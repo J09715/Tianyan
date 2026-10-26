@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="appearance_palette_names">
+        <item>Xuantong</item>
+        <item>Rose</item>
+        <item>Coral</item>
+        <item>Amber</item>
+        <item>Leaf</item>
+        <item>Jade</item>
+        <item>Lake</item>
+        <item>Sky</item>
+        <item>Violet</item>
+        <item>Orchid</item>
+        <item>Sand</item>
+        <item>Slate</item>
+    </string-array>
+    <string-array name="appearance_palette_styles">
+        <item>Tonal spot</item>
+        <item>Vibrant</item>
+        <item>Expressive</item>
+        <item>Neutral</item>
+    </string-array>
+    <string name="appearance_palette_wallpaper_hint">Using wallpaper colors. Tap a palette to switch to manual colors.</string>
+    <string name="appearance_palette_manual_hint">Swipe to explore more colors. Tap a palette to apply it.</string>
+    <string name="appearance_palette_style">Palette style</string>
+</resources>

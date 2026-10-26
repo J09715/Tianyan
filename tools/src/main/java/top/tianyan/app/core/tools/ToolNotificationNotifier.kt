@@ -14,19 +14,15 @@ import androidx.core.content.FileProvider
 import java.io.File
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import dagger.hilt.android.qualifiers.ApplicationContext
 import top.tianyan.app.tools.R
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * 插件与工具安装系统通知栏控制器
  * 实时同步并发安装进度、完成与失败状态到 Android 系统通知栏。
  */
 @SuppressLint("MissingPermission")
-@Singleton
-class ToolNotificationNotifier @Inject constructor(
-    @ApplicationContext private val context: Context,
+class ToolNotificationNotifier(
+    private val context: Context,
 ) {
     private val notificationManager = NotificationManagerCompat.from(context)
     private val channelId = "tianyan_tool_install"

@@ -9,6 +9,7 @@ import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.serialization.json.JsonPrimitive
+import top.tianyan.app.runtime.browser.inject.PageScriptInstaller
 
 /**
  * 每引擎一个安装器：为每个 tab 的 WebView 装 `TianyanBridge`（addJavascriptInterface）
@@ -22,7 +23,7 @@ class HookInstaller(
     context: Context,
     private val pipeline: HookEventPipeline,
     private val store: HookRuleStore,
-) {
+) : PageScriptInstaller {
     private val appContext = context.applicationContext
     private val mainHandler = Handler(Looper.getMainLooper())
     private val docStartHandles = ConcurrentHashMap<String, ScriptHandler>()
@@ -33,7 +34,7 @@ class HookInstaller(
     }
 
     /** WebView 创建后、loadUrl 之前调用（主线程）。 */
-    fun onWebViewCreated(tabId: String, view: WebView) {
+    override fun onWebViewCreated(tabId: String, view: WebView) {
         view.addJavascriptInterface(TianyanHookBridge(tabId, pipeline), "TianyanBridge")
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             runCatching {
@@ -44,7 +45,7 @@ class HookInstaller(
     }
 
     /** tab 关闭 / 崩溃 / 引擎 shutdown 时调用（内部保证主线程执行）：移除 document-start handle 与桥。 */
-    fun onWebViewDestroyed(tabId: String, view: WebView) {
+    override fun onWebViewDestroyed(tabId: String, view: WebView) {
         if (Looper.myLooper() == Looper.getMainLooper()) {
             doDestroy(tabId, view)
         } else {
@@ -58,13 +59,13 @@ class HookInstaller(
     }
 
     /** onPageStarted：仅降级路径需要（无 document-start 支持的古董 WebView）。 */
-    fun injectFallback(view: WebView) {
+    override fun injectFallback(view: WebView) {
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) return
         runCatching { view.evaluateJavascript(runtimeScript, null) }
     }
 
     /** onPageFinished：验证 runtime 存在，缺失则补种（幂等）。 */
-    fun verifyInstalled(view: WebView) {
+    override fun verifyInstalled(view: WebView) {
         runCatching {
             view.evaluateJavascript("!!window.__tianyanHooks") { present ->
                 if (present != "true") view.evaluateJavascript(runtimeScript, null)

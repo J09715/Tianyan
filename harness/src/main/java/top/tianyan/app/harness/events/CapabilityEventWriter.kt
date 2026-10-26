@@ -1,7 +1,5 @@
 package top.tianyan.app.harness.events
 
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.flow.first
 import top.tianyan.app.core.database.AgentSkillRepository
 import top.tianyan.app.core.database.McpServerRepository
@@ -16,8 +14,7 @@ import top.tianyan.app.harness.mcp.McpManager
  * @提及 能力事件写入器：当用户消息提及技能或 MCP 服务时，
  * 在会话内插入一条幂等的 [CapabilityEvent] 展示卡片（同一用户消息下不重复）。
  */
-@Singleton
-class CapabilityEventWriter @Inject constructor(
+class CapabilityEventWriter(
     private val port: LiveMessagePort,
     private val skillRepository: AgentSkillRepository,
     private val mcpServerRepository: McpServerRepository,
@@ -33,7 +30,11 @@ class CapabilityEventWriter @Inject constructor(
         if (userMessageId.isBlank()) return
         val existing = port.snapshot(sessionId)
         writeSkillEvents(existing, sessionId, userMessageId, mentionedNames)
-        writeMcpEvents(existing, sessionId, userMessageId, mentionedNames, model)
+        // @ 提及的服务器会把启用工具挂载进本轮 provider tools；只有确有挂载时才写 MCP 事件，
+        // 未缓存/未命中的服务不产生噪音（模型仍可走 use_capability 按需发现）。
+        if (model.dynamicMcpTools.isNotEmpty()) {
+            writeMcpEvents(existing, sessionId, userMessageId, mentionedNames, model)
+        }
     }
 
     private suspend fun writeSkillEvents(
@@ -78,13 +79,13 @@ class CapabilityEventWriter @Inject constructor(
             .distinctBy { it.first }
             .filter { (serverId, serverName) -> serverId.lowercase() in mentionedNames || serverName.lowercase() in mentionedNames }
             .forEach { (serverId, serverName) ->
-                val lastError = mcpManager?.getLastError(serverId)
+                val lastError = mcpManager?.lastErrorForCall(serverId)
                 val isMounted = model.dynamicMcpTools.any { it.serverId == serverId }
                 val toolCount = model.dynamicMcpTools.count { it.serverId == serverId }
                 val desc = when {
                     isMounted -> "MCP 工具已挂载（$toolCount 个工具，模型可按需调用）"
                     lastError != null -> "⚠️ MCP 服务异常：$lastError"
-                    else -> "已选择 MCP 服务，正在尝试发现工具..."
+                    else -> "已选择 MCP 服务；工具尚未缓存，模型可通过 use_capability inspect 按需发现。"
                 }
                 appendEventOnce(
                     existing,

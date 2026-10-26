@@ -14,6 +14,11 @@ data class ShellCommand(
      * on a pipe; without it the app stops receiving build logs after a few lines.
      */
     val forcePty: Boolean = false,
+    /** Caller-owned foreground capture; activate only for this process, after runtime bootstrap. */
+    val outputCapture: CommandOutputCapture? = null,
+    /** Trusted callers may escalate arbitrary build scripts; this never disables inferred admission. */
+    val memoryHeavy: Boolean = false,
+    val pluginIdentity: top.tianyan.app.core.model.PluginExecutionIdentity? = null,
 ) {
     companion object {
         const val DEFAULT_TIMEOUT_MS = 30_000L

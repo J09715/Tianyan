@@ -33,123 +33,6 @@ val MIGRATION_28_29 = object : Migration(28, 29) {
 }
 
 /**
- * v29 → v30：Agent 多 lane 并发执行模型重构。
- * - 新增 6 表（harness_entries / lanes / lane_results / operations / queue_items / usage）
- * - 删除已重构的 harness_messages（生产代码零引用；DROP 用 runCatching 兜底，
- *   存量设备可能已通过其他路径越过 v30）
- *
- * DDL 从 `schemas/top.wkbin.taixu.core.database.AppDatabase/30.json` 的
- * createSql 逐字提取（替换 `${TABLE_NAME}`），非手写，保证与 Room 校验的 identityHash 一致。
- * 本迁移此前从未注册（addMigrations 缺口），缺失期间旧版用户升级会走
- * fallbackToDestructiveMigration 静默丢全部 Harness 数据。
- */
-val MIGRATION_29_30 = object : Migration(29, 30) {
-    override fun migrate(db: SupportSQLiteDatabase) {
-        db.execSQL(
-            """
-            CREATE TABLE IF NOT EXISTS `harness_entries` (
-                `sequence` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                `id` TEXT NOT NULL,
-                `sessionId` TEXT NOT NULL,
-                `parentId` TEXT,
-                `createdAt` INTEGER NOT NULL,
-                `entryType` TEXT NOT NULL,
-                `customType` TEXT,
-                `payloadJson` TEXT NOT NULL
-            )
-            """.trimIndent(),
-        )
-        db.execSQL(
-            """
-            CREATE TABLE IF NOT EXISTS `harness_lanes` (
-                `sessionId` TEXT NOT NULL,
-                `name` TEXT NOT NULL,
-                `leafId` TEXT,
-                `currentOperationId` TEXT,
-                `modelId` TEXT,
-                `thinkingLevel` TEXT NOT NULL,
-                `faulted` INTEGER NOT NULL,
-                `updatedAt` INTEGER NOT NULL,
-                PRIMARY KEY(`sessionId`, `name`)
-            )
-            """.trimIndent(),
-        )
-        db.execSQL(
-            """
-            CREATE TABLE IF NOT EXISTS `harness_lane_results` (
-                `sessionId` TEXT NOT NULL,
-                `laneName` TEXT NOT NULL,
-                `operationId` TEXT NOT NULL,
-                `outcome` TEXT NOT NULL,
-                `finalEntryId` TEXT,
-                `detailsJson` TEXT,
-                `completedAt` INTEGER NOT NULL,
-                PRIMARY KEY(`sessionId`, `laneName`)
-            )
-            """.trimIndent(),
-        )
-        db.execSQL(
-            """
-            CREATE TABLE IF NOT EXISTS `harness_operations` (
-                `id` TEXT NOT NULL,
-                `sessionId` TEXT NOT NULL,
-                `laneName` TEXT NOT NULL,
-                `kind` TEXT NOT NULL,
-                `status` TEXT NOT NULL,
-                `phase` TEXT NOT NULL,
-                `startedAt` INTEGER NOT NULL,
-                `updatedAt` INTEGER NOT NULL,
-                `startLeafId` TEXT,
-                `stateJson` TEXT NOT NULL,
-                `pendingEffectKind` TEXT,
-                `pendingEffectId` TEXT,
-                `replayPolicy` TEXT,
-                `attempt` INTEGER NOT NULL,
-                PRIMARY KEY(`id`)
-            )
-            """.trimIndent(),
-        )
-        db.execSQL(
-            """
-            CREATE TABLE IF NOT EXISTS `harness_queue_items` (
-                `id` TEXT NOT NULL,
-                `sessionId` TEXT NOT NULL,
-                `laneName` TEXT NOT NULL,
-                `operationId` TEXT,
-                `queueType` TEXT NOT NULL,
-                `createdAt` INTEGER NOT NULL,
-                `payloadJson` TEXT NOT NULL,
-                PRIMARY KEY(`id`)
-            )
-            """.trimIndent(),
-        )
-        db.execSQL(
-            """
-            CREATE TABLE IF NOT EXISTS `harness_usage` (
-                `sequence` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                `id` TEXT NOT NULL,
-                `sessionId` TEXT NOT NULL,
-                `operationId` TEXT,
-                `entryId` TEXT,
-                `provider` TEXT,
-                `modelId` TEXT,
-                `inputTokens` INTEGER NOT NULL,
-                `outputTokens` INTEGER NOT NULL,
-                `reasoningTokens` INTEGER NOT NULL,
-                `cacheReadTokens` INTEGER NOT NULL,
-                `cacheWriteTokens` INTEGER NOT NULL,
-                `estimatedCostUsd` REAL,
-                `adjustment` INTEGER NOT NULL,
-                `detailsJson` TEXT,
-                `createdAt` INTEGER NOT NULL
-            )
-            """.trimIndent(),
-        )
-        runCatching { db.execSQL("DROP TABLE IF NOT EXISTS harness_messages") }
-    }
-}
-
-/**
  * 审批请求绑定 harness operation 与参数摘要，并引入过期时间：
  * - operationId：审批所属运行，恢复执行前校验归属，防跨运行重放；
  * - argsHash：argumentsJson 的 SHA-256，防"批准旧参数、执行新参数"；
@@ -167,28 +50,6 @@ val MIGRATION_30_31 = object : Migration(30, 31) {
 val MIGRATION_31_32 = object : Migration(31, 32) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE harness_models ADD COLUMN responseApiEnabled INTEGER NOT NULL DEFAULT 0")
-    }
-}
-
-/**
- * v32 → v33：给 agent_skills 增加 resourcePath 列（技能资源在沙箱内的相对路径）。
- *
- * ## 这个迁移此前缺失
- *
- * `addMigrations` 里 31_32 之后直接跳到 33_34，32→33 这一段没有注册。
- * 后果是：任何停在 v32 的设备升级到当前版本时，Room 找不到从 32 出发的迁移路径，
- * 会走 `fallbackToDestructiveMigration`——**静默清空整库**。用户表现为「升级后
- * 模型档案、技能、MCP 配置全没了」，且没有任何报错。
- *
- * ## DDL 来源
- *
- * 不是手写：从 `schemas/top.wkbin.taixu.core.database.AppDatabase/33.json` 的
- * agent_skills createSql 逐字提取，保证与 Room 的 schema 校验一致。
- * 32→33 之间表集合完全相同，唯一差异就是这一列。
- */
-val MIGRATION_32_33 = object : Migration(32, 33) {
-    override fun migrate(db: SupportSQLiteDatabase) {
-        db.execSQL("ALTER TABLE agent_skills ADD COLUMN resourcePath TEXT")
     }
 }
 
@@ -395,85 +256,112 @@ val MIGRATION_45_46 = object : Migration(45, 46) {
     }
 }
 
-
-val MIGRATION_48_49 = object : Migration(48, 49) {
-    override fun migrate(db: SupportSQLiteDatabase) {
-        db.execSQL("CREATE TABLE IF NOT EXISTS red_team_facts (sessionId TEXT NOT NULL, id TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, target TEXT, severity TEXT, status TEXT NOT NULL, payload TEXT NOT NULL, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL, PRIMARY KEY(sessionId, id))")
-        db.execSQL("CREATE INDEX IF NOT EXISTS index_red_team_facts_sessionId_kind ON red_team_facts(sessionId, kind)")
-        db.execSQL("CREATE INDEX IF NOT EXISTS index_red_team_facts_sessionId_updatedAt ON red_team_facts(sessionId, updatedAt)")
-    }
-}
-
-/**
- * 会话级智能体绑定列。
- *
- * 新建会话时可选一个已启用的智能体（agent_subagents.id）作为该会话的
- * persona；绑定值进入系统提示词的可缓存前缀，因此会话内不可就地改写——
- * 换智能体走新会话。null 表示沿用默认的天衍本体提示词，与旧数据一致。
- */
-val MIGRATION_50_51 = object : Migration(50, 51) {
-    override fun migrate(db: SupportSQLiteDatabase) {
-        db.execSQL("ALTER TABLE harness_sessions ADD COLUMN agentId TEXT")
-    }
-}
-
-/**
- * 远程 HTTP MCP 服务的自定义认证头持久化。
- *
- * 此前导入 mcpServers 配置时 `headers.Authorization` 被解析器丢弃（模型里的
- * authToken 是 @Transient 且 entity 无对应列），带 Bearer 认证的远程服务
- * （如 ProxyPin 的 /mcp 端点）接入后握手一律 401。此迁移补上加密存储列，
- * 与 args/env 同待遇走 SecretManager。
- */
-val MIGRATION_49_50 = object : Migration(49, 50) {
-    override fun migrate(db: SupportSQLiteDatabase) {
-        db.execSQL("ALTER TABLE mcp_servers ADD COLUMN authTokenCiphertext TEXT NOT NULL DEFAULT ''")
-    }
-}
-
-val MIGRATION_47_48 = object : Migration(47, 48) {
-    override fun migrate(db: SupportSQLiteDatabase) {
-        db.execSQL("ALTER TABLE harness_sessions ADD COLUMN redTeamMode TEXT NOT NULL DEFAULT 'off'")
-        db.execSQL("ALTER TABLE harness_sessions ADD COLUMN redTeamTarget TEXT")
-        db.execSQL("ALTER TABLE harness_sessions ADD COLUMN redTeamScope TEXT NOT NULL DEFAULT ''")
-        db.execSQL("ALTER TABLE harness_sessions ADD COLUMN redTeamPhase TEXT NOT NULL DEFAULT 'idle'")
-    }
-}
-
+/** Adds durable workflow definitions and restart-visible execution history. */
 val MIGRATION_46_47 = object : Migration(46, 47) {
     override fun migrate(db: SupportSQLiteDatabase) {
-        // 工作流引擎 v0.13 移植：两张新表，DDL 与 Room 由 entity 生成的 schema 逐字对齐
         db.execSQL(
-            """
-            CREATE TABLE IF NOT EXISTS `workflows` (
-                `id` TEXT NOT NULL,
-                `name` TEXT NOT NULL,
-                `description` TEXT NOT NULL,
-                `category` TEXT NOT NULL,
-                `isBuiltin` INTEGER NOT NULL,
-                `slashCommand` TEXT,
-                `jsonContent` TEXT NOT NULL,
-                `updatedAt` INTEGER NOT NULL,
-                PRIMARY KEY(`id`)
-            )
-            """.trimIndent(),
+            """CREATE TABLE IF NOT EXISTS `workflows` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `description` TEXT NOT NULL, `category` TEXT NOT NULL, `isBuiltin` INTEGER NOT NULL, `slashCommand` TEXT, `jsonContent` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))""",
         )
         db.execSQL("CREATE INDEX IF NOT EXISTS `index_workflows_slashCommand` ON `workflows` (`slashCommand`)")
         db.execSQL(
-            """
-            CREATE TABLE IF NOT EXISTS `workflow_execution_logs` (
-                `executionId` TEXT NOT NULL,
-                `workflowId` TEXT NOT NULL,
-                `startTime` INTEGER NOT NULL,
-                `endTime` INTEGER,
-                `status` TEXT NOT NULL,
-                `finalContextJson` TEXT NOT NULL,
-                PRIMARY KEY(`executionId`),
-                FOREIGN KEY(`workflowId`) REFERENCES `workflows`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
-            )
-            """.trimIndent(),
+            """CREATE TABLE IF NOT EXISTS `workflow_execution_logs` (`executionId` TEXT NOT NULL, `workflowId` TEXT NOT NULL, `startTime` INTEGER NOT NULL, `endTime` INTEGER, `status` TEXT NOT NULL, `finalContextJson` TEXT NOT NULL, PRIMARY KEY(`executionId`), FOREIGN KEY(`workflowId`) REFERENCES `workflows`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )""",
         )
         db.execSQL("CREATE INDEX IF NOT EXISTS `index_workflow_execution_logs_workflowId` ON `workflow_execution_logs` (`workflowId`)")
         db.execSQL("CREATE INDEX IF NOT EXISTS `index_workflow_execution_logs_startTime` ON `workflow_execution_logs` (`startTime`)")
     }
 }
+
+/** Adds per-model compaction budget overrides (pi-style compaction.modelOverrides). */
+val MIGRATION_47_48 = object : Migration(47, 48) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "ALTER TABLE `harness_models` ADD COLUMN `compactionKeepRecentTokens` INTEGER",
+        )
+        db.execSQL(
+            "ALTER TABLE `harness_models` ADD COLUMN `compactionReserveTokens` INTEGER",
+        )
+    }
+}
+
+/**
+ * Workflow background execution: adds the schedule table (定时计划) and execution-log
+ * provenance columns (triggerSource/workflowName/scheduleId) so runs can record where
+ * they came from and survive process death as RUNNING breadcrumbs.
+ */
+val MIGRATION_48_49 = object : Migration(48, 49) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """CREATE TABLE IF NOT EXISTS `workflow_schedules` (`id` TEXT NOT NULL, `workflowId` TEXT NOT NULL, `name` TEXT NOT NULL, `enabled` INTEGER NOT NULL, `repeatType` TEXT NOT NULL, `hour` INTEGER, `minute` INTEGER, `intervalMinutes` INTEGER, `onceAtEpochMillis` INTEGER, `variablesJson` TEXT NOT NULL, `workspacePath` TEXT NOT NULL, `modelId` TEXT, `modelVariant` TEXT, `lastExecutionId` TEXT, `lastRunAt` INTEGER, `nextRunAt` INTEGER, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`workflowId`) REFERENCES `workflows`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )""",
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_workflow_schedules_workflowId` ON `workflow_schedules` (`workflowId`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_workflow_schedules_nextRunAt` ON `workflow_schedules` (`nextRunAt`)")
+        db.execSQL("ALTER TABLE `workflow_execution_logs` ADD COLUMN `triggerSource` TEXT NOT NULL DEFAULT 'MANUAL'")
+        db.execSQL("ALTER TABLE `workflow_execution_logs` ADD COLUMN `workflowName` TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE `workflow_execution_logs` ADD COLUMN `scheduleId` TEXT")
+    }
+}
+
+/** MCP OAuth credentials and short-lived PKCE transactions. */
+val MIGRATION_49_50 = object : Migration(49, 50) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("""CREATE TABLE IF NOT EXISTS `mcp_oauth_credentials` (`serverId` TEXT NOT NULL, `accessTokenCiphertext` TEXT NOT NULL, `refreshTokenCiphertext` TEXT NOT NULL, `tokenType` TEXT NOT NULL, `scope` TEXT, `expiresAt` INTEGER, `authorizationServer` TEXT, `tokenEndpoint` TEXT, `clientId` TEXT NOT NULL, `resource` TEXT, `credentialRevision` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`serverId`))""")
+        db.execSQL("""CREATE TABLE IF NOT EXISTS `mcp_oauth_transactions` (`state` TEXT NOT NULL, `serverId` TEXT NOT NULL, `codeVerifierCiphertext` TEXT NOT NULL, `redirectUri` TEXT NOT NULL, `clientId` TEXT NOT NULL, `authorizationEndpoint` TEXT NOT NULL, `tokenEndpoint` TEXT NOT NULL, `resource` TEXT, `createdAt` INTEGER NOT NULL, `expiresAt` INTEGER NOT NULL, PRIMARY KEY(`state`))""")
+        db.execSQL("ALTER TABLE `mcp_servers` ADD COLUMN `authMode` TEXT NOT NULL DEFAULT 'NONE'")
+        db.execSQL("ALTER TABLE `mcp_servers` ADD COLUMN `oauthClientId` TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE `mcp_servers` ADD COLUMN `oauthAuthorizationEndpoint` TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE `mcp_servers` ADD COLUMN `oauthTokenEndpoint` TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE `mcp_servers` ADD COLUMN `oauthRedirectUri` TEXT NOT NULL DEFAULT 'tianyan://oauth/mcp'")
+        db.execSQL("ALTER TABLE `mcp_servers` ADD COLUMN `oauthScope` TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE `mcp_servers` ADD COLUMN `oauthResource` TEXT NOT NULL DEFAULT ''")
+    }
+}
+
+/** Index OAuth transactions by server and expiry for callback cleanup and per-server lookup. */
+val MIGRATION_50_51 = object : Migration(50, 51) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_mcp_oauth_transactions_serverId` ON `mcp_oauth_transactions` (`serverId`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_mcp_oauth_transactions_expiresAt` ON `mcp_oauth_transactions` (`expiresAt`)")
+    }
+}
+
+/** Anthropic Prompt Caching：每模型开关与 1h TTL 扩展。 */
+val MIGRATION_51_52 = object : Migration(51, 52) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `harness_models` ADD COLUMN `promptCachingEnabled` INTEGER NOT NULL DEFAULT 1")
+        db.execSQL("ALTER TABLE `harness_models` ADD COLUMN `promptCacheTtl1h` INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
+/**
+ * PLAN 只读规划：全局默认与会话级运行意图（BUILD / PLAN）。
+ *
+ * 默认值必须显式写出且与实体 `@ColumnInfo(defaultValue = "build")` 完全一致，否则迁移后
+ * schema 校验失败（无 fallback 时启动即崩）。
+ *
+ * 两列均做存在性判断：版本 52 在开发期存在过「已含 runMode」的中间构建，直接 ADD COLUMN
+ * 会因列重复使迁移失败。
+ */
+val MIGRATION_52_53 = object : Migration(52, 53) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        if (!db.hasColumn("agent_approval_settings", "runMode")) {
+            db.execSQL("ALTER TABLE `agent_approval_settings` ADD COLUMN `runMode` TEXT NOT NULL DEFAULT 'build'")
+        }
+        if (!db.hasColumn("harness_sessions", "runMode")) {
+            db.execSQL("ALTER TABLE `harness_sessions` ADD COLUMN `runMode` TEXT NOT NULL DEFAULT 'build'")
+        }
+    }
+}
+
+/** PRAGMA table_info 探测列是否已存在（幂等迁移用）。 */
+private fun SupportSQLiteDatabase.hasColumn(table: String, column: String): Boolean =
+    query("PRAGMA table_info(`$table`)").use { cursor ->
+        val nameIndex = cursor.getColumnIndexOrThrow("name")
+        var found = false
+        while (cursor.moveToNext()) {
+            if (cursor.getString(nameIndex) == column) {
+                found = true
+                break
+            }
+        }
+        found
+    }

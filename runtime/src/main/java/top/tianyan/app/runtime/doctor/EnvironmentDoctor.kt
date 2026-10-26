@@ -5,24 +5,19 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Environment
-import dagger.hilt.android.qualifiers.ApplicationContext
+import top.tianyan.app.core.model.BuiltinPluginBundles
 import top.tianyan.app.core.model.DoctorCategory
 import top.tianyan.app.core.model.DoctorItem
 import top.tianyan.app.core.model.DoctorReport
 import top.tianyan.app.core.model.DoctorStatus
 import top.tianyan.app.core.model.RuntimeState
 import top.tianyan.app.runtime.LinuxRuntime
-import top.tianyan.app.runtime.shell.ShellCommand
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-@Singleton
-class EnvironmentDoctor @Inject constructor(
-    @ApplicationContext private val context: Context? = null,
+class EnvironmentDoctor(
+    private val context: Context? = null,
     private val linuxRuntime: LinuxRuntime,
-    private val logger: top.tianyan.app.core.common.logging.AppLogger,
 ) {
     suspend fun check(): DoctorReport = withContext(Dispatchers.IO) {
         // 宿主侧权限检查：不依赖沙箱状态，两种路径都要展示
@@ -58,9 +53,6 @@ class EnvironmentDoctor @Inject constructor(
         // 2. DNS 与网络连通性检查
         items.add(checkDnsAndNetwork())
 
-        // 2.5 沙箱代理健康：配置了 in-app/系统代理但代理本身不可达 → 全链 apt/curl 都会被拖死
-        items.add(checkSandboxProxy())
-
         // 3. CA 根证书检查
         items.add(checkCaCertificates())
 
@@ -79,21 +71,13 @@ class EnvironmentDoctor @Inject constructor(
         val healthyCount = items.count { it.status == DoctorStatus.HEALTHY }
         val warningCount = items.count { it.status == DoctorStatus.WARNING }
         val errorCount = items.count { it.status == DoctorStatus.ERROR }
+        val unknownCount = items.count { it.status == DoctorStatus.UNKNOWN }
 
         val overallStatus = when {
             errorCount > 0 -> DoctorStatus.ERROR
             warningCount > 0 -> DoctorStatus.WARNING
+            unknownCount > 0 -> DoctorStatus.UNKNOWN
             else -> DoctorStatus.HEALTHY
-        }
-
-        // 全量写进 AppLogger（logcat Tianyan tag + 公共 Download/Tianyan/runtime.log）：
-        // 开发者控制台「应用日志抓取」/ 用户直接拷 runtime.log 都能看到体检明细，不必依赖 adb。
-        run {
-            logger.i("[体检] 总体=$overallStatus 健康=$healthyCount 豆=$warningCount 错=$errorCount")
-            items.filter { it.status != DoctorStatus.HEALTHY }.forEach { item ->
-                logger.i("[体检] ${item.title} [${item.status}] ${item.summary}" +
-                    (item.detail?.let { " | $it" } ?: ""))
-            }
         }
 
         DoctorReport(
@@ -103,8 +87,47 @@ class EnvironmentDoctor @Inject constructor(
             healthyCount = healthyCount,
             warningCount = warningCount,
             errorCount = errorCount,
+            unknownCount = unknownCount,
         )
     }
+
+    /**
+     * 探测不可达时的灰牌条目，探测可达时返回 null。
+     *
+     * 区分两种真实原因：命令超时（[timedOutPhrase] + 沙箱正忙说明）与执行异常
+     * （门禁拒绝、沙箱未就绪、进程启动失败等，直接透出异常原文）——
+     * 不再把异常一律写成「探针超时」。
+     */
+    private fun ProbeOutcome.unreachableItem(
+        id: String,
+        category: DoctorCategory,
+        title: String,
+        timedOutPhrase: String,
+    ): DoctorItem? {
+        val missed = this as? ProbeOutcome.Unreachable ?: return null
+        val detail = if (missed.timedOut) {
+            "$timedOutPhrase，沙箱可能正忙（如正在执行构建/安装任务），稍后重新体检即可确认"
+        } else {
+            "沙箱探测未能执行：${missed.reason}；稍后重新体检即可确认"
+        }
+        return unknownItem(id = id, category = category, title = title, detail = detail)
+    }
+
+    /** 「沙箱正忙，暂时无法确认」灰牌条目：不计入待修复项。 */
+    private fun unknownItem(
+        id: String,
+        category: DoctorCategory,
+        title: String,
+        detail: String? = null,
+    ) = DoctorItem(
+        id = id,
+        category = category,
+        title = title,
+        status = DoctorStatus.UNKNOWN,
+        summary = "沙箱正忙，暂时无法确认",
+        detail = detail ?: "沙箱正在处理其他任务导致探测超时，稍后重新体检即可恢复",
+        fixable = false,
+    )
 
     private fun checkAllFilesAccess(): DoctorItem {
         val granted = if (context == null) {
@@ -140,38 +163,15 @@ class EnvironmentDoctor @Inject constructor(
 
     private fun itemsWarning(items: List<DoctorItem>): Int = items.count { it.status == DoctorStatus.WARNING }
 
-    /**
-     * 带一次重试（超时翻倍）的探测执行。返回 null = 沙箱繁忙/无响应——调用方必须显示
-     * UNKNOWN「暂时无法确认」，绝不能把执行不出来当成"配置异常"误报（真机实测：自愈占
-     * 沙箱时 4s 超时曾误报"官方默认源"黄牌，用户因此恐慌重复修复）。
-     */
-    private suspend fun probe(cmd: String, timeoutMs: Long): top.tianyan.app.runtime.shell.CommandResult? {
-        repeat(2) { attempt ->
-            val res = runCatching {
-                linuxRuntime.execute(ShellCommand(cmd, timeoutMs = timeoutMs * (attempt + 1)))
-            }.getOrNull()
-            if (res != null) return res
-            kotlinx.coroutines.delay(400L)
-        }
-        return null
-    }
-
     private suspend fun checkSandboxStorage(): DoctorItem {
-        val res = probe(
-            "mkdir -p /workspace /tmp && touch /workspace/.doctor_probe && rm -f /workspace/.doctor_probe",
-            5_000L,
+        val outcome = linuxRuntime.probeSandbox(
+            commandLine = "mkdir -p /workspace /tmp && touch /workspace/.doctor_probe && rm -f /workspace/.doctor_probe",
+            timeoutMs = 5000L,
         )
+        outcome.unreachableItem("sandbox_storage", DoctorCategory.SANDBOX, "PRoot 沙箱与工作区", "读写探针超时")?.let { return it }
+        val res = outcome.requireExecuted()
 
         return when {
-            res == null -> DoctorItem(
-                id = "sandbox_storage",
-                category = DoctorCategory.SANDBOX,
-                title = "PRoot 沙箱与工作区",
-                status = DoctorStatus.UNKNOWN,
-                summary = "沙箱正忙，暂时无法确认",
-                detail = "有其他操作占用沙箱，稍后下拉刷新重试即可",
-                fixable = false,
-            )
             res.isSuccess -> DoctorItem(
                 id = "sandbox_storage",
                 category = DoctorCategory.SANDBOX,
@@ -185,24 +185,18 @@ class EnvironmentDoctor @Inject constructor(
                 title = "PRoot 沙箱与工作区",
                 status = DoctorStatus.ERROR,
                 summary = "工作区读写或权限测试失败",
-                detail = res.stderr.ifBlank { res.stdout },
+                detail = res.stderr.ifBlank { res.stdout }.ifBlank { "探针命令执行失败" },
             )
         }
     }
 
     private suspend fun checkDnsAndNetwork(): DoctorItem {
-        val resolvCheck = probe("cat /etc/resolv.conf 2>/dev/null", 3_000L)
+        val resolvOutcome = linuxRuntime.probeSandbox("cat /etc/resolv.conf 2>/dev/null", timeoutMs = 3000L)
 
-        if (resolvCheck == null) {
-            return DoctorItem(
-                id = "network_dns",
-                category = DoctorCategory.NETWORK_SSL,
-                title = "DNS 域名解析",
-                status = DoctorStatus.UNKNOWN,
-                summary = "沙箱正忙，暂时无法确认",
-                fixable = false,
-            )
-        }
+        // 探测不可达（超时/执行异常）：不确定是否真的缺 DNS，如实给灰牌
+        resolvOutcome.unreachableItem("network_dns", DoctorCategory.NETWORK_SSL, "DNS 域名解析", "DNS 探针超时")?.let { return it }
+        val resolvCheck = resolvOutcome.requireExecuted()
+
         val resolvContent = resolvCheck.stdout
         val hasNameserver = resolvContent.contains("nameserver", ignoreCase = true)
 
@@ -228,28 +222,23 @@ class EnvironmentDoctor @Inject constructor(
     }
 
     private suspend fun checkCaCertificates(): DoctorItem {
-        val certCheck = probe("test -f /etc/ssl/certs/ca-certificates.crt || test -d /etc/ssl/certs", 3_000L)
+        val certOutcome = linuxRuntime.probeSandbox(
+            commandLine = "test -f /etc/ssl/certs/ca-certificates.crt || test -d /etc/ssl/certs",
+            timeoutMs = 3000L,
+        )
+        // 探测不可达：不把「没探测到」当成「证书缺失」
+        certOutcome.unreachableItem("ca_certificates", DoctorCategory.NETWORK_SSL, "SSL 根证书 (CA)", "SSL 根证书探针超时")?.let { return it }
+        val certCheck = certOutcome.requireExecuted()
 
-        val hasCerts = certCheck != null && certCheck.isSuccess
-        return if (hasCerts) {
-            DoctorItem(
+        return when {
+            certCheck.isSuccess -> DoctorItem(
                 id = "ca_certificates",
                 category = DoctorCategory.NETWORK_SSL,
                 title = "SSL 根证书 (CA)",
                 status = DoctorStatus.HEALTHY,
                 summary = "CA 根证书正常就绪，支持 HTTPS 依赖下载",
             )
-        } else if (certCheck == null) {
-            DoctorItem(
-                id = "ca_certificates",
-                category = DoctorCategory.NETWORK_SSL,
-                title = "SSL 根证书 (CA)",
-                status = DoctorStatus.UNKNOWN,
-                summary = "沙箱正忙，暂时无法确认",
-                fixable = false,
-            )
-        } else {
-            DoctorItem(
+            else -> DoctorItem(
                 id = "ca_certificates",
                 category = DoctorCategory.NETWORK_SSL,
                 title = "SSL 根证书 (CA)",
@@ -260,79 +249,26 @@ class EnvironmentDoctor @Inject constructor(
         }
     }
 
-    /**
-     * 沙箱代理健康检查：天衍内置代理（或 Android 全局代理）注入沙箱后，若代理进程已关闭/
-     * 电脑离线，curl/apt 会静默等待到超时——表现为"探测全部不可达"。直连可达而代理路径不通
-     * 即判死，提示清理。未配置代理时直接健康。
-     */
-    private suspend fun checkSandboxProxy(): DoctorItem {
-        val probe = runCatching {
-            linuxRuntime.execute(
-                ShellCommand(
-                    commandLine = """
-                        P="${'$'}{http_proxy:-${'$'}{HTTPS_PROXY:-}}"
-                        if [ -z "${'$'}P" ]; then echo NOPROXY; exit 0; fi
-                        env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY curl -s -m 5 -o /dev/null https://mirrors.aliyun.com && D=OK || D=FAIL
-                        curl -s -m 5 -o /dev/null https://mirrors.aliyun.com && X=OK || X=FAIL
-                        echo "PROXY=${'$'}P DIRECT=${'$'}D VIA=${'$'}X"
-                    """.trimIndent(),
-                    timeoutMs = 14_000L,
-                ),
-            )
-        }.getOrNull()
-        val out = probe?.stdout.orEmpty().lines().firstOrNull { it.startsWith("PROXY=") }.orEmpty()
-        return when {
-            out.isBlank() || probe == null || !probe.isSuccess -> DoctorItem(
-                id = "sandbox_proxy",
-                category = DoctorCategory.NETWORK_SSL,
-                title = "沙箱代理",
-                status = DoctorStatus.HEALTHY,
-                summary = "未检测到代理配置或探测超时（不影响直连场景）",
-            )
-            out.startsWith("NOPROXY") -> DoctorItem(
-                id = "sandbox_proxy",
-                category = DoctorCategory.NETWORK_SSL,
-                title = "沙箱代理",
-                status = DoctorStatus.HEALTHY,
-                summary = "未配置代理，直连模式",
-            )
-            "DIRECT=OK" in out && "VIA=FAIL" in out -> DoctorItem(
-                id = "sandbox_proxy",
-                category = DoctorCategory.NETWORK_SSL,
-                title = "沙箱代理",
-                status = DoctorStatus.WARNING,
-                summary = "代理不可达但直连正常（代理可能已关闭）",
-                detail = "当前代理 $out —— 沙箱内 curl/apt 会先走代理导致超时变慢。一键修复将自动清除死代理设置；如仍需代理请在 设置→沙箱 HTTP 代理 重新填写可用地址。",
-                fixable = true,
-            )
-            else -> DoctorItem(
-                id = "sandbox_proxy",
-                category = DoctorCategory.NETWORK_SSL,
-                title = "沙箱代理",
-                status = DoctorStatus.HEALTHY,
-                summary = "代理链路正常",
-            )
-        }
-    }
-
     private suspend fun checkAptMirrors(): DoctorItem {
-        val sourcesCheck = probe(
-            "cat /etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/sources.list.d/*.list 2>/dev/null || true",
-            8_000L,
+        val sourcesOutcome = linuxRuntime.probeSandbox(
+            commandLine = "cat /etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/sources.list.d/*.list 2>/dev/null || true",
+            timeoutMs = 4000L,
         )
-        if (sourcesCheck == null) {
-            return DoctorItem(
+        // 探测不可达：不能因超时或执行异常误报「官方默认源」（沙箱正忙时 cat 拿不到输出）
+        sourcesOutcome.unreachableItem("apt_mirrors", DoctorCategory.PACKAGE_MANAGER, "APT 软件包源", "APT 源探针超时")?.let { return it }
+        val sourcesCheck = sourcesOutcome.requireExecuted()
+
+        val content = sourcesCheck.stdout
+        // 命令带 || true，stdout 为空说明源配置整体不可读（而非官方源）——无法判定，如实灰牌
+        if (content.isBlank()) {
+            return unknownItem(
                 id = "apt_mirrors",
                 category = DoctorCategory.PACKAGE_MANAGER,
                 title = "APT 软件包源",
-                status = DoctorStatus.UNKNOWN,
-                summary = "沙箱正忙，暂时无法确认",
-                detail = "稍后下拉刷新重试即可；不代表源有问题",
-                fixable = false,
+                detail = "未读取到任何 APT 源配置内容，无法判定镜像状态；沙箱正忙或源列表异常，稍后重新体检确认",
             )
         }
 
-        val content = sourcesCheck.stdout
         val hasInvalidUbuntuMirror = (content.contains("/ubuntu ") || content.contains("/ubuntu/")) &&
             !content.contains("ubuntu-ports")
 
@@ -354,42 +290,13 @@ class EnvironmentDoctor @Inject constructor(
             content.contains("163.com", ignoreCase = true)
 
         return if (hasDomesticMirror) {
-            // 有国内源 ≠ 源可用：对当前第一个 deb 基址实测 InRelease（--ipv4 防手机 v6 半残误判），
-            // 不可达则黄牌 fixable，一键修复会重新逐个实测选优。
-            val first = content.lines().firstOrNull { it.startsWith("deb ") }?.trim()?.removePrefix("deb ")?.split(" ")
-            val base = first?.getOrNull(0).orEmpty()
-            val dist = first?.getOrNull(1).orEmpty()
-            val reachable = if (base.startsWith("http") && dist.isNotBlank()) {
-                runCatching {
-                    linuxRuntime.execute(
-                        ShellCommand(
-                            commandLine = "curl --ipv4 -fsS -m 5 -o /dev/null \"${base}/dists/${dist}/InRelease\" >/dev/null 2>&1 || exit 7",
-                            timeoutMs = 9_000L,
-                        ),
-                    ).isSuccess
-                }.getOrDefault(true)
-            } else {
-                true
-            }
-            if (!reachable) {
-                DoctorItem(
-                    id = "apt_mirrors",
-                    category = DoctorCategory.PACKAGE_MANAGER,
-                    title = "APT 软件包源",
-                    status = DoctorStatus.WARNING,
-                    summary = "已配置的镜像当前不可达 ($base)",
-                    detail = "该镜像可能对当前网络限流或资源缺失。一键修复将逐个实测国内镜像并自动切换到可用源。",
-                    fixable = true,
-                )
-            } else {
-                DoctorItem(
-                    id = "apt_mirrors",
-                    category = DoctorCategory.PACKAGE_MANAGER,
-                    title = "APT 软件包源",
-                    status = DoctorStatus.HEALTHY,
-                    summary = "已配置国内镜像源加速且实测可达 (阿里/清华/中科大)",
-                )
-            }
+            DoctorItem(
+                id = "apt_mirrors",
+                category = DoctorCategory.PACKAGE_MANAGER,
+                title = "APT 软件包源",
+                status = DoctorStatus.HEALTHY,
+                summary = "已配置国内镜像源加速 (清华/阿里/中科大)",
+            )
         } else {
             DoctorItem(
                 id = "apt_mirrors",
@@ -403,20 +310,13 @@ class EnvironmentDoctor @Inject constructor(
     }
 
     private suspend fun checkBaseDevTools(): DoctorItem {
-        val toolsCheck = probe(
-            "for t in curl git tar xz; do which \$t >/dev/null 2>&1 || echo \$t; done",
-            4_000L,
+        val toolsOutcome = linuxRuntime.probeSandbox(
+            commandLine = "for t in curl git tar xz file; do which \$t >/dev/null 2>&1 || echo \$t; done",
+            timeoutMs = 4000L,
         )
-        if (toolsCheck == null) {
-            return DoctorItem(
-                id = "base_devtools",
-                category = DoctorCategory.DEV_RUNTIMES,
-                title = "核心基础工具链",
-                status = DoctorStatus.UNKNOWN,
-                summary = "沙箱正忙，暂时无法确认",
-                fixable = false,
-            )
-        }
+        // 探测不可达：不把「没探测到」当成「工具缺失」
+        toolsOutcome.unreachableItem("base_devtools", DoctorCategory.DEV_RUNTIMES, "核心基础工具链", "基础工具探针超时")?.let { return it }
+        val toolsCheck = toolsOutcome.requireExecuted()
 
         val missingTools = toolsCheck.stdout.lines().map { it.trim() }.filter { it.isNotBlank() }
 
@@ -426,7 +326,7 @@ class EnvironmentDoctor @Inject constructor(
                 category = DoctorCategory.DEV_RUNTIMES,
                 title = "核心基础工具链",
                 status = DoctorStatus.HEALTHY,
-                summary = "Git, Curl, Tar, XZ 等常用工具已就绪",
+                summary = "Git, Curl, Tar, XZ, File 等常用工具已就绪",
             )
         } else {
             DoctorItem(
@@ -444,62 +344,48 @@ class EnvironmentDoctor @Inject constructor(
      * 复用插件中心 android-core 组件的同一探针命令，保证体检与插件安装的状态判定口径一致。
      */
     private suspend fun checkAndroidEnvironment(): DoctorItem {
-        val checkCommand = top.tianyan.app.core.model.BuiltinPluginBundles.bundles
+        val checkCommand = BuiltinPluginBundles.bundles
             .firstOrNull { it.id == "android-suite" }
             ?.components?.firstOrNull { it.id == "android-core" }
             ?.checkCommand
 
-        val installed = if (checkCommand.isNullOrBlank()) {
-            false
-        } else {
-            val res = probe(checkCommand, 8_000L)
-            if (res == null) return DoctorItem(
-                id = "android_environment",
-                category = DoctorCategory.DEV_RUNTIMES,
-                title = "Android 开发环境",
-                status = DoctorStatus.UNKNOWN,
-                summary = "沙箱正忙，暂时无法确认",
-                fixable = false,
-            )
-            res.isSuccess
-        }
+        val notInstalledItem = DoctorItem(
+            id = "android_environment",
+            category = DoctorCategory.DEV_RUNTIMES,
+            title = "Android 开发环境",
+            status = DoctorStatus.WARNING,
+            summary = "未安装 Android / Flutter / 反编译环境",
+            detail = "可加入官方 QQ 群下载全量离线插件包（已集成 Android、Flutter、反编译三大环境，免在线安装），或前往插件中心在线安装。",
+            fixable = false,
+        )
 
-        return if (installed) {
-            DoctorItem(
-                id = "android_environment",
-                category = DoctorCategory.DEV_RUNTIMES,
-                title = "Android 开发环境",
-                status = DoctorStatus.HEALTHY,
-                summary = "JDK 17 / Android SDK / Gradle / NDK 已就绪，可构建与反编译 APK",
-            )
-        } else {
-            DoctorItem(
-                id = "android_environment",
-                category = DoctorCategory.DEV_RUNTIMES,
-                title = "Android 开发环境",
-                status = DoctorStatus.WARNING,
-                summary = "未安装 Android / Flutter / 反编译环境",
-                detail = "可加入官方 QQ 群下载全量离线插件包（已集成 Android、Flutter、反编译三大环境，免在线安装），或前往插件中心在线安装。",
-                fixable = false,
-            )
-        }
+        // Bundle 数据未定义探针命令：按未安装引导（与历史行为一致）
+        if (checkCommand.isNullOrBlank()) return notInstalledItem
+
+        val androidOutcome = linuxRuntime.probeSandbox(commandLine = checkCommand, timeoutMs = 8000L)
+        // 探测不可达：灰牌，不误报「未安装」
+        androidOutcome
+            .unreachableItem("android_environment", DoctorCategory.DEV_RUNTIMES, "Android 开发环境", "Android 环境探针超时")
+            ?.let { return it }
+        if (!androidOutcome.requireExecuted().isSuccess) return notInstalledItem
+
+        return DoctorItem(
+            id = "android_environment",
+            category = DoctorCategory.DEV_RUNTIMES,
+            title = "Android 开发环境",
+            status = DoctorStatus.HEALTHY,
+            summary = "JDK 17 / Android SDK / Gradle / NDK 已就绪，可构建与反编译 APK",
+        )
     }
 
     private suspend fun checkNodeRuntime(): DoctorItem {
-        val nodeCheck = probe(
-            "node --version 2>/dev/null || /opt/tianyan/bin/node --version 2>/dev/null || /usr/bin/node --version 2>/dev/null",
-            4_000L,
+        val nodeOutcome = linuxRuntime.probeSandbox(
+            commandLine = "node --version 2>/dev/null || /opt/tianyan/bin/node --version 2>/dev/null || /usr/bin/node --version 2>/dev/null",
+            timeoutMs = 4000L,
         )
-        if (nodeCheck == null) {
-            return DoctorItem(
-                id = "node_runtime",
-                category = DoctorCategory.DEV_RUNTIMES,
-                title = "Node.js 运行时",
-                status = DoctorStatus.UNKNOWN,
-                summary = "沙箱正忙，暂时无法确认",
-                fixable = false,
-            )
-        }
+        // 探测不可达：不把「没探测到」当成「Node 未安装」
+        nodeOutcome.unreachableItem("node_runtime", DoctorCategory.DEV_RUNTIMES, "Node.js 运行时", "Node.js 探针超时")?.let { return it }
+        val nodeCheck = nodeOutcome.requireExecuted()
 
         val rawVersion = nodeCheck.stdout.trim()
         if (rawVersion.isBlank()) {

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_nav_models_summary">管理模型、服务商与连接</string>
+    <string name="settings_nav_local_summary">导入 GGUF，在设备上离线推理</string>
+    <string name="settings_nav_phrases_summary">常用提示词与快捷指令</string>
+    <string name="settings_nav_stats_summary">用量、活跃度与模型排行</string>
+    <string name="settings_nav_tools_summary">安装与管理本地开发工具</string>
+    <string name="settings_nav_tools_remote_summary">当前为远程系统，请切回本地安装</string>
+    <string name="settings_nav_cc_summary">管理智能体版本与模型配置</string>
+    <string name="settings_nav_execution_summary">思考展示、上下文与工具调用</string>
+    <string name="settings_nav_roles_summary">委派策略与智能体角色</string>
+    <string name="settings_nav_skills_summary">提示词、脚本与运行时插件</string>
+    <string name="settings_nav_mcp_summary">内置与第三方 MCP 服务</string>
+    <string name="settings_nav_agents_summary">模型、工具、技能与 MCP</string>
+    <string name="settings_nav_linux_summary">发行版、存储挂载与访问</string>
+    <string name="settings_nav_appearance_summary">主题、字号、背景与终端</string>
+    <string name="settings_nav_diagnostics_summary">后台保活与运行诊断</string>
+    <string name="settings_nav_features_summary">AI 创作、协作与自动化</string>
+    <string name="settings_nav_about_summary">版本更新与官方社区</string>
+    <string name="settings_nav_about_title">关于与社区</string>
+</resources>

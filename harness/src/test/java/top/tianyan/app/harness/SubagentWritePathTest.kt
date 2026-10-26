@@ -106,4 +106,25 @@ class SubagentWritePathTest {
         assertTrue("C" in waveOfA.map { s -> s.taskName })
         assertFalse("B" in waveOfA.map { s -> s.taskName })
     }
+
+    /**
+     * 按段消解后再做冲突比较：`docs/../src` 消解为 `src`，与 `docs` 不相交，
+     * 两者并行（同波）是安全的——真实写目标由闸门按消解后路径校验。
+     * 旧的纯前缀比较会把 `docs` 与 `docs/../secret.txt` 判成不相干（或反向误放行），
+     * 消解统一了租约校验与波次规划两边的语义。
+     */
+    @Test
+    fun `dot-dot write paths resolve before conflict detection`() {
+        val waves = buildWriteCleanWaves(
+            listOf(spec("文档", "docs"), spec("源码", "docs/../src")),
+        )
+
+        assertEquals(1, waves.size)
+        assertFalse(writePathsConflict("docs", "docs/../src"))
+        assertTrue(writePathsConflict("docs", "docs/guide"))
+        assertTrue(writePathsConflict("docs", "docs/../docs/extra"))
+        assertEquals("src", normalizeWritePath("docs/../src"))
+        assertEquals("secret.txt", normalizeWritePath("docs/../secret.txt"))
+        assertEquals("../secret.txt", normalizeWritePath("../secret.txt"))
+    }
 }

@@ -63,15 +63,11 @@ import androidx.compose.runtime.mutableFloatStateOf
 import top.tianyan.app.ui.chat.MarkdownText
 import top.tianyan.app.feature.chat.R
 import top.tianyan.app.ui.components.RuntimeButton
-import top.tianyan.app.ui.theme.Spacing
-import top.tianyan.app.ui.theme.Radius
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconButton
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeOutlinedButton
 import top.tianyan.app.ui.components.SyntaxHighlighter
-import top.tianyan.app.ui.components.TianyanGlassPanel
-
 enum class ArtifactViewMode {
     PREVIEW,
     CODE,
@@ -171,14 +167,15 @@ fun ArtifactPreviewSheet(
                 .heightIn(min = 420.dp, max = 680.dp),
         ) {
             // 1. 顶栏标题与模式切换
-            TianyanGlassPanel(
+            Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = Spacing.lg, vertical = Spacing.md),
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
@@ -186,10 +183,10 @@ fun ArtifactPreviewSheet(
                     Row(
                         modifier = Modifier.weight(1f),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Surface(
-                            shape = Radius.xsShape,
+                            shape = RoundedCornerShape(8.dp),
                             color = MaterialTheme.colorScheme.primaryContainer,
                             modifier = Modifier.size(32.dp),
                         ) {
@@ -210,7 +207,7 @@ fun ArtifactPreviewSheet(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
                                     text = title.ifEmpty { relativePath.substringAfterLast('/') },
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    style = MaterialTheme.typography.titleMedium,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
@@ -238,7 +235,7 @@ fun ArtifactPreviewSheet(
                     // 右侧模式切换胶囊
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         if (isMarkdown) {
                             ModeChip(
@@ -290,7 +287,7 @@ fun ArtifactPreviewSheet(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .verticalScroll(rememberScrollState())
-                                .padding(Spacing.lg)
+                                .padding(16.dp)
                                 .graphicsLayer {
                                     scaleX = zoomScale
                                     scaleY = zoomScale
@@ -319,11 +316,11 @@ fun ArtifactPreviewSheet(
                                     .fillMaxSize()
                                     .verticalScroll(rememberScrollState())
                                     .horizontalScroll(rememberScrollState())
-                                    .padding(Spacing.md),
+                                    .padding(12.dp),
                             ) {
                                 // 行号栏
                                 Column(
-                                    modifier = Modifier.padding(end = Spacing.md),
+                                    modifier = Modifier.padding(end = 12.dp),
                                     horizontalAlignment = Alignment.End,
                                 ) {
                                     lines.indices.forEach { idx ->
@@ -359,7 +356,7 @@ fun ArtifactPreviewSheet(
                             onValueChange = { editableContent = it },
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(Spacing.md)
+                                .padding(12.dp)
                                 .verticalScroll(rememberScrollState()),
                             textStyle = TextStyle(
                                 fontFamily = FontFamily.Monospace,
@@ -379,12 +376,12 @@ fun ArtifactPreviewSheet(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     // 复制全文
@@ -396,7 +393,7 @@ fun ArtifactPreviewSheet(
                         },
                     ) {
                         RuntimeIcon(RuntimeIconName.Copy, modifier = Modifier.size(15.dp))
-                        Spacer(Modifier.width(Spacing.xs))
+                        Spacer(Modifier.width(4.dp))
                         Text(stringResource(R.string.chat_artifact_copy), fontSize = 12.sp)
                     }
 
@@ -415,7 +412,7 @@ fun ArtifactPreviewSheet(
                         },
                     ) {
                         RuntimeIcon(RuntimeIconName.OpenInNew, modifier = Modifier.size(15.dp))
-                        Spacer(Modifier.width(Spacing.xs))
+                        Spacer(Modifier.width(4.dp))
                         Text(stringResource(R.string.chat_artifact_share), fontSize = 12.sp)
                     }
 
@@ -426,34 +423,34 @@ fun ArtifactPreviewSheet(
                         },
                     ) {
                         RuntimeIcon(RuntimeIconName.Download, modifier = Modifier.size(15.dp))
-                        Spacer(Modifier.width(Spacing.xs))
+                        Spacer(Modifier.width(4.dp))
                         Text(stringResource(R.string.chat_artifact_export), fontSize = 12.sp)
                     }
                 }
 
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     // 手动缩放微调控制器
                     Surface(
-                        shape = Radius.xsShape,
+                        shape = RoundedCornerShape(8.dp),
                         color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        modifier = Modifier.clip(Radius.xsShape),
+                        modifier = Modifier.clip(RoundedCornerShape(8.dp)),
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
-                            modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
                         ) {
                             Box(
                                 modifier = Modifier
                                     .size(26.dp)
-                                    .clip(Radius.xsShape)
+                                    .clip(RoundedCornerShape(4.dp))
                                     .clickable { zoomScale = (zoomScale - 0.15f).coerceIn(0.7f, 2.5f) },
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Text("-", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                                Text("-", style = MaterialTheme.typography.titleMedium)
                             }
 
                             Text(
@@ -465,19 +462,19 @@ fun ArtifactPreviewSheet(
                                 ),
                                 color = if (zoomScale != 1f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier
-                                    .clip(Radius.xsShape)
+                                    .clip(RoundedCornerShape(4.dp))
                                     .clickable { zoomScale = 1f }
-                                    .padding(horizontal = Spacing.xs, vertical = Spacing.xs),
+                                    .padding(horizontal = 4.dp, vertical = 2.dp),
                             )
 
                             Box(
                                 modifier = Modifier
                                     .size(26.dp)
-                                    .clip(Radius.xsShape)
+                                    .clip(RoundedCornerShape(4.dp))
                                     .clickable { zoomScale = (zoomScale + 0.15f).coerceIn(0.7f, 2.5f) },
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Text("+", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                                Text("+", style = MaterialTheme.typography.titleMedium)
                             }
                         }
                     }
@@ -493,7 +490,7 @@ fun ArtifactPreviewSheet(
                             enabled = isDirty,
                         ) {
                             RuntimeIcon(RuntimeIconName.Check, modifier = Modifier.size(15.dp))
-                            Spacer(Modifier.width(Spacing.xs))
+                            Spacer(Modifier.width(4.dp))
                             Text(stringResource(R.string.chat_artifact_save), fontSize = 12.sp)
                         }
                     }
@@ -510,17 +507,17 @@ private fun ModeChip(
     onClick: () -> Unit,
 ) {
     Surface(
-        shape = Radius.smShape,
+        shape = RoundedCornerShape(12.dp),
         color = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
         border = if (selected) androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
         modifier = Modifier
             .minimumInteractiveComponentSize()
-            .clip(Radius.smShape)
+            .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick),
     ) {
         Text(
             text = label,
-            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal),
             color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
         )

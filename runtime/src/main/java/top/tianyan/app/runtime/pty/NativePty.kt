@@ -1,4 +1,4 @@
-package top.tianyan.app.runtime.pty
+﻿package top.tianyan.app.runtime.pty
 
 /**
  * JNI bindings for the native forkpty backend (see app/src/main/cpp/pty_native.c).
@@ -21,7 +21,6 @@ internal object NativePty {
         cwd: String,
         columns: Int,
         rows: Int,
-        rawMode: Boolean,
     ): IntArray
 
     external fun readFd(fd: Int, buffer: ByteArray): Int
@@ -32,7 +31,8 @@ internal object NativePty {
 
     external fun killPid(pid: Int, signal: Int): Int
 
-    external fun waitPid(pid: Int)
+    /** Nonblocking reap: true when exited/already reaped, false while running. */
+    external fun pollExit(pid: Int): Boolean
 
     external fun closeFd(fd: Int)
 }

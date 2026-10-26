@@ -5,7 +5,12 @@ import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import top.tianyan.app.core.datastore.SettingsDataStore
+import top.tianyan.app.core.datastore.AgentPreferences
+import top.tianyan.app.core.datastore.AgentServerPreferences
+import top.tianyan.app.core.datastore.AppearancePreferences
+import top.tianyan.app.core.datastore.FirstUseGuidePreferences
+import top.tianyan.app.core.datastore.RuntimePreferences
+import top.tianyan.app.core.datastore.TerminalPreferences
 import top.tianyan.app.core.datastore.BrowserPreferences
 import top.tianyan.app.core.database.AiModelRepository
 import top.tianyan.app.core.database.AiModelEntity
@@ -13,24 +18,24 @@ import top.tianyan.app.core.database.AgentSkillRepository
 import top.tianyan.app.core.database.McpServerRepository
 import top.tianyan.app.core.database.StorageMountBindingRepository
 import top.tianyan.app.core.tools.ProviderRepository
+import top.tianyan.app.harness.ContextWindowPolicy
 import top.tianyan.app.core.tools.ToolManager
 import top.tianyan.app.core.tools.AiProfileWriter
 import top.tianyan.app.core.tools.AiProfileBackupCodec
 import top.tianyan.app.core.tools.AgentModelDiscovery
-import top.tianyan.app.core.tools.ModelDiscoveryResponseException
 import top.tianyan.app.core.tools.AgentProviderCatalog
 import top.tianyan.app.core.tools.AgentModelConnectionTester
 import top.tianyan.app.core.tools.ProviderEndpointPolicy
 import top.tianyan.app.core.model.ExecutionMode
 import top.tianyan.app.core.model.McpConnectionState
+import top.tianyan.app.core.model.McpAuthState
+import top.tianyan.app.core.model.McpAuthMode
 import top.tianyan.app.core.model.RuntimeState
 import top.tianyan.app.runtime.LinuxEnvironmentManager
 import top.tianyan.app.runtime.RuntimePathManager
 import top.tianyan.app.runtime.proot.QemuCompatibilityLayout
 import top.tianyan.app.runtime.privilege.PhantomProcessLimitStatus
 import top.tianyan.app.runtime.privilege.PrivilegeManager
-import dagger.hilt.android.lifecycle.HiltViewModel
-import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -41,6 +46,8 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -51,36 +58,85 @@ import java.io.File
 import java.util.UUID
 import java.util.zip.ZipInputStream
 import java.io.BufferedOutputStream
-import top.tianyan.app.core.model.AiModelProfileExport
+import java.io.ByteArrayOutputStream
+import kotlinx.coroutines.withTimeoutOrNull
+import top.tianyan.app.core.common.files.BoundedStreamCopy
+import top.tianyan.app.core.common.logging.AppLogger
+import top.tianyan.app.core.common.result.AppResult
+import top.tianyan.app.core.common.translation.TranslationManager
+import top.tianyan.app.core.common.translation.TranslationModelStatus
+import top.tianyan.app.core.database.AgentApprovalRepository
+import top.tianyan.app.core.database.AgentSubagentRepository
+import top.tianyan.app.core.database.HarnessSessionRepository
+import top.tianyan.app.core.database.McpOAuthCredentialRepository
+import top.tianyan.app.core.database.QuickPhraseRepository
+import top.tianyan.app.core.datastore.SettingsDataStore
+import top.tianyan.app.core.model.AgentDepartments
+import top.tianyan.app.core.model.AgentPlugin
+import top.tianyan.app.core.model.AgentSkill
+import top.tianyan.app.core.model.AgentSubagent
+import top.tianyan.app.core.model.ApprovalMode
+import top.tianyan.app.core.model.BuiltinMcpPresets
+import top.tianyan.app.core.model.McpServerConfig
+import top.tianyan.app.core.model.McpToolInfo
+import top.tianyan.app.core.model.McpTransportType
+import top.tianyan.app.core.model.QuickPhrase
+import top.tianyan.app.core.model.RunMode
+import top.tianyan.app.core.model.RunningSendMode
+import top.tianyan.app.core.model.StorageMountBinding
+import top.tianyan.app.core.model.UpdateCheckState
+import top.tianyan.app.core.model.skill.ClawHubMarketItem
+import top.tianyan.app.core.network.AppUpdateManager
+import top.tianyan.app.core.tools.ProviderProtocol
+import top.tianyan.app.core.tools.skill.ClawHubClient
+import top.tianyan.app.core.tools.skill.SkillInstallInspection
+import top.tianyan.app.core.tools.skill.SkillInstallationManager
+import top.tianyan.app.core.tools.skill.SkillPackageParser
+import top.tianyan.app.harness.mcp.McpManager
+import top.tianyan.app.harness.mcp.oauth.McpOAuthCoordinator
+import top.tianyan.app.runtime.LinuxRuntime
+import top.tianyan.app.runtime.RuntimeInstallRequest
+import top.tianyan.app.runtime.webchat.WebChatBridgeServer
+import top.tianyan.app.runtime.webchat.WebChatServerStatus
 
 
-@HiltViewModel
-class SettingsViewModel @Inject constructor(
+class SettingsViewModel(
     private val application: Application,
-    private val logger: top.tianyan.app.core.common.logging.AppLogger,
-    private val settingsDataStore: SettingsDataStore,
+    private val logger: AppLogger,
+    private val appearancePreferences: AppearancePreferences,
+    private val terminalPreferences: TerminalPreferences,
+    private val runtimePreferences: RuntimePreferences,
+    private val agentPreferences: AgentPreferences,
+    private val firstUseGuidePreferences: FirstUseGuidePreferences,
     private val providerRepository: ProviderRepository,
     private val aiModelDao: AiModelRepository,
     private val modelDiscovery: AgentModelDiscovery,
     private val providerCatalogRepository: AgentProviderCatalog,
     private val connectionTester: AgentModelConnectionTester,
     private val privilegeManager: PrivilegeManager,
-    private val mcpManager: top.tianyan.app.harness.mcp.McpManager,
-    private val linuxRuntime: top.tianyan.app.runtime.LinuxRuntime,
+    private val mcpManager: McpManager,
+    private val linuxRuntime: LinuxRuntime,
     private val pathManager: RuntimePathManager,
     private val linuxEnvironmentManager: LinuxEnvironmentManager,
-    private val subagentRepository: top.tianyan.app.core.database.AgentSubagentRepository,
+    private val appUpdateManager: AppUpdateManager,
+    private val subagentRepository: AgentSubagentRepository,
     private val agentSkillRepository: AgentSkillRepository,
     private val mcpServerRepository: McpServerRepository,
+    private val mcpOAuthCoordinator: McpOAuthCoordinator,
+    private val mcpOAuthCredentials: McpOAuthCredentialRepository,
     private val storageMountBindingRepository: StorageMountBindingRepository,
-    private val approvalRepository: top.tianyan.app.core.database.AgentApprovalRepository,
-    private val sessionDao: top.tianyan.app.core.database.HarnessSessionRepository,
+    private val approvalRepository: AgentApprovalRepository,
+    private val sessionDao: HarnessSessionRepository,
     private val toolManager: ToolManager,
-    private val quickPhraseRepository: top.tianyan.app.core.database.QuickPhraseRepository,
+    private val quickPhraseRepository: QuickPhraseRepository,
     private val profileWriter: AiProfileWriter,
-    private val profileBackupCodec: AiProfileBackupCodec,
-    private val webChatBridgeServer: top.tianyan.app.runtime.webchat.WebChatBridgeServer? = null,
+    internal val profileBackupCodec: AiProfileBackupCodec,
+    private val webChatBridgeServer: WebChatBridgeServer? = null,
     private val browserPrefs: BrowserPreferences,
+    private val agentServerPreferences: AgentServerPreferences,
+    private val translationManager: TranslationManager,
+    private val skillInstallationManager: SkillInstallationManager? = null,
+    private val clawHubClient: ClawHubClient? = null,
 ) : ViewModel() {
     val installedDistros = linuxRuntime.installedDistros
     val activeDistroId = linuxRuntime.activeDistroId
@@ -102,6 +158,7 @@ class SettingsViewModel @Inject constructor(
             agentSkillRepository.ensureInitialized()
             mcpServerRepository.ensureInitialized()
             quickPhraseRepository.ensureInitialized()
+            loadClawHubMarket()
         }
         viewModelScope.launch {
             combine(linuxRuntime.state, linuxRuntime.activeDistroId) { state, distroId ->
@@ -129,11 +186,11 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    val environmentPrivacyMode: StateFlow<Boolean> = settingsDataStore.environmentPrivacyMode
+    val environmentPrivacyMode: StateFlow<Boolean> = agentPreferences.environmentPrivacyMode
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     fun setEnvironmentPrivacyMode(enabled: Boolean) {
-        viewModelScope.launch { settingsDataStore.setEnvironmentPrivacyMode(enabled) }
+        viewModelScope.launch { agentPreferences.setEnvironmentPrivacyMode(enabled) }
     }
 
     fun addEnvironmentVariable(key: String, value: String, note: String, onResult: (Boolean) -> Unit = {}) {
@@ -177,62 +234,124 @@ class SettingsViewModel @Inject constructor(
     }
 
     // ---- 终端外观与显示定制 ----
-    val terminalFontSize: StateFlow<Int> = settingsDataStore.terminalFontSize
+    val terminalFontSize: StateFlow<Int> = terminalPreferences.terminalFontSize
         .stateIn(viewModelScope, SharingStarted.Eagerly, 13)
 
-    val terminalColorScheme: StateFlow<String> = settingsDataStore.terminalColorScheme
+    val terminalColorScheme: StateFlow<String> = terminalPreferences.terminalColorScheme
         .stateIn(viewModelScope, SharingStarted.Eagerly, "obsidian")
 
-    val terminalHapticsEnabled: StateFlow<Boolean> = settingsDataStore.terminalHapticsEnabled
+    val terminalHapticsEnabled: StateFlow<Boolean> = terminalPreferences.terminalHapticsEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
-    val appFontScale: StateFlow<Float> = settingsDataStore.appFontScale
+    val appFontScale: StateFlow<Float> = appearancePreferences.appFontScale
         .stateIn(viewModelScope, SharingStarted.Eagerly, 1.0f)
 
-    val chengmingBackgroundUri: StateFlow<String?> = settingsDataStore.chengmingBackgroundUri
-        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
-
     fun setTerminalFontSize(sizeSp: Int) {
-        viewModelScope.launch { settingsDataStore.setTerminalFontSize(sizeSp) }
+        viewModelScope.launch { terminalPreferences.setTerminalFontSize(sizeSp) }
     }
 
     fun setTerminalColorScheme(scheme: String) {
-        viewModelScope.launch { settingsDataStore.setTerminalColorScheme(scheme) }
+        viewModelScope.launch { terminalPreferences.setTerminalColorScheme(scheme) }
     }
 
     fun setTerminalHapticsEnabled(enabled: Boolean) {
-        viewModelScope.launch { settingsDataStore.setTerminalHapticsEnabled(enabled) }
+        viewModelScope.launch { terminalPreferences.setTerminalHapticsEnabled(enabled) }
     }
 
     fun setAppFontScale(scale: Float) {
-        viewModelScope.launch { settingsDataStore.setAppFontScale(scale) }
+        viewModelScope.launch { appearancePreferences.setAppFontScale(scale) }
     }
 
-    fun setChengmingBackgroundUri(uri: String?) {
-        viewModelScope.launch { settingsDataStore.setChengmingBackgroundUri(uri) }
-    }
+    // ---- 应用版本更新机制 ----
+    val autoCheckUpdates: StateFlow<Boolean> = appearancePreferences.autoCheckUpdates
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
-    /** 沙箱内置 HTTP 代理（用户在设置里填 `http://host:port` 让 git/curl/apt 全走），空 = 不启用回落 Android 全局。 */
-    val sandboxHttpProxy: StateFlow<String> = settingsDataStore.sandboxHttpProxy
-        .stateIn(viewModelScope, SharingStarted.Eagerly, "")
-
-    fun setSandboxHttpProxy(value: String) {
-        viewModelScope.launch { settingsDataStore.setSandboxHttpProxy(value) }
-    }
-
-    /** 清空全部首次使用引导标记，下次进入相应页面会重新展示引导遮罩。 */
-    fun replayFirstUseGuides() {
-        viewModelScope.launch { settingsDataStore.clearFirstUseGuides() }
-    }
-
-    val webChatStatus: StateFlow<top.tianyan.app.runtime.webchat.WebChatServerStatus> =
-        webChatBridgeServer?.status ?: MutableStateFlow(top.tianyan.app.runtime.webchat.WebChatServerStatus()).asStateFlow()
+    val webChatStatus: StateFlow<WebChatServerStatus> =
+        webChatBridgeServer?.status ?: MutableStateFlow(WebChatServerStatus()).asStateFlow()
 
     fun toggleWebChatServer(enabled: Boolean, port: Int = 8899) {
         if (enabled) {
             webChatBridgeServer?.start(port)
         } else {
             webChatBridgeServer?.stop()
+        }
+    }
+
+    private val _updateCheckState = MutableStateFlow<UpdateCheckState>(UpdateCheckState.Idle)
+    val updateCheckState: StateFlow<UpdateCheckState> = _updateCheckState.asStateFlow()
+
+    private val _downloadProgress = MutableStateFlow<Float?>(null)
+    val downloadProgress: StateFlow<Float?> = _downloadProgress.asStateFlow()
+
+    private val _isDownloading = MutableStateFlow(false)
+    val isDownloading: StateFlow<Boolean> = _isDownloading.asStateFlow()
+
+    fun setAutoCheckUpdates(enabled: Boolean) {
+        viewModelScope.launch { appearancePreferences.setAutoCheckUpdates(enabled) }
+    }
+
+    /** 清空全部首次使用引导标记，下次进入相应页面会重新展示引导遮罩。 */
+    fun replayFirstUseGuides() {
+        viewModelScope.launch { firstUseGuidePreferences.clearFirstUseGuides() }
+    }
+
+    fun checkForUpdates(currentVersion: String) {
+        viewModelScope.launch {
+            _updateCheckState.value = UpdateCheckState.Checking
+            val res = appUpdateManager.checkUpdate(currentVersion)
+            res.onSuccess { info ->
+                _updateCheckState.value = UpdateCheckState.Success(info)
+            }.onFailure { err ->
+                _updateCheckState.value = UpdateCheckState.Error(err.message ?: "检查更新失败，请检查网络")
+            }
+        }
+    }
+
+    fun downloadAndInstall(apkUrl: String) {
+        viewModelScope.launch {
+            _isDownloading.value = true
+            _downloadProgress.value = 0f
+            val res = appUpdateManager.downloadApk(apkUrl) { downloaded, total ->
+                if (total != null && total > 0) {
+                    _downloadProgress.value = downloaded.toFloat() / total.toFloat()
+                } else {
+                    _downloadProgress.value = null
+                }
+            }
+            _isDownloading.value = false
+            res.onSuccess { apkFile ->
+                _downloadProgress.value = 1f
+                appUpdateManager.installApk(apkFile)
+            }.onFailure { err ->
+                _downloadProgress.value = null
+                _updateCheckState.value = UpdateCheckState.Error("下载更新包失败：${err.message}")
+            }
+        }
+    }
+
+    fun clearUpdateState() {
+        _updateCheckState.value = UpdateCheckState.Idle
+        _downloadProgress.value = null
+        _isDownloading.value = false
+    }
+
+    private val _currentReleaseNotes = MutableStateFlow<String?>(null)
+    val currentReleaseNotes: StateFlow<String?> = _currentReleaseNotes.asStateFlow()
+
+    private val _isLoadingReleaseNotes = MutableStateFlow(false)
+    val isLoadingReleaseNotes: StateFlow<Boolean> = _isLoadingReleaseNotes.asStateFlow()
+
+    fun loadCurrentReleaseNotes(currentVersion: String) {
+        if (_isLoadingReleaseNotes.value) return
+        _isLoadingReleaseNotes.value = true
+        _currentReleaseNotes.value = null
+        viewModelScope.launch {
+            try {
+                _currentReleaseNotes.value = appUpdateManager.fetchReleaseNotes(currentVersion)
+                    .getOrNull()?.takeIf { it.isNotBlank() }
+            } finally {
+                _isLoadingReleaseNotes.value = false
+            }
         }
     }
 
@@ -257,7 +376,7 @@ class SettingsViewModel @Inject constructor(
         _distroInstallState.value = _distroInstallState.value.copy(errorMessage = null)
     }
 
-    fun installDistro(request: top.tianyan.app.runtime.RuntimeInstallRequest) {
+    fun installDistro(request: RuntimeInstallRequest) {
         if (_distroInstallState.value.isInstalling) return
         viewModelScope.launch {
             _distroInstallState.value = DistroInstallUiState(
@@ -275,7 +394,7 @@ class SettingsViewModel @Inject constructor(
                     progressFraction = (p.fraction ?: 0f) * 0.8f + 0.1f,
                 )
             }
-            if (res is top.tianyan.app.core.common.result.AppResult.Success) {
+            if (res is AppResult.Success) {
                 // 安装成功：重置进度状态，UI 据此关闭安装弹窗
                 _distroInstallState.value = DistroInstallUiState()
             } else {
@@ -288,7 +407,7 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    private val _restoringDistroId = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    private val _restoringDistroId = MutableStateFlow<String?>(null)
     val restoringDistroId: StateFlow<String?> = _restoringDistroId.asStateFlow()
 
     fun resetDistro(distroId: String, onResult: ((Boolean, String) -> Unit)? = null) {
@@ -296,11 +415,11 @@ class SettingsViewModel @Inject constructor(
         _restoringDistroId.value = distroId
         viewModelScope.launch {
             val res = linuxRuntime.resetSandbox(distroId)
-            if (res is top.tianyan.app.core.common.result.AppResult.Success) {
+            if (res is AppResult.Success) {
                 toolManager.resetDistroState(distroId)
             }
             _restoringDistroId.value = null
-            if (res is top.tianyan.app.core.common.result.AppResult.Success) {
+            if (res is AppResult.Success) {
                 onResult?.invoke(true, "已恢复初始状态")
             } else {
                 res.errorOrNull()?.let { logger.e("Distro reset failed: ${it.message}", it.cause) }
@@ -309,7 +428,7 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    private val _deletingDistroId = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    private val _deletingDistroId = MutableStateFlow<String?>(null)
     val deletingDistroId: StateFlow<String?> = _deletingDistroId.asStateFlow()
 
     fun uninstallDistro(distroId: String, onResult: ((Boolean, String) -> Unit)? = null) {
@@ -318,7 +437,7 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             val res = linuxRuntime.uninstallDistro(distroId)
             _deletingDistroId.value = null
-            if (res is top.tianyan.app.core.common.result.AppResult.Success) {
+            if (res is AppResult.Success) {
                 onResult?.invoke(true, "系统已成功删除")
             } else {
                 res.errorOrNull()?.let { logger.e("Distro uninstall failed: ${it.message}", it.cause) }
@@ -327,32 +446,92 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    val mcpServers: StateFlow<List<top.tianyan.app.core.model.McpServerConfig>> = mcpServerRepository.servers
-        .stateIn(viewModelScope, SharingStarted.Eagerly, top.tianyan.app.core.model.BuiltinMcpPresets.presets)
+    private val persistedMcpServers = mcpServerRepository.servers
+        .stateIn(viewModelScope, SharingStarted.Eagerly, BuiltinMcpPresets.presets)
 
+    private val _mcpToggleOverrides = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    val mcpToggleOverrides: StateFlow<Map<String, Boolean>> = _mcpToggleOverrides.asStateFlow()
+    val mcpServers: StateFlow<List<McpServerConfig>> = combine(
+        persistedMcpServers, _mcpToggleOverrides,
+    ) { servers, overrides ->
+        servers.map { server ->
+            overrides[server.id]?.let { server.copy(isEnabled = it) } ?: server
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, BuiltinMcpPresets.presets)
     /** 各 MCP 服务的实时连通性状态（与 McpManager 共享，设置页与聊天页联动）。 */
     val mcpConnectionStates: StateFlow<Map<String, McpConnectionState>> = mcpManager.connectionStates
+    fun mcpLastError(serverId: String): String? = mcpManager.getLastError(serverId)
+    /** 已启用服务的缓存工具数：随连接状态刷新，不主动触发发现。 */
+    val mcpToolCounts: StateFlow<Map<String, Int>> = mcpConnectionStates.map { mcpManager.cachedToolCounts() }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+    private val _mcpAuthOverrides = MutableStateFlow<Map<String, McpAuthState>>(emptyMap())
 
-    /** 手动/自动触发一次全量 MCP 连通性探测。 */
-    fun refreshMcpConnections() {
-        viewModelScope.launch { mcpManager.refreshConnections() }
+    fun markMcpAuthorizing(serverId: String) {
+        _mcpAuthOverrides.value = _mcpAuthOverrides.value + (serverId to McpAuthState.Authorizing)
     }
 
-    fun toggleMcpServer(serverId: String, enabled: Boolean) {
+    fun markMcpAuthError(serverId: String, message: String) {
+        _mcpAuthOverrides.value = _mcpAuthOverrides.value + (serverId to McpAuthState.Error(message))
+    }
+
+    fun clearMcpAuthOverride(serverId: String) {
+        _mcpAuthOverrides.value = _mcpAuthOverrides.value - serverId
+    }
+
+    /** MCP OAuth 状态独立于在线状态，token 不进入 UI。 */
+    val mcpAuthStates: StateFlow<Map<String, McpAuthState>> = combine(
+        mcpServers,
+        mcpOAuthCredentials.authorizedServerIds(),
+        mcpOAuthCoordinator.states,
+    ) { servers, authorizedIds, overrides ->
+        servers.associate { server ->
+            server.id to (overrides[server.id] ?: when {
+                server.authMode != McpAuthMode.OAUTH -> McpAuthState.Unsupported
+                server.id in authorizedIds -> McpAuthState.Authorized(expiresAt = null)
+                else -> McpAuthState.Unauthenticated
+            })
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+    suspend fun beginMcpAuthorization(server: McpServerConfig): String =
+        mcpOAuthCoordinator.begin(server)
+
+    fun logoutMcpAuthorization(serverId: String) {
         viewModelScope.launch {
-            mcpServerRepository.setEnabled(serverId, enabled)
+            mcpOAuthCoordinator.logout(serverId)
+            mcpManager.invalidateServer(serverId)
             mcpManager.refreshConnections()
         }
     }
 
-    /** 浏览器 MCP 安全门禁快照（allowRemoteConnect / allowEvalJs / allowHooks / allowCdp）。 */
+
+    fun refreshMcpConnections(probeSleeping: Boolean = true) {
+        viewModelScope.launch { mcpManager.refreshConnections(probeSleeping) }
+    }
+
+    fun toggleMcpServer(serverId: String, enabled: Boolean) {
+        _mcpToggleOverrides.value = _mcpToggleOverrides.value + (serverId to enabled)
+        viewModelScope.launch {
+            try {
+                mcpServerRepository.setEnabled(serverId, enabled)
+                persistedMcpServers.first { servers -> servers.any { it.id == serverId && it.isEnabled == enabled } }
+                _mcpToggleOverrides.value = _mcpToggleOverrides.value - serverId
+                mcpManager.refreshConnection(serverId)
+            } catch (error: Exception) {
+                _mcpToggleOverrides.value = _mcpToggleOverrides.value - serverId
+                logger.e("MCP 开关切换失败: $serverId", error)
+            }
+        }
+    }
+
+    /** 浏览器 MCP 安全门禁快照（allowRemoteConnect / allowEvalJs / allowHooks / allowCdp / allowVConsole）。 */
     val browserGates: StateFlow<BrowserGateState> = combine(
         browserPrefs.allowRemoteConnect(),
         browserPrefs.allowEvalJs(),
         browserPrefs.allowHooks(),
         browserPrefs.allowCdp(),
-    ) { remote, evalJs, hooks, cdp ->
-        BrowserGateState(remote, evalJs, hooks, cdp)
+        browserPrefs.allowVConsole(),
+    ) { remote, evalJs, hooks, cdp, vConsole ->
+        BrowserGateState(remote, evalJs, hooks, cdp, vConsole)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, BrowserGateState())
 
     fun setBrowserAllowRemoteConnect(enabled: Boolean) {
@@ -371,7 +550,45 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { browserPrefs.setAllowCdp(enabled) }
     }
 
-    fun saveMcpServer(server: top.tianyan.app.core.model.McpServerConfig) {
+    fun setBrowserAllowVConsole(enabled: Boolean) {
+        viewModelScope.launch { browserPrefs.setAllowVConsole(enabled) }
+    }
+
+    /** MCP 被控端（服务端）配置快照：开关 / 端口 / 局域网 / 写入层 / 持久化令牌。 */
+    val agentServerState: StateFlow<AgentServerState> = combine(
+        agentServerPreferences.enabled,
+        agentServerPreferences.port,
+        agentServerPreferences.allowRemote,
+        agentServerPreferences.allowWriteTools,
+        agentServerPreferences.token,
+    ) { enabled, port, allowRemote, allowWriteTools, token ->
+        AgentServerState(enabled, port, allowRemote, allowWriteTools, token)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, AgentServerState())
+
+    fun setAgentServerEnabled(enabled: Boolean) {
+        viewModelScope.launch { agentServerPreferences.setEnabled(enabled) }
+    }
+
+    fun setAgentServerPort(port: Int) {
+        viewModelScope.launch { agentServerPreferences.setPort(port.coerceIn(1024, 65535)) }
+    }
+
+    fun setAgentServerAllowRemote(enabled: Boolean) {
+        viewModelScope.launch { agentServerPreferences.setAllowRemote(enabled) }
+    }
+
+    fun setAgentServerAllowWriteTools(enabled: Boolean) {
+        viewModelScope.launch { agentServerPreferences.setAllowWriteTools(enabled) }
+    }
+
+    /** 重置被控端令牌：外部客户端需同步更新配置。 */
+    fun resetAgentServerToken() {
+        viewModelScope.launch {
+            agentServerPreferences.setToken(UUID.randomUUID().toString().replace("-", ""))
+        }
+    }
+
+    fun saveMcpServer(server: McpServerConfig) {
         viewModelScope.launch {
             mcpServerRepository.save(server)
             mcpManager.refreshConnections()
@@ -380,12 +597,14 @@ class SettingsViewModel @Inject constructor(
 
     fun deleteMcpServer(serverId: String) {
         viewModelScope.launch {
+            mcpManager.invalidateServer(serverId)
+            mcpOAuthCredentials.deleteForServer(serverId)
             mcpServerRepository.delete(serverId)
             mcpManager.refreshConnections()
         }
     }
 
-    suspend fun testMcpServer(server: top.tianyan.app.core.model.McpServerConfig): Result<List<top.tianyan.app.core.model.McpToolInfo>> {
+    suspend fun testMcpServer(server: McpServerConfig): Result<List<McpToolInfo>> {
         return mcpManager.testServer(server)
     }
 
@@ -408,7 +627,7 @@ class SettingsViewModel @Inject constructor(
                 val found = candidates.map { candidate ->
                     async(Dispatchers.IO) {
                         val tools = probeLimiter.withPermit {
-                            kotlinx.coroutines.withTimeoutOrNull(6_000) {
+                            withTimeoutOrNull(6_000) {
                                 mcpManager.testServer(candidate.server).getOrNull()
                             }
                         }
@@ -425,9 +644,9 @@ class SettingsViewModel @Inject constructor(
     }
 
     /** 用户首选模式；即使本次启动降级也保留，用于下次自动恢复。 */
-    val executionMode: StateFlow<ExecutionMode> = settingsDataStore.preferredExecutionMode
+    val executionMode: StateFlow<ExecutionMode> = runtimePreferences.preferredExecutionMode
         .stateIn(viewModelScope, SharingStarted.Eagerly, ExecutionMode.PROOT)
-    val effectiveExecutionMode: StateFlow<ExecutionMode> = settingsDataStore.effectiveExecutionMode
+    val effectiveExecutionMode: StateFlow<ExecutionMode> = runtimePreferences.effectiveExecutionMode
         .stateIn(viewModelScope, SharingStarted.Eagerly, ExecutionMode.PROOT)
     val privilegeState = privilegeManager.state
 
@@ -499,10 +718,10 @@ class SettingsViewModel @Inject constructor(
     val models: StateFlow<List<AiModelEntity>> = aiModelDao.observeAll()
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val developerMode: StateFlow<Boolean> = settingsDataStore.developerMode
+    val developerMode: StateFlow<Boolean> = appearancePreferences.developerMode
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
-    val qemuCompatibilityEnabled: StateFlow<Boolean> = settingsDataStore.qemuCompatibilityEnabled
+    val qemuCompatibilityEnabled: StateFlow<Boolean> = runtimePreferences.qemuCompatibilityEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val _qemuCompatibilityMessage = MutableStateFlow<String?>(null)
@@ -511,15 +730,15 @@ class SettingsViewModel @Inject constructor(
     private val _qemuCompatibilityReady = MutableStateFlow(false)
     val qemuCompatibilityReady: StateFlow<Boolean> = _qemuCompatibilityReady.asStateFlow()
 
-    val themeMode: StateFlow<String> = settingsDataStore.themeMode
+    val themeMode: StateFlow<String> = appearancePreferences.themeMode
         .stateIn(viewModelScope, SharingStarted.Eagerly, "system")
 
-    val themeStyle: StateFlow<String> = settingsDataStore.themeStyle
-        .stateIn(viewModelScope, SharingStarted.Eagerly, "xuantong")
+    val dynamicColorEnabled: StateFlow<Boolean> = appearancePreferences.dynamicColorEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
-    fun setThemeStyle(style: String) {
+    fun setDynamicColorEnabled(enabled: Boolean) {
         viewModelScope.launch {
-            settingsDataStore.setThemeStyle(style)
+            appearancePreferences.setDynamicColorEnabled(enabled)
         }
     }
 
@@ -533,64 +752,138 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, "")
 
     // ---- Agent 配置与管理 ----
-    val thinkingExpanded: StateFlow<Boolean> = settingsDataStore.thinkingExpanded
+    val thinkingExpanded: StateFlow<Boolean> = agentPreferences.thinkingExpanded
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
-    val thinkingLanguage: StateFlow<String> = settingsDataStore.thinkingLanguage
-        .stateIn(viewModelScope, SharingStarted.Eagerly, "zh")
+    val translationModelStatus: StateFlow<TranslationModelStatus> =
+        translationManager.status
 
-    fun setThinkingLanguage(lang: String) {
-        viewModelScope.launch { settingsDataStore.setThinkingLanguage(lang) }
+    val thinkingAutoTranslate: StateFlow<Boolean> = agentPreferences.thinkingAutoTranslate
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    fun downloadTranslationModel(requireWifi: Boolean = false) {
+        viewModelScope.launch {
+            translationManager.downloadModel(requireWifi)
+        }
     }
 
-    val customSystemPromptEnabled: StateFlow<Boolean> = settingsDataStore.customSystemPromptEnabled
+    fun deleteTranslationModel() {
+        viewModelScope.launch {
+            translationManager.deleteModel()
+        }
+    }
+
+    fun refreshTranslationModelStatus() {
+        translationManager.refreshStatus()
+    }
+
+    fun setThinkingAutoTranslate(value: Boolean) { viewModelScope.launch { agentPreferences.setThinkingAutoTranslate(value) } }
+    val chatRoundCollapse: StateFlow<Boolean> = agentPreferences.chatRoundCollapse
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    fun setChatRoundCollapse(value: Boolean) { viewModelScope.launch { agentPreferences.setChatRoundCollapse(value) } }
+    val runningSendMode: StateFlow<RunningSendMode> = agentPreferences.runningSendMode.stateIn(viewModelScope, SharingStarted.Eagerly, RunningSendMode.QUEUE)
+    fun setRunningSendMode(value: RunningSendMode) { viewModelScope.launch { agentPreferences.setRunningSendMode(value) } }
+
+    val customSystemPromptEnabled: StateFlow<Boolean> = agentPreferences.customSystemPromptEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     fun setCustomSystemPromptEnabled(enabled: Boolean) {
-        viewModelScope.launch { settingsDataStore.setCustomSystemPromptEnabled(enabled) }
+        viewModelScope.launch { agentPreferences.setCustomSystemPromptEnabled(enabled) }
     }
 
-    val customSystemPrompt: StateFlow<String> = settingsDataStore.customSystemPrompt
+    val customSystemPrompt: StateFlow<String> = agentPreferences.customSystemPrompt
         .stateIn(viewModelScope, SharingStarted.Eagerly, "")
 
     fun setCustomSystemPrompt(prompt: String) {
-        viewModelScope.launch { settingsDataStore.setCustomSystemPrompt(prompt) }
+        viewModelScope.launch { agentPreferences.setCustomSystemPrompt(prompt) }
     }
 
-    val defaultReasoningDepth: StateFlow<String> = settingsDataStore.defaultReasoningDepth
+    val agentCharName: StateFlow<String> = agentPreferences.agentCharName
+        .stateIn(viewModelScope, SharingStarted.Eagerly, SettingsDataStore.DEFAULT_AGENT_CHAR_NAME)
+
+    fun setAgentCharName(name: String) {
+        viewModelScope.launch { agentPreferences.setAgentCharName(name) }
+    }
+
+    val agentUserName: StateFlow<String> = agentPreferences.agentUserName
+        .stateIn(viewModelScope, SharingStarted.Eagerly, SettingsDataStore.DEFAULT_AGENT_USER_NAME)
+
+    fun setAgentUserName(name: String) {
+        viewModelScope.launch { agentPreferences.setAgentUserName(name) }
+    }
+
+    val defaultReasoningDepth: StateFlow<String> = agentPreferences.defaultReasoningDepth
         .stateIn(viewModelScope, SharingStarted.Eagerly, "auto")
 
-    val contextCompactionEnabled: StateFlow<Boolean> = settingsDataStore.contextCompactionEnabled
+    val contextCompactionEnabled: StateFlow<Boolean> = agentPreferences.contextCompactionEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
-    val contextCompactionThreshold: StateFlow<Int> = settingsDataStore.contextCompactionThreshold
-        .stateIn(viewModelScope, SharingStarted.Eagerly, 15)
-
-    val maxToolRounds: StateFlow<Int> = settingsDataStore.maxToolRounds
+    val maxToolRounds: StateFlow<Int> = agentPreferences.maxToolRounds
         .stateIn(viewModelScope, SharingStarted.Eagerly, 100)
 
-    val autoWorkspaceCwd: StateFlow<Boolean> = settingsDataStore.autoWorkspaceCwd
+    val roundLimitAutoContinuations: StateFlow<Int> = agentPreferences.roundLimitAutoContinuations
+        .stateIn(viewModelScope, SharingStarted.Eagerly, agentPreferences.defaultRoundLimitAutoContinuations)
+
+    val autoWorkspaceCwd: StateFlow<Boolean> = agentPreferences.autoWorkspaceCwd
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
-    val commandOutputCompressionEnabled: StateFlow<Boolean> = settingsDataStore.commandOutputCompressionEnabled
+    val commandOutputCompressionEnabled: StateFlow<Boolean> = agentPreferences.commandOutputCompressionEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
-    val baseCommandTimeoutSeconds: StateFlow<Int> = settingsDataStore.baseCommandTimeoutSeconds
-        .stateIn(viewModelScope, SharingStarted.Eagerly, SettingsDataStore.DEFAULT_BASE_COMMAND_TIMEOUT_SECONDS)
+    val baseCommandTimeoutSeconds: StateFlow<Int> = agentPreferences.baseCommandTimeoutSeconds
+        .stateIn(viewModelScope, SharingStarted.Eagerly, agentPreferences.defaultBaseCommandTimeoutSeconds)
 
-    val approvalMode: StateFlow<top.tianyan.app.core.model.ApprovalMode> = approvalRepository.mode
-        .stateIn(viewModelScope, SharingStarted.Eagerly, top.tianyan.app.core.model.ApprovalMode.ASSISTED)
+    val approvalMode: StateFlow<ApprovalMode> = approvalRepository.mode
+        .stateIn(viewModelScope, SharingStarted.Eagerly, ApprovalMode.ASSISTED)
 
-    val contextBudgetTokens: StateFlow<Int> = settingsDataStore.contextBudgetTokens
+    val runMode: StateFlow<RunMode> = approvalRepository.runMode
+        .stateIn(viewModelScope, SharingStarted.Eagerly, RunMode.BUILD)
+
+    val contextBudgetTokens: StateFlow<Int> = agentPreferences.contextBudgetTokens
         .stateIn(viewModelScope, SharingStarted.Eagerly, 128_000)
 
-    val maxToolsPerRound: StateFlow<Int> = settingsDataStore.maxToolsPerRound
+    /**
+     * 当前全局激活模型的生效上下文上限：显式 `contextTokens` 优先；
+     * 未填写时自动适配主流模型元数据（DeepSeek V4 / Gemini / GPT-4.1 等）；
+     * 都识别不到时返回 null，由全局预算兜底。
+     */
+    val activeModelDeclaredTokens: StateFlow<Int?> = models.map { list ->
+        list.firstOrNull { it.isActive }?.let { model ->
+            ContextWindowPolicy.resolveContextWindow(model.contextTokens, model.model, model.provider)
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /**
+     * 当前**实际生效**的上下文预算，与 Harness 引擎保持同一口径：
+     * `clampedBudget(activeModel.contextTokens, 全局预算)`（先 resolve 再钳到 [ContextWindowPolicy.MAX_CONTEXT_BUDGET]）。
+     *
+     * 设置页的「折叠线预览」必须基于本值计算，才能做到「填多少、看到多少、按多少折叠」三处一致。
+     */
+    val effectiveContextBudget: StateFlow<Int> = combine(
+        activeModelDeclaredTokens,
+        contextBudgetTokens,
+    ) { declared, fallback ->
+        ContextWindowPolicy.clampedBudget(declared, fallback)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, 128_000)
+
+    /**
+     * 历史折叠线比例（%，默认 100）：100 对齐主流 harness 的 contextWindow - reserveTokens；
+     * 调低可让历史更早进入摘要，节省 input token 成本。
+     */
+    val contextFoldingRatioPercent: StateFlow<Int> = agentPreferences.contextFoldingRatioPercent
+        .stateIn(viewModelScope, SharingStarted.Eagerly, ContextWindowPolicy.DEFAULT_FOLDING_RATIO_PERCENT)
+
+    fun setContextFoldingRatioPercent(value: Int) {
+        viewModelScope.launch { agentPreferences.setContextFoldingRatioPercent(value) }
+    }
+
+    val maxToolsPerRound: StateFlow<Int> = agentPreferences.maxToolsPerRound
         .stateIn(viewModelScope, SharingStarted.Eagerly, 12)
 
-    val maxConsecutiveFailures: StateFlow<Int> = settingsDataStore.maxConsecutiveFailures
+    val maxConsecutiveFailures: StateFlow<Int> = agentPreferences.maxConsecutiveFailures
         .stateIn(viewModelScope, SharingStarted.Eagerly, 8)
 
-    val allSkills: StateFlow<List<top.tianyan.app.core.model.AgentSkill>> = agentSkillRepository.allSkills
+    val allSkills: StateFlow<List<AgentSkill>> = agentSkillRepository.allSkills
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _skillArchiveMessage = MutableStateFlow<String?>(null)
@@ -600,48 +893,168 @@ class SettingsViewModel @Inject constructor(
     private val _skillArchiveMessageIsError = MutableStateFlow(false)
     val skillArchiveMessageIsError: StateFlow<Boolean> = _skillArchiveMessageIsError.asStateFlow()
 
+    // ClawHub 市场与端侧静态安全审计状态
+    private val _clawHubMarketSkills = MutableStateFlow<List<ClawHubMarketItem>>(emptyList())
+    val clawHubMarketSkills: StateFlow<List<ClawHubMarketItem>> = _clawHubMarketSkills.asStateFlow()
+
+    private val _isMarketLoading = MutableStateFlow(false)
+    val isMarketLoading: StateFlow<Boolean> = _isMarketLoading.asStateFlow()
+
+    /** 当前市场列表是否来自内置离线精选包（远端 ClawHub 未接入或不可达）。 */
+    private val _isMarketOfflinePreset = MutableStateFlow(true)
+    val isMarketOfflinePreset: StateFlow<Boolean> = _isMarketOfflinePreset.asStateFlow()
+
+    private val _isPreparingInstall = MutableStateFlow(false)
+    val isPreparingInstall: StateFlow<Boolean> = _isPreparingInstall.asStateFlow()
+
+    private val _preparingSkillId = MutableStateFlow<String?>(null)
+    val preparingSkillId: StateFlow<String?> = _preparingSkillId.asStateFlow()
+
+    private val _isCommittingInstallation = MutableStateFlow(false)
+    val isCommittingInstallation: StateFlow<Boolean> = _isCommittingInstallation.asStateFlow()
+
+    private val _pendingSkillInspection = MutableStateFlow<SkillInstallInspection?>(null)
+    val pendingSkillInspection: StateFlow<SkillInstallInspection?> = _pendingSkillInspection.asStateFlow()
+
+    fun loadClawHubMarket(query: String? = null, category: String? = null) {
+        val client = clawHubClient ?: return
+        viewModelScope.launch {
+            _isMarketLoading.value = true
+            when (val res = client.fetchMarketCatalog(query, category)) {
+                is AppResult.Success -> {
+                    val installedIds = allSkills.value.map { it.id.removePrefix("custom_") }.toSet()
+                    _clawHubMarketSkills.value = res.data.map { item ->
+                        item.copy(isInstalled = item.id in installedIds || "custom_${item.id}" in allSkills.value.map { it.id }.toSet())
+                    }
+                    _isMarketOfflinePreset.value = client.lastCatalogUsedOfflineFallback
+                }
+                is AppResult.Failure -> {
+                    logger.w("加载 ClawHub 技能市场失败: ${res.error.message}", res.error.cause)
+                }
+            }
+            _isMarketLoading.value = false
+        }
+    }
+
+    fun prepareInstallMarketSkill(skillId: String) {
+        val installer = skillInstallationManager ?: run {
+            _skillArchiveMessage.value = "技能安全审计与安装引擎未就绪"
+            _skillArchiveMessageIsError.value = true
+            return
+        }
+        if (_isPreparingInstall.value) return
+        viewModelScope.launch {
+            _isPreparingInstall.value = true
+            _preparingSkillId.value = skillId
+            when (val res = installer.prepareMarketSkill(skillId)) {
+                is AppResult.Success -> {
+                    _pendingSkillInspection.value = res.data
+                }
+                is AppResult.Failure -> {
+                    _skillArchiveMessage.value = "准备技能失败: ${res.error.message}"
+                    _skillArchiveMessageIsError.value = true
+                }
+            }
+            _isPreparingInstall.value = false
+            _preparingSkillId.value = null
+        }
+    }
+
+    fun inspectLocalSkillZip(uri: Uri) {
+        val installer = skillInstallationManager ?: run {
+            importSkillArchives(listOf(uri))
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val bos = ByteArrayOutputStream()
+                application.contentResolver.openInputStream(uri)?.use { stream ->
+                    BoundedStreamCopy.copy(
+                        input = stream,
+                        output = bos,
+                        maxBytes = SkillPackageParser.MAX_ZIP_TOTAL_BYTES,
+                        policy = BoundedStreamCopy.OverflowPolicy.ABORT,
+                    )
+                } ?: error("无法读取所选 ZIP 文件")
+                val inspection = installer.inspectZipBytes(bos.toByteArray(), fallbackId = "custom_zip")
+                _pendingSkillInspection.value = inspection
+            } catch (e: Throwable) {
+                _skillArchiveMessage.value = "解析或审计技能包失败: ${e.message}"
+                _skillArchiveMessageIsError.value = true
+            }
+        }
+    }
+
+    fun confirmSkillInstallation() {
+        val inspection = _pendingSkillInspection.value ?: return
+        val installer = skillInstallationManager ?: return
+        if (!_isCommittingInstallation.compareAndSet(expect = false, update = true)) return
+        viewModelScope.launch {
+            try {
+                val skillsDir = File(pathManager.attachmentsDir, "skills").apply { mkdirs() }
+                val skill = installer.commitInstallation(inspection, skillsDir)
+                _skillArchiveMessage.value = "技能“${skill.name}”已通过端侧静态审查并成功安装！"
+                _skillArchiveMessageIsError.value = false
+                _pendingSkillInspection.value = null
+                loadClawHubMarket()
+            } catch (e: Throwable) {
+                _skillArchiveMessage.value = "安装失败: ${e.message}"
+                _skillArchiveMessageIsError.value = true
+            } finally {
+                _isCommittingInstallation.value = false
+            }
+        }
+    }
+
+    fun dismissSkillInspection() {
+        _pendingSkillInspection.value = null
+    }
+
     val autoSubagentDelegationEnabled: StateFlow<Boolean> = subagentRepository.autoDelegationEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
-    val allSubagents: StateFlow<List<top.tianyan.app.core.model.AgentSubagent>> = subagentRepository.profiles
+    val allSubagents: StateFlow<List<AgentSubagent>> = subagentRepository.profiles
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val allPlugins: StateFlow<List<top.tianyan.app.core.model.AgentPlugin>> = settingsDataStore.allPlugins
+    val allPlugins: StateFlow<List<AgentPlugin>> = agentPreferences.allPlugins
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    fun setThinkingExpanded(value: Boolean) {
-        viewModelScope.launch { settingsDataStore.setThinkingExpanded(value) }
+    val skillEvolutionSuggestions: StateFlow<Boolean> = agentPreferences.skillEvolutionSuggestions
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    fun setSkillEvolutionSuggestions(enabled: Boolean) {
+        viewModelScope.launch { agentPreferences.setSkillEvolutionSuggestions(enabled) }
     }
+
+    fun setThinkingExpanded(value: Boolean) { viewModelScope.launch { agentPreferences.setThinkingExpanded(value) } }
 
     fun setDefaultReasoningDepth(value: String) {
-        viewModelScope.launch { settingsDataStore.setDefaultReasoningDepth(value) }
+        viewModelScope.launch { agentPreferences.setDefaultReasoningDepth(value) }
     }
 
-    fun setContextCompactionEnabled(value: Boolean) {
-        viewModelScope.launch { settingsDataStore.setContextCompactionEnabled(value) }
-    }
-
-    fun setContextCompactionThreshold(value: Int) {
-        viewModelScope.launch { settingsDataStore.setContextCompactionThreshold(value) }
-    }
+    fun setContextCompactionEnabled(value: Boolean) { viewModelScope.launch { agentPreferences.setContextCompactionEnabled(value) } }
 
     fun setMaxToolRounds(value: Int) {
-        viewModelScope.launch { settingsDataStore.setMaxToolRounds(value) }
+        viewModelScope.launch { agentPreferences.setMaxToolRounds(value) }
+    }
+
+    fun setRoundLimitAutoContinuations(value: Int) {
+        viewModelScope.launch { agentPreferences.setRoundLimitAutoContinuations(value) }
     }
 
     fun setAutoWorkspaceCwd(value: Boolean) {
-        viewModelScope.launch { settingsDataStore.setAutoWorkspaceCwd(value) }
+        viewModelScope.launch { agentPreferences.setAutoWorkspaceCwd(value) }
     }
 
     fun setCommandOutputCompressionEnabled(value: Boolean) {
-        viewModelScope.launch { settingsDataStore.setCommandOutputCompressionEnabled(value) }
+        viewModelScope.launch { agentPreferences.setCommandOutputCompressionEnabled(value) }
     }
 
     fun setBaseCommandTimeoutSeconds(value: Int) {
-        viewModelScope.launch { settingsDataStore.setBaseCommandTimeoutSeconds(value) }
+        viewModelScope.launch { agentPreferences.setBaseCommandTimeoutSeconds(value) }
     }
 
-    fun setApprovalMode(mode: top.tianyan.app.core.model.ApprovalMode) {
+    fun setApprovalMode(mode: ApprovalMode) {
         viewModelScope.launch {
             approvalRepository.setMode(mode)
             // 会话创建时快照了当时的全局模式；全局改动必须传导到已有会话，
@@ -650,16 +1063,22 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun setRunMode(mode: RunMode) {
+        // 仅作为新建会话的初始值，不传导到已有会话：运行意图是会话内的临时选择，
+        // 聊天顶部可随时单独切换，全局改动若覆盖会丢失用户的显式设置。
+        viewModelScope.launch { approvalRepository.setRunMode(mode) }
+    }
+
     fun setContextBudgetTokens(value: Int) {
-        viewModelScope.launch { settingsDataStore.setContextBudgetTokens(value) }
+        viewModelScope.launch { agentPreferences.setContextBudgetTokens(value) }
     }
 
     fun setMaxToolsPerRound(value: Int) {
-        viewModelScope.launch { settingsDataStore.setMaxToolsPerRound(value) }
+        viewModelScope.launch { agentPreferences.setMaxToolsPerRound(value) }
     }
 
     fun setMaxConsecutiveFailures(value: Int) {
-        viewModelScope.launch { settingsDataStore.setMaxConsecutiveFailures(value) }
+        viewModelScope.launch { agentPreferences.setMaxConsecutiveFailures(value) }
     }
 
     fun toggleSkill(skillId: String, enabled: Boolean) {
@@ -670,8 +1089,8 @@ class SettingsViewModel @Inject constructor(
         val trimmedName = name.trim()
         val trimmedPrompt = systemPrompt.trim()
         if (trimmedName.isBlank() || trimmedPrompt.isBlank()) return
-        val id = "custom_" + java.util.UUID.randomUUID().toString().take(8)
-        val skill = top.tianyan.app.core.model.AgentSkill(
+        val id = "custom_" + UUID.randomUUID().toString().take(8)
+        val skill = AgentSkill(
             id = id,
             name = trimmedName,
             description = description.trim().ifBlank { "自定义技能" },
@@ -871,7 +1290,7 @@ class SettingsViewModel @Inject constructor(
             val description = AgentSkillRepository.extractSkillMetadata(markdown, "description") ?: "从压缩包导入的 Skill"
             val guestPath = "/attachments/skills/$id"
             val prompt = markdown + "\n\n【Skill 资源目录】$guestPath\n如需执行该 Skill 附带的脚本，请先检查脚本内容与参数，再从此目录调用。"
-            agentSkillRepository.addCustom(top.tianyan.app.core.model.AgentSkill(id, skillName, description, prompt, isBuiltin = false, category = "自定义", resourcePath = target.absolutePath))
+            agentSkillRepository.addCustom(AgentSkill(id, skillName, description, prompt, isBuiltin = false, category = "自定义", resourcePath = target.absolutePath))
             return "Skill“$skillName”导入成功，脚本资源位于 $guestPath"
         } catch (error: Throwable) {
             target?.let(::deleteOwnedSkillDirectory)
@@ -893,10 +1312,10 @@ class SettingsViewModel @Inject constructor(
 
     private fun deleteOwnedSkillDirectory(path: String) = deleteOwnedSkillDirectory(File(path))
 
-    /** Skill 自动发现目录：共享附件区与工作区，guestPrefix 对应 PRoot 沙箱内挂载路径。 */
-    private fun skillScanRoots() = listOf(
-        top.tianyan.app.core.database.SkillScanRoot(File(pathManager.attachmentsDir, "skills"), "/attachments/skills"),
-        top.tianyan.app.core.database.SkillScanRoot(File(pathManager.workspaceDir, "skills"), "/workspace/skills"),
+    /** Skill 自动发现目录：共享附件区、工作区及项目根 `.agents/skills`（社区规范）。 */
+    private fun skillScanRoots() = AgentSkillRepository.standardScanRoots(
+        attachmentsDir = pathManager.attachmentsDir,
+        workspaceDir = pathManager.workspaceDir,
     )
 
     private companion object {
@@ -914,7 +1333,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun saveSubagent(
-        previous: top.tianyan.app.core.model.AgentSubagent?,
+        previous: AgentSubagent?,
         roleId: String,
         name: String,
         description: String,
@@ -930,7 +1349,7 @@ class SettingsViewModel @Inject constructor(
         val normalizedDefaultModelId = defaultModelId?.trim()?.takeIf { it.isNotBlank() }
         if (normalizedId.isBlank() || trimmedName.isBlank() || trimmedPrompt.isBlank()) return
         viewModelScope.launch {
-            val profile = top.tianyan.app.core.model.AgentSubagent(
+            val profile = AgentSubagent(
                 id = normalizedId,
                 name = trimmedName,
                 description = description.trim().ifBlank { "自定义子智能体角色" },
@@ -939,7 +1358,7 @@ class SettingsViewModel @Inject constructor(
                 defaultModelVariant = normalizedDefaultModelId?.let {
                     defaultModelVariant?.trim()?.takeIf { variant -> variant.isNotBlank() }
                 },
-                departmentId = previous?.departmentId ?: top.tianyan.app.core.model.AgentDepartments.CUSTOM_ID,
+                departmentId = previous?.departmentId ?: AgentDepartments.CUSTOM_ID,
                 isEnabled = previous?.isEnabled ?: true,
                 isBuiltin = previous?.isBuiltin ?: false,
                 sortOrder = previous?.sortOrder ?: subagentRepository.nextSortOrder(),
@@ -953,7 +1372,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun togglePlugin(pluginId: String, enabled: Boolean) {
-        viewModelScope.launch { settingsDataStore.setPluginEnabled(pluginId, enabled) }
+        viewModelScope.launch { agentPreferences.setPluginEnabled(pluginId, enabled) }
     }
 
     private val _apiKeyDraft = MutableStateFlow("")
@@ -964,6 +1383,8 @@ class SettingsViewModel @Inject constructor(
     val discoveringModels: StateFlow<Boolean> = _discoveringModels.asStateFlow()
     private val _modelDiscoveryError = MutableStateFlow<String?>(null)
     val modelDiscoveryError: StateFlow<String?> = _modelDiscoveryError.asStateFlow()
+    private val _profileSaveError = MutableStateFlow<String?>(null)
+    val profileSaveError: StateFlow<String?> = _profileSaveError.asStateFlow()
     private val _testingConnection = MutableStateFlow(false)
     val testingConnection: StateFlow<Boolean> = _testingConnection.asStateFlow()
     private val _connectionResult = MutableStateFlow<String?>(null)
@@ -971,7 +1392,7 @@ class SettingsViewModel @Inject constructor(
 
     fun setDeveloperMode(enabled: Boolean) {
         viewModelScope.launch {
-            settingsDataStore.setDeveloperMode(enabled)
+            appearancePreferences.setDeveloperMode(enabled)
         }
     }
 
@@ -985,13 +1406,13 @@ class SettingsViewModel @Inject constructor(
                 }
             }
             _qemuCompatibilityMessage.value = null
-            settingsDataStore.setQemuCompatibilityEnabled(enabled)
+            runtimePreferences.setQemuCompatibilityEnabled(enabled)
         }
     }
 
     fun setThemeMode(mode: String) {
         viewModelScope.launch {
-            settingsDataStore.setThemeMode(mode)
+            appearancePreferences.setThemeMode(mode)
         }
     }
 
@@ -1033,9 +1454,7 @@ class SettingsViewModel @Inject constructor(
                 }
                 .onFailure {
                     logger.w("Model discovery failed: ${it.message}", it)
-                    val reason = if (it is ModelDiscoveryResponseException) it.message.orEmpty()
-                        else "获取模型列表失败，请检查 Base URL、API Key 与网络后重试"
-                    _modelDiscoveryError.value = reason
+                    _modelDiscoveryError.value = "获取模型列表失败，请检查 Base URL、API Key 与网络后重试"
                 }
             _discoveringModels.value = false
         }
@@ -1063,7 +1482,7 @@ class SettingsViewModel @Inject constructor(
                     model = model,
                     apiKey = profileWriter.parseApiKeys(apiKey).firstOrNull(),
                     useResponsesApi = useResponsesApi,
-                    protocol = provider?.protocol ?: top.tianyan.app.core.tools.ProviderProtocol.OPENAI,
+                    protocol = provider?.protocol ?: ProviderProtocol.OPENAI,
                     providerName = provider?.name,
                 )
             }
@@ -1105,12 +1524,22 @@ class SettingsViewModel @Inject constructor(
         reasoningEffort: String? = null,
         toolCallMode: String? = null,
         contextTokens: Int? = null,
+        compactionKeepRecentTokens: Int? = null,
+        compactionReserveTokens: Int? = null,
         customHeaders: String = "",
         pureChatMode: Boolean = false,
         visionEnabled: Boolean = true,
         imageGenerationEnabled: Boolean = false,
         responseApiEnabled: Boolean = false,
-    ) {
+        promptCachingEnabled: Boolean = true,
+        promptCacheTtl1h: Boolean = false,
+    ): Boolean {
+        val cleanUrl = ProviderEndpointPolicy.normalizeUrl(baseUrl)
+        if (!ProviderEndpointPolicy.isSafeBaseUrl(cleanUrl)) {
+            _profileSaveError.value = "Base URL 无效：请填写合法的 http(s) 接口地址，且不能内嵌账号密码"
+            return false
+        }
+        _profileSaveError.value = null
         viewModelScope.launch {
             profileWriter.upsertProfile(
                 AiProfileWriter.UpsertRequest(
@@ -1118,7 +1547,7 @@ class SettingsViewModel @Inject constructor(
                     name = name,
                     provider = provider,
                     model = model,
-                    baseUrl = baseUrl,
+                    baseUrl = cleanUrl,
                     apiKey = apiKey,
                     requestsPerMinutePerKey = requestsPerMinutePerKey,
                     temperature = temperature,
@@ -1128,14 +1557,19 @@ class SettingsViewModel @Inject constructor(
                     reasoningEffort = reasoningEffort,
                     toolCallMode = toolCallMode,
                     contextTokens = contextTokens,
+                    compactionKeepRecentTokens = compactionKeepRecentTokens,
+                    compactionReserveTokens = compactionReserveTokens,
                     customHeaders = customHeaders,
                     pureChatMode = pureChatMode,
                     visionEnabled = visionEnabled,
                     imageGenerationEnabled = imageGenerationEnabled,
                     responseApiEnabled = responseApiEnabled,
+                    promptCachingEnabled = promptCachingEnabled,
+                    promptCacheTtl1h = promptCacheTtl1h,
                 ),
             )
         }
+        return true
     }
 
     fun saveModels(
@@ -1153,12 +1587,24 @@ class SettingsViewModel @Inject constructor(
         reasoningEffort: String? = null,
         toolCallMode: String? = null,
         contextTokens: Int? = null,
+        compactionKeepRecentTokens: Int? = null,
+        compactionReserveTokens: Int? = null,
         customHeaders: String = "",
         pureChatMode: Boolean = false,
         visionEnabled: Boolean = true,
         imageGenerationEnabled: Boolean = false,
         responseApiEnabled: Boolean = false,
-    ) {
+        promptCachingEnabled: Boolean = true,
+        promptCacheTtl1h: Boolean = false,
+    ): Boolean {
+        // 与 discoverModels 同源的端点策略：不安全的 Base URL（非 http(s)、内嵌凭据、
+        // 无法解析）拒绝落库，否则请求期才在 OkHttp 解析处崩溃。
+        val cleanUrl = ProviderEndpointPolicy.normalizeUrl(baseUrl)
+        if (!ProviderEndpointPolicy.isSafeBaseUrl(cleanUrl)) {
+            _profileSaveError.value = "Base URL 无效：请填写合法的 http(s) 接口地址，且不能内嵌账号密码"
+            return false
+        }
+        _profileSaveError.value = null
         viewModelScope.launch {
             val cleanModels = models.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
             val profileName = name.trim().ifBlank {
@@ -1170,7 +1616,7 @@ class SettingsViewModel @Inject constructor(
                     name = profileName,
                     provider = provider,
                     model = cleanModels.joinToString(", "),
-                    baseUrl = baseUrl,
+                    baseUrl = cleanUrl,
                     apiKey = apiKey,
                     requestsPerMinutePerKey = requestsPerMinutePerKey,
                     temperature = temperature,
@@ -1180,14 +1626,19 @@ class SettingsViewModel @Inject constructor(
                     reasoningEffort = reasoningEffort,
                     toolCallMode = toolCallMode,
                     contextTokens = contextTokens,
+                    compactionKeepRecentTokens = compactionKeepRecentTokens,
+                    compactionReserveTokens = compactionReserveTokens,
                     customHeaders = customHeaders,
                     pureChatMode = pureChatMode,
                     visionEnabled = visionEnabled,
                     imageGenerationEnabled = imageGenerationEnabled,
                     responseApiEnabled = responseApiEnabled,
+                    promptCachingEnabled = promptCachingEnabled,
+                    promptCacheTtl1h = promptCacheTtl1h,
                 ),
             )
         }
+        return true
     }
 
     suspend fun readModelApiKey(secretRef: String): String {
@@ -1196,8 +1647,8 @@ class SettingsViewModel @Inject constructor(
 
     fun setActiveModel(id: String) {
         viewModelScope.launch {
-            aiModelDao.clearActive()
-            aiModelDao.setActive(id)
+            // 单事务切换唯一激活，避免两步 UPDATE 之间被杀留下 0 激活模型
+            aiModelDao.activate(id)
         }
     }
 
@@ -1207,68 +1658,51 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    suspend fun exportAllProfilesJson(includeApiKeys: Boolean): String =
-        profileBackupCodec.exportAll(includeApiKeys)
-
-    suspend fun exportSingleProfileJson(modelId: String, includeApiKeys: Boolean): String? =
-        profileBackupCodec.exportSingle(modelId, includeApiKeys)
-
-    fun parseProfilesFromJson(rawJson: String): Result<List<AiModelProfileExport>> =
-        profileBackupCodec.parseProfiles(rawJson)
-
-    suspend fun importProfilesFromJson(rawJson: String): Result<Int> =
-        profileBackupCodec.importProfiles(rawJson)
-
-
     // ---- 宿主与沙箱存储挂载配置 (PRoot -b) ----
-    val mountDownloadEnabled: StateFlow<Boolean> = settingsDataStore.mountDownloadEnabled
+    val mountDownloadEnabled: StateFlow<Boolean> = runtimePreferences.mountDownloadEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
-    val mountDocumentsEnabled: StateFlow<Boolean> = settingsDataStore.mountDocumentsEnabled
+    val mountDocumentsEnabled: StateFlow<Boolean> = runtimePreferences.mountDocumentsEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
-    val mountSharedStorageEnabled: StateFlow<Boolean> = settingsDataStore.mountSharedStorageEnabled
+    val mountSharedStorageEnabled: StateFlow<Boolean> = runtimePreferences.mountSharedStorageEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
-    val customMountBindings: StateFlow<List<top.tianyan.app.core.model.StorageMountBinding>> = storageMountBindingRepository.bindings
+    val customMountBindings: StateFlow<List<StorageMountBinding>> = storageMountBindingRepository.bindings
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     fun setMountDownloadEnabled(enabled: Boolean) {
-        viewModelScope.launch { settingsDataStore.setMountDownloadEnabled(enabled) }
+        viewModelScope.launch { runtimePreferences.setMountDownloadEnabled(enabled) }
     }
 
     fun setMountDocumentsEnabled(enabled: Boolean) {
-        viewModelScope.launch { settingsDataStore.setMountDocumentsEnabled(enabled) }
+        viewModelScope.launch { runtimePreferences.setMountDocumentsEnabled(enabled) }
     }
 
     fun setMountSharedStorageEnabled(enabled: Boolean) {
-        viewModelScope.launch { settingsDataStore.setMountSharedStorageEnabled(enabled) }
+        viewModelScope.launch { runtimePreferences.setMountSharedStorageEnabled(enabled) }
     }
 
-    /** 挂载保存的一次性反馈（宿主目录不可创建等），UI 弹 Toast 后消费清空。 */
-    private val _mountFeedback = MutableStateFlow<String?>(null)
-    val mountFeedback: kotlinx.coroutines.flow.StateFlow<String?> = _mountFeedback.asStateFlow()
-    fun consumeMountFeedback() { _mountFeedback.value = null }
-
-    fun addCustomMountBinding(name: String, hostPath: String, guestPath: String) {
-        val binding = top.tianyan.app.core.model.StorageMountBinding(
-            id = java.util.UUID.randomUUID().toString(),
+    /**
+     * 新增自定义挂载绑定。保存前做与运行时一致的安全校验（StorageMountBinding.validationError），
+     * 拒绝越界路径（容器路径必须在 /mnt 或 /sdcard 内、宿主路径必须在共享存储内），
+     * 避免历史版本"先入库、会话启动时才崩"的问题再次发生。
+     */
+    fun addCustomMountBinding(name: String, hostPath: String, guestPath: String): Result<Unit> {
+        val binding = StorageMountBinding(
+            id = UUID.randomUUID().toString(),
             name = name.trim().ifBlank { "自定义挂载" },
             hostPath = hostPath.trim(),
             guestPath = if (guestPath.trim().startsWith("/")) guestPath.trim() else "/${guestPath.trim()}",
             enabled = true,
             isSystemDefault = false,
         )
-        viewModelScope.launch {
-            // 保存即预建宿主目录：填了尚未创建的路径是正常用法，当场建好并反馈结果。
-            // 建不成也照常保存——运行时构建器会跳过无效绑定并记日志，绝不再让
-            // require() 抛异常把 App 打进启动闪退循环（历史 bug）。
-            val dir = java.io.File(binding.hostPath)
-            if (!dir.isDirectory && !dir.mkdirs()) {
-                _mountFeedback.value = "宿主目录暂不可创建，绑定已保存并在路径就绪后自动生效：${binding.hostPath}"
-            }
-            storageMountBindingRepository.add(binding)
+        val error = StorageMountBinding.validationError(binding)
+        if (error != null) {
+            return Result.failure(IllegalArgumentException(error))
         }
+        viewModelScope.launch { storageMountBindingRepository.add(binding) }
+        return Result.success(Unit)
     }
 
     fun removeCustomMountBinding(bindingId: String) {
@@ -1280,7 +1714,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     // ---- 快捷短语与常用指令 ----
-    val quickPhrases: StateFlow<List<top.tianyan.app.core.model.QuickPhrase>> = quickPhraseRepository.observeAll()
+    val quickPhrases: StateFlow<List<QuickPhrase>> = quickPhraseRepository.observeAll()
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     fun saveQuickPhrase(
@@ -1294,8 +1728,8 @@ class SettingsViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             val existing = if (id != null) quickPhraseRepository.findById(id) else null
-            val phrase = top.tianyan.app.core.model.QuickPhrase(
-                id = id ?: java.util.UUID.randomUUID().toString(),
+            val phrase = QuickPhrase(
+                id = id ?: UUID.randomUUID().toString(),
                 title = title.trim(),
                 content = content.trim(),
                 description = description.trim(),
@@ -1336,7 +1770,7 @@ sealed interface LocalMcpDiscoveryState {
 }
 
 data class DetectedLocalMcpServer(
-    val server: top.tianyan.app.core.model.McpServerConfig,
+    val server: McpServerConfig,
     val toolCount: Int,
 ) {
     val serverUrl: String get() = server.serverUrl
@@ -1363,11 +1797,11 @@ private fun localLoopbackMcpCandidates(): List<DetectedLocalMcpServer> {
         listOf("mcp", "sse").map { path ->
             val url = "http://127.0.0.1:$port/$path"
             DetectedLocalMcpServer(
-                server = top.tianyan.app.core.model.McpServerConfig(
+                server = McpServerConfig(
                     id = "local_probe_${port}_$path",
                     name = "本机 MCP ($port)",
                     description = "在 127.0.0.1:$port 上自动探测到的 MCP 服务",
-                    transportType = top.tianyan.app.core.model.McpTransportType.SSE,
+                    transportType = McpTransportType.SSE,
                     serverUrl = url,
                     isEnabled = true,
                     isBuiltin = false,
@@ -1384,4 +1818,14 @@ data class BrowserGateState(
     val allowEvalJs: Boolean = false,
     val allowHooks: Boolean = false,
     val allowCdp: Boolean = false,
+    val allowVConsole: Boolean = false,
+)
+
+/** MCP 被控端配置快照（运行状态另由 AgentMcpAccess 提供）。 */
+data class AgentServerState(
+    val enabled: Boolean = false,
+    val port: Int = AgentServerPreferences.DEFAULT_PORT,
+    val allowRemote: Boolean = false,
+    val allowWriteTools: Boolean = false,
+    val token: String = "",
 )

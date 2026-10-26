@@ -1,5 +1,7 @@
 package top.tianyan.app.ui.settings
-
+import top.tianyan.app.ui.components.previewOrNull
+import top.tianyan.app.ui.components.previewStateOf
+import org.koin.compose.viewmodel.koinViewModel
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -22,12 +24,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -38,7 +42,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -48,6 +51,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -56,14 +60,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import top.tianyan.app.core.database.AiModelEntity
 import top.tianyan.app.core.model.AiModelProfileExport
+import top.tianyan.app.harness.ModelContextWindows
 import top.tianyan.app.ui.components.IconTile
-import top.tianyan.app.ui.theme.Spacing
-import top.tianyan.app.ui.theme.Radius
 import top.tianyan.app.ui.components.ProviderBadge
 import top.tianyan.app.ui.components.RuntimeAlertDialog
 import top.tianyan.app.ui.components.RuntimeButton
@@ -76,18 +78,19 @@ import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeOutlinedButton
 import top.tianyan.app.ui.components.RuntimeTextButton
 import top.tianyan.app.ui.components.RuntimeTopBar
-
+import java.util.Locale
 /**
  * 模型档案管理全屏独立页面
  */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun ModelProfilesScreen(
     onBack: () -> Unit,
     onCreate: () -> Unit,
     onEdit: (String) -> Unit,
-    viewModel: SettingsViewModel = hiltViewModel(),
+    viewModel: SettingsViewModel? = previewOrNull { koinViewModel() },
 ) {
-    val models by viewModel.models.collectAsStateWithLifecycle()
+    val models by viewModel?.models?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
@@ -97,12 +100,15 @@ fun ModelProfilesScreen(
     var modelPendingDelete by remember { mutableStateOf<AiModelEntity?>(null) }
     var importing by remember { mutableStateOf(false) }
 
+    val scrollBehavior = androidx.compose.material3.TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             RuntimeTopBar(
                 title = "模型档案",
                 onBack = onBack,
+                scrollBehavior = scrollBehavior,
                 actions = {
                     // 📥 导入按钮
                     RuntimeIconButton(
@@ -137,11 +143,11 @@ fun ModelProfilesScreen(
         },
     ) { padding ->
         ModelProfilesContent(
-            modifier = Modifier.padding(padding),
+            modifier = top.tianyan.app.ui.components.runtimeScrollViewport(padding), bottomPadding = padding.calculateBottomPadding(),
             models = models,
             onCreate = onCreate,
             onEdit = { model -> onEdit(model.id) },
-            onActivate = viewModel::setActiveModel,
+            onActivate = { arg0 -> viewModel?.setActiveModel(arg0) },
             onDelete = { model -> modelPendingDelete = model },
             onExportSingle = { model -> singleExportModel = model },
         )
@@ -152,19 +158,20 @@ fun ModelProfilesScreen(
         ModelImportDialog(
             onDismiss = { showImportDialog = false },
             importing = importing,
-            onImportJson = { jsonStr ->
+            models = models,
+            parseProfiles = { raw -> viewModel?.parseProfilesFromJson(raw) ?: Result.failure(IllegalStateException()) },
+            onImportJson = { jsonStr, mode ->
                 if (importing) return@ModelImportDialog
                 importing = true
                 coroutineScope.launch {
-                    val result = viewModel.importProfilesFromJson(jsonStr)
+                    val result = viewModel?.importProfilesFromJson(jsonStr, mode)
                     importing = false
-                    result.fold(
+                    result?.fold(
                         onSuccess = { count ->
                             Toast.makeText(context, "成功导入 $count 个模型档案", Toast.LENGTH_SHORT).show()
                             showImportDialog = false
                         },
-                        onFailure = { err ->
-                            android.util.Log.e("ModelProfiles", "Profile import failed: ${err.message}", err)
+                        onFailure = { _ ->
                             Toast.makeText(context, "导入失败：JSON 无法解析或配置无效，请检查后重试", Toast.LENGTH_LONG).show()
                         }
                     )
@@ -180,7 +187,7 @@ fun ModelProfilesScreen(
             subtitle = "准备导出 ${models.size} 个模型档案配置",
             onDismiss = { showExportAllDialog = false },
             onGenerateJson = { includeKeys ->
-                viewModel.exportAllProfilesJson(includeKeys)
+                viewModel?.exportAllProfilesJson(includeKeys).orEmpty()
             },
         )
     }
@@ -193,7 +200,7 @@ fun ModelProfilesScreen(
             defaultFileName = "tianyan_model_${targetModel.name.replace(" ", "_")}.json",
             onDismiss = { singleExportModel = null },
             onGenerateJson = { includeKeys ->
-                viewModel.exportSingleProfileJson(targetModel.id, includeKeys) ?: ""
+                viewModel?.exportSingleProfileJson(targetModel.id, includeKeys) ?: ""
             },
         )
     }
@@ -203,7 +210,7 @@ fun ModelProfilesScreen(
         RuntimeAlertDialog(
             onDismissRequest = { modelPendingDelete = null },
             title = {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     RuntimeIcon(RuntimeIconName.Alert, Modifier.size(20.dp), MaterialTheme.colorScheme.error)
                     Text("删除模型档案", fontWeight = FontWeight.Bold)
                 }
@@ -212,7 +219,7 @@ fun ModelProfilesScreen(
             confirmButton = {
                 RuntimeButton(
                     onClick = {
-                        viewModel.deleteModel(target.id)
+                        viewModel?.deleteModel(target.id)
                         modelPendingDelete = null
                     },
                 ) {
@@ -231,7 +238,7 @@ fun ModelProfilesScreen(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ModelProfilesContent(
-    modifier: Modifier,
+    modifier: Modifier, bottomPadding: androidx.compose.ui.unit.Dp = 0.dp,
     models: List<AiModelEntity>,
     onCreate: () -> Unit,
     onEdit: (AiModelEntity) -> Unit,
@@ -241,16 +248,16 @@ private fun ModelProfilesContent(
 ) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.sm),
-        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+        contentPadding = top.tianyan.app.ui.components.runtimeContentPadding(horizontal = 16.dp, top = 16.dp, bottom = 32.dp + bottomPadding),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item {
             RuntimeButton(
                 onClick = onCreate,
-                modifier = Modifier.fillMaxWidth().height(44.dp),
-                shape = Radius.smShape,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                shape = RoundedCornerShape(50),
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     RuntimeIcon(RuntimeIconName.Plus, Modifier.size(16.dp), MaterialTheme.colorScheme.onPrimary)
                     Text("新增模型档案", fontWeight = FontWeight.Bold)
                 }
@@ -260,15 +267,15 @@ private fun ModelProfilesContent(
         if (models.isEmpty()) {
             item {
                 Column(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.xxl),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     IconTile(RuntimeIconName.Model, color = MaterialTheme.colorScheme.primary, size = 42.dp)
-                    Text("暂无模型档案", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+                    Text("暂无模型档案", style = MaterialTheme.typography.titleMedium)
                     Text(
                         "点击上方新增或从右上角导入 OpenAI / DeepSeek / Claude / 本地模型配置",
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -285,495 +292,4 @@ private fun ModelProfilesContent(
             )
         }
     }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun ModelProfileCard(
-    model: AiModelEntity,
-    onEdit: () -> Unit,
-    onActivate: () -> Unit,
-    onDelete: () -> Unit,
-    onExport: () -> Unit,
-) {
-    var menuExpanded by remember { mutableStateOf(false) }
-
-    RuntimeCard(
-        modifier = Modifier.fillMaxWidth(),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        borderColor = if (model.isActive) {
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
-        } else {
-            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
-        },
-        onClick = onEdit,
-        contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
-    ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
-        ) {
-        // 头部：Provider Badge + 标题 + 激活状态 + 更多菜单
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-        ) {
-            ProviderBadge(providerIdOrName = model.provider, size = 24.dp)
-
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                Text(
-                    text = model.name,
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = model.provider,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            if (model.isActive) {
-                Surface(
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                    shape = Radius.xsShape,
-                ) {
-                    Text(
-                        text = "当前激活",
-                        color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
-                    )
-                }
-            } else {
-                RuntimeTextButton(
-                    onClick = onActivate,
-                    contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs),
-                ) {
-                    Text("设为激活", style = MaterialTheme.typography.labelMedium)
-                }
-            }
-
-            // 更多操作下拉菜单
-            Box {
-                RuntimeIconButton(
-                    onClick = { menuExpanded = true },
-                    modifier = Modifier
-                        .minimumInteractiveComponentSize()
-                        .size(32.dp),
-                    contentDescription = "更多操作",
-                ) {
-                    RuntimeIcon(
-                        name = RuntimeIconName.More,
-                        modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-
-                DropdownMenu(
-                    expanded = menuExpanded,
-                    onDismissRequest = { menuExpanded = false },
-                ) {
-                    DropdownMenuItem(
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                                RuntimeIcon(RuntimeIconName.Edit, Modifier.size(16.dp))
-                                Text("编辑档案")
-                            }
-                        },
-                        onClick = {
-                            menuExpanded = false
-                            onEdit()
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                                RuntimeIcon(RuntimeIconName.OpenInNew, Modifier.size(16.dp))
-                                Text("导出为 JSON")
-                            }
-                        },
-                        onClick = {
-                            menuExpanded = false
-                            onExport()
-                        },
-                    )
-                    if (!model.isActive) {
-                        DropdownMenuItem(
-                            text = {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                                    RuntimeIcon(RuntimeIconName.Check, Modifier.size(16.dp))
-                                    Text("设为激活")
-                                }
-                            },
-                            onClick = {
-                                menuExpanded = false
-                                onActivate()
-                            },
-                        )
-                    }
-                    HorizontalDivider()
-                    DropdownMenuItem(
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                                RuntimeIcon(RuntimeIconName.Trash, Modifier.size(16.dp), MaterialTheme.colorScheme.error)
-                                Text("删除档案", color = MaterialTheme.colorScheme.error)
-                            }
-                        },
-                        onClick = {
-                            menuExpanded = false
-                            onDelete()
-                        },
-                    )
-                }
-            }
-        }
-
-        // 模型列表标签
-        val modelList = remember(model.model) {
-            model.model.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-        }
-        if (modelList.isNotEmpty()) {
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                verticalArrangement = Arrangement.spacedBy(Spacing.xs),
-            ) {
-                modelList.take(3).forEach { modelId ->
-                    Surface(
-                        shape = Radius.xsShape,
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    ) {
-                        Text(
-                            text = modelId,
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontFamily = FontFamily.Monospace),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
-                        )
-                    }
-                }
-                if (modelList.size > 3) {
-                    Surface(
-                        shape = Radius.xsShape,
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f),
-                    ) {
-                        Text(
-                            text = "+${modelList.size - 3} 更多",
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
-                        )
-                    }
-                }
-            }
-        }
-
-        // 元数据摘要
-        val ctxTokens = model.contextTokens
-        val metadataSummary = buildList {
-            if (model.baseUrl.isNotBlank()) add(model.baseUrl)
-            if (model.apiKeyCount > 0) add("${model.apiKeyCount} Key")
-            if (model.requestsPerMinutePerKey > 0) add("${model.requestsPerMinutePerKey} RPM/Key")
-            if (ctxTokens != null) add("${ctxTokens / 1000}k 上下文")
-        }.joinToString(" • ")
-
-        if (metadataSummary.isNotBlank()) {
-            Text(
-                text = metadataSummary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontSize = 11.sp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-            )
-        }
-    }
-}
-}
-
-/**
- * 模型档案导入对话框
- */
-@Composable
-fun ModelImportDialog(
-    importing: Boolean = false,
-    onDismiss: () -> Unit,
-    onImportJson: (String) -> Unit,
-) {
-    var selectedTab by remember { mutableIntStateOf(0) }
-    var jsonText by remember { mutableStateOf("") }
-    val context = LocalContext.current
-
-    // 文件选择器
-    val filePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument(),
-    ) { uri: Uri? ->
-        if (uri != null) {
-            runCatching {
-                context.contentResolver.openInputStream(uri)?.use { stream ->
-                    stream.bufferedReader().readText()
-                }
-            }.onSuccess { fileContent ->
-                if (!fileContent.isNullOrBlank()) {
-                    jsonText = fileContent
-                    selectedTab = 0
-                    Toast.makeText(context, "已载入文件内容", Toast.LENGTH_SHORT).show()
-                }
-            }.onFailure {
-                Toast.makeText(context, "读取文件失败: ${it.message}", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    RuntimeAlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                RuntimeIcon(RuntimeIconName.Download, Modifier.size(20.dp), MaterialTheme.colorScheme.primary)
-                Text("导入模型档案", fontWeight = FontWeight.Bold)
-            }
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
-                SecondaryTabRow(
-                    selectedTabIndex = selectedTab,
-                    containerColor = Color.Transparent,
-                ) {
-                    Tab(
-                        selected = selectedTab == 0,
-                        onClick = { selectedTab = 0 },
-                        text = { Text("剪贴板粘贴") },
-                    )
-                    Tab(
-                        selected = selectedTab == 1,
-                        onClick = {
-                            selectedTab = 1
-                            filePickerLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
-                        },
-                        text = { Text("选择文件 (.json)") },
-                    )
-                }
-
-                if (selectedTab == 0) {
-                    OutlinedTextField(
-                        value = jsonText,
-                        onValueChange = { jsonText = it },
-                        modifier = Modifier.fillMaxWidth().height(170.dp),
-                        placeholder = { Text("粘贴导出的 JSON 模型配置（支持单个或批量 bundle）") },
-                        textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                        shape = Radius.smShape,
-                    )
-
-                    RuntimeOutlinedButton(
-                        onClick = {
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                            val clipText = clipboard?.primaryClip?.getItemAt(0)?.text?.toString().orEmpty()
-                            if (clipText.isNotBlank()) {
-                                jsonText = clipText
-                            } else {
-                                Toast.makeText(context, "剪贴板为空", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth().height(36.dp),
-                        shape = Radius.xsShape,
-                    ) {
-                        Text("一键粘贴剪贴板内容")
-                    }
-                } else {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.lg),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
-                    ) {
-                        RuntimeOutlinedButton(
-                            onClick = {
-                                filePickerLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
-                            },
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                                RuntimeIcon(RuntimeIconName.File, Modifier.size(16.dp))
-                                Text("选择本地 JSON 文件")
-                            }
-                        }
-                        if (jsonText.isNotBlank()) {
-                            Text(
-                                text = "已载入 ${jsonText.length} 字符",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            RuntimeButton(
-                onClick = { onImportJson(jsonText) },
-                enabled = jsonText.isNotBlank() && !importing,
-            ) {
-                if (importing) {
-                    RuntimeCircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                    Spacer(Modifier.width(Spacing.sm))
-                }
-                Text(if (importing) "正在导入…" else "开始导入")
-            }
-        },
-        dismissButton = {
-            RuntimeTextButton(onClick = onDismiss) {
-                Text("取消")
-            }
-        },
-    )
-}
-
-/**
- * 模型档案导出对话框
- */
-@Composable
-fun ModelExportDialog(
-    title: String,
-    subtitle: String,
-    defaultFileName: String = "tianyan_models_export.json",
-    onDismiss: () -> Unit,
-    onGenerateJson: suspend (includeKeys: Boolean) -> String,
-) {
-    val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
-    var includeKeys by remember { mutableStateOf(false) }
-
-    // 保存文件选择器
-    val createFileLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/json"),
-    ) { uri: Uri? ->
-        if (uri != null) {
-            coroutineScope.launch {
-                runCatching {
-                    val jsonContent = onGenerateJson(includeKeys)
-                    context.contentResolver.openOutputStream(uri)?.use { stream ->
-                        stream.bufferedWriter().use { it.write(jsonContent) }
-                    }
-                }.onSuccess {
-                    Toast.makeText(context, "导出文件保存成功", Toast.LENGTH_SHORT).show()
-                    onDismiss()
-                }.onFailure {
-                    Toast.makeText(context, "保存失败: ${it.message}", Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-    }
-
-    RuntimeAlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                RuntimeIcon(RuntimeIconName.OpenInNew, Modifier.size(20.dp), MaterialTheme.colorScheme.primary)
-                Text(title, fontWeight = FontWeight.Bold)
-            }
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-
-                // 是否包含 API Key 复选框
-                Surface(
-                    shape = Radius.smShape,
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(Spacing.md),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                    ) {
-                        RuntimeCheckbox(
-                            checked = includeKeys,
-                            onCheckedChange = { includeKeys = it },
-                        )
-                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                            Text(
-                                text = "包含 API Key",
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                            )
-                            Text(
-                                text = if (includeKeys) "⚠️ 包含敏感凭据，请妥善保管，切勿公开发送" else "推荐：脱敏导出（不含 Key），适合安全分享",
-                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                                color = if (includeKeys) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-
-                // 导出操作选项
-                Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                    // 1. 复制到剪贴板
-                    RuntimeOutlinedButton(
-                        onClick = {
-                            coroutineScope.launch {
-                                val jsonStr = onGenerateJson(includeKeys)
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                                val clip = ClipData.newPlainText("Tianyan Model Config", jsonStr)
-                                clipboard?.setPrimaryClip(clip)
-                                Toast.makeText(context, "已复制 JSON 配置到剪贴板", Toast.LENGTH_SHORT).show()
-                                onDismiss()
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth().height(42.dp),
-                        shape = Radius.smShape,
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                            RuntimeIcon(RuntimeIconName.Copy, Modifier.size(16.dp))
-                            Text("复制 JSON 到剪贴板")
-                        }
-                    }
-
-                    // 2. 保存为文件
-                    RuntimeOutlinedButton(
-                        onClick = {
-                            createFileLauncher.launch(defaultFileName)
-                        },
-                        modifier = Modifier.fillMaxWidth().height(42.dp),
-                        shape = Radius.smShape,
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                            RuntimeIcon(RuntimeIconName.Save, Modifier.size(16.dp))
-                            Text("保存为 .json 文件")
-                        }
-                    }
-
-                    // 3. 系统分享
-                    RuntimeOutlinedButton(
-                        onClick = {
-                            coroutineScope.launch {
-                                val jsonStr = onGenerateJson(includeKeys)
-                                val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                                    type = "text/plain"
-                                    putExtra(Intent.EXTRA_SUBJECT, "Tianyan Model Profiles")
-                                    putExtra(Intent.EXTRA_TEXT, jsonStr)
-                                }
-                                context.startActivity(Intent.createChooser(sendIntent, "分享模型配置"))
-                                onDismiss()
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth().height(42.dp),
-                        shape = Radius.smShape,
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                            RuntimeIcon(RuntimeIconName.OpenInNew, Modifier.size(16.dp))
-                            Text("系统分享 (Share Sheet)")
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            RuntimeTextButton(onClick = onDismiss) {
-                Text("关闭")
-            }
-        },
-    )
 }

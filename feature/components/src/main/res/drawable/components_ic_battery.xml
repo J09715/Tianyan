@@ -1,14 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Material Symbols Outlined (Apache 2.0) via Google Fonts, converted to Android vector drawable -->
+<!-- Material Symbols Rounded, weight 300, optical size 24; Apache-2.0. Glyph: battery_full.
+     Source: google/material-design-icons@49d4db35df873165d6bd6ba09b063c7dafbac2f4; converted from SVG. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp"
-    android:height="24dp"
-    android:viewportWidth="960"
-    android:viewportHeight="960">
-    <group
-        android:translateY="960">
-        <path
-            android:pathData="M660-80v-120H560l140-200v120h100L660-80Zm-300-80Zm-40 80q-17 0-28.5-11.5T280-120v-640q0-17 11.5-28.5T320-800h80v-80h160v80h80q17 0 28.5 11.5T680-760v280q-21 0-41 3.5T600-466v-254H360v560h94q8 23 19.5 43T501-80H320Z"
-            android:fillColor="#FF000000" />
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="960" android:viewportHeight="960">
+    <group android:translateX="-0" android:translateY="960">
+        <path android:fillColor="#FF000000" android:pathData="M333.91-100q-15.52 0-25.87-10.4-10.35-10.39-10.35-25.76v-618.07q0-15.37 10.4-25.76 10.39-10.39 25.76-10.39h72.3v-33.46q0-15.37 10.4-25.76 10.39-10.4 25.76-10.4h75.38q15.37 0 25.76 10.4 10.4 10.39 10.4 25.76v33.46h72.38q15.38 0 25.73 10.39t10.35 25.76v618.07q0 15.37-10.4 25.76-10.39 10.4-25.76 10.4H333.91Z" />
     </group>
 </vector>

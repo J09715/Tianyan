@@ -15,6 +15,10 @@ interface ContextPaneProps {
   onWorkspaceRefresh: () => void;
   onWorkspaceContent: (content: string) => void;
   onWorkspaceSave: () => void;
+  onWorkspaceUpload: (files: FileList) => void;
+  onWorkspaceCreate: (kind: "file" | "dir") => void;
+  onWorkspaceRename: (item: WorkspaceItem) => void;
+  onWorkspaceDelete: (item: WorkspaceItem) => void;
 }
 
 export function ContextPane({
@@ -29,6 +33,10 @@ export function ContextPane({
   onWorkspaceRefresh,
   onWorkspaceContent,
   onWorkspaceSave,
+  onWorkspaceUpload,
+  onWorkspaceCreate,
+  onWorkspaceRename,
+  onWorkspaceDelete,
 }: ContextPaneProps) {
   return (
     <aside className="context-pane">
@@ -49,6 +57,24 @@ export function ContextPane({
             </button>
           </div>
           <div className="header-actions">
+            <label className="quiet-button" title="上传文件到当前目录">
+              <Icon name="upload" size={14} /><span>上传</span>
+              <input
+                type="file"
+                multiple
+                hidden
+                onChange={(event) => {
+                  if (event.target.files?.length) onWorkspaceUpload(event.target.files);
+                  event.target.value = "";
+                }}
+              />
+            </label>
+            <button className="quiet-button" type="button" title="新建文件" onClick={() => onWorkspaceCreate("file")}>
+              <Icon name="file" size={14} />
+            </button>
+            <button className="quiet-button" type="button" title="新建文件夹" onClick={() => onWorkspaceCreate("dir")}>
+              <Icon name="folder" size={14} />
+            </button>
             {workspaceFilePath && (
               <a className="quiet-link" href={workspaceDownloadUrl(workspaceFilePath)} title="下载文件">
                 <Icon name="download" size={15} /><span>下载</span>
@@ -69,16 +95,19 @@ export function ContextPane({
           <div className="workspace-list">
             {!workspaceItems.length && <div className="list-empty">当前工作区为空</div>}
             {workspaceItems.map((item) => (
-              <button
-                className={`workspace-item${item.path === workspaceFilePath ? " active" : ""}`}
-                type="button"
-                onClick={() => onWorkspaceItem(item)}
-                key={item.path}
-              >
-                <Icon name={item.isDirectory ? "folder" : "file"} size={15} />
-                <span>{item.name}</span>
-                <small>{item.isDirectory ? "" : formatBytes(item.size)}</small>
-              </button>
+              <div className={`workspace-item-row${item.path === workspaceFilePath ? " active" : ""}`} key={item.path}>
+                <button className="workspace-item" type="button" onClick={() => onWorkspaceItem(item)}>
+                  <Icon name={item.isDirectory ? "folder" : "file"} size={15} />
+                  <span>{item.name}</span>
+                  <small>{item.isDirectory ? "" : formatBytes(item.size)}</small>
+                </button>
+                <button className="item-action" type="button" title="重命名" onClick={() => onWorkspaceRename(item)}>
+                  <Icon name="pencil" size={13} />
+                </button>
+                <button className="item-action danger" type="button" title="删除" onClick={() => onWorkspaceDelete(item)}>
+                  <Icon name="trash" size={13} />
+                </button>
+              </div>
             ))}
           </div>
           <div className="workspace-editor-wrap">

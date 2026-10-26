@@ -1,8 +1,6 @@
 package top.tianyan.app.harness.projection
 
 import java.util.concurrent.ConcurrentHashMap
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,10 +17,10 @@ import top.tianyan.app.harness.ToolCall
  * - 每会话一份底层存储；前台会话的值同时镜像到全局单值流供 UI / 通知消费。
  * - 纯内存组件，不持有任何业务依赖；写入语义与原 HarnessLoop 内联实现一致。
  */
-@Singleton
-class SessionStateMirrors @Inject constructor(
+class SessionStateMirrors(
     private val tracker: CurrentSessionTracker,
 ) {
+    val providerActivity = top.tianyan.app.harness.session.ProviderActivityTracker()
 
     private val _sessionRunStates = MutableStateFlow<Map<String, SessionRunState>>(emptyMap())
     /** 全局所有会话的运行状态映射（供会话抽屉、状态点等观察） */
@@ -31,6 +29,13 @@ class SessionStateMirrors @Inject constructor(
     private val _sessionStatuses = MutableStateFlow<Map<String, String>>(emptyMap())
     /** 全局各会话当前的动作描述状态 */
     val sessionStatuses: StateFlow<Map<String, String>> = _sessionStatuses.asStateFlow()
+
+    private val _modelOutputRevisions = MutableStateFlow<Map<String, Long>>(emptyMap())
+    val modelOutputRevisions: StateFlow<Map<String, Long>> = _modelOutputRevisions.asStateFlow()
+    fun recordModelOutput(sessionId: String, phase: String = "model_output") {
+        providerActivity.output(sessionId, phase)
+        _modelOutputRevisions.update { it + (sessionId to ((it[sessionId] ?: 0L) + 1)) }
+    }
 
     private val sessionErrors = ConcurrentHashMap<String, MutableStateFlow<String?>>()
     private val sessionThinkingLives = ConcurrentHashMap<String, MutableStateFlow<Boolean>>()
@@ -41,6 +46,17 @@ class SessionStateMirrors @Inject constructor(
     // ---- 当前前台聚焦会话的全局响应式镜像 ----
     private val _running = MutableStateFlow(false)
     val running: StateFlow<Boolean> = _running.asStateFlow()
+
+    /**
+     * 点亮 [_running] 的会话 id（null = 没有会话在驱动前台运行镜像）。
+     *
+     * 旧实现只在 "写入终态的那一刻该会话仍在前台" 时才复位 `_running`，一旦终态写入时
+     * 前台焦点已经切走（用户离开聊天页、`currentSessionId` 被清空、运行期新建/切换过会话），
+     * 复位条件就永远不成立，`_running` 会永久停在 true：聊天页一直显示"执行中"、停止键
+     * 看起来完全没用，只有杀进程重启（loadSession 重新按 sessionJobs 计算）才能恢复。
+     * 记住"谁点亮的"后，终态复位不再依赖写入瞬间的前台焦点。
+     */
+    private var runningOwner: String? = null
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
@@ -58,11 +74,19 @@ class SessionStateMirrors @Inject constructor(
     }
 
     fun removeSession(sessionId: String) {
+        providerActivity.remove(sessionId)
         sessionErrors.remove(sessionId)
         sessionThinkingLives.remove(sessionId)
         thinkingModes.remove(sessionId)
         _sessionRunStates.update { it - sessionId }
         _sessionStatuses.update { it - sessionId }
+        _modelOutputRevisions.update { it - sessionId }
+        // 删掉的正是点亮前台运行镜像的会话：清掉 owner 并复位，避免 _running 永久停在 true。
+        // 终态写入（setRunState / onRunFinished）走另一条路径，这里只处理会话已不存在的情况。
+        if (runningOwner == sessionId) {
+            runningOwner = null
+            _running.value = false
+        }
     }
 
     fun setStatus(sessionId: String, statusText: String?) {
@@ -98,8 +122,16 @@ class SessionStateMirrors @Inject constructor(
 
     fun setRunState(sessionId: String, state: SessionRunState) {
         _sessionRunStates.update { it + (sessionId to state) }
-        if (tracker.isForeground(sessionId)) {
-            _running.value = (state == SessionRunState.RUNNING)
+        if (state == SessionRunState.RUNNING) {
+            // 只有前台会话的运行才点亮全局镜像，避免后台会话把当前聊天页的输入框锁住。
+            if (tracker.isForeground(sessionId)) {
+                runningOwner = sessionId
+                _running.value = true
+            }
+        } else if (runningOwner == null || runningOwner == sessionId) {
+            // 终态：谁点亮的谁负责复位，不要求该会话此刻仍在前台（前台焦点可能已经切走）。
+            runningOwner = null
+            _running.value = false
         }
     }
 
@@ -125,8 +157,12 @@ class SessionStateMirrors @Inject constructor(
     fun onRunFinished(sessionId: String): Boolean {
         val waitingApproval = isWaitingApproval(sessionId)
         if (!waitingApproval) setStatus(sessionId, null)
-        if (tracker.isForeground(sessionId)) {
+        // 同上：复位按"谁点亮的"判定，不在前台也要复位，避免运行镜像永久卡在 true。
+        if (runningOwner == null || runningOwner == sessionId) {
+            runningOwner = null
             _running.value = false
+        }
+        if (tracker.isForeground(sessionId)) {
             if (!waitingApproval) _status.value = null
             _thinkingLive.value = false
         }
@@ -140,10 +176,12 @@ class SessionStateMirrors @Inject constructor(
     }
 
     fun setForegroundRunning(active: Boolean) {
+        runningOwner = if (active) tracker.foregroundId.takeIf { it.isNotBlank() } else null
         _running.value = active
     }
 
     fun resetForeground() {
+        runningOwner = null
         _running.value = false
         _error.value = null
         _status.value = null

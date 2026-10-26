@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>新标签页</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f5f6fa;
+    --bg-glow-1: rgba(91, 124, 255, 0.10);
+    --bg-glow-2: rgba(140, 96, 255, 0.08);
+    --fg: #1b1f2b;
+    --fg-dim: #5c6474;
+    --card: rgba(255, 255, 255, 0.78);
+    --card-border: rgba(27, 31, 43, 0.10);
+    --accent: #4a6cf7;
+    --accent-fg: #ffffff;
+    --input-bg: #ffffff;
+    --input-border: rgba(27, 31, 43, 0.16);
+    --tile-bg: rgba(255, 255, 255, 0.72);
+    --tile-hover: rgba(74, 108, 247, 0.08);
+    --logo-a: #4a6cf7;
+    --logo-b: #8c60ff;
+    --logo-c: #2bb3a3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1018;
+      --bg-glow-1: rgba(74, 108, 247, 0.16);
+      --bg-glow-2: rgba(140, 96, 255, 0.12);
+      --fg: #e8eaf0;
+      --fg-dim: #9aa3b5;
+      --card: rgba(21, 25, 36, 0.80);
+      --card-border: rgba(232, 234, 240, 0.10);
+      --accent: #7c96ff;
+      --accent-fg: #0d1018;
+      --input-bg: rgba(255, 255, 255, 0.06);
+      --input-border: rgba(232, 234, 240, 0.18);
+      --tile-bg: rgba(255, 255, 255, 0.05);
+      --tile-hover: rgba(124, 150, 255, 0.12);
+      --logo-a: #7c96ff;
+      --logo-b: #b08aff;
+      --logo-c: #4fd8c6;
+    }
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: system-ui, -apple-system, "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Noto Sans SC", sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    display: flex;
+    padding: 24px;
+    position: relative;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* 内容高于视口（分屏内嵌短 WebView）时可整体滚动；margin:auto 保证矮视口居中、高视口也居中 */
+  .wrap {
+    position: relative;
+    width: 100%;
+    max-width: 520px;
+    margin: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 28px;
+    animation: rise .5s ease-out both;
+  }
+  /* 背景微光：浅色为清晨雾面，深色为深空星云 */
+  body::before, body::after {
+    content: "";
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(90px);
+    pointer-events: none;
+  }
+  body::before {
+    width: 60vmax; height: 60vmax;
+    top: -22vmax; left: -14vmax;
+    background: var(--bg-glow-1);
+  }
+  body::after {
+    width: 50vmax; height: 50vmax;
+    bottom: -20vmax; right: -12vmax;
+    background: var(--bg-glow-2);
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .wrap { animation: none; }
+  }
+
+  /* ===== Logo：归墟漩涡 ===== */
+  .logo { width: 96px; height: 96px; display: block; }
+
+  .brand { text-align: center; }
+  .brand h1 {
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+  .brand h1 .latin {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--fg-dim);
+    margin-left: 10px;
+    letter-spacing: 0.12em;
+  }
+  .brand .slogan {
+    margin-top: 8px;
+    font-size: 14px;
+    color: var(--fg-dim);
+    letter-spacing: 0.28em;
+  }
+  .brand .motto {
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--fg-dim);
+    opacity: 0.7;
+    letter-spacing: 0.18em;
+  }
+
+  /* ===== 搜索 ===== */
+  .search {
+    width: 100%;
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 18px;
+    padding: 14px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  .search-row {
+    display: flex;
+    gap: 8px;
+  }
+  .search-row input {
+    flex: 1;
+    min-width: 0;
+    height: 44px;
+    padding: 0 16px;
+    font-size: 15px;
+    color: var(--fg);
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 22px;
+    outline: none;
+    transition: border-color .15s;
+  }
+  .search-row input:focus { border-color: var(--accent); }
+  .search-row input::placeholder { color: var(--fg-dim); opacity: .8; }
+  .search-row button {
+    height: 44px;
+    padding: 0 20px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--accent-fg);
+    background: var(--accent);
+    border: none;
+    border-radius: 22px;
+    cursor: pointer;
+  }
+  .search-row button:active { opacity: .85; }
+  .engines {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .engines button {
+    padding: 4px 12px;
+    font-size: 12px;
+    color: var(--fg-dim);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    cursor: pointer;
+  }
+  .engines button.on {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
+  /* ===== 快捷入口 ===== */
+  .links {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+  @media (max-width: 380px) {
+    .links { grid-template-columns: repeat(2, 1fr); }
+  }
+  .links a {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 6px;
+    text-decoration: none;
+    color: var(--fg);
+    background: var(--tile-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    transition: background .15s;
+  }
+  .links a:active { background: var(--tile-hover); }
+  @media (hover: hover) {
+    .links a:hover { background: var(--tile-hover); }
+  }
+  .links .glyph {
+    width: 34px; height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .links .label {
+    font-size: 12px;
+    color: var(--fg-dim);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .foot {
+    font-size: 11px;
+    color: var(--fg-dim);
+    opacity: .55;
+    letter-spacing: 0.08em;
+  }
+
+  /* 矮视口（分屏内嵌短 WebView）压缩纵向占位，避免内容溢出过多；需位于 .logo 主规则之后 */
+  @media (max-height: 720px) {
+    body { padding: 16px; }
+    .wrap { gap: 16px; }
+    .logo { width: 64px; height: 64px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 归墟漩涡 Logo：三色弧线向中心汇聚 -->
+  <svg class="logo" viewBox="0 0 96 96" fill="none" aria-hidden="true">
+    <circle cx="48" cy="48" r="44" stroke="var(--logo-a)" stroke-opacity=".22" stroke-width="2"/>
+    <path d="M48 12 A36 36 0 0 1 84 48" stroke="var(--logo-a)" stroke-width="4.5" stroke-linecap="round"/>
+    <path d="M48 84 A36 36 0 0 1 12 48" stroke="var(--logo-b)" stroke-width="4.5" stroke-linecap="round"/>
+    <path d="M76.5 24 A38 38 0 0 1 78 62" stroke="var(--logo-c)" stroke-width="3" stroke-linecap="round" stroke-opacity=".85"/>
+    <path d="M19.5 72 A38 38 0 0 1 18 34" stroke="var(--logo-c)" stroke-width="3" stroke-linecap="round" stroke-opacity=".85"/>
+    <circle cx="48" cy="48" r="7" fill="var(--logo-a)"/>
+    <circle cx="48" cy="48" r="2.6" fill="var(--bg)"/>
+  </svg>
+
+  <div class="brand">
+    <h1>天衍<span class="latin">TIANYAN</span></h1>
+    <div class="slogan">掌中归墟 · 万象可期</div>
+    <div class="motto">于天衍中立极，于方寸间创世</div>
+  </div>
+
+  <div class="search" role="search">
+    <div class="search-row">
+      <input id="q" type="search" enterkeyhint="go" placeholder="搜索或输入网址" autocomplete="off">
+      <button id="go" type="button">搜索</button>
+    </div>
+    <div class="engines" id="engines"></div>
+  </div>
+
+  <nav class="links" aria-label="快捷入口">
+    <a href="https://github.com/J09715/Tianyan">
+      <span class="glyph">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" style="color:var(--fg)">
+          <path d="M12 .5A11.5 11.5 0 0 0 .5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-2c-3.2.7-3.87-1.54-3.87-1.54-.53-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.23-1.28-5.23-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.05.78 2.12v3.15c0 .31.21.68.8.56A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5Z"/>
+        </svg>
+      </span>
+      <span class="label">GitHub</span>
+    </a>
+    <a href="https://github.com/J09715/Tianyan/releases">
+      <span class="glyph">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--fg)">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>
+        </svg>
+      </span>
+      <span class="label">发布版</span>
+    </a>
+    <a href="https://juejin.cn/">
+      <span class="glyph">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" style="color:var(--fg)">
+          <path d="M12 2 4.5 7.4 12 12.8l7.5-5.4L12 2Zm-9 9.9L10.5 21v-6.1L3 9.9v4Zm18 0v4l-7.5 5v-6.1L21 9.9Z" transform="translate(0 .5)"/>
+        </svg>
+      </span>
+      <span class="label">掘金</span>
+    </a>
+    <a href="https://www.bing.com/">
+      <span class="glyph">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="color:var(--fg)">
+          <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
+        </svg>
+      </span>
+      <span class="label">必应</span>
+    </a>
+    <a href="https://www.baidu.com/">
+      <span class="glyph">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" style="color:var(--fg)">
+          <path d="M5.5 3.5h6a5.5 5.5 0 0 1 0 11h-6a5.5 5.5 0 0 1 0-11Z"/><path d="M12.5 14.5h6a5.5 5.5 0 0 0 0-11"/>
+        </svg>
+      </span>
+      <span class="label">百度</span>
+    </a>
+    <a href="https://react.dev/">
+      <span class="glyph">
+        <svg width="24" height="24" viewBox="-10.5 -9.5 21 19" fill="none" stroke="currentColor" stroke-width="1.1" style="color:var(--fg)">
+          <circle cx="0" cy="0" r="2" fill="currentColor" stroke="none"/>
+          <ellipse rx="10" ry="4.2"/><ellipse rx="10" ry="4.2" transform="rotate(60)"/><ellipse rx="10" ry="4.2" transform="rotate(120)"/>
+        </svg>
+      </span>
+      <span class="label">React</span>
+    </a>
+    <a href="https://developer.android.com/">
+      <span class="glyph">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="color:var(--fg)">
+          <path d="M17 2 12 7l5 5 5-5-5-5ZM7 2 2 7l5 5 5-5-5-5Zm0 20 5-5-5-5-5 5 5 5Zm10 0 5-5-5-5-5 5 5 5ZM7 9.5l5 2.5-5 2.5V9.5Zm10 0v5l-5-2.5 5-2.5Z"/>
+        </svg>
+      </span>
+      <span class="label">Android</span>
+    </a>
+    <a href="https://kotlinlang.org/">
+      <span class="glyph">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" style="color:var(--fg)">
+          <path d="M3 3h9l9 9-9 9H3l9-9L3 3Z"/>
+        </svg>
+      </span>
+      <span class="label">Kotlin</span>
+    </a>
+  </nav>
+
+  <div class="foot">天衍 · Tianyan — Android 无 Root Linux Runtime 与智能体引擎</div>
+</div>
+
+<script>
+(function () {
+  var ENGINES = [
+    { name: "必应", url: "https://www.bing.com/search?q=" },
+    { name: "百度", url: "https://www.baidu.com/s?wd=" },
+    { name: "Google", url: "https://www.google.com/search?q=" }
+  ];
+  var current = 0;
+  var input = document.getElementById("q");
+  var box = document.getElementById("engines");
+
+  ENGINES.forEach(function (e, i) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.textContent = e.name;
+    if (i === current) b.className = "on";
+    b.addEventListener("click", function () {
+      current = i;
+      Array.prototype.forEach.call(box.children, function (c, j) {
+        c.className = j === i ? "on" : "";
+      });
+      input.focus();
+    });
+    box.appendChild(b);
+  });
+
+  function navigate() {
+    var raw = input.value.trim();
+    if (!raw) return;
+    // 带 scheme 的按网址跳，否则按当前引擎搜索
+    var target = /^https?:\/\//i.test(raw) ? raw : ENGINES[current].url + encodeURIComponent(raw);
+    location.href = target;
+  }
+  document.getElementById("go").addEventListener("click", navigate);
+  input.addEventListener("keydown", function (ev) {
+    if (ev.key === "Enter") navigate();
+  });
+})();
+</script>
+</body>
+</html>

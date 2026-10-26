@@ -19,20 +19,27 @@ import top.tianyan.app.core.database.HarnessLaneResultEntity
 import top.tianyan.app.core.database.HarnessOperationEntity
 import top.tianyan.app.core.database.HarnessQueueItemEntity
 import top.tianyan.app.core.database.HarnessRuntimeRepository
+import top.tianyan.app.core.database.UsageLedgerSessionRow
+import top.tianyan.app.core.database.UsageLedgerRow
 import top.tianyan.app.core.database.HarnessUsageEntity
+import top.tianyan.app.core.database.UsageLedgerBotRow
 import top.tianyan.app.harness.ChatUsage
 import top.tianyan.app.harness.UserMessage
+import top.tianyan.app.core.database.DailyCountRow
+import top.tianyan.app.core.database.UsageAggregateRow
+import top.tianyan.app.harness.events.HarnessEvent
+import top.tianyan.app.harness.events.HarnessEventBus
 
 class OperationCoordinatorTest {
 
     private lateinit var repository: FakeRuntimeRepository
-    private lateinit var eventBus: top.tianyan.app.harness.events.HarnessEventBus
+    private lateinit var eventBus: HarnessEventBus
     private lateinit var coordinator: OperationCoordinator
 
     @Before
     fun setUp() {
         repository = FakeRuntimeRepository()
-        eventBus = top.tianyan.app.harness.events.HarnessEventBus()
+        eventBus = HarnessEventBus()
         coordinator = OperationCoordinator(repository, Json, eventBus)
     }
 
@@ -175,7 +182,7 @@ class OperationCoordinatorTest {
 
     @Test
     fun `operation lifecycle emits structured events`() = runBlocking {
-        val events = mutableListOf<top.tianyan.app.harness.events.HarnessEvent>()
+        val events = mutableListOf<HarnessEvent>()
         val job = GlobalScope.launch(Dispatchers.Unconfined) {
             eventBus.events.collect { events += it }
         }
@@ -190,7 +197,7 @@ class OperationCoordinatorTest {
             assertTrue(kinds.contains("ProviderRoundStarted"))
             assertTrue(kinds.contains("ProviderRoundSettled"))
             assertTrue(kinds.contains("OperationFinished"))
-            val finished = events.filterIsInstance<top.tianyan.app.harness.events.HarnessEvent.OperationFinished>().single()
+            val finished = events.filterIsInstance<HarnessEvent.OperationFinished>().single()
             assertEquals("completed", finished.outcome)
             assertEquals("s8", finished.sessionId)
             assertEquals(operationId, finished.operationId)
@@ -201,6 +208,40 @@ class OperationCoordinatorTest {
 
     /** 全内存 fake：只实现 coordinator 依赖的事务语义，其余为简单存取。 */
     private class FakeRuntimeRepository : HarnessRuntimeRepository {
+        // 账本聚合（SQL 层）：本 Fake 不模拟聚合语义，返回空列表即可——
+        // 这两个测试都不涉及用量统计，与 aggregateUsageInRange 的处理保持一致。
+        override suspend fun aggregateUsageLedger(
+            start: Long?,
+            end: Long?,
+            tzOffsetMs: Long,
+            modelId: String?,
+            provider: String?,
+            sessionId: String?,
+        ): List<UsageLedgerRow> = emptyList()
+        override suspend fun aggregateUsageLedgerByBot(start: Long?, end: Long?, sessionId: String?): List<UsageLedgerBotRow> = emptyList()
+
+        override suspend fun aggregateUsageLedgerForSessions(start: Long?, end: Long?, tzOffsetMs: Long, sessionIds: List<String>): List<UsageLedgerRow> = emptyList()
+
+        override suspend fun listRecentUsageForSessions(start: Long?, end: Long?, limit: Int, sessionIds: List<String>): List<HarnessUsageEntity> = emptyList()
+
+        override suspend fun aggregateUsageLedgerBySession(
+            start: Long?,
+            end: Long?,
+            modelId: String?,
+            provider: String?,
+            sessionId: String?,
+        ): List<UsageLedgerSessionRow> = emptyList()
+
+        override suspend fun listRecentUsage(
+            start: Long?,
+            end: Long?,
+            limit: Int,
+            modelId: String?,
+            provider: String?,
+            sessionId: String?,
+        ): List<HarnessUsageEntity> = emptyList()
+
+
         val lanes = LinkedHashMap<Pair<String, String>, HarnessLaneEntity>()
         val operations = LinkedHashMap<String, HarnessOperationEntity>()
         val results = LinkedHashMap<Pair<String, String>, HarnessLaneResultEntity>()
@@ -236,6 +277,14 @@ class OperationCoordinatorTest {
             entryList.filter { (start == null || it.createdAt >= start) && (end == null || it.createdAt < end) }
 
         override suspend fun countEntriesInRange(start: Long?, end: Long?) = listEntriesInRange(start, end).size
+
+        // 用量聚合（SQL 层）：生产实现走 json_extract + GROUP BY 以避免 OOM。
+        // 本 Fake 不模拟聚合语义，返回空列表即可——本测试不涉及用量统计。
+        override suspend fun aggregateUsageInRange(start: Long?, end: Long?) =
+            emptyList<UsageAggregateRow>()
+
+        override suspend fun aggregateDailyCounts(start: Long?, end: Long?, tzOffsetMs: Long) =
+            emptyList<DailyCountRow>()
         override suspend fun branch(sessionId: String, leafId: String?): List<HarnessEntryEntity> {
             if (leafId == null) return emptyList()
             val byId = entryList.associateBy { it.id }
@@ -277,6 +326,15 @@ class OperationCoordinatorTest {
             acceptOperation(entry, lane, operation)
         }
 
+        override suspend fun acceptRunTakeover(queueItemId: String?, entry: HarnessEntryEntity?, lane: HarnessLaneEntity,
+            operation: HarnessOperationEntity, previousLane: HarnessLaneEntity,
+            previousResult: HarnessLaneResultEntity?, taskId: String?) {
+            if (previousResult != null) finishOperation(previousResult, previousLane.copy(currentOperationId = null))
+            if (entry == null) beginOperation(lane, operation)
+            else if (queueItemId != null) acceptQueuedOperation(queueItemId, entry, lane, operation)
+            else acceptOperation(entry, lane, operation)
+        }
+
         override suspend fun beginOperation(lane: HarnessLaneEntity, operation: HarnessOperationEntity) {
             operations[operation.id] = operation
             upsertLaneForTest(lane)
@@ -294,7 +352,7 @@ class OperationCoordinatorTest {
         }
 
         override suspend fun finishOperation(result: HarnessLaneResultEntity, lane: HarnessLaneEntity) {
-            queueItems.removeAll { it.operationId == result.operationId }
+            queueItems.removeAll { it.operationId == result.operationId && it.queueType != "next_run" }
             operations.remove(result.operationId)
             results[result.sessionId to result.laneName] = result
             upsertLaneForTest(lane)

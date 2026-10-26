@@ -13,6 +13,7 @@ export type IconName =
   | "menu"
   | "panel-left"
   | "panel-right"
+  | "pencil"
   | "plus"
   | "refresh"
   | "save"
@@ -20,6 +21,7 @@ export type IconName =
   | "shield"
   | "terminal"
   | "trash"
+  | "upload"
   | "workspace"
   | "x";
 
@@ -63,6 +65,7 @@ export function Icon({ name, size = 20, ...props }: IconProps) {
         <path d="M15 3v18" />
       </>
     ),
+    pencil: <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />,
     plus: <path d="M12 5v14M5 12h14" />,
     refresh: (
       <>
@@ -88,6 +91,7 @@ export function Icon({ name, size = 20, ...props }: IconProps) {
         <path d="M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6M10 11v5M14 11v5" />
       </>
     ),
+    upload: <path d="M12 21V9m0 0 4 4m-4-4-4 4M5 3h14" />,
     workspace: <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />,
     x: <path d="m18 6-12 12M6 6l12 12" />,
   } satisfies Record<IconName, ReactNode>;

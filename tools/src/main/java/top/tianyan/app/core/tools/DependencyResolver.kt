@@ -1,14 +1,11 @@
-package top.tianyan.app.core.tools
+﻿package top.tianyan.app.core.tools
 
 import top.tianyan.app.core.model.RuntimeName
 import top.tianyan.app.core.model.RuntimeRequirement
 import top.tianyan.app.core.model.ToolDependency
 import top.tianyan.app.core.model.ToolManifest
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class DependencyResolver @Inject constructor() {
+class DependencyResolver() {
     fun resolve(manifest: ToolManifest): List<RuntimeRequirement> = manifest.dependencies.mapNotNull { dependency ->
         ManifestDependencyParser.parse(dependency)?.let { parsed ->
             when (parsed.name) {

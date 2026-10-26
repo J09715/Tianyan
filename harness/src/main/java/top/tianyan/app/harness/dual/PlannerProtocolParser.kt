@@ -23,6 +23,9 @@ import kotlinx.serialization.json.jsonPrimitive
 object PlannerProtocolParser {
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
+    /** 决策协议的已知顶层字段；裸 JSON 兜底提取需命中其一才被接受为决策对象。 */
+    private val KNOWN_DECISION_KEYS = setOf("thought", "action", "plan", "steps", "step", "finalReport")
+
     fun parse(text: String, currentSteps: List<PlanStep>): PlannerDecision {
         val jsonPattern = Regex("""```(?:json)?\s*(\{.*?\})\s*```""", RegexOption.DOT_MATCHES_ALL)
         val match = jsonPattern.find(text)
@@ -32,17 +35,24 @@ object PlannerProtocolParser {
 
         val parsed = runCatching {
             json.parseToJsonElement(rawJson).jsonObject
-        }.getOrNull()
+        }.getOrNull()?.let { obj ->
+            // 代码块中的 JSON 可信；裸 JSON 兜底提取（首个 { 到末个 }）可能把散文中的杂散
+            // 花括号误当决策对象，这里要求至少含一个决策协议已知字段才接受，否则走自然语言启发式。
+            if (match != null || obj.keys.any { it in KNOWN_DECISION_KEYS }) obj else null
+        }
 
         if (parsed == null) {
             val lower = text.lowercase()
-            val isCompleted = listOf("已完成", "全部完成", "实现完毕", "任务完成", "completed", "all done", "finished", "all tasks are completed")
-                .any { it in lower || it in text }
+            // 英文完成信号用词边界精确匹配，避免 "uncompleted"/"unfinished" 误命中 "completed"/"finished" 触发 FINISH
+            val isCompleted = listOf("已完成", "全部完成", "实现完毕", "任务完成").any { it in text } ||
+                listOf("completed", "all done", "finished", "all tasks are completed")
+                    .any { Regex("(^|[^a-z])${Regex.escape(it)}([^a-z]|$)").containsMatchIn(lower) }
             return if (isCompleted) {
                 PlannerDecision.Finish(finalReport = text, completedSteps = currentSteps)
             } else {
+                // 兜底 id 避开既有步骤 id：撞 id 时协调器会按旧状态保留而静默丢弃新指令
                 val step = PlanStep(
-                    id = "step_${currentSteps.size + 1}",
+                    id = nextFallbackStepId(currentSteps),
                     title = "执行下一步",
                     instruction = text.take(500),
                 )
@@ -85,12 +95,14 @@ object PlannerProtocolParser {
                     PlannerDecision.InitializePlan(thought = thought, plan = planList)
                 } else {
                     val stepObj = parsed["step"] as? JsonObject
+                    // 兜底 id 避开既有步骤 id：撞 id 时协调器会按旧状态保留而静默丢弃新指令
+                    val fallbackId = nextFallbackStepId(currentSteps)
                     val step = if (stepObj != null) {
-                        parseStepObject(stepObj, defaultId = "step_${currentSteps.size + 1}", defaultInstruction = thought.ifBlank { text })
+                        parseStepObject(stepObj, defaultId = fallbackId, defaultInstruction = thought.ifBlank { text })
                     } else {
                         PlanStep(
-                            id = "step_${currentSteps.size + 1}",
-                            title = "工序 step_${currentSteps.size + 1}",
+                            id = fallbackId,
+                            title = "工序 $fallbackId",
                             instruction = thought.ifBlank { text },
                         )
                     }
@@ -98,6 +110,14 @@ object PlannerProtocolParser {
                 }
             }
         }
+    }
+
+    /** 生成不与既有步骤冲突的兜底步骤 id（step_N 递增直到不撞车）。 */
+    private fun nextFallbackStepId(currentSteps: List<PlanStep>): String {
+        val existing = currentSteps.mapTo(hashSetOf()) { it.id }
+        var n = currentSteps.size + 1
+        while ("step_$n" in existing) n++
+        return "step_$n"
     }
 
     private fun parsePlanArray(parsed: JsonObject): List<PlanStep>? {

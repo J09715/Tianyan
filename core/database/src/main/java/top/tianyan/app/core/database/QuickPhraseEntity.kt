@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 import top.tianyan.app.core.model.QuickPhrase
 
@@ -73,6 +74,16 @@ interface QuickPhraseDao {
 
     @Query("DELETE FROM quick_phrases")
     suspend fun clearAll()
+
+    /**
+     * 重置为默认短语必须单事务：clearAll 与 upsertAll 分两步提交时，崩溃窗口内
+     * 自建短语已删、默认短语未写入，用户数据永久丢失。
+     */
+    @Transaction
+    suspend fun resetToDefault(phrases: List<QuickPhraseEntity>) {
+        clearAll()
+        upsertAll(phrases)
+    }
 
     @Query("SELECT COUNT(*) FROM quick_phrases")
     suspend fun count(): Int

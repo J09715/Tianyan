@@ -1,0 +1,20 @@
+<resources>
+    <string name="components_drawer_tab_chat">对话</string>
+    <string name="components_drawer_tab_workspace">项目</string>
+    <string name="components_drawer_tab_system">系统</string>
+    <string name="components_open_navigation">打开导航与会话</string>
+    <string name="components_local_terminal">本地终端</string>
+    <string name="components_tools">工具中心</string>
+    <string name="components_drawer_chat">AI 对话</string>
+    <string name="components_drawer_workspace">项目与文件</string>
+    <string name="components_drawer_system">系统概览</string>
+    <string name="components_drawer_settings">设置</string>
+    <string name="components_rail_sessions">会话</string>
+    <string name="components_rail_new_session">新建</string>
+    <string name="components_rail_terminal">终端</string>
+    <string name="components_rail_tools">工具</string>
+    <string name="components_collapse_sidebar">收起侧栏</string>
+    <string name="components_companion_open">打开终端与浏览器面板</string>
+    <string name="components_companion_collapse">收起伴随面板</string>
+    <string name="components_companion_resize">拖动调整分栏宽度</string>
+</resources>

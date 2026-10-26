@@ -78,7 +78,7 @@ private fun legacyStringResource(source: String): Int? = when (source) {
         "不注入工具和提示词" -> R.string.settings_legacy_0056
         "关闭系统提示词和工具定义注入，仅发送用户消息（用于排查问题）" -> R.string.settings_legacy_0057
         "Agent 智能体管理" -> R.string.settings_legacy_0059
-        "思考流呈现、上下文压缩阈值与技能插件" -> R.string.settings_legacy_0060
+        "思考流呈现、上下文压缩策略与技能插件" -> R.string.settings_legacy_0060
         "工具与插件生态" -> R.string.settings_legacy_0061
         "插件与工具生态中心" -> R.string.settings_legacy_0062
         "一键安装 Claude Code、OpenClaw 等 AI CLI 与开发环境" -> R.string.settings_legacy_0063
@@ -122,6 +122,20 @@ private fun legacyStringResource(source: String): Int? = when (source) {
         "开发者控制台" -> R.string.settings_legacy_0101
         "开发者调试与控制台" -> R.string.settings_legacy_0102
         "实时查看 PRoot 进程与命令追踪" -> R.string.settings_legacy_0103
+        "关于与社区" -> R.string.settings_legacy_0104
+        "关于天衍 · Tianyan" -> R.string.settings_legacy_0105
+        "关于、更新与官方社区" -> R.string.settings_legacy_0106
+        "应用版本与更新" -> R.string.settings_legacy_0107
+        "检查新版本" -> R.string.settings_legacy_0108
+        "检查中…" -> R.string.settings_legacy_0109
+        "已是最新版本" -> R.string.settings_legacy_0110
+        "检查更新失败" -> R.string.settings_legacy_0111
+        "启动时自动检查更新" -> R.string.settings_legacy_0112
+        "应用启动时在后台静默检测新版本" -> R.string.settings_legacy_0113
+        "官方社区与开源" -> R.string.settings_legacy_0114
+        "GitHub 开源项目" -> R.string.settings_legacy_0115
+        "天衍官方交流群" -> R.string.settings_legacy_0116
+        "官方 QQ 交流群" -> R.string.settings_legacy_0117
         "前往 GitHub 下载" -> R.string.settings_legacy_0118
         "运行平稳" -> R.string.settings_legacy_0119
         "未配置" -> R.string.settings_legacy_0120
@@ -215,7 +229,7 @@ private fun legacyStringResource(source: String): Int? = when (source) {
         "删除子智能体" -> R.string.settings_text_0061
         "删除服务" -> R.string.settings_text_0062
         "删除模型失败" -> R.string.settings_text_0063
-        "加入 QQ 交流群 (000000000)" -> R.string.settings_text_0064
+        "加入 QQ 交流群 (964382207)" -> R.string.settings_text_0064
         "助手名称" -> R.string.settings_text_0065
         "协议: Apache-2.0 License" -> R.string.settings_text_0066
         "单 Key RPM 需为非负整数" -> R.string.settings_text_0067
@@ -224,7 +238,6 @@ private fun legacyStringResource(source: String): Int? = when (source) {
         "卸载" -> R.string.settings_text_0070
         "卸载工具" -> R.string.settings_text_0071
         "压缩策略" -> R.string.settings_text_0072
-        "压缩触发阈值（用户轮次）" -> R.string.settings_text_0073
         "参数（空格分隔）" -> R.string.settings_text_0074
         "可呼叫天衍 Agent 在 PRoot 沙箱内自主排查与自愈" -> R.string.settings_text_0075
         "可更新" -> R.string.settings_text_0076
@@ -246,7 +259,7 @@ private fun legacyStringResource(source: String): Int? = when (source) {
         "复制 JSON" -> R.string.settings_text_0092
         "复杂且可并行的任务将由主智能体自行决定是否派发" -> R.string.settings_text_0093
         "多沙箱并存与动态切换" -> R.string.settings_text_0094
-        "多轮工具调用超出阈值时，自动压缩历史中间工具输出日志，保留任务首尾与关键状态" -> R.string.settings_text_0095
+        "历史超过 Token 折叠线时自动生成结构化摘要，保留近期原文、任务状态与关键文件足迹" -> R.string.settings_text_0095
         "如: sqlite / github / fetch" -> R.string.settings_text_0096
         "安装" -> R.string.settings_text_0097
         "安装中" -> R.string.settings_text_0098
@@ -290,13 +303,10 @@ private fun legacyStringResource(source: String): Int? = when (source) {
         "开始下载" -> R.string.settings_text_0136
         "开始安装" -> R.string.settings_text_0137
         "异常" -> R.string.settings_text_0138
-        "强制中文 (推荐)" -> R.string.settings_text_0139
-        "强制模型思考过程全程使用英文 (English)" -> R.string.settings_text_0140
         "当会话关联了工作区时，执行 base 命令默认以该目录为工作路径 (cwd)" -> R.string.settings_text_0141
         "当会话历史超过该轮数时，启动智能剪裁，最近 4 轮保持无损" -> R.string.settings_text_0142
         "当前活跃" -> R.string.settings_text_0143
         "必选基座" -> R.string.settings_text_0144
-        "思考与推理语言偏好 (Thinking Language)" -> R.string.settings_text_0145
         "思考呈现" -> R.string.settings_text_0146
         "思考流、子智能体、Skill 与插件" -> R.string.settings_text_0147
         "思考流与执行表现" -> R.string.settings_text_0148
@@ -401,7 +411,6 @@ private fun legacyStringResource(source: String): Int? = when (source) {
         "版本: v0.3.0 (Material 3 Expressive)" -> R.string.settings_text_0247
         "生成安全 Token" -> R.string.settings_text_0248
         "用户名称" -> R.string.settings_text_0249
-        "由模型根据上下文或底层默认策略自主决定思考语言" -> R.string.settings_text_0250
         "申请豁免电池优化" -> R.string.settings_text_0251
         "电池优化与后台保活" -> R.string.settings_text_0252
         "电池电量" -> R.string.settings_text_0253
@@ -423,7 +432,7 @@ private fun legacyStringResource(source: String): Int? = when (source) {
         "网关服务" -> R.string.settings_text_0269
         "网络下载" -> R.string.settings_text_0270
         "网络下载 GGUF" -> R.string.settings_text_0271
-        "群号: 000000000 · 点击一键加群 / 复制群号" -> R.string.settings_text_0272
+        "群号: 964382207 · 点击一键加群 / 复制群号" -> R.string.settings_text_0272
         "聊天界面中新生成的思考过程将默认展开呈现" -> R.string.settings_text_0273
         "职责简介" -> R.string.settings_text_0274
         "自动 (Auto)" -> R.string.settings_text_0275
@@ -488,6 +497,18 @@ private fun legacyStringResource(source: String): Int? = when (source) {
         "📋 JSON 导入" -> R.string.settings_text_0334
         "📝 表单模式" -> R.string.settings_text_0335
         "🧠 AI 自愈" -> R.string.settings_text_0336
+        "防止复杂任务中模型陷入死循环；达到轮次后进入下方的自动续跑检查点" -> R.string.settings_text_0337
+        "轮次用尽后自动续跑" -> R.string.settings_text_0338
+        "轮次用尽即停下等待用户确认；适合希望逐段把关的场景" -> R.string.settings_text_0339
+        "称呼与人设" -> R.string.settings_text_0342
+        "查看默认系统提示词" -> R.string.settings_text_0343
+        "模型自称" -> R.string.settings_text_0344
+        "天衍智枢" -> R.string.settings_text_0345
+        "对用户的称呼" -> R.string.settings_text_0346
+        "用户" -> R.string.settings_text_0347
+        "修改后立即对所有对话生效（留空恢复默认）；自定义提示词中的 {{char}} / {{user}} 宏变量也将使用这两个值。" -> R.string.settings_text_0348
+        "默认系统提示词 (core.md)" -> R.string.settings_text_0349
+        "（默认系统提示词加载失败）" -> R.string.settings_text_0350
         ", target.sizeBytes.toDouble() / (1024 * 1024))} MB 空间）。/workspace 工作区中的代码文件不会受到任何影响。" -> R.string.settings_long_001
         "1. 分析上述 PRoot 沙箱内的失败报错（如 dpkg 依赖破损、锁残留、网络下载受阻、commandLinks 软链接缺失或环境缺失）；" -> R.string.settings_long_002
         "2. 直接调用 base 工具执行针对性的修复命令（如清理 /var/lib/dpkg 锁、dpkg --configure -a、apt-get --fix-broken install、手动从备用源拉取或补齐软链接）；" -> R.string.settings_long_003
@@ -498,7 +519,6 @@ private fun legacyStringResource(source: String): Int? = when (source) {
         "天衍支持多套 Linux 系统并存。所有系统均自动挂载 /workspace 代码工程，/sdcard 外部存储按「存储挂载与共享」页的开关注入，各发行版软件生态与包管理器完全独立隔离。" -> R.string.settings_long_008
         "尚未配置任何模型档案，可前往【设置 → 模型档案管理】添加 Claude、OpenAI 或 DeepSeek 模型" -> R.string.settings_long_009
         "挂载仅作用于 Linux 沙箱内的进程（终端、智枢 Agent、构建任务与后台服务），不影响文件浏览器——文件浏览器始终直接访问宿主存储。挂载在会话启动时注入，修改后新建的终端 / 构建任务才会应用。完整读写还需在系统设置中授予「所有文件访问」权限。" -> R.string.settings_long_010
-        "强约束模型思考过程全程使用中文（解决 DeepSeek/Claude 思考总跑英文的问题）" -> R.string.settings_long_011
         "提示：小米/华为/OPPO 等厂商系统还需在应用详情中手动允许「自启动」与「后台运行」，" -> R.string.settings_long_012
         "服务尚未启动，请先在【网关服务】卡片中点击启动，启动成功后将在此展示可访问链接。Token 可提前生成，启动时自动注入。" -> R.string.settings_long_013
         "架构: aarch64 · chroot-less user-space virtualization" -> R.string.settings_long_014
@@ -549,6 +569,12 @@ private fun resolveLegacyString(source: String): String {
     }
     Regex("""成功探测到 (\d+) 个工具""").matchEntire(source)?.also {
         return stringResource(R.string.settings_dynamic_tool_count, it.groupValues[1])
+    }
+    Regex("""轮次用尽时先让模型收束并记录进度，再自动续跑，无需用户点击继续；总预算上限 (\d+) 轮""").matchEntire(source)?.also {
+        return stringResource(R.string.settings_text_0340, it.groupValues[1])
+    }
+    Regex("""(\d+) 次""").matchEntire(source)?.also {
+        return stringResource(R.string.settings_text_0341, it.groupValues[1])
     }
     return source
 }

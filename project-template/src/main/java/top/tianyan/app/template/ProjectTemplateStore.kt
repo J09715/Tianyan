@@ -3,7 +3,6 @@ package top.tianyan.app.template
 import top.tianyan.app.core.common.files.SafeFileTree
 import android.content.Context
 import android.graphics.BitmapFactory
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
@@ -11,8 +10,6 @@ import java.util.UUID
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.serialization.json.Json
 
 data class InstalledProjectTemplate(
@@ -28,9 +25,8 @@ data class InstalledProjectTemplate(
  * Repository for portable `.zip` project templates. Imported packages are data-only here:
  * lifecycle hooks are stored but never executed without an explicit trust decision by a caller.
  */
-@Singleton
-class ProjectTemplateStore @Inject constructor(
-    @ApplicationContext private val context: Context,
+class ProjectTemplateStore(
+    private val context: Context,
 ) {
     private val templatesDir = File(context.filesDir, "linux-runtime/templates")
     private val json = Json { ignoreUnknownKeys = false; prettyPrint = true }

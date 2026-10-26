@@ -1,0 +1,39 @@
+{
+  "id": "staged_dynamic_demo",
+  "name": "分阶段动态扩图",
+  "description": "第一批确认后打印诊断标记，再根据输出规划第二批；第二批单独确认。",
+  "defaultVariables": {
+    "FIRST_PROPOSAL": "{\"nodes\":[{\"id\":\"review.probe\",\"type\":\"BASH_COMMAND\",\"title\":\"打印诊断标记\",\"config\":{\"command\":\"printf 'probe complete\\\\n'\"},\"canvasX\":560,\"canvasY\":40},{\"id\":\"review.plan\",\"type\":\"AGENT_INFERENCE\",\"title\":\"依据诊断结果再规划\",\"config\":{\"prompt\":\"只返回 JSON，不调用工具。根据诊断输出 ${previous.output} 为后续打印步骤选择说明文字。只能生成一个 BASH_COMMAND 节点，id 为 review.next.finish，config.command 为 printf 打印诊断总结的命令；生成一条 id 为 finish_edge 的边，从 review.next 的 success 端口连到 review.next.finish。顶层只能包含 nodes 和 edges。\",\"resultSchema\":\"{\\\"properties\\\":{\\\"nodes\\\":{\\\"items\\\":{\\\"properties\\\":{\\\"config\\\":{\\\"additionalProperties\\\":true,\\\"type\\\":\\\"object\\\"},\\\"id\\\":{\\\"type\\\":\\\"string\\\"},\\\"title\\\":{\\\"type\\\":\\\"string\\\"},\\\"type\\\":{\\\"enum\\\":[\\\"BASH_COMMAND\\\",\\\"AGENT_INFERENCE\\\",\\\"HUMAN_APPROVAL\\\"],\\\"type\\\":\\\"string\\\"},\\\"canvasX\\\":{\\\"type\\\":\\\"number\\\"},\\\"canvasY\\\":{\\\"type\\\":\\\"number\\\"}},\\\"additionalProperties\\\":false,\\\"required\\\":[\\\"id\\\",\\\"type\\\",\\\"title\\\",\\\"config\\\"],\\\"type\\\":\\\"object\\\"},\\\"type\\\":\\\"array\\\"},\\\"edges\\\":{\\\"items\\\":{\\\"properties\\\":{\\\"fromPort\\\":{\\\"enum\\\":[\\\"success\\\"],\\\"type\\\":\\\"string\\\"},\\\"toNodeId\\\":{\\\"type\\\":\\\"string\\\"},\\\"id\\\":{\\\"type\\\":\\\"string\\\"},\\\"fromNodeId\\\":{\\\"type\\\":\\\"string\\\"}},\\\"additionalProperties\\\":false,\\\"required\\\":[\\\"id\\\",\\\"fromNodeId\\\",\\\"fromPort\\\",\\\"toNodeId\\\"],\\\"type\\\":\\\"object\\\"},\\\"type\\\":\\\"array\\\"}},\\\"additionalProperties\\\":false,\\\"required\\\":[\\\"nodes\\\",\\\"edges\\\"],\\\"type\\\":\\\"object\\\"}\"},\"canvasX\":820,\"canvasY\":40},{\"id\":\"review.next\",\"type\":\"HUMAN_APPROVAL\",\"title\":\"确认下一批步骤\",\"config\":{\"expansionResultNode\":\"review.plan\"},\"canvasX\":1080,\"canvasY\":40}],\"edges\":[{\"id\":\"probe_edge\",\"toNodeId\":\"review.probe\",\"fromNodeId\":\"review\",\"fromPort\":\"success\"},{\"id\":\"next_plan_edge\",\"toNodeId\":\"review.plan\",\"fromNodeId\":\"review.probe\",\"fromPort\":\"success\"},{\"id\":\"next_review_edge\",\"toNodeId\":\"review.next\",\"fromNodeId\":\"review.plan\",\"fromPort\":\"success\"}]}"
+  },
+  "nodes": [
+    {
+      "id": "plan",
+      "type": "AGENT_INFERENCE",
+      "title": "提出第一阶段步骤",
+      "config": {
+        "prompt": "只返回下面的 JSON 提案，不调用任何工具，保留其中的变量引用与节点 ID：${FIRST_PROPOSAL}",
+        "resultSchema": "{\"properties\":{\"nodes\":{\"items\":{\"properties\":{\"config\":{\"additionalProperties\":true,\"type\":\"object\"},\"id\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"type\":{\"enum\":[\"BASH_COMMAND\",\"AGENT_INFERENCE\",\"HUMAN_APPROVAL\"],\"type\":\"string\"},\"canvasX\":{\"type\":\"number\"},\"canvasY\":{\"type\":\"number\"}},\"additionalProperties\":false,\"required\":[\"id\",\"type\",\"title\",\"config\"],\"type\":\"object\"},\"type\":\"array\"},\"edges\":{\"items\":{\"properties\":{\"fromPort\":{\"enum\":[\"success\"],\"type\":\"string\"},\"toNodeId\":{\"type\":\"string\"},\"id\":{\"type\":\"string\"},\"fromNodeId\":{\"type\":\"string\"}},\"additionalProperties\":false,\"required\":[\"id\",\"fromNodeId\",\"fromPort\",\"toNodeId\"],\"type\":\"object\"},\"type\":\"array\"}},\"additionalProperties\":false,\"required\":[\"nodes\",\"edges\"],\"type\":\"object\"}"
+      },
+      "canvasX": 40,
+      "canvasY": 40
+    },
+    {
+      "id": "review",
+      "type": "HUMAN_APPROVAL",
+      "title": "确认第一批步骤",
+      "config": {
+        "expansionResultNode": "plan"
+      },
+      "canvasX": 300,
+      "canvasY": 40
+    }
+  ],
+  "edges": [
+    {
+      "id": "first_review_edge",
+      "toNodeId": "review",
+      "fromNodeId": "plan",
+      "fromPort": "success"
+    }
+  ]
+}

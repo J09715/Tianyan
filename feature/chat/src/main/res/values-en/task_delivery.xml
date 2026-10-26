@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="delivery_title">Task delivery record</string>
+    <string name="delivery_expand">Expand</string>
+    <string name="delivery_collapse">Collapse</string>
+    <string name="delivery_counts">%1$d tool records · %2$d artifact records</string>
+    <string name="delivery_unverified">Successful tool execution does not verify the goal. No independent behavior verification was recorded.</string>
+    <string name="delivery_show_all">Show all tool records</string>
+    <string name="delivery_hash_at_creation">Recorded SHA-256</string>
+    <string name="delivery_artifact_version">Fingerprints describe the recorded byte version, not proof of creation in this run or current existence. Recheck after changes.</string>
+    <string name="delivery_observed_at">Observed: %1$s</string>
+    <string name="delivery_kind_log">Tool log</string>
+    <string name="delivery_kind_apk">APK file</string>
+    <string name="delivery_kind_image">Image file</string>
+    <string name="delivery_kind_file">Workspace file</string>
+    <string name="delivery_origin_new">New file observed after command</string>
+    <string name="delivery_origin_changed">Changed contents observed after command</string>
+    <string name="delivery_origin_unchanged">Existing version, contents unchanged</string>
+    <string name="delivery_origin_observed">Observed after command; earlier version unavailable</string>
+    <string name="delivery_origin_download">Version observed after download</string>
+    <string name="delivery_origin_image_read">Image version read in this run</string>
+    <string name="delivery_tool_succeeded">Succeeded</string>
+    <string name="delivery_tool_failed">Failed</string>
+    <string name="delivery_tool_unknown">Unknown</string>
+    <string name="delivery_tool_waiting">Awaiting approval</string>
+    <string name="delivery_tool_unsettled">No result</string>
+    <string name="delivery_no_evidence">No tool evidence was recorded in this run.</string>
+    <string name="delivery_history_incomplete">The evidence window is incomplete; only retained records are included.</string>
+    <string name="delivery_unknown_outcome">Some calls have unknown outcomes; verify their actual effects.</string>
+    <string name="delivery_pending_result">Some calls are unfinished or awaiting approval.</string>
+    <string name="delivery_failed_tool">Some tool calls failed; consider subsequent results.</string>
+    <string name="delivery_incomplete_artifact">Some artifact records are incomplete: a log was truncated, or inventory or fingerprinting did not finish.</string>
+    <string name="delivery_invalid_artifact">Some artifact fingerprint records could not be read and were excluded from evidence.</string>
+</resources>

@@ -1,9 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="tianyan_theme" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">#FFFFFF</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/tianyan_splash</item>
+        <!-- Android 12+ (API 31+) 系统级属性 -->
+        <item name="android:windowSplashScreenBackground">@color/tianyan_splash_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/tianyan_splash_animated</item>
+        <item name="android:windowSplashScreenAnimationDuration">500</item>
+
+        <!-- AndroidX 兼容库属性 -->
+        <item name="windowSplashScreenBackground">@color/tianyan_splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/tianyan_splash_animated</item>
+        <item name="windowSplashScreenAnimationDuration">500</item>
         <item name="postSplashScreenTheme">@style/tianyan_post_splash_theme</item>
     </style>
-    <style name="tianyan_post_splash_theme" parent="Theme.AppCompat.DayNight.NoActionBar" />
+    <style name="tianyan_post_splash_theme" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarDividerColor">@android:color/transparent</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+        <item name="android:enforceStatusBarContrast">false</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+    </style>
 </resources>

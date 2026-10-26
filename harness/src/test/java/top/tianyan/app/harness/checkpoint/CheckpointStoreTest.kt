@@ -76,4 +76,21 @@ class CheckpointStoreTest {
         }
         assertEquals(CheckpointStore.MAX_KEPT, store.checkpoints("s").size)
     }
+
+    @Test
+    fun `failed disk restore is retried on next access`() {
+        var reads = 0
+        store.persistence = object : CheckpointStore.Persistence {
+            override fun write(sessionId: String, checkpoint: Checkpoint) = Unit
+            override fun delete(sessionId: String) = Unit
+            override fun readAll(sessionId: String): List<Checkpoint> {
+                reads++
+                if (reads == 1) error("temporary disk failure")
+                return listOf(Checkpoint(0, 1L, "saved", listOf(FileSnap("a.txt", "before"))))
+            }
+        }
+        assertTrue(store.checkpoints("s").isEmpty())
+        assertEquals(1, store.checkpoints("s").size)
+        assertEquals(2, reads)
+    }
 }

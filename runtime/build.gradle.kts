@@ -1,36 +1,19 @@
 plugins {
-    alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.serialization)
-    alias(libs.plugins.ksp)
-    alias(libs.plugins.hilt)
+    alias(libs.plugins.tianyan.android.library)
 }
 
 android {
     namespace = "top.tianyan.app.runtime"
-    resourcePrefix = "runtime_"
-    compileSdk = 37
-
-    defaultConfig {
-        minSdk = 29
-    }
+    defaultConfig { consumerProguardFiles("ssh-consumer-rules.pro") }
 
     buildFeatures {
         aidl = true
     }
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_25
-        targetCompatibility = JavaVersion.VERSION_25
-    }
-}
-
-kotlin {
-    compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_25)
-    }
 }
 
 dependencies {
+    implementation("com.github.mwiede:jsch:2.28.0")
+    implementation("org.bouncycastle:bcprov-jdk18on:1.84")
     api(project(":core:common"))
     api(project(":core:model"))
     implementation(project(":project-template"))
@@ -38,8 +21,7 @@ dependencies {
     implementation(project(":core:database"))
     implementation(project(":core:network"))
     implementation(libs.androidx.core.ktx)
-    implementation(libs.hilt.android)
-    ksp(libs.hilt.compiler)
+    implementation(libs.koin.core)
     implementation(libs.androidx.room.runtime)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.core)
@@ -47,9 +29,18 @@ dependencies {
     implementation("com.github.luben:zstd-jni:${libs.versions.zstd.get()}@aar")
     implementation(libs.xz)
     implementation(libs.okhttp)
-    implementation(libs.shizuku.api)
-    implementation(libs.shizuku.provider)
+    implementation(libs.bundles.shizuku)
     implementation(libs.hiddenapi.bypass)
     implementation(libs.kadb)
+    // Shower 虚拟屏客户端库（LGPL-3.0 来源）：虚拟屏 + shell 级输入注入 + H.264 视频回传
+    implementation(project(":showerclient"))
+    // Termux VT100 emulator + PTY JNI fork (GPL-3.0). Exported so feature/terminal can attach TerminalView.
+    api(project(":termux-terminal-emulator"))
     testImplementation(libs.junit)
+    // Bridge auth convergence tests need SettingsDataStore's SecretManager to build RuntimePreferences.
+    testImplementation(project(":core:security"))
+    testImplementation(libs.bundles.test.robolectric)
+    testImplementation(libs.okhttp.mockwebserver)
+    testImplementation("org.apache.sshd:sshd-core:2.16.0")
+    testImplementation("org.apache.sshd:sshd-sftp:2.16.0")
 }

@@ -131,4 +131,9 @@ data class StatsSnapshot(
     val modelRank: List<StatsRankItem>,
     val assistantRank: List<StatsRankItem>,
     val topicRank: List<StatsRankItem>,
+    /**
+     * 账本口径的权威用量（`harness_usage`），与估算口径的 [summary] 并行展示。
+     * 给默认值，既有构造点（测试与 @Preview）无需改动。
+     */
+    val ledger: StatsLedger = StatsLedger(),
 )

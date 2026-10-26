@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material Symbols Rounded, weight 300, optical size 24; Apache-2.0. Glyph: right_panel_open.
+     Source: google/material-design-icons@49d4db35df873165d6bd6ba09b063c7dafbac2f4; converted from SVG. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="960" android:viewportHeight="960"
+    android:autoMirrored="true">
+    <group android:translateX="-0" android:translateY="960">
+        <path android:fillColor="#FF000000" android:pathData="M461.92-379.92v-200.16q0-12.46-11.04-17.07-11.03-4.62-19.88 4.23l-87.61 87.61q-10.85 10.85-10.85 25.31 0 14.46 10.85 25.31L431-367.08q8.85 8.85 19.88 4.23 11.04-4.61 11.04-17.07ZM212.31-140q-29.92 0-51.12-21.19Q140-182.39 140-212.31v-535.38q0-29.92 21.19-51.12Q182.39-820 212.31-820h535.38q29.92 0 51.12 21.19Q820-777.61 820-747.69v535.38q0 29.92-21.19 51.12Q777.61-140 747.69-140H212.31ZM640-200h120v-547.69q0-4.62-3.85-8.46-3.84-3.85-8.46-3.85H640v560Zm-60 0v-560H212.31q-4.62 0-8.46 3.85-3.85 3.84-3.85 8.46v535.38q0 4.62 3.85 8.46 3.84 3.85 8.46 3.85H580Zm60 0h120-120Z" />
+    </group>
+</vector>

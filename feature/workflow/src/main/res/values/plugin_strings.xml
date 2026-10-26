@@ -1,0 +1,7 @@
+<resources>
+    <string name="workflow_review_configuration">我已核对本次动作的完整配置</string>
+    <string name="plugin_node_id">插件 ID</string>
+    <string name="plugin_node_extension">节点扩展 ID</string>
+    <string name="plugin_node_arguments">JSON 参数</string>
+    <string name="plugin_node_scope">插件节点每次执行前都需要确认。仅支持已编译装配的扩展；参数必须符合其 Schema。</string>
+</resources>

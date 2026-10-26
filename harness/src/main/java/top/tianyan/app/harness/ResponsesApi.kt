@@ -1,18 +1,16 @@
 package top.tianyan.app.harness
 
+import top.tianyan.app.harness.core.LlmApi
 import java.io.IOException
-import java.net.SocketTimeoutException
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
@@ -20,10 +18,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 
 /**
  * OpenAI Responses API（POST /responses）适配层：把内部统一的 OpenAI 风格 [ApiMessage] 列表
@@ -34,10 +29,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
  * - 历史消息用 `input` items 表示：`{role:user|assistant, content:[...]}`、
  *   `{type:"function_call", call_id, name, arguments}`、
  *   `{type:"function_call_output", call_id, output}`；
- * - 图片内容 part 类型为 `input_image`，文本为 `input_text` / `output_text`；
  * - 工具定义为扁平结构 `{type:"function", name, description, parameters}`；
- * - 最大输出 token 字段名为 `max_output_tokens`；
- * - 推理参数为顶层 `reasoning: {effort: low|medium|high}`；
  * - 流式事件为 response.* 事件族：`response.output_text.delta`（正文增量）、
  *   `response.reasoning_text.delta` / `response.reasoning_summary_text.delta`（推理增量）、
  *   `response.output_item.added` / `response.function_call_arguments.delta`（工具调用分片）、
@@ -46,39 +38,47 @@ import okhttp3.RequestBody.Companion.toRequestBody
 internal class ResponsesApi(
     private val okHttpClient: OkHttpClient,
     private val json: Json,
-) {
-    suspend fun chat(model: ModelConfig, messages: List<ApiMessage>): ChatResult =
+) : LlmApiAdapter {
+    override val api = LlmApi.OPENAI_RESPONSES
+    @OptIn(InternalCoroutinesApi::class)
+    override suspend fun chat(model: ModelConfig, messages: List<ApiMessage>): ChatResult =
         withContext(Dispatchers.IO) {
-            okHttpClient.newCall(buildRequest(model, messages, stream = false)).execute().use { response ->
-                val body = response.body.string()
-                if (!response.isSuccessful) {
-                    if (response.code == 429) {
-                        throw ProviderClient.rateLimitException(response.code, body, response.header("Retry-After"))
+            val call = okHttpClient.newCall(buildResponsesRequest(model, messages, stream = false))
+            // 与流式路径一致：取消时立即关闭 socket，避免"停止"后阻塞到读超时
+            val cancelHandle = coroutineContext[Job]?.invokeOnCompletion(onCancelling = true) { call.cancel() }
+            try {
+                call.execute().use { response ->
+                    val body = response.body.string()
+                    if (!response.isSuccessful) {
+                        if (response.code == 429) {
+                            throw ProviderClient.rateLimitException(response.code, body, response.header("Retry-After"))
+                        }
+                        if (response.code in 500..599) {
+                            throw ProviderClient.transientHttpException(response.code, body, response.header("Retry-After"))
+                        }
+                        throw httpError(response.code, body)
                     }
-                    throw IllegalStateException("Responses 请求失败 HTTP ${response.code}：${extractError(body)}")
+                    parseFinalResponse(body, model)
                 }
-                parseFinalResponse(body)
+            } finally {
+                cancelHandle?.dispose()
             }
         }
 
     @OptIn(InternalCoroutinesApi::class)
-    suspend fun chatStream(
+    override suspend fun chatStream(
         model: ModelConfig,
         messages: List<ApiMessage>,
-        onReasoning: (String) -> Unit = {},
-        onToolProgress: (ToolCallStreamProgress) -> Unit = {},
+        onReasoning: (String) -> Unit,
+        onToolProgress: (ToolCallStreamProgress) -> Unit,
         onDelta: (String) -> Unit,
     ): ChatResult = withContext(Dispatchers.IO) {
-        val call = okHttpClient.newCall(buildRequest(model, messages, stream = true))
+        val call = okHttpClient.newCall(buildResponsesRequest(model, messages, stream = true))
         // 与 ChatApi 一致：取消时立即关闭 socket，保证"停止"秒级生效
         val cancelHandle = coroutineContext[Job]?.invokeOnCompletion(onCancelling = true) { call.cancel() }
+        val firstEventTimeoutMs = firstEventTimeoutMs(messages, model)
         val firstEventState = AtomicInteger(ProviderClient.FIRST_EVENT_WAITING)
-        val firstEventWatchdog = launch {
-            delay(ProviderClient.FIRST_STREAM_EVENT_TIMEOUT_MS)
-            if (firstEventState.compareAndSet(ProviderClient.FIRST_EVENT_WAITING, ProviderClient.FIRST_EVENT_TIMED_OUT)) {
-                call.cancel()
-            }
-        }
+        val firstEventWatchdog = launch { awaitFirstEventTimeout(firstEventTimeoutMs, firstEventState) { call.cancel() } }
         try {
             call.execute().use { response ->
                 if (!response.isSuccessful) {
@@ -86,15 +86,25 @@ internal class ResponsesApi(
                     if (response.code == 429) {
                         throw ProviderClient.rateLimitException(response.code, rawBody, response.header("Retry-After"))
                     }
-                    throw IllegalStateException("Responses 请求失败 HTTP ${response.code}：${extractError(rawBody)}")
+                    if (response.code in 500..599) {
+                        throw ProviderClient.transientHttpException(response.code, rawBody, response.header("Retry-After"))
+                    }
+                    throw httpError(response.code, rawBody)
                 }
                 val source = response.body.source()
-                val demuxer = ThinkTagStreamDemuxer(onReasoning, onDelta)
+                // 单轮流式输出硬失败预算：正文/思考经 demuxer 计入，工具入参在累积点计入。
+                val budget = StreamBudget()
+                val demuxer = ThinkTagStreamDemuxer(onReasoning, onDelta, budget = budget)
+                val receivedText = StringBuilder()
                 // item_id -> 工具调用累积器（Responses 以 item_id 区分同一轮多个 function_call）
                 val toolCalls = mutableMapOf<String, ToolCallAccumulator>()
                 var usage = ChatUsage()
+                val completedItems = sortedMapOf<Int, JsonObject>()
+                var nativeOutput: JsonArray? = null
+                var completed = false
                 while (true) {
                     val line = source.readUtf8Line() ?: break
+                    observeStreamActivity(line, firstEventState, firstEventWatchdog)
                     if (!line.startsWith("data:")) continue
                     val data = line.removePrefix("data:").trim()
                     if (data.isEmpty()) continue
@@ -112,7 +122,7 @@ internal class ResponsesApi(
                         // 正文增量
                         "response.output_text.delta" -> {
                             event["delta"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotEmpty() }
-                                ?.let { demuxer.onContentChunk(it) }
+                                ?.let { receivedText.append(it); demuxer.onContentChunk(it) }
                         }
                         // 推理增量：detail 推理与 summary 摘要都作为推理内容回传
                         "response.reasoning_text.delta", "response.reasoning_summary_text.delta" -> {
@@ -137,6 +147,7 @@ internal class ResponsesApi(
                             val chunk = event["delta"]?.jsonPrimitive?.contentOrNull
                             if (!chunk.isNullOrEmpty()) {
                                 val accum = toolCalls.getOrPut(itemId) { ToolCallAccumulator() }
+                                budget.add(chunk)
                                 accum.arguments.append(chunk)
                                 accum.publishProgress(onToolProgress)
                             }
@@ -144,6 +155,7 @@ internal class ResponsesApi(
                         // 兼容部分网关不下发 arguments.delta、只在 item.done 里带完整参数的情况
                         "response.output_item.done" -> {
                             val item = event["item"] as? JsonObject ?: continue
+                            (event["output_index"]?.jsonPrimitive?.contentOrNull?.toIntOrNull())?.let { completedItems[it] = item }
                             if (item["type"]?.jsonPrimitive?.contentOrNull == "function_call") {
                                 val itemId = item["id"]?.jsonPrimitive?.contentOrNull.orEmpty()
                                 val accum = toolCalls.getOrPut(itemId) { ToolCallAccumulator() }
@@ -154,6 +166,7 @@ internal class ResponsesApi(
                                 if (accum.name.isBlank()) accum.name = item["name"]?.jsonPrimitive?.contentOrNull.orEmpty()
                                 val args = item["arguments"]?.jsonPrimitive?.contentOrNull
                                 if (args != null && accum.arguments.isEmpty() && args.isNotBlank()) {
+                                    budget.add(args)
                                     accum.arguments.append(args)
                                 }
                                 accum.publishProgress(onToolProgress)
@@ -161,6 +174,12 @@ internal class ResponsesApi(
                         }
                         // 结束：携带最终 usage（与完整 output）
                         "response.completed" -> {
+                            val finalResponse = event["response"] as? JsonObject
+                            completed = finalResponse?.get("status")?.jsonPrimitive?.contentOrNull in listOf(null, "completed")
+                            nativeOutput = finalResponse?.get("output") as? JsonArray
+                            if (nativeOutput == null && completedItems.isNotEmpty() &&
+                                completedItems.keys.toList() == completedItems.keys.indices.toList()
+                            ) nativeOutput = JsonArray(completedItems.values.toList())
                             ((event["response"] as? JsonObject)?.get("usage") as? JsonObject)
                                 ?.let { usage = parseUsage(it) }
                             break
@@ -168,18 +187,29 @@ internal class ResponsesApi(
                         "response.failed" -> {
                             val error = (event["response"] as? JsonObject)?.get("error") as? JsonObject
                             val message = error?.get("message")?.jsonPrimitive?.contentOrNull ?: "响应处理失败"
-                            throw IllegalStateException("Responses 请求失败：$message")
+                            throw providerStreamError(error?.toString() ?: message)
+                        }
+                        "response.incomplete" -> {
+                            val incompleteResponse = event["response"] as? JsonObject
+                            val reason = (incompleteResponse?.get("incomplete_details") as? JsonObject)
+                                ?.get("reason")?.jsonPrimitive?.contentOrNull
+                            requireOutputCompletion(reason, ProviderClient.estimateApiMessageTokens(messages), receivedText.length + demuxer.fullReasoning.length)
+                            throw IllegalStateException("Responses 响应未完成：${reason ?: "未知原因"}")
                         }
                         "error" -> {
-                            val message = event["message"]?.jsonPrimitive?.contentOrNull ?: "未知错误"
-                            val code = event["code"]?.jsonPrimitive?.contentOrNull
-                            throw IllegalStateException(
-                                "Responses 请求失败：$message" + (code?.let { " (code=$it)" } ?: ""),
-                            )
+                            throw providerStreamError(event.toString())
                         }
                         else -> Unit // response.created / in_progress / content_part.* 等无需处理
                     }
                 }
+                requireStreamCompletion(completed, "Responses")
+                val finalResult = nativeOutput?.takeIf { completed && it.isNotEmpty() }?.let {
+                    parseFinalResponse(buildJsonObject { put("output", it) }.toString(), model)
+                }
+                // Some gateways provide only completed output, or omit the last text delta.
+                val emittedText = receivedText.toString()
+                finalResult?.content?.takeIf { it.startsWith(emittedText) && it.length > emittedText.length }
+                    ?.let { demuxer.onContentChunk(it.substring(emittedText.length)) }
                 demuxer.flush()
                 toolCalls.values.forEach { it.publishProgress(onToolProgress, force = true) }
                 // 无参数函数可能不下发 arguments 分片，空串兜底为 "{}"
@@ -188,197 +218,22 @@ internal class ResponsesApi(
                 }
                 ChatResult(
                     content = demuxer.fullText.toString().ifEmpty { null },
-                    toolCalls = calls,
-                    reasoningContent = demuxer.fullReasoning.toString().ifEmpty { null },
+                    toolCalls = finalResult?.toolCalls ?: calls,
+                    reasoningContent = demuxer.fullReasoning.toString().ifEmpty { finalResult?.reasoningContent },
                     usage = usage,
+                    responsesTurn = if (completed) ResponsesTurn.capture(model, nativeOutput) else null,
                 )
             }
         } catch (io: IOException) {
-            if (firstEventState.get() == ProviderClient.FIRST_EVENT_TIMED_OUT) {
-                throw SocketTimeoutException(
-                    "等待模型首个响应超过 ${ProviderClient.FIRST_STREAM_EVENT_TIMEOUT_MS / 1000}s",
-                ).apply { initCause(io) }
-            }
-            throw io
+            throw streamFailure(io, firstEventState.get(), firstEventTimeoutMs, okHttpClient.readTimeoutMillis.toLong())
         } finally {
             firstEventWatchdog.cancel()
             cancelHandle?.dispose()
         }
     }
 
-    private fun buildRequest(model: ModelConfig, messages: List<ApiMessage>, stream: Boolean): Request {
-        val systemPrompt = StringBuilder()
-        val inputItems = buildJsonArray {
-            var index = 0
-            while (index < messages.size) {
-                val message = messages[index]
-                when (message.role) {
-                    "system" -> {
-                        // 系统提示词聚合到顶层 instructions
-                        if (!message.content.isNullOrBlank()) {
-                            if (systemPrompt.isNotEmpty()) systemPrompt.append("\n\n")
-                            systemPrompt.append(message.content)
-                        }
-                        index++
-                    }
-                    "user" -> {
-                        add(
-                            buildJsonObject {
-                                put("role", "user")
-                                put(
-                                    "content",
-                                    buildJsonArray {
-                                        if (!message.content.isNullOrBlank()) {
-                                            add(
-                                                buildJsonObject {
-                                                    put("type", "input_text")
-                                                    put("text", message.content)
-                                                },
-                                            )
-                                        }
-                                        message.imageUrls.forEach { url ->
-                                            add(
-                                                buildJsonObject {
-                                                    put("type", "input_image")
-                                                    put("image_url", url)
-                                                },
-                                            )
-                                        }
-                                        if (message.content.isNullOrBlank() && message.imageUrls.isEmpty()) {
-                                            // 空 user 消息补一个空文本，避免 content 空数组被 400
-                                            add(
-                                                buildJsonObject {
-                                                    put("type", "input_text")
-                                                    put("text", "")
-                                                },
-                                            )
-                                        }
-                                    },
-                                )
-                            },
-                        )
-                        index++
-                    }
-                    "assistant" -> {
-                        add(
-                            buildJsonObject {
-                                put("role", "assistant")
-                                put(
-                                    "content",
-                                    buildJsonArray {
-                                        if (!message.content.isNullOrBlank()) {
-                                            add(
-                                                buildJsonObject {
-                                                    put("type", "output_text")
-                                                    put("text", message.content)
-                                                },
-                                            )
-                                        }
-                                    },
-                                )
-                            },
-                        )
-                        // 推理内容回传为 reasoning item（可选；保持多轮上下文一致）
-                        if (!message.reasoning_content.isNullOrBlank()) {
-                            add(
-                                buildJsonObject {
-                                    put("type", "reasoning")
-                                    put(
-                                        "summary",
-                                        buildJsonArray {
-                                            add(
-                                                buildJsonObject {
-                                                    put("type", "summary_text")
-                                                    put("text", message.reasoning_content)
-                                                },
-                                            )
-                                        },
-                                    )
-                                },
-                            )
-                        }
-                        // 历史工具调用：以 function_call item 逐条回传
-                        message.tool_calls.orEmpty().forEach { call ->
-                            add(
-                                buildJsonObject {
-                                    put("type", "function_call")
-                                    put("call_id", call.id)
-                                    put("name", call.function.name)
-                                    put("arguments", call.function.arguments.ifBlank { "{}" })
-                                },
-                            )
-                        }
-                        index++
-                    }
-                    "tool" -> {
-                        add(
-                            buildJsonObject {
-                                put("type", "function_call_output")
-                                put("call_id", message.tool_call_id.orEmpty())
-                                put("output", message.content.orEmpty())
-                            },
-                        )
-                        index++
-                    }
-                    else -> index++
-                }
-            }
-        }
-
-        val dynamicTools = if (model.pureChatMode) emptyList() else ProviderClient.buildDynamicTools(model.dynamicMcpTools)
-        // JSON_TEXT 模式：工具定义写进 instructions，模型用文本输出工具调用
-        if (!model.pureChatMode && model.toolCallMode == ToolCallMode.JSON_TEXT && dynamicTools.isNotEmpty()) {
-            systemPrompt.append("\n\n## 可用工具 JSON 定义（必须严格按此 name 与参数输出）\n")
-                .append(ProviderClient.buildToolsTextDescription(dynamicTools))
-        }
-
-        val requestBody = buildJsonObject {
-            put("model", model.model)
-            put("stream", stream)
-            model.temperature?.let { put("temperature", it) }
-            model.topP?.let { put("top_p", it) }
-            // Responses API 的输出上限字段名与 chat/completions 不同
-            model.maxTokens?.let { put("max_output_tokens", it) }
-            // 推理开关/强度：Responses 专用 reasoning.effort 格式
-            ReasoningAdapter.responsesFields(model).forEach { (key, value) -> put(key, value) }
-            if (systemPrompt.isNotBlank()) put("instructions", systemPrompt.toString())
-            put("input", inputItems)
-            // 仅 NATIVE 模式注入标准 tools；纯净模式与 JSON_TEXT / DISABLED 均不注入
-            if (!model.pureChatMode && model.toolCallMode == ToolCallMode.NATIVE && dynamicTools.isNotEmpty()) {
-                put(
-                    "tools",
-                    buildJsonArray {
-                        dynamicTools.forEach { definition ->
-                            add(
-                                buildJsonObject {
-                                    put("type", "function")
-                                    put("name", definition.function.name)
-                                    put("description", definition.function.description)
-                                    put("parameters", definition.function.parameters)
-                                },
-                            )
-                        }
-                    },
-                )
-                put("tool_choice", "auto")
-            }
-        }
-
-        return Request.Builder()
-            .url("${model.baseUrl.trimEnd('/')}/responses")
-            .header("Content-Type", "application/json")
-            .apply {
-                model.apiKey?.let { header("Authorization", "Bearer $it") }
-                ProviderClient.parseCustomHeaders(model.customHeaders).forEach { (name, value) ->
-                    header(name, value)
-                }
-            }
-            .post(requestBody.toString().encodeToByteArray().toRequestBody(JSON_MEDIA_TYPE))
-            .build()
-    }
-
     /** 非流式响应：解析 output 数组（message / function_call / reasoning）与顶层 usage。 */
-    private fun parseFinalResponse(body: String): ChatResult {
+    private fun parseFinalResponse(body: String, model: ModelConfig): ChatResult {
         if (!ProviderClient.looksLikeJsonResponse(body)) {
             throw IllegalStateException(ProviderClient.formatHttpErrorMessage(200, body))
         }
@@ -419,6 +274,8 @@ internal class ResponsesApi(
             toolCalls = calls,
             reasoningContent = reasoning.toString().ifEmpty { null },
             usage = (root["usage"] as? JsonObject)?.let { parseUsage(it) } ?: ChatUsage(),
+            responsesTurn = if (root["status"]?.jsonPrimitive?.contentOrNull in listOf(null, "completed"))
+                ResponsesTurn.capture(model, root["output"] as? JsonArray) else null,
         )
     }
 
@@ -432,6 +289,17 @@ internal class ResponsesApi(
             ?.get("cached_tokens")?.jsonPrimitive?.longOrNull ?: 0,
     )
 
+    /** 非 429/5xx 的 HTTP 错误：413 与上下文超限文案走可自愈类型，供引擎紧急压缩后重试。 */
+    private fun httpError(code: Int, body: String): Exception {
+        val detail = extractError(body)
+        val message = "Responses 请求失败 HTTP $code：$detail"
+        return when (ProviderClient.contextOverflowException(code, body)) {
+            is LlmContextOverflowException -> LlmContextOverflowException(message)
+            is LlmInvalidOutputTokensException -> LlmInvalidOutputTokensException(message)
+            else -> IllegalStateException(message)
+        }
+    }
+
     private fun extractError(body: String): String {
         val message = runCatching {
             val obj = json.parseToJsonElement(body) as? JsonObject
@@ -442,7 +310,4 @@ internal class ResponsesApi(
         return message ?: body.take(512)
     }
 
-    private companion object {
-        val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
-    }
 }

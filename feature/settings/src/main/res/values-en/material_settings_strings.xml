@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_material_features_data">Features and data</string>
+    <string name="settings_material_plugins_title">Plugins</string>
+    <string name="settings_material_plugins_summary">Install, update and manage extensions</string>
+    <string name="settings_material_backup_summary">Export or restore chats, models and preferences</string>
+    <string name="settings_material_features_intro">Create, collaborate and automate</string>
+    <string name="settings_material_creation">Create and collaborate</string>
+    <string name="settings_material_automation">Daily automation</string>
+    <string name="settings_material_connection">Connect your devices</string>
+</resources>

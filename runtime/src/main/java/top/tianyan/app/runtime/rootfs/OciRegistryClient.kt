@@ -5,13 +5,9 @@ import top.tianyan.app.runtime.DistributionSpec
 import top.tianyan.app.runtime.DownloadProgress
 import top.tianyan.app.runtime.RegistryRoute
 import java.io.File
-import java.io.FileOutputStream
-import java.io.InputStream
 import java.net.URLEncoder
-import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
-import javax.inject.Inject
-import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -27,11 +23,13 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
-@Singleton
-class OciRegistryClient @Inject constructor(
-    private val http: OkHttpClient,
+class OciRegistryClient(
+    http: OkHttpClient,
     private val logger: AppLogger,
 ) {
+    private val http = http.forRootfsDownloads()
+    private val layerStore = OciLayerStore(this.http)
+    private val manifests = OciManifestStore()
     private val json = Json { ignoreUnknownKeys = true }
 
     data class ImageInfo(val version: String, val digest: String)
@@ -40,6 +38,7 @@ class OciRegistryClient @Inject constructor(
         distribution: DistributionSpec,
         route: RegistryRoute,
     ): ImageInfo = withContext(Dispatchers.IO) {
+        OciImageReference.parse(distribution.imageReference)
         val endpoints = when (route) {
             RegistryRoute.OFFICIAL -> listOf(Endpoint.dockerHub())
             RegistryRoute.CHINA_ACCELERATED -> listOf(Endpoint.daoCloud())
@@ -49,6 +48,8 @@ class OciRegistryClient @Inject constructor(
         for (endpoint in endpoints) {
             try {
                 return@withContext resolveFrom(endpoint, distribution)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (failure: Throwable) {
                 lastFailure = failure
                 logger.w("OCI manifest check on ${endpoint.name} failed", failure)
@@ -65,6 +66,7 @@ class OciRegistryClient @Inject constructor(
         resetDestination: suspend () -> Unit,
         applyLayer: suspend (File, String) -> Unit,
     ): ImageInfo = withContext(Dispatchers.IO) {
+        OciImageReference.parse(distribution.imageReference)
         val endpoints = when (route) {
             RegistryRoute.OFFICIAL -> listOf(Endpoint.dockerHub())
             RegistryRoute.CHINA_ACCELERATED -> listOf(Endpoint.daoCloud())
@@ -91,6 +93,8 @@ class OciRegistryClient @Inject constructor(
                     applyLayer,
                     metadataClient,
                 )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (failure: Throwable) {
                 lastFailure = failure
                 logger.w("OCI registry route ${endpoint.name} failed", failure)
@@ -108,13 +112,13 @@ class OciRegistryClient @Inject constructor(
         metadataClient: OkHttpClient,
     ): ImageInfo {
         cacheDir.mkdirs()
-        val parsed = ImageReference.parse(distribution.imageReference)
+        val parsed = OciImageReference.parse(distribution.imageReference)
         val repo = endpoint.rewriteRepo(parsed.repo)
-        val token = endpoint.token(repo, metadataClient, json)
-        var response = getManifest(
-            "${endpoint.registryBase}/v2/$repo/manifests/${parsed.tag}", token,
+        val token by lazy { endpoint.token(repo, metadataClient, json) }
+        var response = manifests.get(
+            "${endpoint.registryBase}/v2/$repo/manifests/${parsed.manifestRef}", { token },
             ACCEPT_MANIFESTS,
-            metadataClient,
+            metadataClient, parsed.digest, cacheDir,
         )
         var manifest = response.body
         var digest = response.digest
@@ -125,10 +129,10 @@ class OciRegistryClient @Inject constructor(
                     platform["architecture"]?.jsonPrimitive?.content == "arm64"
             }?.jsonObject ?: error("镜像 ${distribution.imageReference} 不提供 linux/arm64")
             digest = target.getValue("digest").jsonPrimitive.content
-            response = getManifest(
-                "${endpoint.registryBase}/v2/$repo/manifests/$digest", token,
+            response = manifests.get(
+                "${endpoint.registryBase}/v2/$repo/manifests/$digest", { token },
                 ACCEPT_MANIFESTS,
-                metadataClient,
+                metadataClient, digest, cacheDir,
             )
             manifest = response.body
         }
@@ -147,7 +151,7 @@ class OciRegistryClient @Inject constructor(
                         val layer = element.jsonObject
                         val layerDigest = layer.getValue("digest").jsonPrimitive.content
                         val mediaType = layer["mediaType"]?.jsonPrimitive?.content.orEmpty()
-                        val blob = downloadBlob(endpoint, repo, layerDigest, token, cacheDir) { current ->
+                        val blob = layerStore.download("${endpoint.registryBase}/v2/$repo/blobs/$layerDigest", layerDigest, { token }, cacheDir) { current ->
                             downloaded[index] = current
                             onProgress(DownloadProgress(downloaded.sum(), total.takeIf { it > 0 }))
                         }
@@ -163,17 +167,17 @@ class OciRegistryClient @Inject constructor(
             onProgress(DownloadProgress(total, total.takeIf { it > 0 }))
             logger.i("Applied OCI layer ${index + 1}/${layers.size}: ${blob.file.name.takeLast(16)}")
         }
-        return ImageInfo("oci-5.8.0-${distribution.id}-${parsed.tag}", digest ?: error("OCI manifest 未返回 digest"))
+        return ImageInfo("oci-5.10.0-${distribution.id}-${parsed.manifestRef}", digest)
     }
 
     private fun resolveFrom(endpoint: Endpoint, distribution: DistributionSpec): ImageInfo {
-        val parsed = ImageReference.parse(distribution.imageReference)
+        val parsed = OciImageReference.parse(distribution.imageReference)
         val repo = endpoint.rewriteRepo(parsed.repo)
         val token = endpoint.token(repo, http, json)
-        var response = getManifest(
-            "${endpoint.registryBase}/v2/$repo/manifests/${parsed.tag}", token,
+        var response = manifests.get(
+            "${endpoint.registryBase}/v2/$repo/manifests/${parsed.manifestRef}", { token },
             ACCEPT_MANIFESTS,
-            http,
+            http, parsed.digest,
         )
         var digest = response.digest
         if (response.body["manifests"] != null) {
@@ -183,155 +187,14 @@ class OciRegistryClient @Inject constructor(
                     platform["architecture"]?.jsonPrimitive?.content == "arm64"
             }?.jsonObject ?: error("镜像 ${distribution.imageReference} 不提供 linux/arm64")
             digest = target.getValue("digest").jsonPrimitive.content
-            response = getManifest(
-                "${endpoint.registryBase}/v2/$repo/manifests/$digest", token,
+            response = manifests.get(
+                "${endpoint.registryBase}/v2/$repo/manifests/$digest", { token },
                 ACCEPT_MANIFESTS,
-                http,
+                http, digest,
             )
         }
         check(response.body["layers"]?.jsonArray != null) { "OCI manifest 没有文件系统层" }
-        return ImageInfo("oci-5.8.0-${distribution.id}-${parsed.tag}", digest ?: error("OCI manifest 未返回 digest"))
-    }
-
-    private fun getJson(url: String, token: String, accept: String, client: OkHttpClient): JsonObject {
-        val request = Request.Builder().url(url).header("Accept", accept).header("User-Agent", USER_AGENT)
-            .apply { if (token.isNotBlank()) header("Authorization", "Bearer $token") }.build()
-        client.newCall(request).execute().use { response ->
-            check(response.isSuccessful) { "Registry 请求失败 HTTP ${response.code}: $url" }
-            return json.parseToJsonElement(response.body.string()).jsonObject
-        }
-    }
-
-    private data class ManifestResponse(val body: JsonObject, val digest: String?)
-
-    private fun getManifest(url: String, token: String, accept: String, client: OkHttpClient): ManifestResponse {
-        val request = Request.Builder().url(url).header("Accept", accept).header("User-Agent", USER_AGENT)
-            .apply { if (token.isNotBlank()) header("Authorization", "Bearer $token") }.build()
-        client.newCall(request).execute().use { response ->
-            check(response.isSuccessful) { "Registry 请求失败 HTTP ${response.code}: $url" }
-            val raw = response.body.bytes()
-            val headerDigest = response.header("Docker-Content-Digest")
-            val digest = headerDigest ?: "sha256:" + MessageDigest.getInstance("SHA-256")
-                .digest(raw)
-                .joinToString("") { "%02x".format(it) }
-            return ManifestResponse(
-                body = json.parseToJsonElement(raw.toString(Charsets.UTF_8)).jsonObject,
-                digest = digest,
-            )
-        }
-    }
-
-    /**
-     * 下载单个 OCI layer（带断点续传）：
-     * - 已校验完成的缓存直接命中（`sha256-<digest>.layer`）；
-     * - 中断残留的 `.part` 通过 HTTP `Range: bytes=<已有大小>-` 续传，不必整层重下；
-     * - 摘要校验失败或服务器返回 416 时清空重试一次完整下载。
-     */
-    private suspend fun downloadBlob(
-        endpoint: Endpoint,
-        repo: String,
-        digest: String,
-        token: String,
-        cacheDir: File,
-        progress: suspend (Long) -> Unit,
-    ): File {
-        val expected = validateDigest(digest)
-        val target = File(cacheDir, "sha256-$expected.layer")
-        if (target.isFile && sha256(target) == expected) return target
-        val partial = File(cacheDir, "sha256-$expected.part")
-        var attempt = 0
-        while (true) {
-            attempt++
-            val existing = if (partial.isFile) partial.length() else 0L
-            val md = MessageDigest.getInstance("SHA-256")
-            if (existing > 0) {
-                // 断点续传：先累计本地已有部分的摘要，再续传剩余字节
-                partial.inputStream().use { input -> hashInto(md, input) }
-            }
-            val request = Request.Builder().url("${endpoint.registryBase}/v2/$repo/blobs/$digest")
-                .header("User-Agent", USER_AGENT)
-                .apply { if (token.isNotBlank()) header("Authorization", "Bearer $token") }
-                .apply { if (existing > 0) header("Range", "bytes=$existing-") }
-                .build()
-            var append = false
-            var count = existing
-            var actual: String? = null
-            http.newCall(request).execute().use { response ->
-                when (response.code) {
-                    206 -> append = true
-                    200 -> {
-                        // 服务器忽略 Range：从头重写
-                        if (existing > 0) {
-                            partial.delete()
-                            count = 0
-                            md.reset()
-                        }
-                    }
-                    416 -> {
-                        // 本地已完整：直接校验后提交
-                        actual = sha256(partial)
-                    }
-                    else -> check(false) { "下载 OCI layer 失败 HTTP ${response.code}" }
-                }
-                if (actual == null) {
-                    response.body.byteStream().use { input ->
-                        FileOutputStream(partial, append).use { output ->
-                            val buffer = ByteArray(64 * 1024)
-                            while (true) {
-                                val read = input.read(buffer)
-                                if (read < 0) break
-                                output.write(buffer, 0, read)
-                                md.update(buffer, 0, read)
-                                count += read
-                                progress(count)
-                            }
-                        }
-                    }
-                    actual = md.digest().joinToString("") { "%02x".format(it) }
-                }
-            }
-            if (actual == expected) {
-                check(partial.renameTo(target)) { "无法提交 OCI layer 缓存" }
-                return target
-            }
-            // 摘要不符：清空后重试（上限内）
-            partial.delete()
-            if (attempt >= MAX_BLOB_DOWNLOAD_ATTEMPTS) {
-                check(false) { "OCI layer 摘要校验失败：期望 $expected（已重试 $MAX_BLOB_DOWNLOAD_ATTEMPTS 次）" }
-            }
-        }
-    }
-
-    private fun validateDigest(value: String): String {
-        val match = Regex("^sha256:([0-9a-fA-F]{64})$").matchEntire(value)
-            ?: throw SecurityException("非法或不支持的 OCI digest：$value")
-        return match.groupValues[1].lowercase()
-    }
-
-    private fun sha256(file: File): String {
-        val md = MessageDigest.getInstance("SHA-256")
-        file.inputStream().use { input -> hashInto(md, input) }
-        return md.digest().joinToString("") { "%02x".format(it) }
-    }
-
-    private fun hashInto(md: MessageDigest, input: InputStream) {
-        val buffer = ByteArray(64 * 1024)
-        while (true) {
-            val n = input.read(buffer)
-            if (n < 0) break
-            md.update(buffer, 0, n)
-        }
-    }
-
-    private data class ImageReference(val repo: String, val tag: String) {
-        companion object {
-            fun parse(value: String): ImageReference {
-                val last = value.substringAfterLast('/')
-                val tag = if (':' in last) last.substringAfterLast(':') else "latest"
-                val name = if (':' in last) value.substringBeforeLast(':') else value
-                return ImageReference(if ('/' in name) name else "library/$name", tag)
-            }
-        }
+        return ImageInfo("oci-5.10.0-${distribution.id}-${parsed.manifestRef}", digest)
     }
 
     private data class Endpoint(
@@ -377,12 +240,10 @@ class OciRegistryClient @Inject constructor(
     }
 
     private companion object {
-        const val USER_AGENT = "Tianyan/proot-distro-5.8.0"
+        const val USER_AGENT = "Tianyan/proot-distro-5.10.0"
         const val ACCEPT_MANIFESTS =
             "application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json"
         /** OCI layer 并行下载并发数（移动网络单连接限速时多路并发可显著提速）。 */
         const val MAX_PARALLEL_LAYER_DOWNLOADS = 3
-        /** 单个 layer 摘要校验失败后的完整重试次数上限。 */
-        const val MAX_BLOB_DOWNLOAD_ATTEMPTS = 2
     }
 }

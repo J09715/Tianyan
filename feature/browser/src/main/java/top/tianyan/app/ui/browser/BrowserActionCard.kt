@@ -16,7 +16,6 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import top.tianyan.app.core.model.ToolImageRef
 import top.tianyan.app.ui.components.RuntimeCard
-import top.tianyan.app.ui.theme.Spacing
 
 /**
  * 在 chat 中展示某次 mcp__browser__* 调用的产物（最常见：截图）。
@@ -33,8 +32,8 @@ fun BrowserActionCard(
     val model = remember(imageRef) {
         imageRef?.let { ImageRequest.Builder(ctx).data(it.uri).build() }
     }
-    RuntimeCard(modifier = modifier.padding(vertical = Spacing.xs)) {
-        Column(modifier = Modifier.fillMaxWidth().padding(Spacing.sm)) {
+    RuntimeCard(modifier = modifier.padding(vertical = 4.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
             Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(subtitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (model != null) {

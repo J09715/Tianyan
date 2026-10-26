@@ -9,6 +9,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.put
+import java.util.UUID
 import top.tianyan.app.core.browser.BrowserCapability
 import top.tianyan.app.core.browser.BrowserPreferences
 import top.tianyan.app.core.browser.BrowserRisk
@@ -95,7 +96,7 @@ class BrowserMcpTools(
             InvokeResult.okMessage(engine.eventBus.titleOf(t.tabId) ?: t.title)
         }
             "browser.page_source" -> {
-                val max = args["maxBytes"]?.asInt() ?: 60_000
+                val max = (args["maxBytes"]?.asInt() ?: 60_000).coerceIn(1_000, 256_000)
                 InvokeResult.okMessage(engine.pageSource(tokenOf(args, engine), max))
             }
             "browser.evaluate" -> {
@@ -231,25 +232,25 @@ class BrowserMcpTools(
     }
 
     private suspend fun handleSnapshot(engine: BrowserEngine, args: JsonObject): InvokeResult {
-        val max = args["maxElements"]?.asInt() ?: 200
+        val max = (args["maxElements"]?.asInt() ?: 200).coerceIn(10, 300)
         val snap = engine.snapshot(tokenOf(args, engine), max)
-        val refsArray = JsonArray(snap.refs.entries.map { (ref, r) ->
+        val refsArray = JsonArray(snap.refs.entries.take(max).map { (ref, r) ->
             buildJsonObject {
                 put("ref", JsonPrimitive(ref))
                 put("tag", JsonPrimitive(r.tag))
-                r.type?.let { put("type", JsonPrimitive(it)) }
-                r.role?.let { put("role", JsonPrimitive(it)) }
-                r.name?.let { put("name", JsonPrimitive(it)) }
-                r.text?.let { put("text", JsonPrimitive(it)) }
-                r.placeholder?.let { put("placeholder", JsonPrimitive(it)) }
-                r.ariaLabel?.let { put("ariaLabel", JsonPrimitive(it)) }
+                r.type?.take(50)?.let { put("type", JsonPrimitive(it)) }
+                r.role?.take(50)?.let { put("role", JsonPrimitive(it)) }
+                r.name?.take(200)?.let { put("name", JsonPrimitive(it)) }
+                r.text?.take(500)?.let { put("text", JsonPrimitive(it)) }
+                r.placeholder?.take(200)?.let { put("placeholder", JsonPrimitive(it)) }
+                r.ariaLabel?.take(200)?.let { put("ariaLabel", JsonPrimitive(it)) }
             }
         })
         return InvokeResult.okMessage(buildJsonObject {
             put("ok", JsonPrimitive(true))
             put("tab", JsonPrimitive(snap.tabId))
-            put("url", JsonPrimitive(snap.url))
-            put("title", JsonPrimitive(snap.title))
+            put("url", JsonPrimitive(snap.url.take(1024)))
+            put("title", JsonPrimitive(snap.title.take(500)))
             put("domFingerprint", JsonPrimitive(snap.domFingerprint))
             put("interactiveCount", JsonPrimitive(snap.interactiveRefs.size))
             put("refs", refsArray)
@@ -325,7 +326,7 @@ class BrowserMcpTools(
         }
         if (actions.isEmpty()) return InvokeResult.error("actions 不能为空")
         val rule = HookRule(
-            id = "hr_" + java.util.UUID.randomUUID().toString().substring(0, 8),
+            id = "hr_" + UUID.randomUUID().toString().substring(0, 8),
             type = type,
             target = target,
             name = args["name"]?.asString() ?: "",

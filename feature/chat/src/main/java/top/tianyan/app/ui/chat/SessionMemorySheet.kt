@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.Button
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -20,7 +20,8 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import top.tianyan.app.ui.components.RuntimeButton as Button
+import top.tianyan.app.ui.components.RuntimeTextButton as TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,16 +35,16 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import top.tianyan.app.core.database.AgentMemoryEntity
 import top.tianyan.app.core.database.AgentScratchpadEntity
 import top.tianyan.app.feature.chat.R
 import top.tianyan.app.ui.components.RuntimeAlertDialog
-import top.tianyan.app.ui.theme.Radius
-import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
+import top.tianyan.app.ui.components.TianyanMemoryEmptyIllustration
 
 /**
  * 会话工作记忆抽屉：长期记忆（memory 工具写入的 AgentMemoryEntity，全量观察流）
@@ -70,20 +71,20 @@ internal fun SessionMemorySheet(
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.lg, vertical = Spacing.xs),
-            verticalArrangement = Arrangement.spacedBy(Spacing.md),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 RuntimeIcon(RuntimeIconName.Brain, Modifier.size(20.dp), MaterialTheme.colorScheme.primary)
                 Text(
                     stringResource(R.string.chat_memory_sheet_title),
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.titleMedium,
                 )
             }
 
             LazyColumn(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 // —— 长期记忆 ——
                 item(key = "header_memories") {
@@ -94,7 +95,7 @@ internal fun SessionMemorySheet(
                 }
                 if (memories.isEmpty()) {
                     item(key = "memories_empty") {
-                        EmptyHint(stringResource(R.string.chat_memory_empty))
+                        EmptyHint(stringResource(R.string.chat_memory_empty), illustration = true)
                     }
                 } else {
                     items(memories.size, key = { memories[it].id }) { index ->
@@ -116,7 +117,7 @@ internal fun SessionMemorySheet(
                 item(key = "header_scratchpads") {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         SectionHeader(
@@ -175,7 +176,7 @@ internal fun SessionMemorySheet(
                     text = stringResource(
                         if (isClear) R.string.chat_clear_scratchpad_title else R.string.chat_delete_memory_title,
                     ),
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.titleMedium,
                 )
             },
             text = {
@@ -224,25 +225,34 @@ private fun SectionHeader(
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         modifier = modifier.fillMaxWidth(),
     ) {
         RuntimeIcon(icon, Modifier.size(15.dp), MaterialTheme.colorScheme.primary)
         Text(
             title,
-            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+            style = MaterialTheme.typography.titleSmall,
         )
     }
 }
 
 @Composable
-private fun EmptyHint(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.xs),
-    )
+private fun EmptyHint(text: String, illustration: Boolean = false) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        if (illustration) {
+            TianyanMemoryEmptyIllustration()
+        }
+        Text(
+            text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+    }
 }
 
 @Composable
@@ -254,22 +264,22 @@ private fun MemoryRow(
     onDelete: () -> Unit,
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth().clip(Radius.smShape),
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = Radius.smShape,
+        shape = RoundedCornerShape(10.dp),
     ) {
         Row(
             verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md, vertical = Spacing.sm),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
         ) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (scope != null) {
-                        Surface(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), shape = Radius.xsShape) {
+                        Surface(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), shape = RoundedCornerShape(4.dp)) {
                             Text(
                                 scope,
-                                modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.xs),
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary,
                             )

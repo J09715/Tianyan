@@ -114,6 +114,7 @@ object WorkflowConditionEvaluator {
     private fun resolveValue(token: String, context: WorkflowRuntimeContext, upstream: NodeExecutionOutput?): String {
         val key = token.trim().removePrefix("\${").removeSuffix("}").trim()
         return when {
+            context.resultReference(key, upstream) != null -> context.resultReference(key, upstream).orEmpty()
             key.equals("exitCode", ignoreCase = true) -> (upstream?.exitCode ?: 0).toString()
             key.equals("output", ignoreCase = true) || key == "previous.output" ->
                 upstream?.textOutput ?: context.previousOutput()
@@ -128,6 +129,7 @@ object WorkflowConditionEvaluator {
         VARIABLE.replace(template) { match ->
             val key = match.groupValues[1]
             when {
+                context.resultReference(key) != null -> context.resultReference(key).orEmpty()
                 key == "WORKSPACE_PATH" -> context.workspacePath
                 key == "previous.output" -> context.previousOutput()
                 key.endsWith(".output") -> context.nodeOutputs[key.removeSuffix(".output")]?.textOutput.orEmpty()

@@ -1,72 +1,32 @@
 package top.tianyan.app.ui.theme
 
+import top.tianyan.app.core.model.ThemePalette
+
 import android.app.Activity
-import android.net.Uri
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
+import android.content.ContextWrapper
+import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
-import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
-import com.kyant.backdrop.backdrops.LayerBackdrop
-import com.kyant.backdrop.backdrops.layerBackdrop
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import top.tianyan.app.feature.theme.R
-
-/**
- * 天衍内置主题风格。
- *
- * - [XUANTONG]（玄同）—— 默认主题。源自《老子》「万物同归于玄」，曜石夜空与温润素白的 M3 Expressive 设计系统。
- * - [CHENGMING]（澄明）—— 液态玻璃主题。源自「澄明」通透清澈之意，以毛玻璃折射 + 流光 Aurora 渲染虚实交织的界面。
- */
-enum class ThemeStyle(
-    val id: String,
-    val displayName: String,
-    val displayNameEn: String,
-    val description: String,
-) {
-    XUANTONG(
-        id = "xuantong",
-        displayName = "玄同",
-        displayNameEn = "Xuantong",
-        description = "默认主题 · 源自《老子》「万物同归于玄」。曜石夜空与温润素白，M3 Expressive 设计系统。",
-    ),
-    CHENGMING(
-        id = "chengming",
-        displayName = "澄明",
-        displayNameEn = "Chengming",
-        description = "液态玻璃主题 · 毛玻璃折射 + 流光 Aurora，源自「澄明」通透清澈之意。",
-    ),
-    ;
-
-    companion object {
-        fun fromId(id: String?): ThemeStyle = entries.firstOrNull { it.id == id } ?: XUANTONG
-    }
-}
 
 // ======================= 「玄同 · Xuantong」= 默认 M3 Expressive 配色 =======================
 
-private val XuantongLightColors = lightColorScheme(
+val XuantongLightColors = lightColorScheme(
     primary = M3ExpLightPrimary,
     onPrimary = M3ExpLightOnPrimary,
     primaryContainer = M3ExpLightPrimaryContainer,
@@ -96,9 +56,28 @@ private val XuantongLightColors = lightColorScheme(
     surfaceContainerHighest = M3ExpLightSurfaceContainerHighest,
     outline = M3ExpLightOutline,
     outlineVariant = M3ExpLightOutlineVariant,
+    inversePrimary = M3ExpLightInversePrimary,
+    inverseSurface = M3ExpLightInverseSurface,
+    inverseOnSurface = M3ExpLightInverseOnSurface,
+    surfaceTint = M3ExpLightSurfaceTint,
+    scrim = M3ExpScrim,
+    surfaceBright = M3ExpLightSurfaceBright,
+    surfaceDim = M3ExpLightSurfaceDim,
+    primaryFixed = M3ExpPrimaryFixed,
+    primaryFixedDim = M3ExpPrimaryFixedDim,
+    onPrimaryFixed = M3ExpOnPrimaryFixed,
+    onPrimaryFixedVariant = M3ExpOnPrimaryFixedVariant,
+    secondaryFixed = M3ExpSecondaryFixed,
+    secondaryFixedDim = M3ExpSecondaryFixedDim,
+    onSecondaryFixed = M3ExpOnSecondaryFixed,
+    onSecondaryFixedVariant = M3ExpOnSecondaryFixedVariant,
+    tertiaryFixed = M3ExpTertiaryFixed,
+    tertiaryFixedDim = M3ExpTertiaryFixedDim,
+    onTertiaryFixed = M3ExpOnTertiaryFixed,
+    onTertiaryFixedVariant = M3ExpOnTertiaryFixedVariant,
 )
 
-private val XuantongDarkColors = darkColorScheme(
+val XuantongDarkColors = darkColorScheme(
     primary = M3ExpDarkPrimary,
     onPrimary = M3ExpDarkOnPrimary,
     primaryContainer = M3ExpDarkPrimaryContainer,
@@ -128,98 +107,63 @@ private val XuantongDarkColors = darkColorScheme(
     surfaceContainerHighest = M3ExpDarkSurfaceContainerHighest,
     outline = M3ExpDarkOutline,
     outlineVariant = M3ExpDarkOutlineVariant,
-)
-
-// ======================= 「澄明 · Chengming」液态玻璃配色 =======================
-
-private val ChengmingLightColors = lightColorScheme(
-    primary = ChengmingLightPrimary,
-    onPrimary = ChengmingLightOnPrimary,
-    primaryContainer = ChengmingLightPrimaryContainer,
-    onPrimaryContainer = ChengmingLightOnPrimaryContainer,
-    secondary = ChengmingLightSecondary,
-    onSecondary = ChengmingLightOnSecondary,
-    secondaryContainer = ChengmingLightSecondaryContainer,
-    onSecondaryContainer = ChengmingLightOnSecondaryContainer,
-    tertiary = ChengmingLightTertiary,
-    onTertiary = ChengmingLightOnTertiary,
-    tertiaryContainer = ChengmingLightTertiaryContainer,
-    onTertiaryContainer = ChengmingLightOnTertiaryContainer,
-    error = ChengmingLightError,
-    onError = ChengmingLightOnError,
-    errorContainer = ChengmingLightErrorContainer,
-    onErrorContainer = ChengmingLightOnErrorContainer,
-    background = ChengmingLightBackground,
-    onBackground = ChengmingLightOnBackground,
-    surface = ChengmingLightSurface,
-    onSurface = ChengmingLightOnSurface,
-    surfaceVariant = ChengmingLightSurfaceVariant,
-    onSurfaceVariant = ChengmingLightOnSurfaceVariant,
-    surfaceContainerLowest = ChengmingLightSurfaceContainerLowest,
-    surfaceContainerLow = ChengmingLightSurfaceContainerLow,
-    surfaceContainer = ChengmingLightSurfaceContainer,
-    surfaceContainerHigh = ChengmingLightSurfaceContainerHigh,
-    surfaceContainerHighest = ChengmingLightSurfaceContainerHighest,
-    outline = ChengmingLightOutline,
-    outlineVariant = ChengmingLightOutlineVariant,
-)
-
-private val ChengmingDarkColors = darkColorScheme(
-    primary = ChengmingDarkPrimary,
-    onPrimary = ChengmingDarkOnPrimary,
-    primaryContainer = ChengmingDarkPrimaryContainer,
-    onPrimaryContainer = ChengmingDarkOnPrimaryContainer,
-    secondary = ChengmingDarkSecondary,
-    onSecondary = ChengmingDarkOnSecondary,
-    secondaryContainer = ChengmingDarkSecondaryContainer,
-    onSecondaryContainer = ChengmingDarkOnSecondaryContainer,
-    tertiary = ChengmingDarkTertiary,
-    onTertiary = ChengmingDarkOnTertiary,
-    tertiaryContainer = ChengmingDarkTertiaryContainer,
-    onTertiaryContainer = ChengmingDarkOnTertiaryContainer,
-    error = ChengmingDarkError,
-    onError = ChengmingDarkOnError,
-    errorContainer = ChengmingDarkErrorContainer,
-    onErrorContainer = ChengmingDarkOnErrorContainer,
-    background = ChengmingDarkBackground,
-    onBackground = ChengmingDarkOnBackground,
-    surface = ChengmingDarkSurface,
-    onSurface = ChengmingDarkOnSurface,
-    surfaceVariant = ChengmingDarkSurfaceVariant,
-    onSurfaceVariant = ChengmingDarkOnSurfaceVariant,
-    surfaceContainerLowest = ChengmingDarkSurfaceContainerLowest,
-    surfaceContainerLow = ChengmingDarkSurfaceContainerLow,
-    surfaceContainer = ChengmingDarkSurfaceContainer,
-    surfaceContainerHigh = ChengmingDarkSurfaceContainerHigh,
-    surfaceContainerHighest = ChengmingDarkSurfaceContainerHighest,
-    outline = ChengmingDarkOutline,
-    outlineVariant = ChengmingDarkOutlineVariant,
+    inversePrimary = M3ExpDarkInversePrimary,
+    inverseSurface = M3ExpDarkInverseSurface,
+    inverseOnSurface = M3ExpDarkInverseOnSurface,
+    surfaceTint = M3ExpDarkSurfaceTint,
+    scrim = M3ExpScrim,
+    surfaceBright = M3ExpDarkSurfaceBright,
+    surfaceDim = M3ExpDarkSurfaceDim,
+    primaryFixed = M3ExpPrimaryFixed,
+    primaryFixedDim = M3ExpPrimaryFixedDim,
+    onPrimaryFixed = M3ExpOnPrimaryFixed,
+    onPrimaryFixedVariant = M3ExpOnPrimaryFixedVariant,
+    secondaryFixed = M3ExpSecondaryFixed,
+    secondaryFixedDim = M3ExpSecondaryFixedDim,
+    onSecondaryFixed = M3ExpOnSecondaryFixed,
+    onSecondaryFixedVariant = M3ExpOnSecondaryFixedVariant,
+    tertiaryFixed = M3ExpTertiaryFixed,
+    tertiaryFixedDim = M3ExpTertiaryFixedDim,
+    onTertiaryFixed = M3ExpOnTertiaryFixed,
+    onTertiaryFixedVariant = M3ExpOnTertiaryFixedVariant,
 )
 
 /**
- * Material 3 Expressive 形状体系 (Generous, Organic, Bolder)
+ * Material 3 Expressive 形状体系 (Shape Scale)
  *
- * 数值与 [Radius] 令牌同源（xs/sm/md/lg/xl），改一处即全站生效。
+ * 标准五级（4/8/12/16/28）+ Expressive 扩展三级：largeIncreased 20dp、extraLargeIncreased 32dp、
+ * extraExtraLarge 48dp，对应 M3 Expressive 的强调容器与英雄区域形态。
+ * 原实现把 extraSmall 压到 4dp，导致 507 处调用点各自硬编码 4/6/8/10/12dp，
+ * 形状 token 形同虚设。这里重新对齐到 M3 基线（4/8/12/16/28）并补齐扩展级。
  */
-private val TianyanShapes = Shapes(
-    extraSmall = Radius.xsShape,
-    small = Radius.smShape,
-    medium = Radius.mdShape,
-    large = Radius.lgShape,
-    extraLarge = Radius.xlShape,
+val TianyanShapes = Shapes(
+    extraSmall = RoundedCornerShape(4.dp),
+    small = RoundedCornerShape(8.dp),
+    medium = RoundedCornerShape(12.dp),
+    large = RoundedCornerShape(16.dp),
+    extraLarge = RoundedCornerShape(28.dp),
+    largeIncreased = RoundedCornerShape(20.dp),
+    extraLargeIncreased = RoundedCornerShape(32.dp),
+    extraExtraLarge = RoundedCornerShape(48.dp),
 )
 
+/**
+ * 天衍主题：Material 3 Expressive，支持 Monet 动态壁纸取色（系统色板优先，HCT 兜底）
+ * 与曜石/素白静态基调（玄同色板）。
+ */
 @Composable
 fun TianyanTheme(
-    style: ThemeStyle = ThemeStyle.XUANTONG,
     darkTheme: Boolean = isSystemInDarkTheme(),
-    backgroundUri: String? = null,
+    dynamicColor: Boolean = true,
+    palette: ThemePalette = ThemePalette(),
     content: @Composable () -> Unit,
 ) {
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
-            val window = (view.context as? Activity)?.window
+            val window = generateSequence(view.context) { context ->
+                (context as? ContextWrapper)?.baseContext?.takeIf { it !== context }
+            }.filterIsInstance<Activity>().firstOrNull()?.window
             if (window != null) {
                 window.isNavigationBarContrastEnforced = false
                 val insetsController = WindowCompat.getInsetsController(window, view)
@@ -229,164 +173,34 @@ fun TianyanTheme(
         }
     }
 
-    val colorScheme = when (style) {
-        ThemeStyle.XUANTONG -> if (darkTheme) XuantongDarkColors else XuantongLightColors
-        ThemeStyle.CHENGMING -> if (darkTheme) ChengmingDarkColors else ChengmingLightColors
-    }
-    val tianyanColors = if (darkTheme) DarkTianyanColors else LightTianyanColors
-
-    CompositionLocalProvider(LocalTianyanColors provides tianyanColors) {
-        MaterialTheme(
-            colorScheme = colorScheme,
-            typography = AppTypography,
-            shapes = TianyanShapes,
-        ) {
-            if (style == ThemeStyle.CHENGMING) {
-                LiquidGlassRoot(content, darkTheme, backgroundUri)
-            } else {
-                content()
-            }
-        }
-    }
-}
-
-// ======================= 澄明 · 液态玻璃根容器 =======================
-
-/**
- * 当前液态玻璃折射源（[LayerBackdrop]），仅在澄明主题存在（否则为 null）。
- * 底部导航等"液态玻璃"组件可通过 [LocalLiquidGlassBackdrop] 读取并叠加毛玻璃折射。
- */
-val LocalLiquidGlassBackdrop = staticCompositionLocalOf<LayerBackdrop?> { null }
-
-/**
- * 澄明组件使用的稳定背景折射源。
- *
- * 页面内容会记录到 [LocalLiquidGlassBackdrop] 供底部导航折射；卡片、按钮等页面内部组件
- * 不能反过来读取同一记录层，否则部分设备的 RenderThread 会形成递归合成。这里单独记录
- * Aurora 根背景，让任意层级的玻璃组件都能安全取样。
- */
-val LocalLiquidGlassSurfaceBackdrop = staticCompositionLocalOf<LayerBackdrop?> { null }
-
-/**
- * 液态玻璃根容器（核心面液态玻璃）：
- * 底层绘制缓慢漂移的流光 Aurora，并通过 [layerBackdrop] 捕获为折射源；
- * 应用内容绘制在其上，半透明配色透出流光。底部导航等玻璃组件读取
- * [LocalLiquidGlassBackdrop]，用 [com.kyant.backdrop.drawBackdrop] 叠加毛玻璃折射，
- * 呈现悬浮磨砂玻璃效果（见 RuntimeBottomBar）。
- *
- * 在 RenderEffect 不可用的设备上，折射会自动退化为"半透明冰霜 + 流光底色"，不崩溃。
- */
-@Composable
-private fun LiquidGlassRoot(content: @Composable () -> Unit, darkTheme: Boolean, backgroundUri: String?) {
-    val pageBackdrop = rememberLayerBackdrop()
-    val surfaceBackdrop = rememberLayerBackdrop()
-    CompositionLocalProvider(
-        LocalLiquidGlassBackdrop provides pageBackdrop,
-        LocalLiquidGlassSurfaceBackdrop provides surfaceBackdrop,
-    ) {
-        // Keep the source layer separate from consumers of the backdrop. Capturing a
-        // parent that also contains drawBackdrop surfaces can recurse inside RenderThread.
-        Box(modifier = Modifier.fillMaxSize()) {
-            ChengmingBackdrop(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .layerBackdrop(surfaceBackdrop),
-                darkTheme = darkTheme,
-                backgroundUri = backgroundUri,
-            )
-            content()
-        }
-    }
-}
-
-/**
- * 澄明的真实取样背景。与参考 Glass 工程一样使用高信息量壁纸作为折射源，
- * 而不是低对比度纯渐变；玻璃边缘因此能呈现清晰的位移、亮度与色彩变化。
- */
-@Composable
-private fun ChengmingBackdrop(modifier: Modifier, darkTheme: Boolean, backgroundUri: String?) {
     val context = LocalContext.current
-    val painter by produceState<BitmapPainter?>(
-        initialValue = null,
-        key1 = context,
-        key2 = backgroundUri,
-    ) {
-        value = withContext(Dispatchers.IO) {
-            backgroundUri?.takeIf { it.isNotBlank() }?.let { savedUri ->
-                runCatching {
-                    // 两段解码：先以 inJustDecodeBounds 只读原始尺寸（不分配像素内存），
-                    // 按屏幕短边计算 2 的幂 inSampleSize（目标短边 ≤1080px）后再真正解码，
-                    // 避免全分辨率壁纸占用数倍内存并拖慢首帧；壁纸重设时才解码一次。
-                    val bounds = android.graphics.BitmapFactory.Options().apply {
-                        inJustDecodeBounds = true
-                    }
-                    context.contentResolver.openInputStream(Uri.parse(savedUri))?.use { stream ->
-                        android.graphics.BitmapFactory.decodeStream(stream, null, bounds)
-                    }
-                    val decodeOptions = android.graphics.BitmapFactory.Options()
-                    if (bounds.outWidth > 0 && bounds.outHeight > 0) {
-                        val displayMetrics = context.resources.displayMetrics
-                        val targetShortEdge = minOf(
-                            displayMetrics.widthPixels,
-                            displayMetrics.heightPixels,
-                        ).coerceAtMost(1080)
-                        var shortEdge = minOf(bounds.outWidth, bounds.outHeight)
-                        var sampleSize = 1
-                        while (shortEdge / sampleSize > targetShortEdge) {
-                            sampleSize *= 2
-                        }
-                        decodeOptions.inSampleSize = sampleSize
-                    }
-                    context.contentResolver.openInputStream(Uri.parse(savedUri))?.use { stream ->
-                        android.graphics.BitmapFactory.decodeStream(stream, null, decodeOptions)
-                    }?.asImageBitmap()?.let(::BitmapPainter)
-                }.getOrNull()
-            }
-        }
+    val staticFallback = remember(darkTheme, palette) {
+        themePaletteColorScheme(palette, darkTheme)
     }
-    Box(modifier) {
-        if (painter != null) {
-            Image(
-                painter = painter!!,
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-            )
+    val colorScheme = if (dynamicColor) {
+        // Monet 优先：API 31+ 直接透传系统色板（含系统对比度偏好的「原汁原味」）
+        val systemMonet = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         } else {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(if (darkTheme) Color(0xFF111318) else Color(0xFFF4F5F7)),
-            )
+            null
         }
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(
-                    // 壁纸未就绪时也铺上与「有壁纸」同结构的覆盖层，只是整体更淡：
-                    // 早先这里给的是全透明渐变，壁纸加载完成的瞬间覆盖层从「无」突变到「有」，
-                    // 画面会明显闪一下（澄明主题冷启动可见）。
-                    // 用同色系低透明度过渡，视觉上是从淡到浓的连续变化，而不是跳变。
-                    if (painter == null) {
-                        if (darkTheme) {
-                            Brush.verticalGradient(
-                                listOf(Color(0x4D0A1020), Color(0x3D07142A), Color(0x59040914)),
-                            )
-                        } else {
-                            Brush.verticalGradient(
-                                listOf(Color.White.copy(alpha = 0.06f), Color.Transparent, Color(0xFFECF6FF).copy(alpha = 0.08f)),
-                            )
-                        }
-                    } else if (darkTheme) {
-                        Brush.verticalGradient(
-                            listOf(Color(0xB80A1020), Color(0x8F07142A), Color(0xC9040914)),
-                        )
-                    } else {
-                        Brush.verticalGradient(
-                            listOf(Color.White.copy(alpha = 0.12f), Color.Transparent, Color(0xFFECF6FF).copy(alpha = 0.18f)),
-                        )
-                    },
-                ),
+        rememberWallpaperDynamicColorScheme(
+            darkTheme = darkTheme,
+            systemScheme = systemMonet,
+            fallback = staticFallback,
+            style = palette.style,
         )
+    } else {
+        staticFallback
+    }
+
+    MaterialExpressiveTheme(
+        colorScheme = colorScheme,
+        motionScheme = MotionScheme.expressive(),
+        typography = AppTypography,
+        shapes = TianyanShapes,
+    ) {
+        val semantics = remember(colorScheme) { buildSemanticColors(colorScheme) }
+        CompositionLocalProvider(LocalSemanticColors provides semantics, content = content)
     }
 }

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,8 +21,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.tianyan.app.core.model.StatsSummary
 import top.tianyan.app.ui.components.RuntimeIcon
-import top.tianyan.app.ui.theme.Spacing
-import top.tianyan.app.ui.theme.Radius
 import top.tianyan.app.ui.components.RuntimeIconName
 import java.util.Locale
 
@@ -65,12 +64,12 @@ fun StatsMetricGrid(
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         for (i in items.indices step 2) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 MetricTile(item = items[i], modifier = Modifier.weight(1f))
                 if (i + 1 < items.size) {
@@ -97,9 +96,9 @@ private fun MetricTile(
     Box(
         modifier = modifier
             .height(72.dp)
-            .clip(Radius.smShape)
+            .clip(RoundedCornerShape(10.dp))
             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
-            .padding(horizontal = Spacing.md, vertical = Spacing.sm),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -107,7 +106,7 @@ private fun MetricTile(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 RuntimeIcon(
                     name = item.icon,

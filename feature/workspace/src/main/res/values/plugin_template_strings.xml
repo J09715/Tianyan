@@ -1,0 +1,8 @@
+<resources>
+    <string name="workspace_project_tianyan_plugin">天衍本地插件开发</string>
+    <string name="workspace_plugin_debug_import">一键导入调试</string>
+    <string name="workspace_plugin_debug_failed">调试插件打包失败</string>
+    <string name="workspace_plugin_debug_dismiss">知道了</string>
+    <string name="workspace_plugin_debug_preparing">正在打包工程并准备安装预览…</string>
+    <string name="workspace_plugin_debug_cancel">取消</string>
+</resources>
