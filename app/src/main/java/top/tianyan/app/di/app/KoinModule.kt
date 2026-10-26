@@ -30,6 +30,7 @@ import top.tianyan.app.core.database.BuildScriptDao
 import top.tianyan.app.core.database.GroupChatDao
 import top.tianyan.app.core.database.HarnessRuntimeDao
 import top.tianyan.app.core.database.HarnessSessionDao
+import top.tianyan.app.core.database.RedTeamFactDao
 import top.tianyan.app.core.database.InstallLogDao
 import top.tianyan.app.core.database.InstallTaskDao
 import top.tianyan.app.core.database.McpOAuthCredentialDao
@@ -75,6 +76,7 @@ import top.tianyan.app.di.AppModule.provideDependencyManager
 import top.tianyan.app.di.AppModule.provideFileDownloader
 import top.tianyan.app.di.AppModule.provideHarnessRuntimeDao
 import top.tianyan.app.di.AppModule.provideHarnessSessionDao
+import top.tianyan.app.di.AppModule.provideRedTeamFactDao
 import top.tianyan.app.di.AppModule.provideInstallLogDao
 import top.tianyan.app.di.AppModule.provideInstallTaskDao
 import top.tianyan.app.di.AppModule.provideJson
@@ -173,6 +175,8 @@ val appModule = module {
     single<RuntimeDao> { provideRuntimeDao(database = get()) }
 
     single<HarnessSessionDao> { provideHarnessSessionDao(database = get()) }
+
+    single<RedTeamFactDao> { provideRedTeamFactDao(database = get()) }
 
     single<AiModelDao> { provideAiModelDao(database = get()) }
 

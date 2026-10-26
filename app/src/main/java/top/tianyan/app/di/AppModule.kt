@@ -76,6 +76,7 @@ import top.tianyan.app.core.database.InstallLogDao
 import top.tianyan.app.core.database.InstallTaskDao
 import top.tianyan.app.core.database.RuntimeDao
 import top.tianyan.app.core.database.HarnessSessionDao
+import top.tianyan.app.core.database.RedTeamFactDao
 import top.tianyan.app.core.database.AiModelDao
 import top.tianyan.app.core.database.WorkspaceDao
 import top.tianyan.app.core.database.TerminalSessionDao
@@ -169,6 +170,8 @@ object AppModule {
     fun provideRuntimeDao(database: AppDatabase): RuntimeDao = database.runtimeDao()
 
     fun provideHarnessSessionDao(database: AppDatabase): HarnessSessionDao = database.harnessSessionDao()
+
+    fun provideRedTeamFactDao(database: AppDatabase): RedTeamFactDao = database.redTeamFactDao()
 
     fun provideAiModelDao(database: AppDatabase): AiModelDao = database.aiModelDao()
 
