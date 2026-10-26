@@ -6,7 +6,7 @@ import java.util.Properties
 import org.gradle.kotlin.dsl.configure
 
 val appVersionName = "1.5.0"
-val appVersionCode = 42
+val appVersionCode = 116
 
 // TianyanDev 双包构建开关：CI（.github/workflows/tianyandev-build.yml）设 TIANYAN_DEV_BUILD=1 时，
 // 产出独立预览包 top.tianyan.app.dev / 应用名 TianyanDev / 版本后缀 -dev，
