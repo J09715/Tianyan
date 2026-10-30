@@ -44,7 +44,17 @@ internal fun ChatViewModel.bindRedTeam(
     scope: String,
 ) {
     val sessionId = currentSessionId.value.takeIf { it.isNotBlank() } ?: return
+    val coordinator = redTeamCoordinatorRef
     viewModelScope.launch(Dispatchers.IO) {
+        if (coordinator != null) {
+            // 走协调器而不是直接写会话字段：协调器会同时落一条 engagement 事实，
+            // 「目标」页签正是从这条事实渲染的。之前绕过它只改 harness_sessions，
+            // 导致绑完目标在控制台里看不到 —— 会话字段有值、事实库却是空的。
+            runCatching { coordinator.bind(sessionId, target.trim(), scope.trim()) }
+                .onSuccess { return@launch }
+            // 协调器拒绝（例如 scope 为空）时回落到只写会话字段，至少让绑定生效，
+            // 不至于因为事实写入失败把用户的操作整个吞掉。
+        }
         sessions.updateRedTeamBinding(
             id = sessionId,
             mode = RedTeamMode.RED_TEAM.id,

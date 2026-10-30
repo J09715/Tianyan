@@ -1,5 +1,10 @@
 package top.tianyan.app.ui.chat
 
+import androidx.compose.ui.Alignment
+import androidx.compose.material3.Surface
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -91,28 +96,39 @@ internal fun RedTeamTabNavigation(
                         MaterialTheme.colorScheme.onSurfaceVariant
                     },
                     modifier = Modifier
-                        .padding(vertical = Spacing.xs)
-                        .then(
-                            if (active) {
-                                Modifier.padding(bottom = Spacing.xs)
-                            } else {
-                                Modifier
-                            },
-                        ),
+                        // 必须可点：之前只渲染了 Text 没有 clickable，
+                        // 点击会穿透到下面的消息列表，触发「复制/撤回」这类消息长按菜单。
+                        .clickable { onSelectTab(group.tabs.first()) }
+                        // 触摸目标下限 48dp：一级分区是主导航，太窄点不中。
+                        .heightIn(min = 48.dp)
+                        .padding(vertical = Spacing.xs),
                 )
             }
         }
         // 二级：当前分区内的页签。分区只有一个页签时（态势/资产/报告）不渲染，
         // 避免出现「一行只有一个页签」的空导航。
+        //
+        // 超过 4 个就不再用 OrbitalTabRow：它按 maxWidth/tabCount 均分，
+        // 7 个页签每个只有 ~50dp，「凭据文件」会被截成「凭据…」。
+        // 改用可换行的胶囊标签，一行放 3-4 个，标签保持完整。
         if (activeGroup.tabs.size > 1) {
-            OrbitalTabRow(
-                specs = activeGroup.tabs.map { tab ->
-                    OrbitalTabSpec(label = tab.label, count = sectionCount(tab))
-                },
-                selectedIndex = activeGroup.tabs.indexOf(current).coerceAtLeast(0),
-                modifier = Modifier.fillMaxWidth(),
-                onSelect = { index -> activeGroup.tabs.getOrNull(index)?.let(onSelectTab) },
-            )
+            if (activeGroup.tabs.size <= 4) {
+                OrbitalTabRow(
+                    specs = activeGroup.tabs.map { tab ->
+                        OrbitalTabSpec(label = tab.label, count = sectionCount(tab))
+                    },
+                    selectedIndex = activeGroup.tabs.indexOf(current).coerceAtLeast(0),
+                    modifier = Modifier.fillMaxWidth(),
+                    onSelect = { index -> activeGroup.tabs.getOrNull(index)?.let(onSelectTab) },
+                )
+            } else {
+                WrappedTabChips(
+                    tabs = activeGroup.tabs,
+                    current = current,
+                    sectionCount = sectionCount,
+                    onSelectTab = onSelectTab,
+                )
+            }
         }
     }
 }
@@ -125,4 +141,65 @@ internal fun RedTeamConsoleState.badgeCount(tab: RedTeamConsoleTab): Int = when 
     RedTeamConsoleTab.ARTIFACTS -> (sections.firstOrNull { it.id == "attackfiles" }?.count ?: 0) +
         (sections.firstOrNull { it.id == "sessions" }?.count ?: 0)
     else -> sections.firstOrNull { it.id == tab.sectionId }?.count ?: 0
+}
+
+/**
+ * 可换行的页签胶囊：页签多于 4 个时替代 [OrbitalTabRow]。
+ *
+ * 为什么需要它：[OrbitalTabRow] 按 `maxWidth / tabCount` 均分宽度，
+ * 7 个页签每个只剩约 50dp，「凭据文件」会被截成「凭据…」，「技能」只剩半个字。
+ * 换行布局让每个标签拿到自己的自然宽度，一行放 3-4 个，标签完整可读。
+ */
+@Composable
+private fun WrappedTabChips(
+    tabs: List<RedTeamConsoleTab>,
+    current: RedTeamConsoleTab,
+    sectionCount: (RedTeamConsoleTab) -> Int,
+    onSelectTab: (RedTeamConsoleTab) -> Unit,
+) {
+    // 按自然宽度流式排列：每行尽量放满，放不下就换行。
+    androidx.compose.foundation.layout.FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+    ) {
+        tabs.forEach { tab ->
+            val selected = tab == current
+            val count = sectionCount(tab)
+            Surface(
+                onClick = { onSelectTab(tab) },
+                shape = MaterialTheme.shapes.small,
+                color = if (selected) {
+                    MaterialTheme.colorScheme.primaryContainer
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.6f)
+                },
+                modifier = Modifier.heightIn(min = 40.dp),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = tab.label,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                        color = if (selected) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                    if (count > 0) {
+                        Text(
+                            text = count.toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+            }
+        }
+    }
 }

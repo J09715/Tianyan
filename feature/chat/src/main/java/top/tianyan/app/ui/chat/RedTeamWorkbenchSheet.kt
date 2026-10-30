@@ -41,7 +41,10 @@ internal fun RedTeamWorkbenchSheet(
         session = session,
         facts = facts,
         state = state,
-        onBindTarget = { target, scope -> viewModel.bindRedTeamTarget(target, scope) },
+        onBindTarget = { target, scope ->
+            viewModel.bindRedTeamTarget(target, scope)
+            controller.onTargetBound()
+        },
         onDismiss = onDismiss,
         onSelectTab = controller::selectTab,
         onRefresh = controller::refresh,

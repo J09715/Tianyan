@@ -61,7 +61,8 @@ internal class RedTeamConsoleController(
 
     /** 首次进入或手动刷新：概览页签所需的全量快照。 */
     fun refresh() = launch { coordinator, sessionId ->
-        _state.update { it.copy(loading = true, error = null) }
+        // 清分区行缓存：刷新意味着「数据可能变了」，带着旧缓存会把新写入的事实藏起来。
+        _state.update { it.copy(loading = true, error = null, sectionRows = emptyMap()) }
         val snapshot = withContext(Dispatchers.IO) { coordinator.consoleSnapshot(sessionId) }
         _state.update {
             it.copy(
@@ -144,6 +145,17 @@ internal class RedTeamConsoleController(
         else -> null
     }
 
+    /**
+     * 绑定目标后重新加载。
+     *
+     * 绑定会写入一条 engagement 事实，「目标」页签正是从它渲染的。
+     * 不清缓存的话，用户绑完切到目标页仍看到「0 条」—— 数据其实已经在库里了。
+     */
+    fun onTargetBound() {
+        _state.update { it.copy(sectionRows = emptyMap()) }
+        refresh()
+    }
+
     fun refreshSkillHealth() = launch { coordinator, sessionId ->
         val report = withContext(Dispatchers.IO) { coordinator.skillHealth(sessionId) }
         _skillHealth.value = report
@@ -184,7 +196,12 @@ internal class RedTeamConsoleController(
         reloadAssets()
     }
 
-    fun setView(view: RedTeamConsoleView) = _state.update { it.copy(view = view) }
+    fun setView(view: RedTeamConsoleView) {
+        _state.update { it.copy(view = view) }
+        // 切到图谱视图才拉图谱数据：力导向布局要算全量节点，
+        // 在列表视图里预先算一遍是白烧 CPU。
+        if (view == RedTeamConsoleView.GRAPH && _state.value.graph == null) loadGraph()
+    }
 
     fun toggleAsset(assetId: String) {
         if (_state.value.expandedAsset == assetId) {

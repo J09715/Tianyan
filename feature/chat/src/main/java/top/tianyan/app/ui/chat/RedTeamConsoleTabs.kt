@@ -260,7 +260,7 @@ internal fun RedTeamSkillsTab(
         if (draft == null) {
             RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(Spacing.sm)) {
                 Text(
-                    "左侧选择一个技能，或新建",
+                    "上方选择一个技能，或新建",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
