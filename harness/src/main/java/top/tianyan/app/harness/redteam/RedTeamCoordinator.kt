@@ -2133,7 +2133,6 @@ class RedTeamCoordinator(
                 )
             }
 
-
     /**
      * 读回攻击文件内容。
      *

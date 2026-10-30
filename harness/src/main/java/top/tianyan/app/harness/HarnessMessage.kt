@@ -29,6 +29,12 @@ enum class HarnessTool {
     @SerialName("compress") COMPRESS,
     @SerialName("ask_user") ASK_USER,
     @SerialName("render_surface") RENDER_SURFACE,
+
+    /**
+     * 红队演练工具。只在会话 `redTeamMode == "red_team"` 时挂载 —— 普通会话拿不到这个工具，
+     * 模型也就无法在非红队会话里调用红队能力。
+     */
+    @SerialName("red_team") RED_TEAM,
 }
 
 /**

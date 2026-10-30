@@ -131,7 +131,11 @@ internal fun UserAttachmentCards(
         files.forEach { attachment ->
             AttachmentFileCard(
                 attachment = attachment,
-                onClick = { openAttachment(context, attachment) },
+                // 视频/音频交给系统播放器（需要解码器），其余走文件查看器
+                onClick = {
+                    if (attachment.isPlayableMedia() && openMediaAttachment(context, attachment)) return@AttachmentFileCard
+                    openAttachment(context, attachment)
+                },
             )
         }
     }

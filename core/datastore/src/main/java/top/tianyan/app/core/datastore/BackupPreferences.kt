@@ -75,7 +75,7 @@ class BackupPreferences(private val context: Context) : BackupPreferenceStore {
             "agent_local_logging_enabled", "custom_system_prompt_enabled", "environment_privacy_mode",
             "skill_evolution_suggestions", "terminal_haptics_enabled", "auto_check_updates",
             "agent_context_compaction_enabled", "agent_auto_workspace_cwd", "agent_command_output_compression_enabled")
-        private val integers = mapOf("terminal_font_size" to 10..24, "agent_max_concurrent_turns" to 1..4,
+        private val integers = mapOf("terminal_font_size" to 10..24, "agent_max_concurrent_turns" to 1..10,
             "agent_max_tool_rounds" to 10..300, "agent_round_limit_auto_continuations" to 0..10,
             "agent_base_command_timeout_seconds" to 60..3600, "agent_context_budget_tokens" to 4000..2_000_000,
             "agent_context_folding_ratio_percent" to 10..100, "agent_max_tools_per_round" to 1..50,

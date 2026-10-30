@@ -389,7 +389,7 @@ internal class AnthropicApi(
             }
         }
 
-        val dynamicTools = if (model.pureChatMode) emptyList() else ProviderClient.buildDynamicTools(model)
+        val dynamicTools = if (model.pureChatMode) emptyList() else ProviderClient.buildDynamicTools(model, model.redTeamEnabled)
         // NATIVE 模式下 tools 数组独立于 messages，输出预算必须显式扣掉 schema
         val toolSchemaTokens =
             if (model.capabilities.nativeTools) {

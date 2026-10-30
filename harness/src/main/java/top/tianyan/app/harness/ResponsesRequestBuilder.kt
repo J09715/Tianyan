@@ -121,7 +121,7 @@ internal fun buildResponsesRequest(model: ModelConfig, messages: List<ApiMessage
         }
     }
 
-    val dynamicTools = if (model.pureChatMode) emptyList() else ProviderClient.buildDynamicTools(model)
+    val dynamicTools = if (model.pureChatMode) emptyList() else ProviderClient.buildDynamicTools(model, model.redTeamEnabled)
     // JSON_TEXT 模式：工具定义写进 instructions，模型用文本输出工具调用
     if (model.capabilities.textTools && dynamicTools.isNotEmpty()) {
         systemPrompt.append("\n\n## 可用工具 JSON 定义（必须严格按此 name 与参数输出）\n")

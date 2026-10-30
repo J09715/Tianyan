@@ -189,6 +189,33 @@ internal val toolBackendModule = module {
             toolCheckpoints = get(),
             workspaceToolBackend = get(), governanceGuard = get(),
             environments = get(),
+            redTeamCoordinator = get(),
+        )
+    }
+
+    /**
+     * 红队协调器：资产/漏洞/评分事实、角色派发、技能库。
+     *
+     * 注册为单例是因为它内部持有事实库缓存与模板索引缓存（13k 个 nuclei 模板，
+     * 每次重建都极慢），且红队会话之间共享同一份技能库。
+     */
+    // 红队技能体检与技能库都读应用自己的 AgentSkillRepository —— 两处若各存一份，
+    // 会出现「面板里保存了、开工体检却说技能不存在」的双真值问题。
+    single<top.tianyan.app.harness.redteam.RedTeamSkillSource> {
+        top.tianyan.app.harness.redteam.RepositoryRedTeamSkillSource(skillRepository = get())
+    }
+
+    single<top.tianyan.app.harness.redteam.RedTeamSkillStore> {
+        top.tianyan.app.harness.redteam.RepositoryRedTeamSkillStore(repository = get())
+    }
+
+    single<top.tianyan.app.harness.redteam.RedTeamCoordinator> {
+        top.tianyan.app.harness.redteam.RedTeamCoordinator(
+            facts = get(),
+            sessions = get(),
+            events = get(),
+            skills = get(),
+            skillStore = get(),
         )
     }
 

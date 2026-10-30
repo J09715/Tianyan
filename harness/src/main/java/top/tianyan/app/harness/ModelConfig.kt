@@ -33,6 +33,14 @@ data class ModelConfig(
      */
     val toolCallMode: ToolCallMode = ToolCallMode.NATIVE,
     val dynamicMcpTools: List<McpToolInfo> = emptyList(),
+    /**
+     * 是否为红队会话：决定 tools 数组里是否挂载 `red_team` 工具。
+     *
+     * 放在 ModelConfig 里而不是逐层传参，是因为 ModelConfig 已经贯穿全部请求构建路径
+     * （OpenAI / Anthropic / Responses 三套 builder 都收它），加一个字段即可全链路生效。
+     * 默认 false —— 任何未显式开启的路径都拿不到红队工具。
+     */
+    val redTeamEnabled: Boolean = false,
     /** 上下文 Token 容量上限（如 128000，超出时滑动窗口压缩）。 */
     val contextTokens: Int? = null,
     /**

@@ -488,8 +488,7 @@ private fun AskUserOptionChip(
 
 /** 工具类型 → 语义前缀图标（与思考块的 Brain 图标同一视觉语言）。形状标识工具类别；颜色由调用处以状态色着色。穷尽 HarnessTool，新增工具有编译器兜底。 */
 internal fun toolIcon(tool: HarnessTool): RuntimeIconName = when (tool) {
-    HarnessTool.READ -> RuntimeIconName.Document
-    HarnessTool.WRITE -> RuntimeIconName.WriteDocument
+    HarnessTool.READ -> RuntimeIconName.Document; HarnessTool.WRITE -> RuntimeIconName.WriteDocument
     HarnessTool.EDIT -> RuntimeIconName.Edit
     HarnessTool.BASE -> RuntimeIconName.Terminal
     HarnessTool.PROCESS -> RuntimeIconName.Play
@@ -508,6 +507,7 @@ internal fun toolIcon(tool: HarnessTool): RuntimeIconName = when (tool) {
     HarnessTool.COMPRESS -> RuntimeIconName.Compress
     HarnessTool.ASK_USER -> RuntimeIconName.Chat
     HarnessTool.RENDER_SURFACE -> RuntimeIconName.Palette
+    HarnessTool.RED_TEAM -> RuntimeIconName.Shield
 }
 
 internal fun toolArgsSummary(call: ToolCall): String {

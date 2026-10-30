@@ -55,6 +55,12 @@ object ToolStatusDescriber {
         HarnessTool.LOAD_RULE -> "正在加载规则块：${arg(args, "rule") ?: "load_rule"}…"
         HarnessTool.LOAD_SKILL -> "正在加载技能：${arg(args, "name") ?: "load_skill"}…"
         HarnessTool.COMPRESS -> "正在压缩会话历史…"
+        HarnessTool.RED_TEAM -> {
+            val action = arg(args, "action") ?: "red_team"
+            val target = arg(args, "target") ?: arg(args, "title")
+            "红队演练：$action" + (target?.let { " · ${it.take(MAX_STATUS_ARG_LENGTH)}" } ?: "")
+        }
+
         HarnessTool.ASK_USER -> "正在向你提问…"
         HarnessTool.RENDER_SURFACE -> "正在生成 A2UI 原生界面：${arg(args, "title") ?: arg(args, "surfaceId") ?: "surface"}"
     }

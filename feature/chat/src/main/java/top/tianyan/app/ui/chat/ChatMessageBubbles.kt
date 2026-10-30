@@ -113,6 +113,7 @@ internal fun UserBubble(
     var showDeleteConfirm by rememberSaveable { mutableStateOf(false) }
     // 撤回到此轮：先选择撤回范围（代码/对话/两者）
     var showRewindScopeDialog by rememberSaveable { mutableStateOf(false) }
+    var previewImageUrl by remember { mutableStateOf<String?>(null) } // 缩略图点击→全屏预览
 
     val copyText = {
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -126,8 +127,7 @@ internal fun UserBubble(
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             // 🌟 1. 多模态图片预览卡片
-            if (message.imageUrls.isNotEmpty()) {
-                LazyRow(
+            if (message.imageUrls.isNotEmpty()) { LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.padding(bottom = 2.dp),
                 ) {
@@ -138,12 +138,12 @@ internal fun UserBubble(
                         ImageThumbnail(
                             imageUrl = imageUrl,
                             cacheKey = "chat-image-${message.id}-$index",
-                            onClick = { showMenu = true },
+                            onClick = { previewImageUrl = imageUrl },
                         )
                     }
                 }
             }
-            UserAttachmentCards(message.attachments, context) // 文件附件卡片，见 AttachmentFileCard.kt
+            UserAttachmentCards(message.attachments, context); previewImageUrl?.let { u -> ChatImagePreviewDialog(u) { previewImageUrl = null } } // 附件卡片 + 图片预览
             if (message.text.isNotBlank()) { // 🌟 2. 用户文字气泡
                 Surface(
                     color = MaterialTheme.colorScheme.secondaryContainer,

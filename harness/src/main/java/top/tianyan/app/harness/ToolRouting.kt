@@ -40,6 +40,14 @@ internal class ToolRouting(
     private val contextMemoryToolBackend: ContextMemoryToolBackend,
     private val promptAssetToolBackend: PromptAssetToolBackend,
     private val capabilityToolGateway: CapabilityToolGateway,
+    /**
+     * 红队协调器。可空：非红队装配不提供，此时红队工具路由直接返回「未启用」。
+     * 之所以用可空而不是必填：绝大多数会话不是红队会话，没必要为它们构造协调器。
+     */
+    private val redTeamCoordinator: top.tianyan.app.harness.redteam.RedTeamCoordinator? = null,
+    /** 判定会话是否绑定红队（与协调器同生同灭）。 */
+    private val redTeamSessions: top.tianyan.app.core.database.HarnessSessionRepository? = null,
+
     private val searchRedactor: suspend (String, String) -> (String) -> String = { _, _ -> { it } },
 ) {
     private val routes: Map<HarnessTool, ToolRouteFn> = buildRoutes()
@@ -52,6 +60,17 @@ internal class ToolRouting(
 
     suspend fun dispatch(ctx: ToolInvocationContext): Pair<Boolean, String> {
         return routes.getValue(ctx.tool).invoke(ctx)
+    }
+
+    /** 红队工具路由：未装配协调器 / 无会话 / 会话未绑定红队时都明确拒绝。 */
+    private suspend fun dispatchRedTeam(ctx: ToolInvocationContext): Pair<Boolean, String> {
+        val coordinator = redTeamCoordinator ?: return false to "红队模式未启用：当前构建没有装配红队协调器。"
+        if (ctx.sessionId.isBlank()) return false to "红队工具需要会话上下文，当前调用没有 sessionId。"
+        val sessions = redTeamSessions ?: return false to "红队模式未启用：缺少会话仓库。"
+        if (!top.tianyan.app.harness.redteam.isRedTeamSession(sessions, ctx.sessionId)) {
+            return false to "当前会话不是红队会话，red_team 工具不可用。请先在「新建会话」里把工程类型选为「红队演练」，或在红队工作台绑定目标与授权范围后再试。"
+        }
+        return coordinator.execute(ctx.args, ctx.sessionId)
     }
 
     private fun buildRoutes(): Map<HarnessTool, ToolRouteFn> {
@@ -108,6 +127,9 @@ internal class ToolRouting(
             },
             HarnessTool.LOAD_SKILL to { ctx -> promptAssetToolBackend.execute(PromptAssetRequest(ctx.tool, ctx.args)) },
             HarnessTool.LOAD_RULE to { ctx -> promptAssetToolBackend.execute(PromptAssetRequest(ctx.tool, ctx.args)) },
+            // 红队演练：动作语义（资产/漏洞/评分/派活）由协调器独占，路由只做委派。
+            // 会话未绑定红队时不放行，避免普通会话误调。
+            HarnessTool.RED_TEAM to ::dispatchRedTeam,
         )
     }
 }

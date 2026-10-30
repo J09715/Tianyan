@@ -639,12 +639,12 @@ class SettingsDataStore(
     private val commandOutputCompressionEnabledKey = booleanPreferencesKey("agent_command_output_compression_enabled")
     private val baseCommandTimeoutSecondsKey = intPreferencesKey("agent_base_command_timeout_seconds")
 
-    /** 全局最大并发 Agent 轮次数（默认 2，受移动端性能/API 限流制约） */
+    /** 全局最大并发 Agent 轮次数（默认 2，可调 1..10，受移动端性能/API 限流制约） */
     val maxConcurrentAgentTurns: Flow<Int> = context.settingsDataStore.data.map {
         it[maxConcurrentAgentTurnsKey] ?: DEFAULT_MAX_CONCURRENT_AGENT_TURNS
     }
     suspend fun setMaxConcurrentAgentTurns(value: Int) {
-        context.settingsDataStore.edit { it[maxConcurrentAgentTurnsKey] = value.coerceIn(1, 4) }
+        context.settingsDataStore.edit { it[maxConcurrentAgentTurnsKey] = value.coerceIn(MIN_MAX_CONCURRENT_AGENT_TURNS, MAX_MAX_CONCURRENT_AGENT_TURNS) }
     }
 
     val contextCompactionEnabled: Flow<Boolean> = context.settingsDataStore.data.map { it[contextCompactionEnabledKey] ?: true }
@@ -966,7 +966,7 @@ class SettingsDataStore(
 
     companion object {
         private const val PROTECTED_VALUE_PREFIX = "enc:v1:"
-        const val DEFAULT_MAX_CONCURRENT_AGENT_TURNS = 2
+        const val DEFAULT_MAX_CONCURRENT_AGENT_TURNS = AgentConcurrency.DEFAULT; const val MIN_MAX_CONCURRENT_AGENT_TURNS = AgentConcurrency.MIN; const val MAX_MAX_CONCURRENT_AGENT_TURNS = AgentConcurrency.MAX
         const val DEFAULT_AGENT_CHAR_NAME = "天衍智枢"
         const val DEFAULT_AGENT_USER_NAME = "用户"
         const val DEFAULT_BASE_COMMAND_TIMEOUT_SECONDS = 10 * 60

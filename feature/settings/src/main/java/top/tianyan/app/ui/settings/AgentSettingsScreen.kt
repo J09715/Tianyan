@@ -101,6 +101,7 @@ fun AgentSettingsScreen(
     val agentUserName by viewModel?.agentUserName?.collectAsStateWithLifecycle() ?: previewStateOf("")
     val compactionEnabled by viewModel?.contextCompactionEnabled?.collectAsStateWithLifecycle() ?: previewStateOf(false)
     val maxToolRounds by viewModel?.maxToolRounds?.collectAsStateWithLifecycle() ?: previewStateOf(0)
+    val maxConcurrentAgentTurns by viewModel?.maxConcurrentAgentTurns?.collectAsStateWithLifecycle() ?: previewStateOf(2)
     val roundLimitAutoContinuations by viewModel?.roundLimitAutoContinuations?.collectAsStateWithLifecycle() ?: previewStateOf(0)
     val autoWorkspaceCwd by viewModel?.autoWorkspaceCwd?.collectAsStateWithLifecycle() ?: previewStateOf(false)
     val commandOutputCompressionEnabled by viewModel?.commandOutputCompressionEnabled?.collectAsStateWithLifecycle() ?: previewStateOf(false)
@@ -292,10 +293,9 @@ fun AgentSettingsScreen(
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     FirstResponseTimeoutRow()
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    RoundsSliderRow(
-                        currentValue = maxToolRounds,
-                        onValueChange = { arg0 -> viewModel?.setMaxToolRounds(arg0) },
-                    )
+                    ConcurrencySliderRow(currentValue = maxConcurrentAgentTurns, onValueChange = { arg0 -> viewModel?.setMaxConcurrentAgentTurns(arg0) })
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    RoundsSliderRow(currentValue = maxToolRounds, onValueChange = { arg0 -> viewModel?.setMaxToolRounds(arg0) })
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     AutoContinuationSliderRow(
                         currentValue = roundLimitAutoContinuations,

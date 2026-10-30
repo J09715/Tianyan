@@ -13,6 +13,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import top.tianyan.app.core.common.logging.AppLogger
 import top.tianyan.app.core.datastore.AgentPreferences
+import top.tianyan.app.core.datastore.SettingsDataStore
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
@@ -56,8 +57,11 @@ class SessionTurnCoordinatorImpl(
         preferences?.let { prefs ->
             coordinatorScope.launch {
                 prefs.maxConcurrentAgentTurns.collectLatest { configuredLimit ->
-                    // 上限与 SettingsDataStore.setMaxConcurrentAgentTurns 的写入口径 (1..4) 保持一致
-                    val safeLimit = configuredLimit.coerceIn(1, 4)
+                    // 上限与 SettingsDataStore 的写入口径保持一致（1..10），否则用户在设置里调大也不生效
+                    val safeLimit = configuredLimit.coerceIn(
+                        SettingsDataStore.MIN_MAX_CONCURRENT_AGENT_TURNS,
+                        SettingsDataStore.MAX_MAX_CONCURRENT_AGENT_TURNS,
+                    )
                     logger?.i("SessionTurnCoordinator: reconfiguring max concurrent turns to $safeLimit")
                     globalLimiter.setLimit(safeLimit)
                 }

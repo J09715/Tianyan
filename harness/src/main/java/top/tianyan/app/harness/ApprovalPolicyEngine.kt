@@ -14,7 +14,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.security.MessageDigest
 
-
 data class ApprovalDecision(
     val required: Boolean,
     val riskLevel: String = "low",
@@ -131,6 +130,7 @@ class ApprovalPolicyEngine(
             HarnessTool.HISTORY_SEARCH, HarnessTool.HISTORY_READ, HarnessTool.SUBAGENT, HarnessTool.LOAD_RULE,
             HarnessTool.LOAD_SKILL, HarnessTool.RENDER_SURFACE,
             HarnessTool.ASK_USER -> ApprovalDecision(false)
+            HarnessTool.RED_TEAM -> if (args["action"]?.jsonPrimitive?.content.orEmpty().trim().lowercase() in RedTeamReadOnlyActions.ACTIONS) ApprovalDecision(false) else ApprovalDecision(true, "high", "红队动作会写入演练事实、派发子智能体或修改评分。", summary)
         }
     }
 

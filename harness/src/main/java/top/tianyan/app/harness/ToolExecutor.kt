@@ -78,6 +78,7 @@ class ToolExecutor(
     workspaceToolBackend: WorkspaceToolBackend? = null,
     private val governanceGuard: top.tianyan.app.harness.bot.GroupGovernanceGuard? = null,
     private val environments: top.tianyan.app.harness.environment.SessionExecutionEnvironments? = null,
+    private val redTeamCoordinator: top.tianyan.app.harness.redteam.RedTeamCoordinator? = null,
 ) {
     private val mutationSnapshots = WorkspaceMutationSnapshots(checkpointStore, eventBus)
     private val workspaceTools = workspaceToolBackend ?: WorkspaceToolBackend(
@@ -95,9 +96,8 @@ class ToolExecutor(
         harnessServiceToolBackend = harnessServiceToolBackend,
         contextMemoryToolBackend = contextMemoryToolBackend,
         promptAssetToolBackend = promptAssetToolBackend,
-        capabilityToolGateway = capabilityToolGateway,
-        searchRedactor = { session, workspace -> top.tianyan.app.harness.environment.executionOutputRedactor(
-            secretRedactor, environments, linuxEnvironmentManager, settingsDataStore, session, workspace) },
+        capabilityToolGateway = capabilityToolGateway, redTeamCoordinator = redTeamCoordinator, redTeamSessions = sessionDao,
+        searchRedactor = { s, w -> top.tianyan.app.harness.environment.executionOutputRedactor(secretRedactor, environments, linuxEnvironmentManager, settingsDataStore, s, w) },
     )
 
     private val executionBoundary = ToolExecutionBoundary(toolCheckpoints) { request, output ->

@@ -348,7 +348,7 @@ internal class ChatApi(
     }
 
     private fun buildRequest(model: ModelConfig, messages: List<ApiMessage>, stream: Boolean, includeUsage: Boolean = true): Request {
-            val tools = if (model.pureChatMode) emptyList() else ProviderClient.buildDynamicTools(model)
+            val tools = if (model.pureChatMode) emptyList() else ProviderClient.buildDynamicTools(model, model.redTeamEnabled)
         // JSON_TEXT 模式：把工具 JSON 描述追加到首条 system 消息末尾，让模型在纯文本中输出工具调用。
         // 只注入首条：压缩摘要层也是 system 消息，全量注入会把数千 token 的工具 schema 复制多份，
         // 还把 JSON 定义拼在「早期历史摘要」末尾污染摘要语义（Anthropic/Responses 路径本就只注入一次）。
@@ -1073,15 +1073,13 @@ class ProviderClient internal constructor(
             ),
         )
 
-        /** 静态基础工具 + 会话内 @ 挂载的 MCP 工具；挂载集合由调用方保持稳定排序。 */
-        fun buildDynamicTools(model: ModelConfig): List<ApiToolDefinition> =
-            if (model.dynamicMcpTools.isEmpty()) TOOLS
-            else TOOLS + model.dynamicMcpTools.map { it.toApiToolDefinition() }
+        /** 静态基础工具（含红队开关）+ 会话内 @ 挂载的 MCP 工具；挂载集合由调用方保持稳定排序。 */
+        fun buildDynamicTools(model: ModelConfig, redTeamEnabled: Boolean = false): List<ApiToolDefinition> {
+            val base = if (redTeamEnabled) TOOLS + RedTeamToolDefinitions.TOOLS else TOOLS
+            return if (model.dynamicMcpTools.isEmpty()) base else base + model.dynamicMcpTools.map { it.toApiToolDefinition() }
+        }
 
-        /**
-         * 把工具定义转成给模型看的 JSON 文本描述（JSON_TEXT 工具调用模式使用）。
-         * 每个工具一行 JSON，格式与 OpenAI function calling 一致，模型按 name/parameters 输出调用。
-         */
+        /** 把工具定义转成给模型看的 JSON 文本描述（JSON_TEXT 模式）；每工具一行，格式同 OpenAI function calling。 */
         fun buildToolsTextDescription(tools: List<ApiToolDefinition>): String {
             if (tools.isEmpty()) return "（无可用工具）"
             return tools.joinToString("\n") { tool ->

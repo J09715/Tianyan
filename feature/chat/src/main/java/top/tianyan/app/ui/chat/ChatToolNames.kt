@@ -56,4 +56,5 @@ internal fun toolName(tool: HarnessTool, rawToolName: String? = null): String =
         HarnessTool.COMPRESS -> "compress"
         HarnessTool.ASK_USER -> "ask_user"
         HarnessTool.RENDER_SURFACE -> "render_surface"
+        HarnessTool.RED_TEAM -> "red_team"
     }

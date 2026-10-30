@@ -820,6 +820,7 @@ class SettingsViewModel(
 
     val maxToolRounds: StateFlow<Int> = agentPreferences.maxToolRounds
         .stateIn(viewModelScope, SharingStarted.Eagerly, 100)
+    val maxConcurrentAgentTurns: StateFlow<Int> = agentPreferences.maxConcurrentAgentTurns.stateIn(viewModelScope, SharingStarted.Eagerly, 2) // 群聊并发 1..10
 
     val roundLimitAutoContinuations: StateFlow<Int> = agentPreferences.roundLimitAutoContinuations
         .stateIn(viewModelScope, SharingStarted.Eagerly, agentPreferences.defaultRoundLimitAutoContinuations)
@@ -1034,9 +1035,8 @@ class SettingsViewModel(
 
     fun setContextCompactionEnabled(value: Boolean) { viewModelScope.launch { agentPreferences.setContextCompactionEnabled(value) } }
 
-    fun setMaxToolRounds(value: Int) {
-        viewModelScope.launch { agentPreferences.setMaxToolRounds(value) }
-    }
+    fun setMaxConcurrentAgentTurns(value: Int) { viewModelScope.launch { agentPreferences.setMaxConcurrentAgentTurns(value) } }
+    fun setMaxToolRounds(value: Int) { viewModelScope.launch { agentPreferences.setMaxToolRounds(value) } }
 
     fun setRoundLimitAutoContinuations(value: Int) {
         viewModelScope.launch { agentPreferences.setRoundLimitAutoContinuations(value) }

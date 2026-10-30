@@ -161,6 +161,52 @@ internal fun RoundsSliderRow(
     }
 }
 
+/**
+ * 全局并发 Agent 回合数。
+ *
+ * 为什么值得暴露给用户：这个值直接决定群聊里能同时开几个成员。
+ * 默认 2 是保守值（移动端内存/网络/上游 API 限流都吃紧），
+ * 但多成员群聊场景下用户需要主动调大，否则会看到「只有两个在干活」。
+ */
+@Composable
+internal fun ConcurrencySliderRow(
+    currentValue: Int,
+    onValueChange: (Int) -> Unit,
+) {
+    var sliderVal by remember(currentValue) { mutableFloatStateOf(currentValue.toFloat()) }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("同时执行的智能体数量", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
+            Text(
+                "${sliderVal.toInt()} 个",
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace),
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        Text(
+            "群聊里多个成员同时回复时，超出这个数量的会排队等待；调大更快，但更吃内存与上游限流",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Slider(
+            value = sliderVal,
+            onValueChange = { sliderVal = it },
+            onValueChangeFinished = { onValueChange(sliderVal.toInt()) },
+            valueRange = 1f..10f,
+            steps = 8, // 1..10 的整数档位（1,2,...,10）
+        )
+    }
+}
+
 @Composable
 internal fun AgentSettingsGroup(content: @Composable () -> Unit) = SettingsGroup(content)
 
