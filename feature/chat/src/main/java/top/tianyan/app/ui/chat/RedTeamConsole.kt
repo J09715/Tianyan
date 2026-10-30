@@ -192,6 +192,11 @@ internal fun RedTeamConsole(
                 loading = state.loading,
             )
 
+            RedTeamConsoleTab.ARTIFACTS -> RedTeamArtifactsTab(
+                rows = state.sectionRows[RedTeamConsoleTab.ARTIFACTS.sectionId].orEmpty(),
+                loading = state.loading,
+            )
+
             RedTeamConsoleTab.PROMPTS -> RedTeamPromptsTab(
                 state = state,
                 onSelectRole = onSelectRole,
@@ -228,6 +233,7 @@ internal val RedTeamConsoleTab.sectionId: String
         RedTeamConsoleTab.TARGETS -> "targets"
         RedTeamConsoleTab.REPORT -> "report"
         RedTeamConsoleTab.KNOWLEDGE -> "knowledge"
+        RedTeamConsoleTab.ARTIFACTS -> "attackfiles"
         else -> ""
     }
 
@@ -692,31 +698,11 @@ private fun ConsoleChrome(
         }
     }
 
-    // 六个主页签：概览 / 资产 / 漏洞 / 链路 / 得分 / 报告。
-    // 条数直接标在页签上（CountBadge）：否则用户要点进每个页签才知道有没有数据，
-    // 空页签和「没实现的页签」看起来一模一样。
-    val primaryTabs = listOf(
-        RedTeamConsoleTab.OVERVIEW,
-        RedTeamConsoleTab.ASSETS,
-        RedTeamConsoleTab.VULNS,
-        RedTeamConsoleTab.CHAIN,
-        RedTeamConsoleTab.SCORES,
-        RedTeamConsoleTab.REPORT,
-    )
-    OrbitalTabRow(
-        specs = primaryTabs.map { tab ->
-            OrbitalTabSpec(
-                label = tab.label,
-                // 概览/资产没有分区 digest（sectionId 为空串），count 落 0，
-                // 徽章不渲染——这两个页签的「有没有数据」由氛围卡与统计网格表达。
-                count = state.sections.firstOrNull { it.id == tab.sectionId }?.count ?: 0,
-            )
-        },
-        // 次级页签（会话/目标/知识/提示词/技能）不在主页签列表里，indexOf 为 -1；
-        // coerceAtLeast(0) 落回「概览」高亮。已知折衷：次级页签内容仍完整显示，
-        // 用户点「概览」即回到导航枢纽，再从「更多分区」卡去别处。
-        selectedIndex = primaryTabs.indexOf(state.tab).coerceAtLeast(0),
-        modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
-        onSelect = { onSelectTab(primaryTabs[it]) },
+    // 两级导航：一级 5 个分区，二级才是具体页签（见 RedTeamTabNavigation）。
+    // 原来 11 个页签平铺一行放不下，横向滚动后低频页签（技能库）等于藏起来了。
+    RedTeamTabNavigation(
+        current = state.tab,
+        sectionCount = { tab -> state.badgeCount(tab) },
+        onSelectTab = onSelectTab,
     )
 }

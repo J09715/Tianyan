@@ -145,6 +145,8 @@ class ChatViewModel(
     private val quickPhraseRepository: QuickPhraseRepository,
     private val laneManager: LaneManager,
     internal val redTeamFactsSource: top.tianyan.app.core.database.RedTeamFactRepository,
+    /** 红队协调器；控制台的所有查询与写入都经它。 */
+    internal val redTeamCoordinatorRef: top.tianyan.app.harness.redteam.RedTeamCoordinator? = null,
 
     private val eventBus: HarnessEventBus,
     private val proactiveWorkflowAdvisor: ProactiveWorkflowAdvisor,
@@ -383,7 +385,8 @@ class ChatViewModel(
 
     /** 绑定红队目标与授权范围。 */
     fun bindRedTeamTarget(target: String, scope: String) = bindRedTeam(sessionDao, target, scope)
-    /** 所有会话的多 Agent 并发运行状态映射 (IDLE / RUNNING / COMPLETED / FAILED) */
+    internal val redTeamConsoleController by lazy { buildRedTeamConsoleController() } // 红队控制台
+
     val sessionRunStates: StateFlow<Map<String, SessionRunState>> = harnessLoop.sessionRunStates
     @OptIn(ExperimentalCoroutinesApi::class)
     val pendingApprovals: StateFlow<List<AgentApprovalRequestEntity>> = harnessLoop.currentSessionId.flatMapLatest { sessionId ->

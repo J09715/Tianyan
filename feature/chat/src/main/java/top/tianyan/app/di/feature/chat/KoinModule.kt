@@ -43,6 +43,7 @@ val featureChatModule = module {
             quickPhraseRepository = get(),
             laneManager = get(),
             redTeamFactsSource = get(),
+            redTeamCoordinatorRef = get(),
             eventBus = get(),
             proactiveWorkflowAdvisor = get(),
             modelDiscovery = get(),
