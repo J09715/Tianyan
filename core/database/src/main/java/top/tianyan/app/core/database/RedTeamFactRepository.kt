@@ -1,8 +1,6 @@
 package top.tianyan.app.core.database
 
 import kotlinx.coroutines.flow.Flow
-import javax.inject.Inject
-import javax.inject.Singleton
 
 interface RedTeamFactRepository {
     fun observeForSession(sessionId: String): Flow<List<RedTeamFactEntity>>
@@ -24,8 +22,7 @@ interface RedTeamFactRepository {
     suspend fun deleteById(sessionId: String, id: String)
 }
 
-@Singleton
-class RoomRedTeamFactRepository @Inject constructor(
+class RoomRedTeamFactRepository(
     private val dao: RedTeamFactDao,
 ) : RedTeamFactRepository {
     override fun observeForSession(sessionId: String) = dao.observeForSession(sessionId)

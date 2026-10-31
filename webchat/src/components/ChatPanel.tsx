@@ -7,6 +7,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import { isRecord } from "../api";
+import { diffLines, type DiffRow } from "../diff";
 import { formatBytes, markdownToHtml, messageContent, messageTime } from "../format";
 import type { ApprovalRequest, Attachment, ChatMessage, Conversation, QuickPhrase } from "../types";
 import {
@@ -105,87 +106,34 @@ function attachmentName(attachment: Record<string, unknown>): string {
   return String(attachment.fileName ?? attachment.name ?? "附件");
 }
 
-function attachmentSource(attachment: Record<string, unknown>): string {
+function attachmentImage(attachment: Record<string, unknown>): string {
   const source = String(attachment.dataUrl ?? attachment.url ?? "");
-  return /^(?:data:(?:image|video)\/|https?:\/\/)/i.test(source) ? source : "";
-}
-
-function attachmentKind(attachment: Record<string, unknown>, source: string): "image" | "video" | "file" {
   const mimeType = String(attachment.mimeType ?? attachment.type ?? "");
-  if (attachment.isImage === true || mimeType.startsWith("image/") || source.startsWith("data:image/") || /\.(avif|gif|jpe?g|png|webp)(?:[?#]|$)/i.test(source)) return "image";
-  if (mimeType.startsWith("video/") || source.startsWith("data:video/") || /\.(mp4|m4v|mov|webm|ogv)(?:[?#]|$)/i.test(source)) return "video";
-  return "file";
-}
-
-function MediaAttachment({
-  name,
-  kind,
-  source,
-}: {
-  name: string;
-  kind: "image" | "video";
-  source: string;
-}) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  const [lightboxOpen, setLightboxOpen] = useState(false);
-
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog || !lightboxOpen || dialog.open) return;
-    dialog.showModal();
-  }, [lightboxOpen]);
-
-  function closeLightbox() {
-    dialogRef.current?.close();
-    setLightboxOpen(false);
-  }
-
-  return (
-    <>
-      {kind === "image" ? (
-        <button className="message-media-button" type="button" aria-label={`查看大图：${name}`} onClick={() => setLightboxOpen(true)}>
-          <img className="message-image" src={source} alt={name} />
-        </button>
-      ) : (
-        <video className="message-video" controls preload="metadata" aria-label={name} src={source} />
-      )}
-      {kind === "image" && (
-        <dialog
-          className="media-lightbox"
-          ref={dialogRef}
-          aria-label={`大图预览：${name}`}
-          onCancel={closeLightbox}
-          onClick={(event) => {
-            if (event.target === event.currentTarget) closeLightbox();
-          }}
-        >
-          <button className="media-lightbox-close" type="button" aria-label="关闭大图" onClick={closeLightbox}>×</button>
-          <img src={source} alt={name} />
-        </dialog>
-      )}
-      {kind === "video" && <span className="sr-only">{name}</span>}
-    </>
-  );
+  const isImage = attachment.isImage === true
+    || mimeType.startsWith("image/")
+    || source.startsWith("data:image/")
+    || /\.(avif|gif|jpe?g|png|webp)(?:[?#]|$)/i.test(source);
+  return isImage && (source.startsWith("data:image/") || source.startsWith("https://") || source.startsWith("http://"))
+    ? source
+    : "";
 }
 
 function MessageAttachments({ attachments }: { attachments: Record<string, unknown>[] }) {
-  const visibleAttachments = attachments.map((attachment, index) => {
-    const source = attachmentSource(attachment);
-    return { attachment, index, name: attachmentName(attachment), kind: attachmentKind(attachment, source), source };
-  });
   if (!attachments.length) return null;
   return (
     <div className="message-attachments">
-      {visibleAttachments.map(({ index, name, kind, source }) => (
-        source && kind !== "file" ? (
-          <MediaAttachment name={name} kind={kind} source={source} key={`${name}-${index}`} />
+      {attachments.map((attachment, index) => {
+        const image = attachmentImage(attachment);
+        const name = attachmentName(attachment);
+        return image ? (
+          <img className="message-image" src={image} alt={name} key={`${name}-${index}`} />
         ) : (
           <span className="attachment-chip" key={`${name}-${index}`}>
             <Icon name="file" size={15} />
             <span>{name}</span>
           </span>
-        )
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -199,6 +147,7 @@ function statusLabel(status: unknown): string {
     timeout: "超时",
     interrupted: "已中断",
     cancelled: "已停止",
+    unverified: "未验证",
   } as Record<string, string>)[String(status)] ?? String(status || "已完成");
 }
 
@@ -209,6 +158,7 @@ function statusClass(status: unknown): string {
   if (value === "error") return "error";
   if (value === "timeout") return "timeout";
   if (value === "interrupted" || value === "cancelled") return "interrupted";
+  if (value === "unverified") return "unverified";
   return "running";
 }
 
@@ -233,6 +183,33 @@ function toolIcon(card: Record<string, unknown>): "terminal" | "search" | "file"
   return "workspace";
 }
 
+/** 从文件类工具调用参数提取 diff 行；无法解析时返回 null，回退到 JSON 展示。 */
+function toolDiffRows(card: Record<string, unknown>): DiffRow[] | null {
+  const raw = card.arguments;
+  let args: Record<string, unknown> | null = null;
+  if (typeof raw === "string") {
+    try {
+      args = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      args = null;
+    }
+  } else if (isRecord(raw)) {
+    args = raw;
+  }
+  if (!args) return null;
+  const before = args.old_string ?? args.old_str ?? args.oldText;
+  const after = args.new_string ?? args.new_str ?? args.newText;
+  if (typeof before === "string" && typeof after === "string") {
+    return diffLines(before, after);
+  }
+  const toolType = String(card.toolType ?? "").toLowerCase();
+  const written = args.content ?? args.file_text;
+  if (typeof written === "string" && /file|write|edit|replace/.test(toolType)) {
+    return diffLines("", written);
+  }
+  return null;
+}
+
 function Message({
   message,
   active = false,
@@ -250,6 +227,7 @@ function Message({
   const reasoning = String(message.reasoning_content ?? message.reasoningContent ?? "").trim();
   const classes = `message-row ${isUser ? "user" : "assistant"}${message.isError ? " error" : ""}`;
   const isCard = Number(message.type) === 2 || rawCard;
+  const diffRows = isCard ? toolDiffRows(card) : null;
 
   // 天衍 Harness 的工具调用、工具结果与能力事件。
   if (isCard) {
@@ -271,7 +249,18 @@ function Message({
               </span>
             </summary>
             <div className="tool-detail">
-              <pre>{JSON.stringify(card, null, 2)}</pre>
+              {diffRows ? (
+                <div className="tool-diff">
+                  {diffRows.map((row, index) => (
+                    <div className={`diff-row ${row.kind}`} key={index}>
+                      <span className="diff-sign">{row.kind === "add" ? "+" : row.kind === "del" ? "-" : "\u00A0"}</span>
+                      <span className="diff-text">{row.text || "\u00A0"}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <pre>{JSON.stringify(card, null, 2)}</pre>
+              )}
             </div>
           </details>
         </div>
@@ -334,7 +323,6 @@ export function ChatPanel({
   const [draft, setDraft] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const messageListRef = useRef<HTMLDivElement>(null);
-  const shouldAutoScrollRef = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const sortedMessages = [...messages].sort((left, right) => messageTime(left) - messageTime(right));
@@ -345,17 +333,9 @@ export function ChatPanel({
   const isProcessing = sending || Boolean(activeTaskId);
   const canSend = !isProcessing && Boolean(draft.trim() || attachments.length);
 
-  function updateScrollIntent() {
-    const list = messageListRef.current;
-    if (!list) return;
-    const distanceFromBottom = list.scrollHeight - list.scrollTop - list.clientHeight;
-    shouldAutoScrollRef.current = distanceFromBottom <= 96;
-  }
-
   useEffect(() => {
     const list = messageListRef.current;
-    if (!list || !shouldAutoScrollRef.current) return;
-    list.scrollTop = list.scrollHeight;
+    if (list) list.scrollTop = list.scrollHeight;
   }, [messages, activeTaskId]);
 
   useEffect(() => {
@@ -428,7 +408,7 @@ export function ChatPanel({
 
       {globalError && <div className="global-error" role="alert">{globalError}</div>}
 
-      <div className="message-list" aria-live="polite" ref={messageListRef} onScroll={updateScrollIntent}>
+      <div className="message-list" aria-live="polite" ref={messageListRef}>
         {!sortedMessages.length && <EmptyGreeting />}
         {sortedMessages.map((message, index) => (
           <Message

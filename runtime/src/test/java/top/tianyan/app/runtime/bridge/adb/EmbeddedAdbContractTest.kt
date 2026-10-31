@@ -54,4 +54,16 @@ class EmbeddedAdbContractTest {
         assertEquals(1, failureOutcome.exitCode)
         assertFalse(failureOutcome.success)
     }
+
+    @Test
+    fun consumerTagsAreDefinedAndDiscoveryDefaultsToNotRunning() {
+        assertEquals("manual", EmbeddedAdbManager.TAG_MANUAL)
+        assertEquals("adb_notification", EmbeddedAdbManager.TAG_NOTIFICATION)
+        assertEquals("developer_ui", EmbeddedAdbManager.TAG_DEVELOPER_UI)
+
+        val defaultDiscovery = EmbeddedAdbManager.DiscoveryState()
+        assertFalse("默认发现状态必须为非运行态，避免冷启动触发 mDNS 扫描", defaultDiscovery.running)
+        assertTrue(defaultDiscovery.pairingEndpoints.isEmpty())
+        assertTrue(defaultDiscovery.connectEndpoints.isEmpty())
+    }
 }

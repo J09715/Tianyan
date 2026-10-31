@@ -1,5 +1,7 @@
 package top.tianyan.app.ui.workspace
-
+import top.tianyan.app.ui.components.previewOrNull
+import top.tianyan.app.ui.components.previewStateOf
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -15,7 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -33,7 +35,6 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -44,27 +45,28 @@ import top.tianyan.app.ui.components.RuntimeAlertDialog
 import top.tianyan.app.ui.components.RuntimeButton
 import top.tianyan.app.ui.components.RuntimeCard
 import top.tianyan.app.ui.components.RuntimeIcon
+import top.tianyan.app.ui.components.RuntimeIconButton
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeOutlinedButton
 import top.tianyan.app.ui.components.RuntimeTopBar
 import top.tianyan.app.ui.components.SectionHeader
 import androidx.compose.ui.res.stringResource
-
+import java.util.UUID
 /**
  * 工坊签名管理：创建 / 导入 / 删除 Android 签名（keystore）。
  * Release 构建时在构建类型选择弹窗中选用这里登记的签名。
  */
 @Composable
-fun WorkshopSigningScreen(onBack: () -> Unit, viewModel: WorkshopSigningViewModel = hiltViewModel()) {
-    val keystores by viewModel.keystores.collectAsStateWithLifecycle()
-    val busy by viewModel.busy.collectAsStateWithLifecycle()
-    val message by viewModel.message.collectAsStateWithLifecycle()
+fun WorkshopSigningScreen(onBack: () -> Unit, viewModel: WorkshopSigningViewModel? = previewOrNull { koinViewModel() }) {
+    val keystores by viewModel?.keystores?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val busy by viewModel?.busy?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val message by viewModel?.message?.collectAsStateWithLifecycle() ?: previewStateOf(null)
     var showCreate by rememberSaveable { mutableStateOf(false) }
     var showImport by rememberSaveable { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<WorkshopKeystore?>(null) }
 
     Scaffold(containerColor = MaterialTheme.colorScheme.background, topBar = { RuntimeTopBar(stringResource(R.string.workshop_signing_title), onBack, stringResource(R.string.workshop_signing_subtitle)) }) { padding ->
-        LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        LazyColumn(Modifier.fillMaxSize().then(top.tianyan.app.ui.components.runtimeScrollViewport(padding)), contentPadding = top.tianyan.app.ui.components.runtimeScrollContentPadding(padding, PaddingValues(16.dp)), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item { SectionHeader(stringResource(R.string.workshop_signing_section), stringResource(R.string.workshop_signing_section_description)) }
             item {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -102,7 +104,7 @@ fun WorkshopSigningScreen(onBack: () -> Unit, viewModel: WorkshopSigningViewMode
             busy = busy,
             onDismiss = { showCreate = false },
             onConfirm = { draft, onError ->
-                viewModel.createKeystore(
+                viewModel?.createKeystore(
                     draft = draft,
                     onError = onError,
                     onSuccess = { showCreate = false },
@@ -115,7 +117,7 @@ fun WorkshopSigningScreen(onBack: () -> Unit, viewModel: WorkshopSigningViewMode
             busy = busy,
             onDismiss = { showImport = false },
             onConfirm = { draft, onError ->
-                viewModel.importKeystore(
+                viewModel?.importKeystore(
                     draft = draft,
                     onError = onError,
                     onSuccess = { showImport = false },
@@ -129,7 +131,7 @@ fun WorkshopSigningScreen(onBack: () -> Unit, viewModel: WorkshopSigningViewMode
             title = { Text(stringResource(R.string.workshop_signing_delete_title, target.name)) },
             text = { Text(stringResource(R.string.workshop_signing_delete_message)) },
             confirmButton = {
-                RuntimeButton(onClick = { viewModel.deleteKeystore(target); deleteTarget = null }) { Text(stringResource(R.string.workspace_confirm_delete)) }
+                RuntimeButton(onClick = { viewModel?.deleteKeystore(target); deleteTarget = null }) { Text(stringResource(R.string.workspace_confirm_delete)) }
             },
             dismissButton = {
                 RuntimeOutlinedButton(onClick = { deleteTarget = null }) { Text(stringResource(R.string.workspace_cancel)) }
@@ -144,7 +146,7 @@ private fun KeystoreRow(keystore: WorkshopKeystore, onDelete: () -> Unit) {
         Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.secondaryContainer) {
             RuntimeIcon(RuntimeIconName.Key, Modifier.padding(9.dp).size(20.dp), MaterialTheme.colorScheme.onSecondaryContainer)
         }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(keystore.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 "alias ${keystore.alias} · ${keystore.validityYears}y · ${formatDate(keystore.createdAtMillis)}",
@@ -286,55 +288,16 @@ private fun CreateKeystoreDialog(
     )
 }
 
-/**
- * 生成签名密钥库口令。
- *
- * 之前是 `${项目名}#${年份}_${4位随机}`，随机部分只有 4 个字符（36 选 4 无放回），
- * 约 20 bits 熵；而项目名和年份都可枚举或已知。这个口令保护的是有效期 25 年的
- * 签名密钥库，可被暴力枚举——一旦泄露，攻击者能用同一身份签名假冒 APK。
- *
- * 改用 SecureRandom 从 64 字符集取 24 位，约 144 bits 熵，且不暴露任何可预测片段。
- */
-private val PASSWORD_ALPHABET: CharArray =
-    ("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#\$%^&*-_=+").toCharArray()
-private const val PASSWORD_LENGTH = 24
-
-/**
- * 先保证每类字符各出现一次，再填满剩余长度，最后整体打乱。
- *
- * 「保证出现」与「随机」要分开处理：纯随机会有小概率某一类一个都没抽到
- * （24 次抽样、72 字符集时，数字类一次都不出现的概率不为零），
- * 用 SecureRandom 洗牌既保证覆盖又不引入可预测的位置规律。
- */
-private fun generateStrongPassword(): String {
-    val random = java.security.SecureRandom()
-    val pick = { chars: CharArray -> chars[random.nextInt(chars.size)] }
-    val upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".toCharArray()
-    val lower = "abcdefghijklmnopqrstuvwxyz".toCharArray()
-    val digits = "0123456789".toCharArray()
-    val symbols = "!@#\$%^&*-_=+".toCharArray()
-
-    val chars = mutableListOf(pick(upper), pick(lower), pick(digits), pick(symbols))
-    repeat(PASSWORD_LENGTH - chars.size) { chars += pick(PASSWORD_ALPHABET) }
-    // Fisher-Yates：用 SecureRandom 保证洗牌不可预测
-    for (i in chars.size - 1 downTo 1) {
-        val j = random.nextInt(i + 1)
-        val tmp = chars[i]
-        chars[i] = chars[j]
-        chars[j] = tmp
-    }
-    return chars.joinToString("")
-}
-
 internal fun generateDefaultSigningDraft(prefixInput: String): WorkshopSigningCreationDraft {
     val cleanInput = prefixInput.trim()
         .replace(Regex("-\\d{8}-[a-fA-F0-9]+$"), "")
         .ifBlank { "tianyan-release" }
     val safePrefix = cleanInput.replace(Regex("[^a-zA-Z0-9]+"), "-").trim('-').ifBlank { "tianyan-release" }
     val dateStr = SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date())
-    val hexSuffix = java.util.UUID.randomUUID().toString().replace("-", "").take(4).lowercase(Locale.getDefault())
+    val hexSuffix = UUID.randomUUID().toString().replace("-", "").take(4).lowercase(Locale.getDefault())
     val name = "$safePrefix-$dateStr-$hexSuffix"
     val alias = "$safePrefix-key"
+    val yearStr = SimpleDateFormat("yyyy", Locale.getDefault()).format(Date())
     val capPrefix = if (safePrefix == "tianyan-release") {
         "Tianyan"
     } else {
@@ -343,7 +306,8 @@ internal fun generateDefaultSigningDraft(prefixInput: String): WorkshopSigningCr
             .joinToString("") { it.replaceFirstChar { c -> c.uppercase(Locale.getDefault()) } }
             .ifBlank { "Tianyan" }
     }
-    val password = generateStrongPassword()
+    val randomChars = (('a'..'z') + ('0'..'9')).shuffled().take(4).joinToString("")
+    val password = "${capPrefix}#${yearStr}_$randomChars"
     val org = "$capPrefix Developer"
     return WorkshopSigningCreationDraft(
         name = name,
@@ -461,7 +425,7 @@ private fun SigningField(
     onValueChange: (String) -> Unit,
 ) {
     var passwordVisible by remember { mutableStateOf(false) }
-    OutlinedTextField(
+    RuntimeFilledTextField(
         value = value,
         onValueChange = onValueChange,
         label = { Text(if (optional) "$label（可选）" else label) },
@@ -471,12 +435,8 @@ private fun SigningField(
         visualTransformation = if (password && !passwordVisible) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
         trailingIcon = if (password) {
             {
-                androidx.compose.material3.IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                    RuntimeIcon(
-                        name = if (passwordVisible) RuntimeIconName.VisibilityOff else RuntimeIconName.Visibility,
-                        modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                RuntimeIconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    RuntimeIcon(name = if (passwordVisible) RuntimeIconName.VisibilityOff else RuntimeIconName.Visibility, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         } else null,
@@ -516,10 +476,4 @@ private val importDraftSaver = androidx.compose.runtime.saveable.listSaver<Works
         )
     },
 )
-
-private fun queryDisplayName(context: android.content.Context, uri: android.net.Uri): String? = runCatching {
-    context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-        val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-        if (nameIndex >= 0 && cursor.moveToFirst()) cursor.getString(nameIndex) else null
-    }
-}.getOrNull()
+// queryDisplayName 已抽至同包 WorkspaceAppPicker.kt 统一复用

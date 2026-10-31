@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="personal_settings_title">Settings</string>
+    <string name="personal_appearance_title">Look &amp; feel</string>
+    <string name="personal_color_intro">Make colors, text, and backgrounds feel like you.</string>
+    <string name="personal_wallpaper_color">Wallpaper colors</string>
+    <string name="personal_wallpaper_color_description">Bring colors from your wallpaper into the app</string>
+    <string name="personal_search">Search settings and features</string>
+    <string name="personal_environment">Features &amp; environment</string>
+    <string name="personal_application">App &amp; support</string>
+    <string name="personal_agents_title">Agents &amp; models</string>
+    <string name="personal_linux_title">Linux &amp; storage</string>
+    <string name="personal_diagnostics_title">Background &amp; diagnostics</string>
+    <string name="personal_phrase_enabled">Enabled</string>
+    <string name="personal_phrase_disabled">Disabled</string>
+    <string name="personal_mcp_title">MCP services</string>
+</resources>

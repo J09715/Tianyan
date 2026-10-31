@@ -1,5 +1,7 @@
 package top.tianyan.app.ui.settings.stats
-
+import top.tianyan.app.ui.components.previewOrNull
+import top.tianyan.app.ui.components.previewStateOf
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,37 +14,46 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.tianyan.app.core.model.StatsDateRangePreset
+import top.tianyan.app.ui.components.RuntimeButton
 import top.tianyan.app.ui.components.RuntimeCard
+import top.tianyan.app.ui.components.RuntimeFilterChip
 import top.tianyan.app.ui.components.RuntimeIconName
+import top.tianyan.app.ui.components.RuntimeLinearProgressIndicator
 import top.tianyan.app.ui.components.RuntimeTopBar
+import top.tianyan.app.ui.settings.stats.widgets.LedgerBreakdownPanel
+import top.tianyan.app.ui.settings.stats.widgets.LedgerCompositionPanel
+import top.tianyan.app.ui.settings.stats.widgets.LedgerDetailDialog
+import top.tianyan.app.ui.settings.stats.widgets.LedgerScopeControls
+import top.tianyan.app.ui.settings.stats.widgets.LedgerTrendPanel
+import top.tianyan.app.ui.settings.stats.widgets.LedgerUsagePanel
 import top.tianyan.app.ui.settings.stats.widgets.StatsHeatmap
 import top.tianyan.app.ui.settings.stats.widgets.StatsMetricGrid
-import top.tianyan.app.ui.settings.stats.widgets.StatsRankSection
 import top.tianyan.app.ui.settings.stats.widgets.StatsSectionCard
 import top.tianyan.app.ui.settings.stats.widgets.StatsUsageChart
-
 @Composable
 fun StatsScreen(
     onBack: () -> Unit,
-    viewModel: StatsViewModel = hiltViewModel(),
+    viewModel: StatsViewModel? = previewOrNull { koinViewModel() },
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val uiState by viewModel?.uiState?.collectAsStateWithLifecycle() ?: previewStateOf(StatsUiState())
+
+    // 明细弹窗的开关就放在页面这一层：多个分区（用量右上角、分解行）都可能打开它。
+    var showLedgerDetail by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -56,7 +67,7 @@ fun StatsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
+                .then(top.tianyan.app.ui.components.runtimeScrollViewport(padding)),
         ) {
             // 顶部时间范围筛选胶囊
             Row(
@@ -75,9 +86,9 @@ fun StatsScreen(
 
                 for ((preset, label) in presets) {
                     val selected = uiState.range.preset == preset
-                    FilterChip(
+                    RuntimeFilterChip(
                         selected = selected,
-                        onClick = { viewModel.setDateRangePreset(preset) },
+                        onClick = { viewModel?.setDateRangePreset(preset) },
                         label = {
                             Text(
                                 text = label,
@@ -87,16 +98,26 @@ fun StatsScreen(
                                 ),
                             )
                         },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        ),
+                    )
+                }
+            }
+
+            // 作用域控件是页面级的（与时间范围同级），不放在 LazyColumn 里，
+            // 否则滚动时会跟着内容跑掉。账本为空时整块隐藏，不出现空壳控件。
+            val ledgerForScope = uiState.snapshot?.ledger?.takeIf { it.calls > 0 }
+            if (ledgerForScope != null) {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+                    LedgerScopeControls(
+                        scopeDim = uiState.scopeDim,
+                        scopeValue = uiState.scopeValue,
+                        options = ledgerForScope.scopeOptions,
+                        onScopeChange = { dim, value -> viewModel?.setLedgerScope(dim, value) },
                     )
                 }
             }
 
             if (uiState.isLoading) {
-                LinearProgressIndicator(
+                RuntimeLinearProgressIndicator(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(2.dp),
@@ -118,11 +139,11 @@ fun StatsScreen(
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.error,
                             )
-                            FilterChip(
-                                selected = false,
-                                onClick = viewModel::refresh,
-                                label = { Text("重试") },
-                            )
+                            RuntimeButton(
+                                onClick = { viewModel?.refresh() },
+                            ) {
+                                Text("重试")
+                            }
                         }
                     }
                 }
@@ -146,64 +167,74 @@ fun StatsScreen(
             if (snapshot != null) {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    contentPadding = top.tianyan.app.ui.components.runtimeScrollContentPadding(padding, PaddingValues(horizontal = 16.dp, vertical = 8.dp)),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
-                    // 1. 活跃度打卡热力图
+                    // 1. 活跃度打卡热力图（与用量无关的独立维度，原样保留）
                     item {
                         StatsSectionCard(title = "活跃度打卡热力图") {
                             StatsHeatmap(days = snapshot.heatmap)
                         }
                     }
 
-                    // 2. 核心指标概览 6 宫格
-                    item {
-                        StatsSectionCard(title = "核心指标概览") {
-                            StatsMetricGrid(summary = snapshot.summary)
+                    if (snapshot.ledger.calls > 0) {
+                        // 2. 用量 —— 账本的真实计量值。估算口径的 token 三项已从这里退场，
+                        //    只保留它独有的行为指标，因此与下面几个分区不重复。
+                        item {
+                            LedgerUsagePanel(
+                                ledger = snapshot.ledger,
+                                conversations = snapshot.summary.totalConversations,
+                                messages = snapshot.summary.totalMessages,
+                                launches = snapshot.summary.launchCount,
+                                onOpenDetail = { showLedgerDetail = true },
+                            )
                         }
-                    }
 
-                    // 3. Token 用量趋势图表
-                    item {
-                        StatsSectionCard(title = "Token 用量与消耗趋势") {
-                            StatsUsageChart(days = snapshot.trend)
+                        // 3. 用量趋势 —— 复用既有图表组件：点立柱看当日各模型、
+                        //    左右滑动看趋势两个手感原样继承，不必重写手势。
+                        item {
+                            LedgerTrendPanel(days = snapshot.ledger.trend)
                         }
-                    }
 
-                    // 4. 模型使用排行
-                    item {
-                        StatsRankSection(
-                            title = "模型使用排行",
-                            leftHeader = "模型名称",
-                            rightHeader = "调用次数",
-                            items = snapshot.modelRank,
-                            icon = RuntimeIconName.Brain,
-                        )
-                    }
+                        // 4. 分解 —— 三种分组在快照里已预计算，切换分组不查库。
+                        item {
+                            LedgerBreakdownPanel(
+                                rows = snapshot.ledger.groupsOf(uiState.groupDim),
+                                groupDim = uiState.groupDim,
+                                onGroupChange = { viewModel?.setLedgerGroupDim(it) },
+                            )
+                        }
 
-                    // 5. 助手 / 工程工作区排行
-                    item {
-                        StatsRankSection(
-                            title = "助手与工程排行",
-                            leftHeader = "工作区 / 助手",
-                            rightHeader = "使用频次",
-                            items = snapshot.assistantRank,
-                            icon = RuntimeIconName.Bot,
-                        )
-                    }
-
-                    // 6. 热门话题排行
-                    item {
-                        StatsRankSection(
-                            title = "热门话题会话排行",
-                            leftHeader = "会话标题",
-                            rightHeader = "消息条数",
-                            items = snapshot.topicRank,
-                            icon = RuntimeIconName.Chat,
-                        )
+                        // 5. 构成 —— token 类型构成，到这一节页面结束。
+                        item {
+                            LedgerCompositionPanel(ledger = snapshot.ledger)
+                        }
+                    } else {
+                        // 账本为空：早于用量账本落库的历史用法。这里回退到估算口径，
+                        // 否则这些用户整页只剩一张热力图——与「估算口径要覆盖账本落库之前的历史」
+                        // 这一设计前提直接矛盾。
+                        item {
+                            StatsSectionCard(title = "核心指标概览") {
+                                StatsMetricGrid(summary = snapshot.summary)
+                            }
+                        }
+                        item {
+                            StatsSectionCard(title = "Token 用量与消耗趋势") {
+                                StatsUsageChart(days = snapshot.trend)
+                            }
+                        }
                     }
                 }
             }
+        }
+
+        val ledger = uiState.snapshot?.ledger
+        if (showLedgerDetail && ledger != null) {
+            LedgerDetailDialog(
+                ledger = ledger,
+                groupDim = uiState.groupDim,
+                onDismiss = { showLedgerDetail = false },
+            )
         }
     }
 }

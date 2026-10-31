@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="tianyan_app_name">Tianyan</string>
+    <string name="tianyan_update_available">New version available: v%1$s</string>
+    <string name="tianyan_update_versions">Current: v%1$s  ➔  Latest: v%2$s</string>
+    <string name="tianyan_update_downloading_package">Downloading update…</string>
+    <string name="tianyan_update_download_failed">Failed to download the update package. Check your network and try again.</string>
+    <string name="tianyan_downloading">Downloading…</string>
+    <string name="tianyan_update_now">Update now</string>
+    <string name="tianyan_open_github">Open GitHub</string>
+    <string name="tianyan_later">Later</string>
     <string name="tianyan_agent_notification_channel">Agent execution</string>
     <string name="tianyan_agent_ready">Agent center ready</string>
     <string name="tianyan_agent_default_title">Tianyan Agent</string>
@@ -15,4 +23,7 @@
     <string name="tianyan_runtime_notification_channel">Linux Runtime</string>
     <string name="tianyan_runtime_running">Linux Runtime is running</string>
     <string name="tianyan_runtime_background_available">Background tools and local services remain available</string>
+    <string name="tianyan_agent_mcp_notification_channel">MCP Agent Server</string>
+    <string name="tianyan_agent_mcp_running_hint">External AI clients can connect at any time</string>
+    <string name="tianyan_gui_a11y_description">Tianyan GUI gesture service for taps/swipes/long-press. With Shizuku/Root it is auto-enabled; otherwise you can turn it on manually in Accessibility settings as a fallback.</string>
 </resources>

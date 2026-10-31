@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
@@ -24,8 +23,6 @@ import top.tianyan.app.core.model.ExecutionMode
 import top.tianyan.app.core.model.PrivilegeCheckResult
 import java.util.concurrent.TimeUnit
 import java.util.UUID
-import javax.inject.Inject
-import javax.inject.Singleton
 
 enum class PrivilegeAvailability { CHECKING, ACTIVE, DEGRADED, UNAVAILABLE }
 
@@ -42,9 +39,8 @@ data class PrivilegeState(
     val degraded: Boolean get() = availability == PrivilegeAvailability.DEGRADED
 }
 
-@Singleton
-class PrivilegeManager @Inject constructor(
-    @ApplicationContext private val context: Context,
+class PrivilegeManager(
+    private val context: Context,
     private val settingsDataStore: RuntimePreferences,
     private val logger: AppLogger,
     private val shizukuHostServiceClient: ShizukuHostServiceClient,

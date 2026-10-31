@@ -1,4 +1,4 @@
-package top.tianyan.app.core.database.task
+﻿package top.tianyan.app.core.database.task
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
@@ -38,6 +38,9 @@ data class AgentTaskEntity(
     @ColumnInfo(defaultValue = "0") val lastRound: Int = 0,
     @ColumnInfo(defaultValue = "0") val maxRounds: Int = 0,
     val statusDetail: String? = null,
+    @ColumnInfo(defaultValue = "NULL") val groupWorkId: String? = null,
+    @ColumnInfo(defaultValue = "NULL") val groupId: String? = null,
+    @ColumnInfo(defaultValue = "NULL") val groupProgressJson: String? = null,
 )
 
 /** Persisted values are stable API: migrations and notification/UI projections depend on them. */

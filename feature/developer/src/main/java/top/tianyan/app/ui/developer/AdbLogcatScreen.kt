@@ -1,5 +1,7 @@
 package top.tianyan.app.ui.developer
-
+import top.tianyan.app.ui.components.previewOrNull
+import top.tianyan.app.ui.components.previewStateOf
+import org.koin.compose.viewmodel.koinViewModel
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -20,7 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -35,7 +37,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.tianyan.app.runtime.bridge.adb.EmbeddedAdbManager
 import top.tianyan.app.ui.components.IconTile
@@ -46,11 +47,11 @@ import top.tianyan.app.ui.components.RuntimeFilledTonalButton as FilledTonalButt
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeLinearProgressIndicator as LinearProgressIndicator
 import top.tianyan.app.ui.components.RuntimeOutlinedButton as OutlinedButton
+import top.tianyan.app.ui.components.RuntimeSwitch as Switch
 import top.tianyan.app.ui.components.RuntimeTopBar
 import top.tianyan.app.ui.components.SectionHeader
 import top.tianyan.app.ui.components.StatusBadge
 import top.tianyan.app.ui.developer.LocalizedText as Text
-
 /**
  * 独立的无线 ADB 与日志抓取工作台页面。
  *
@@ -63,14 +64,14 @@ import top.tianyan.app.ui.developer.LocalizedText as Text
 @Composable
 fun AdbLogcatScreen(
     onBack: () -> Unit,
-    viewModel: DeveloperViewModel = hiltViewModel(),
+    viewModel: DeveloperViewModel? = previewOrNull { koinViewModel() },
 ) {
-    val adbState by viewModel.adbState.collectAsStateWithLifecycle()
-    val adbDiscovery by viewModel.adbDiscovery.collectAsStateWithLifecycle()
-    val adbBusy by viewModel.adbBusy.collectAsStateWithLifecycle()
-    val adbMessage by viewModel.adbMessage.collectAsStateWithLifecycle()
-    val logcatOutput by viewModel.logcatOutput.collectAsStateWithLifecycle()
-    val adbNotificationEnabled by viewModel.adbNotificationEnabled.collectAsStateWithLifecycle()
+    val adbState by viewModel?.adbState?.collectAsStateWithLifecycle() ?: previewStateOf(top.tianyan.app.runtime.bridge.adb.EmbeddedAdbManager.ConnectionState.Disconnected)
+    val adbDiscovery by viewModel?.adbDiscovery?.collectAsStateWithLifecycle() ?: previewStateOf(top.tianyan.app.runtime.bridge.adb.EmbeddedAdbManager.DiscoveryState())
+    val adbBusy by viewModel?.adbBusy?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val adbMessage by viewModel?.adbMessage?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val logcatOutput by viewModel?.logcatOutput?.collectAsStateWithLifecycle() ?: previewStateOf("")
+    val adbNotificationEnabled by viewModel?.adbNotificationEnabled?.collectAsStateWithLifecycle() ?: previewStateOf(false)
 
     var pairingCode by rememberSaveable { mutableStateOf("") }
     var explicitPort by rememberSaveable { mutableStateOf("") }
@@ -96,8 +97,8 @@ fun AdbLogcatScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-                .verticalScroll(rememberScrollState())
+                .then(top.tianyan.app.ui.components.runtimeScrollViewport(innerPadding))
+                .verticalScroll(rememberScrollState()).padding(bottom = innerPadding.calculateBottomPadding())
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
@@ -179,9 +180,8 @@ fun AdbLogcatScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    androidx.compose.material3.Switch(
-                        checked = adbNotificationEnabled,
-                        onCheckedChange = viewModel::setAdbNotificationEnabled,
+                    Switch(
+                        checked = adbNotificationEnabled, onCheckedChange = { viewModel?.setAdbNotificationEnabled(it) },
                     )
                 }
             }
@@ -214,7 +214,7 @@ fun AdbLogcatScreen(
                 Spacer(Modifier.height(12.dp))
 
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = pairingCode,
                         onValueChange = { value -> pairingCode = value.filter(Char::isDigit).take(6) },
                         modifier = Modifier.weight(1.1f),
@@ -223,7 +223,7 @@ fun AdbLogcatScreen(
                         supportingText = { Text("首次配对时填入") },
                         singleLine = true,
                     )
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = explicitPort,
                         onValueChange = { value -> explicitPort = value.filter(Char::isDigit).take(5) },
                         modifier = Modifier.weight(0.9f),
@@ -237,14 +237,14 @@ fun AdbLogcatScreen(
 
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
-                        onClick = { viewModel.pairWirelessAdb(pairingCode, explicitPort.toIntOrNull()) },
+                        onClick = { viewModel?.pairWirelessAdb(pairingCode, explicitPort.toIntOrNull()) },
                         enabled = !adbBusy && pairingCode.length == 6 && (adbDiscovery.pairingEndpoints.isNotEmpty() || explicitPort.isNotBlank()),
                         modifier = Modifier.weight(1f),
                     ) {
                         Text("完成配对并连接")
                     }
                     OutlinedButton(
-                        onClick = { viewModel.connectWirelessAdb(explicitPort.toIntOrNull()) },
+                        onClick = { viewModel?.connectWirelessAdb(explicitPort.toIntOrNull()) },
                         enabled = !adbBusy && (adbDiscovery.connectEndpoints.isNotEmpty() || explicitPort.isNotBlank() || adbState is EmbeddedAdbManager.ConnectionState.Connected),
                         modifier = Modifier.weight(1f),
                     ) {
@@ -255,7 +255,7 @@ fun AdbLogcatScreen(
                 Spacer(Modifier.height(6.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     FilledTonalButton(
-                        onClick = viewModel::restartAdbDiscovery,
+                        onClick = { viewModel?.restartAdbDiscovery() },
                         enabled = !adbBusy,
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                     ) {
@@ -276,7 +276,7 @@ fun AdbLogcatScreen(
             // ── 3. 日志抓取工作台 ───────────────────────────────────────────
             SectionHeader("Logcat 日志抓取", "指定目标应用包名、Tag 与过滤条件，就地抓取与分析运行日志")
             RuntimeCard(Modifier.fillMaxWidth()) {
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = logcatPackage,
                     onValueChange = { logcatPackage = it },
                     modifier = Modifier.fillMaxWidth(),
@@ -301,14 +301,14 @@ fun AdbLogcatScreen(
                 Spacer(Modifier.height(10.dp))
 
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = logcatTag,
                         onValueChange = { logcatTag = it },
                         modifier = Modifier.weight(1f),
                         label = { Text("Tag 过滤（可选）") },
                         singleLine = true,
                     )
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = logcatLines,
                         onValueChange = { logcatLines = it.filter(Char::isDigit).take(4) },
                         modifier = Modifier.weight(0.6f),
@@ -318,7 +318,7 @@ fun AdbLogcatScreen(
                 }
                 Spacer(Modifier.height(8.dp))
 
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = logcatKeyword,
                     onValueChange = { logcatKeyword = it },
                     modifier = Modifier.fillMaxWidth(),
@@ -355,7 +355,7 @@ fun AdbLogcatScreen(
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = {
-                            viewModel.captureLogcat(
+                            viewModel?.captureLogcat(
                                 logcatPackage,
                                 logcatTag,
                                 logcatPriority,
@@ -369,7 +369,7 @@ fun AdbLogcatScreen(
                         Text("抓取日志")
                     }
                     OutlinedButton(
-                        onClick = viewModel::clearDeviceLogcat,
+                        onClick = { viewModel?.clearDeviceLogcat() },
                         enabled = connected != null && !adbBusy,
                     ) {
                         Text("清空缓冲区")

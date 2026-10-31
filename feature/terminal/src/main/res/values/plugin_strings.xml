@@ -1,0 +1,4 @@
+<resources>
+    <string name="terminal_plugin_title">终端</string>
+    <string name="terminal_plugin_description">交互式 Shell 与项目命令</string>
+</resources>

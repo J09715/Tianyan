@@ -150,6 +150,26 @@ class SubagentArgsParserTest {
         assertEquals(listOf("app/src"), SubagentArgsParser.parse(args).single().writePaths)
     }
 
+    @Test
+    fun `parses task id for lane resume`() {
+        val args = jsonObject(
+            """{"subagents":{"taskName":"续跑","role":"coder","prompt":"继续修复失败测试","task_id":"subagent:coder:lane-123"}}""",
+        )
+
+        val result = SubagentArgsParser.parse(args)
+
+        assertEquals("subagent:coder:lane-123", result.single().taskId)
+    }
+
+    @Test
+    fun `accepts camel case task id for compatibility`() {
+        val args = jsonObject(
+            """{"subagents":{"taskName":"续跑","role":"coder","prompt":"继续","taskId":"subagent:coder:lane-456"}}""",
+        )
+
+        assertEquals("subagent:coder:lane-456", SubagentArgsParser.parse(args).single().taskId)
+    }
+
     private fun jsonObject(raw: String) = Json.parseToJsonElement(raw).jsonObject
 }
 

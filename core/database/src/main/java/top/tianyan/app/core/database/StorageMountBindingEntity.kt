@@ -4,16 +4,15 @@ import androidx.room.Dao
 import androidx.room.Entity
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
+import androidx.room.PrimaryKey
 import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import top.tianyan.app.core.model.StorageMountBinding
-import javax.inject.Inject
-import javax.inject.Singleton
 
 @Entity(tableName = "storage_mount_bindings")
 data class StorageMountBindingEntity(
-    @androidx.room.PrimaryKey val id: String,
+    @PrimaryKey val id: String,
     val name: String,
     val hostPath: String,
     val guestPath: String,
@@ -36,8 +35,7 @@ interface StorageMountBindingDao {
     suspend fun deleteCustom(id: String)
 }
 
-@Singleton
-class StorageMountBindingRepository @Inject constructor(
+class StorageMountBindingRepository(
     private val dao: StorageMountBindingDao,
 ) {
     val bindings: Flow<List<StorageMountBinding>> = dao.observeAll().map { rows -> rows.map(StorageMountBindingEntity::toModel) }

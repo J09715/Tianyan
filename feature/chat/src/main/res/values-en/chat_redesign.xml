@@ -1,0 +1,31 @@
+<resources>
+    <string name="chat_reasoning_action">Adjust reasoning effort</string>
+    <string name="chat_install_mcp">Install</string>
+    <string name="chat_message_placeholder">Describe an idea or a problem…</string>
+    <string name="chat_more_controls">More conversation actions</string>
+    <string name="chat_workbench_controls">Workbench controls</string>
+    <string name="chat_hide_controls">Hide workbench controls</string>
+    <string name="chat_browser_entry">Browser</string>
+    <string name="chat_runtime_overview">Run history</string>
+    <string name="chat_toolchain_entry">Toolchain</string>
+    <string name="chat_welcome_subtitle">Choose a starting point, or describe your request below.</string>
+    <string name="chat_welcome_project">Project shortcuts</string>
+    <string name="chat_welcome_project_subtitle">Describe your goal or a problem, and Tianyan will help with your current project.</string>
+    <string name="chat_welcome_suggestions">Quick start</string>
+    <string name="chat_start_build">Build a small tool</string>
+    <string name="chat_start_build_detail">Turn a requirement into a first working version.</string>
+    <string name="chat_start_build_prompt">I want to build a small tool. Help me clarify the requirements, then propose an implementation.</string>
+    <string name="chat_start_fix">Solve a problem</string>
+    <string name="chat_start_fix_detail">Understand an error and find a way to fix it.</string>
+    <string name="chat_start_fix_prompt">I have a problem. Ask me about the symptoms and error, then help identify the cause.</string>
+    <string name="chat_start_explore">Explore this workspace</string>
+    <string name="chat_start_explore_detail">Understand the code and decide what to do next.</string>
+    <string name="chat_start_explore_prompt">Inspect the current workspace and explain its files and projects. If it is empty, explain how to get started.</string>
+    <string name="chat_workbench_workspace">Workspace</string>
+    <string name="chat_workbench_session">Session controls</string>
+    <string name="chat_workbench_tools_attention">Needs attention</string>
+    <string name="chat_redteam_entry">Red team</string>
+    <string name="chat_redteam_active">Engaged</string>
+    <string name="chat_redteam_inactive">No target bound</string>
+    <string name="chat_attachment_missing">Attachment unavailable: %1$s</string>
+</resources>

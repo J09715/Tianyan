@@ -1,41 +1,32 @@
 package top.tianyan.app.core.database
 
-import dagger.Binds
-import dagger.Module
-import dagger.hilt.InstallIn
-import dagger.hilt.components.SingletonComponent
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import top.tianyan.app.core.model.QuickPhrase
 
-/** Stable persistence ports consumed by feature, harness, and runtime layers. */
-interface AiModelRepository {
-    fun observeAll(): Flow<List<AiModelEntity>>
-    suspend fun findById(id: String): AiModelEntity?
-    suspend fun activeModel(): AiModelEntity?
-    suspend fun upsert(model: AiModelEntity)
-    suspend fun clearActive()
-    suspend fun setActive(id: String)
-    suspend fun updateReasoning(id: String, mode: String?, effort: String?)
-    suspend fun delete(id: String)
+/** Encrypted diagnostics archive. Blocking operations must run off the UI/request thread. */
+interface RequestDiagnosticsRepository {
+    fun read(): String?
+    fun write(redactedArchive: String)
 }
 
+/** Stable persistence ports consumed by feature, harness, and runtime layers. */
 interface HarnessSessionRepository {
+    suspend fun bindExecutionTarget(id: String, target: String): String? {
+        val session = findById(id) ?: return null
+        session.executionTargetJson?.takeUnless { it == "unbound" }?.let { return it }
+        upsert(session.copy(executionTargetJson = target))
+        return target
+    }
     fun observeAll(): Flow<List<HarnessSessionEntity>>
     suspend fun findById(id: String): HarnessSessionEntity?
     suspend fun upsert(session: HarnessSessionEntity)
     suspend fun touch(id: String, updatedAt: Long)
-    suspend fun updateWorkspace(id: String, workspace: String)
-    /** Optional extension for legacy repository test doubles; Room implementation persists it. */
-    suspend fun updateRedTeamBinding(id: String, mode: String, target: String?, scope: String, phase: String, updatedAt: Long) = Unit
     suspend fun rename(id: String, title: String, updatedAt: Long)
     suspend fun setApprovalMode(id: String, approvalMode: String, updatedAt: Long)
     suspend fun setApprovalModeForAll(approvalMode: String, updatedAt: Long)
+    suspend fun setRunMode(id: String, runMode: String, updatedAt: Long)
     suspend fun setModelSelection(id: String, modelId: String?, modelVariant: String?, updatedAt: Long)
-    /** 会话级智能体绑定；legacy 测试替身可忽略（Room 实现持久化）。 */
-    suspend fun setAgentBinding(id: String, agentId: String?, updatedAt: Long) = Unit
     suspend fun deleteSession(id: String)
     suspend fun countInRange(start: Long?, end: Long?): Int
     suspend fun listAll(): List<HarnessSessionEntity>
@@ -81,8 +72,7 @@ interface BuildScriptRepository {
     suspend fun ensureBuiltinScripts(androidScript: String = "", flutterScript: String = "")
 }
 
-@Singleton
-class RoomBuildScriptRepository @Inject constructor(
+class RoomBuildScriptRepository(
     private val dao: BuildScriptDao,
 ) : BuildScriptRepository {
     override fun observeScripts() = dao.observeScripts()
@@ -104,8 +94,7 @@ class RoomBuildScriptRepository @Inject constructor(
         return script
     }
     override suspend fun findBinding(projectName: String) = dao.findBinding(projectName)
-    override suspend fun resolvedScript(projectName: String): BuildScriptEntity? =
-        dao.findBinding(projectName)?.let { findScript(it.scriptId) }
+    override suspend fun resolvedScript(projectName: String): BuildScriptEntity? = dao.findBinding(projectName)?.let { findScript(it.scriptId) }
     override suspend fun upsertScript(script: BuildScriptEntity) = dao.upsertScript(script)
     override suspend fun deleteScript(id: String) = dao.deleteScriptAndBindings(id)
     override suspend fun bind(projectName: String, scriptId: String) {
@@ -123,9 +112,7 @@ class RoomBuildScriptRepository @Inject constructor(
                 name = "标准 Android",
                 description = "天衍内置 Android 构建脚本，可复制后适配旧版或新版依赖。",
                 projectType = "ANDROID",
-                content = androidScript.ifBlank {
-                    "#!/bin/sh\nset -eu\nPROJECT_DIR=\"\${1:-.}\"\nTASK=\"\${2:-assembleDebug}\"\ncd \"\$PROJECT_DIR\"\nif [ -f ./gradlew ]; then\n    chmod +x ./gradlew\n    ./gradlew \"\$TASK\" --no-daemon --max-workers=2\nelif command -v gradle >/dev/null 2>&1; then\n    gradle \"\$TASK\" --no-daemon --max-workers=2\nelif [ -x /opt/tianyan/bin/gradle ]; then\n    /opt/tianyan/bin/gradle \"\$TASK\" --no-daemon --max-workers=2\nelse\n    echo '未找到可用的 Gradle 环境，请检查是否已安装 Android 基础套件' >&2\n    exit 127\nfi\n"
-                },
+                content = androidScript.ifBlank { DEFAULT_BUILTIN_ANDROID_SCRIPT },
                 isBuiltin = true,
                 createdAt = now,
                 updatedAt = now,
@@ -135,20 +122,36 @@ class RoomBuildScriptRepository @Inject constructor(
                 name = "标准 Flutter",
                 description = "天衍内置 Flutter APK 构建脚本，可复制后定制。",
                 projectType = "FLUTTER",
-                content = flutterScript.ifBlank {
-                    "#!/bin/sh\nset -eu\nPROJECT_DIR=\"\${1:-.}\"\nTARGET=\"\${2:-apk --debug}\"\ncd \"\$PROJECT_DIR\"\nflutter pub get\nflutter build \$TARGET\n"
-                },
+                content = flutterScript.ifBlank { DEFAULT_BUILTIN_FLUTTER_SCRIPT },
                 isBuiltin = true,
                 createdAt = now,
                 updatedAt = now,
             ),
         )
-        builtins.filter { it.id !in existing }.forEach { dao.upsertScript(it) }
+        builtins.forEach { builtin ->
+            val old = existing[builtin.id]
+            if (old == null) {
+                dao.upsertScript(builtin)
+            } else if (old.isBuiltin && isLegacyBrokenStub(old.content)) {
+                dao.upsertScript(old.copy(content = builtin.content, updatedAt = now))
+            }
+        }
+    }
+
+    private fun isLegacyBrokenStub(content: String): Boolean =
+        content.contains("elif [ -x /opt/tianyan/bin/gradle ]; then") ||
+            (content.contains("TARGET=\"\${2:-apk --debug}\"") && content.contains("flutter pub get"))
+
+    companion object {
+        const val DEFAULT_BUILTIN_ANDROID_SCRIPT =
+            "#!/bin/sh\n# 天衍标准 Android 构建脚本入口\n# 默认调度 /opt/tianyan/scripts/tianyan-build.sh 执行完整环境加载、AAPT2 架构对齐与 Gradle 编译\nset -eu\n\nPROJECT_DIR=\"\${1:-.}\"\nTASK=\"\${2:-assembleDebug}\"\n\nexec /bin/sh /opt/tianyan/scripts/tianyan-build.sh android \"\$PROJECT_DIR\" \"\$TASK\"\n"
+
+        const val DEFAULT_BUILTIN_FLUTTER_SCRIPT =
+            "#!/bin/sh\n# 天衍标准 Flutter 构建脚本入口\n# 默认调度 /opt/tianyan/scripts/tianyan-build.sh 执行完整跨端工具链校验与 Flutter APK 构建\nset -eu\n\nPROJECT_DIR=\"\${1:-.}\"\nTARGET=\"\${2:-apk --debug --target-platform android-arm64}\"\n\nexec /bin/sh /opt/tianyan/scripts/tianyan-build.sh flutter \"\$PROJECT_DIR\" \$TARGET\n"
     }
 }
 
-@Singleton
-class RoomAndroidAppRepository @Inject constructor(private val dao: AndroidAppDao) : AndroidAppRepository {
+class RoomAndroidAppRepository(private val dao: AndroidAppDao) : AndroidAppRepository {
     override fun observeAll() = dao.observeAll()
     override suspend fun findByPackageName(packageName: String) = dao.findByPackageName(packageName)
     override suspend fun search(query: String, limit: Int) = dao.search(query, limit)
@@ -181,41 +184,7 @@ interface AgentContextRepository {
     suspend fun clearScratchpads(sessionId: String)
 }
 
-@Singleton
-class RoomAiModelRepository @Inject constructor(private val dao: AiModelDao) : AiModelRepository {
-    override fun observeAll() = dao.observeAll()
-    override suspend fun findById(id: String) = dao.findById(id)
-    override suspend fun activeModel() = dao.activeModel()
-    override suspend fun upsert(model: AiModelEntity) = dao.upsert(model)
-    override suspend fun clearActive() = dao.clearActive()
-    override suspend fun setActive(id: String) = dao.setActive(id)
-    override suspend fun updateReasoning(id: String, mode: String?, effort: String?) = dao.updateReasoning(id, mode, effort)
-    override suspend fun delete(id: String) = dao.delete(id)
-}
-
-@Singleton
-class RoomHarnessSessionRepository @Inject constructor(private val dao: HarnessSessionDao) : HarnessSessionRepository {
-    override fun observeAll() = dao.observeAll()
-    override suspend fun findById(id: String) = dao.findById(id)
-    override suspend fun upsert(session: HarnessSessionEntity) = dao.upsert(session)
-    override suspend fun touch(id: String, updatedAt: Long) = dao.touch(id, updatedAt)
-    override suspend fun updateWorkspace(id: String, workspace: String) = dao.updateWorkspace(id, workspace)
-    override suspend fun updateRedTeamBinding(id: String, mode: String, target: String?, scope: String, phase: String, updatedAt: Long) =
-        dao.updateRedTeamBinding(id, mode, target, scope, phase, updatedAt)
-    override suspend fun rename(id: String, title: String, updatedAt: Long) = dao.rename(id, title, updatedAt)
-    override suspend fun setApprovalMode(id: String, approvalMode: String, updatedAt: Long) = dao.setApprovalMode(id, approvalMode, updatedAt)
-    override suspend fun setApprovalModeForAll(approvalMode: String, updatedAt: Long) = dao.setApprovalModeForAll(approvalMode, updatedAt)
-    override suspend fun setModelSelection(id: String, modelId: String?, modelVariant: String?, updatedAt: Long) =
-        dao.setModelSelection(id, modelId, modelVariant, updatedAt)
-    override suspend fun setAgentBinding(id: String, agentId: String?, updatedAt: Long) =
-        dao.setAgentBinding(id, agentId, updatedAt)
-    override suspend fun deleteSession(id: String) = dao.deleteSession(id)
-    override suspend fun countInRange(start: Long?, end: Long?) = dao.countInRange(start, end)
-    override suspend fun listAll() = dao.listAll()
-}
-
-@Singleton
-class RoomWorkspaceRepository @Inject constructor(private val dao: WorkspaceDao) : WorkspaceRepository {
+class RoomWorkspaceRepository(private val dao: WorkspaceDao) : WorkspaceRepository {
     override fun observeAll() = dao.observeAll()
     override suspend fun listAll() = dao.listAll()
     override suspend fun findByName(name: String) = dao.findByName(name)
@@ -223,18 +192,7 @@ class RoomWorkspaceRepository @Inject constructor(private val dao: WorkspaceDao)
     override suspend fun delete(name: String) = dao.delete(name)
 }
 
-@Singleton
-class RoomTerminalSessionRepository @Inject constructor(private val dao: TerminalSessionDao) : TerminalSessionRepository {
-    override fun observeAll() = dao.observeAll()
-    override suspend fun listAll() = dao.listAll()
-    override suspend fun nextOrder() = dao.nextOrder()
-    override suspend fun upsert(session: TerminalSessionEntity) = dao.upsert(session)
-    override suspend fun delete(id: String) = dao.delete(id)
-    override suspend fun deleteAll() = dao.deleteAll()
-}
-
-@Singleton
-class RoomAgentContextRepository @Inject constructor(private val dao: AgentContextDao) : AgentContextRepository {
+class RoomAgentContextRepository(private val dao: AgentContextDao) : AgentContextRepository {
     override suspend fun saveMemory(memory: AgentMemoryEntity) = dao.saveMemory(memory)
     override suspend fun getMemoryById(id: String) = dao.getMemoryById(id)
     override suspend fun getMemoryByKey(key: String, scope: String, ownerId: String) = dao.getMemoryByKey(key, scope, ownerId)
@@ -275,8 +233,7 @@ interface QuickPhraseRepository {
     suspend fun ensureInitialized()
 }
 
-@Singleton
-class RoomQuickPhraseRepository @Inject constructor(
+class RoomQuickPhraseRepository(
     private val dao: QuickPhraseDao,
 ) : QuickPhraseRepository {
     override fun observeAll(): Flow<List<QuickPhrase>> =
@@ -298,23 +255,13 @@ class RoomQuickPhraseRepository @Inject constructor(
         dao.delete(id)
 
     override suspend fun resetToDefault() {
-        dao.clearAll()
-        dao.upsertAll(defaultQuickPhrases.map { QuickPhraseEntity.fromDomain(it) })
+        // 单事务重置：clearAll 与 upsertAll 分离时，崩溃窗口内自建短语已删、默认未写入
+        dao.resetToDefault(defaultQuickPhrases.map { QuickPhraseEntity.fromDomain(it) })
     }
 
     override suspend fun ensureInitialized() {
         if (dao.count() == 0) {
             dao.upsertAll(defaultQuickPhrases.map { QuickPhraseEntity.fromDomain(it) })
-            return
-        }
-        // 老库升级路径：count() != 0 时上面这条分支永远不会走，于是新增的内置短语
-        // （如红队演练那几条）对已装用户永久缺席——用户在设置页看得到分类却一条都没有。
-        // 这里只补插「缺失的内置 id」，已存在的行一律不碰：用户可能改过内容或禁用过，
-        // 用 upsert 全量刷会把他们的改动冲掉。
-        val existing = dao.getAll().mapTo(mutableSetOf()) { it.id }
-        val missing = defaultQuickPhrases.filter { it.id !in existing }
-        if (missing.isNotEmpty()) {
-            dao.upsertAll(missing.map { QuickPhraseEntity.fromDomain(it) })
         }
     }
 
@@ -474,65 +421,6 @@ class RoomQuickPhraseRepository @Inject constructor(
                 sortOrder = 31,
                 isBuiltin = true,
             ),
-            QuickPhrase(
-                id = "builtin_redteam_preflight",
-                title = "红队环境体检",
-                content = "请调用 redteam 工具的 preflight，列出工具箱与技能的缺失项和对应修复命令；体检通过前不要开始任何主动探测。",
-                description = "检查工具箱与技能就绪度，给出修复指引",
-                iconName = "Shield",
-                targetProjectType = "RED_TEAM",
-                isEnabled = true,
-                sortOrder = 40,
-                isBuiltin = true,
-            ),
-            QuickPhrase(
-                id = "builtin_redteam_recon",
-                title = "信息收集",
-                content = "请先 session_info 确认当前绑定的目标与授权范围，再用 base 做被动与轻量主动信息收集，把发现的资产与指纹用 redteam 工具的 asset_add 写回当前会话。",
-                description = "确认范围后收集资产并写回会话事实",
-                iconName = "Search",
-                targetProjectType = "RED_TEAM",
-                isEnabled = true,
-                sortOrder = 41,
-                isBuiltin = true,
-            ),
-            QuickPhrase(
-                id = "builtin_redteam_dispatch",
-                title = "派发角色作业",
-                content = "请用 redteam 工具的 role_dispatch 取角色任务书，再通过 invoke_subagent 派发（department 选 security 或 specialized）；返回后记得 agent_slot release，产出必须落成会话事实。",
-                description = "按角色并行派活，产出写回事实",
-                iconName = "Sponsor",
-                targetProjectType = "RED_TEAM",
-                isEnabled = true,
-                sortOrder = 42,
-                isBuiltin = true,
-            ),
-            QuickPhrase(
-                id = "builtin_redteam_report",
-                title = "生成演练报告",
-                content = "请用 redteam 工具的 report 汇总当前会话事实生成演练报告，结论必须来自事实库，未验证的项要标注为待验证而不是结论。",
-                description = "汇总会话事实生成报告",
-                iconName = "Document",
-                targetProjectType = "RED_TEAM",
-                isEnabled = true,
-                sortOrder = 43,
-                isBuiltin = true,
-            ),
         )
     }
-}
-
-@Module
-@InstallIn(SingletonComponent::class)
-abstract class PersistenceRepositoryModule {
-    @Binds abstract fun bindAiModelRepository(impl: RoomAiModelRepository): AiModelRepository
-    @Binds abstract fun bindHarnessSessionRepository(impl: RoomHarnessSessionRepository): HarnessSessionRepository
-    @Binds abstract fun bindWorkspaceRepository(impl: RoomWorkspaceRepository): WorkspaceRepository
-    @Binds abstract fun bindTerminalSessionRepository(impl: RoomTerminalSessionRepository): TerminalSessionRepository
-    @Binds abstract fun bindAgentContextRepository(impl: RoomAgentContextRepository): AgentContextRepository
-    @Binds abstract fun bindAndroidAppRepository(impl: RoomAndroidAppRepository): AndroidAppRepository
-    @Binds abstract fun bindQuickPhraseRepository(impl: RoomQuickPhraseRepository): QuickPhraseRepository
-    @Binds abstract fun bindHarnessRuntimeRepository(impl: RoomHarnessRuntimeRepository): HarnessRuntimeRepository
-    @Binds abstract fun bindRedTeamFactRepository(impl: RoomRedTeamFactRepository): RedTeamFactRepository
-    @Binds abstract fun bindBuildScriptRepository(impl: RoomBuildScriptRepository): BuildScriptRepository
 }

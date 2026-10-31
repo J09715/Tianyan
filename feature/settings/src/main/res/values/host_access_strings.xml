@@ -1,0 +1,13 @@
+<resources>
+    <string name="host_access_developer">开发者诊断模式</string>
+    <string name="host_access_developer_detail">开启诊断与授权入口；宿主 Shell 需另行确认，关闭后立即撤销授权。</string>
+    <string name="host_access_sandbox">本地终端与沙箱会话</string>
+    <string name="host_access_target">系统 %1$s · %2$s · %3$s</string>
+    <string name="host_access_active">已授权，点击撤销</string>
+    <string name="host_access_request">授予临时宿主权限</string>
+    <string name="host_access_title">临时宿主权限确认</string>
+    <string name="host_access_confirmation">允许“%1$s”在本地系统 %2$s 请求宿主 Shell、安装 APK 和读取 Logcat，最长 30 分钟？\n插件：%3$s\n版本：%4$s\n\n可执行宿主命令并产生文件副作用，实际权限仍受 Android 和现有审批约束。授权不落盘；关闭开发者模式、撤销、超时或重启后失效。已发生的副作用不会回滚。PRoot 同 UID 运行，不构成强隔离。</string>
+    <string name="host_access_allow">允许 30 分钟</string>
+    <string name="host_access_revoke">立即撤销</string>
+    <string name="host_access_cancel">取消</string>
+</resources>

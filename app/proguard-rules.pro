@@ -6,7 +6,6 @@
 # Persisted polymorphic payloads may use their declared serializable class name. Keep only
 # those class names while still allowing unused classes/members to shrink and optimize.
 -keep,allowshrinking,allowoptimization @kotlinx.serialization.Serializable class top.tianyan.app.**
--keep,allowshrinking,allowoptimization @kotlinx.serialization.Serializable class top.tianyan.app.**
 
 # JNI symbol lookup includes the declaring class and method names. This precise rule also
 # covers zstd-jni native entry points without retaining the whole dependency.
@@ -38,3 +37,19 @@
 # HostProcessRunner 由 ShizukuHostUserService 直接引用，R8 可达性分析应自动保留，
 # 但因其运行在 Shizuku 独立进程中，显式保活避免边缘裁剪。
 -keep class top.tianyan.app.runtime.privilege.HostProcessRunner { *; }
+
+# === Shower 虚拟屏 Binder 交接（release 必保） ===
+# shower-server.jar 与宿主跨进程传递 Parcelable / AIDL，parcel 里写的是**全限定类名**
+# （com.ai.assistance.shower.ShowerBinderContainer）。R8 若重命名宿主侧这些类，
+# 反序列化时 Class.forName 按原名找不到 → BadParcelableException(ClassNotFoundException)，
+# 接收端崩溃、虚拟屏永远起不来。接口的 AIDL DESCRIPTOR 同样依赖全限定名。
+-keep class com.ai.assistance.shower.** { *; }
+-keep class com.ai.assistance.showerclient.ShowerBinderReceiver { *; }
+
+# === JGit（feature:git 分支管理，release 必保） ===
+# JGit 内部按类名反射加载签名/传输实现，且引用了 Android 不存在的 OSGi/javax 可选类。
+-keep class org.eclipse.jgit.** { *; }
+-dontwarn org.eclipse.jgit.**
+-dontwarn org.osgi.framework.**
+-dontwarn org.slf4j.**
+-dontwarn javax.annotation.**

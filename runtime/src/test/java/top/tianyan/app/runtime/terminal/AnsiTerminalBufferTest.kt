@@ -29,11 +29,39 @@ class AnsiTerminalBufferTest {
 
     @Test
     fun scrollbackIsBounded() {
-        val buffer = AnsiTerminalBuffer(columns = 20, maxRows = 3)
-        val screen = buffer.append("one\ntwo\nthree\nfour")
+        // rows=3 会被实现的 MIN_ROWS=5 钳制（视口护栏），取最小合法视口 5 行；
+        // maxRows=5 + 7 行输入 → 滚动两次，最早两行被滚回缓冲裁掉，总量仍有界。
+        val buffer = AnsiTerminalBuffer(columns = 20, rows = 5, maxRows = 5)
+        val screen = buffer.append("one\ntwo\nthree\nfour\nfive\nsix\nseven")
 
-        assertTrue(screen.size <= 3)
-        assertEquals("four", screen.last().cells.joinToString("") { it.character })
+        assertTrue(screen.size <= 5)
+        assertEquals("seven", screen.last().cells.joinToString("") { it.character })
+    }
+
+    @Test
+    fun absoluteCursorUsesViewportNotScrollback() {
+        val buffer = AnsiTerminalBuffer(columns = 40, rows = 5, maxRows = 50)
+        buffer.append("banner\nprompt> ")
+        // Codex-style redraw: home + clear-down + multi-line paint inside the viewport.
+        val screen = buffer.append("\u001B[H\u001B[Jline1\nline2\nline3")
+
+        assertEquals("line1", screen[0].cells.joinToString("") { it.character })
+        assertEquals("line2", screen[1].cells.joinToString("") { it.character })
+        assertEquals("line3", screen[2].cells.joinToString("") { it.character })
+        // line3 写在视口第 2 行（0-indexed），光标与写入行一致（同 cupCanAddress… 的语义）。
+        assertEquals(2, buffer.cursor().row)
+    }
+
+    @Test
+    fun cupCanAddressRowsBeyondCurrentContent() {
+        val buffer = AnsiTerminalBuffer(columns = 40, rows = 8, maxRows = 50)
+        buffer.append("a")
+        val screen = buffer.append("\u001B[5;1Hhello")
+
+        assertEquals("a", screen[0].cells.joinToString("") { it.character })
+        assertEquals("hello", screen[4].cells.joinToString("") { it.character })
+        assertEquals(4, buffer.cursor().row)
+        assertEquals(5, buffer.cursor().column)
     }
 
     @Test
@@ -96,18 +124,18 @@ class AnsiTerminalBufferTest {
         val buffer = AnsiTerminalBuffer(columns = 20, maxRows = 10)
         // 模拟 readline/bash：先清行，再输入中文字符
         buffer.append("abcdefgh")
-        val screen = buffer.append("\u001B[1G\u001B[K你好天衍")
+        val screen = buffer.append("\u001B[1G\u001B[K你好世界")
 
         val line = screen.first()
-        assertEquals("你好天衍", line.cells.joinToString("") { it.character })
+        assertEquals("你好世界", line.cells.joinToString("") { it.character })
         assertEquals(8, buffer.cursor().column)
         assertEquals("你", line.cells[0].character)
         assertEquals("", line.cells[1].character)
         assertEquals("好", line.cells[2].character)
         assertEquals("", line.cells[3].character)
-        assertEquals("天", line.cells[4].character)
+        assertEquals("世", line.cells[4].character)
         assertEquals("", line.cells[5].character)
-        assertEquals("衍", line.cells[6].character)
+        assertEquals("界", line.cells[6].character)
         assertEquals("", line.cells[7].character)
     }
 }

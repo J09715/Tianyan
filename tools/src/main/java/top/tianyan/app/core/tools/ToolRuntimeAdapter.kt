@@ -1,5 +1,6 @@
-package top.tianyan.app.core.tools
+﻿package top.tianyan.app.core.tools
 
+import top.tianyan.app.runtime.service.ServiceLaunch
 import top.tianyan.app.runtime.shell.CommandResult
 import top.tianyan.app.runtime.shell.ManagedProcess
 import top.tianyan.app.runtime.shell.SessionConfig
@@ -16,6 +17,8 @@ interface ToolRuntimeAdapter : ToolInstallerAdapter {
     suspend fun uninstall(deleteData: Boolean = false): ToolActionResult
     suspend fun startService(): ManagedProcess? = null
     suspend fun interactiveSessionConfig(): SessionConfig? = null
+    /** Native launch plan the page may use to start this tool's own service; never from Web content. */
+    suspend fun serviceLaunch(): ServiceLaunch? = null
 }
 
 data class ToolActionResult(

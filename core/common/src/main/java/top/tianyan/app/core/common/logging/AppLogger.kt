@@ -3,10 +3,10 @@ package top.tianyan.app.core.common.logging
 import android.util.Log
 import android.content.Context
 import android.os.Environment
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
-import javax.inject.Inject
-import javax.inject.Singleton
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -17,9 +17,8 @@ import kotlinx.coroutines.launch
  * 便于用户直接从文件管理器取走日志。未授予"所有文件访问"或公共目录写入失败时，
  * 回退到应用私有 files/logs 目录，保证日志永不静默丢失。
  */
-@Singleton
-class AppLogger @Inject constructor(
-    @ApplicationContext private val context: Context,
+class AppLogger(
+    private val context: Context,
     private val secretRedactor: SensitiveDataRedactor,
 ) {
 
@@ -49,9 +48,9 @@ class AppLogger @Inject constructor(
         androidLog: (String, Throwable?) -> Unit,
     ) {
         val safeMessage = safe(message)
-        val safeThrowable = safe(throwable)
-        androidLog(safeMessage, safeThrowable)
         val stack = throwable?.let { secretRedactor.redact(it.stackTraceToString()) }.orEmpty()
+        // Redact the entire cause/suppressed chain, not only the outer message.
+        androidLog(if (stack.isBlank()) safeMessage else "$safeMessage\n$stack", null)
         ioScope.launch {
             runCatching {
                 append(
@@ -70,11 +69,11 @@ class AppLogger @Inject constructor(
         val safeTag = safe(tag)
         val safeSessionId = safe(sessionId)
         val stack = throwable?.let { secretRedactor.redact(it.stackTraceToString()) }.orEmpty()
-        Log.d(TAG, "[$safeTag][$safeSessionId] $safeMessage", throwable)
+        Log.d(TAG, "[$safeTag][$safeSessionId] $safeMessage" + if (stack.isBlank()) "" else "\n$stack")
         ioScope.launch {
             runCatching {
-                val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", java.util.Locale.US)
-                    .format(java.util.Date())
+                val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
+                    .format(Date())
                 append(
                     fileName = AGENT_LOG_FILE,
                     content = "[$timestamp][$safeTag][session:$safeSessionId] $safeMessage" +
@@ -101,9 +100,21 @@ class AppLogger @Inject constructor(
     fun readAgentLogs(maxChars: Int = 100_000): String = runCatching {
         val file = existingLogFile(AGENT_LOG_FILE)
             ?: return@runCatching "暂无智能体本地日志"
-        val text = file.readText(Charsets.UTF_8)
+        val text = safe(file.readText(Charsets.UTF_8))
         when {
             text.isEmpty() -> "暂无智能体本地日志"
+            text.length > maxChars -> text.takeLast(maxChars)
+            else -> text
+        }
+    }.getOrDefault("读取日志失败")
+
+    /** 运行日志（Bot 编排/群聊分流等非 Agent 标签日志落在这里）。 */
+    fun readGeneralLogs(maxChars: Int = 100_000): String = runCatching {
+        val file = existingLogFile(GENERAL_LOG_FILE)
+            ?: return@runCatching "暂无运行日志"
+        val text = safe(file.readText(Charsets.UTF_8))
+        when {
+            text.isEmpty() -> "暂无运行日志"
             text.length > maxChars -> text.takeLast(maxChars)
             else -> text
         }
@@ -117,44 +128,6 @@ class AppLogger @Inject constructor(
         var ok = true
         publicLogFile(AGENT_LOG_FILE)?.takeIf { it.exists() }?.let { ok = it.delete() && ok }
         fallbackLogFile(AGENT_LOG_FILE).takeIf { it.exists() }?.let { ok = it.delete() && ok }
-        ok
-    }.getOrDefault(false)
-
-    /** 通用运行日志（runtime.log）的落盘位置描述，与智能体日志同一套公共/回退目录逻辑。 */
-    fun getLogLocation(): String {
-        val publicFile = publicLogFile(GENERAL_LOG_FILE)
-        return if (publicFile != null && publicFile.exists()) {
-            publicFile.absolutePath
-        } else if (Environment.isExternalStorageManager()) {
-            "${publicFile?.absolutePath}（尚未创建）"
-        } else {
-            fallbackLogFile(GENERAL_LOG_FILE).absolutePath + "（未授予所有文件访问）"
-        }
-    }
-
-    /**
-     * 读取通用运行日志尾部。崩溃现场排查时，CrashReporter 只留下异常栈本身，
-     * 运行日志提供崩溃前一刻的应用级上下文，二者互补。
-     */
-    fun readLogs(maxChars: Int = 100_000): String = runCatching {
-        val file = existingLogFile(GENERAL_LOG_FILE)
-            ?: return@runCatching "暂无运行日志"
-        val text = file.readText(Charsets.UTF_8)
-        when {
-            text.isEmpty() -> "暂无运行日志"
-            text.length > maxChars -> text.takeLast(maxChars)
-            else -> text
-        }
-    }.getOrDefault("读取日志失败")
-
-    fun getLogSizeBytes(): Long = runCatching {
-        existingLogFile(GENERAL_LOG_FILE)?.length() ?: 0L
-    }.getOrDefault(0L)
-
-    fun clearLogs(): Boolean = runCatching {
-        var ok = true
-        publicLogFile(GENERAL_LOG_FILE)?.takeIf { it.exists() }?.let { ok = it.delete() && ok }
-        fallbackLogFile(GENERAL_LOG_FILE).takeIf { it.exists() }?.let { ok = it.delete() && ok }
         ok
     }.getOrDefault(false)
 
@@ -197,11 +170,6 @@ class AppLogger @Inject constructor(
             ?: fallbackLogFile(fileName).takeIf { it.exists() }
 
     private fun safe(value: String): String = secretRedactor.redact(value)
-
-    private fun safe(throwable: Throwable?): Throwable? = throwable?.let {
-        val message = it.message.orEmpty()
-        if (safe(message) == message) it else IllegalStateException(safe(message))
-    }
 
     private companion object {
         const val TAG = "Tianyan"

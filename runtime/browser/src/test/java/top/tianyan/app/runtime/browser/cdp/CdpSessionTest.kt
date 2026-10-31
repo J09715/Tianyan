@@ -6,6 +6,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -23,6 +24,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * CdpSession over MockWebServer 真实 WebSocket：命令关联、错误透传、事件分发、断连清理。
@@ -84,7 +87,7 @@ class CdpSessionTest {
         }))
         val events = CopyOnWriteArrayList<String>()
         session.start(object : CdpSession.EventListener {
-            override suspend fun onEvent(method: String, params: kotlinx.serialization.json.JsonObject, sessionId: String?) {
+            override suspend fun onEvent(method: String, params: JsonObject, sessionId: String?) {
                 events += method
             }
             override suspend fun onClosed() {}
@@ -101,7 +104,7 @@ class CdpSessionTest {
             """{"id":$id,"error":{"code":-32000,"message":"Breakpoint not found"}}"""
         }))
         session.start(object : CdpSession.EventListener {
-            override suspend fun onEvent(method: String, params: kotlinx.serialization.json.JsonObject, sessionId: String?) {}
+            override suspend fun onEvent(method: String, params: JsonObject, sessionId: String?) {}
             override suspend fun onClosed() {}
         })
         try {
@@ -125,13 +128,13 @@ class CdpSessionTest {
         })
         val received = CopyOnWriteArrayList<Pair<String, String?>>()
         session.start(object : CdpSession.EventListener {
-            override suspend fun onEvent(method: String, params: kotlinx.serialization.json.JsonObject, sessionId: String?) {
+            override suspend fun onEvent(method: String, params: JsonObject, sessionId: String?) {
                 received += method to sessionId
             }
             override suspend fun onClosed() {}
         })
         withTimeout(5_000) {
-            while (received.size < 2) kotlinx.coroutines.delay(20)
+            while (received.size < 2) delay(20)
         }
         assertEquals("Debugger.paused" to null, received[0])
         assertEquals("Debugger.resumed" to "ws-1", received[1])
@@ -144,18 +147,18 @@ class CdpSessionTest {
             onOpen = { serverWs = it },
             onRequest = { null }, // 不回响应，让命令挂起
         ))
-        val closed = java.util.concurrent.CountDownLatch(1)
+        val closed = CountDownLatch(1)
         session.start(object : CdpSession.EventListener {
-            override suspend fun onEvent(method: String, params: kotlinx.serialization.json.JsonObject, sessionId: String?) {}
+            override suspend fun onEvent(method: String, params: JsonObject, sessionId: String?) {}
             override suspend fun onClosed() { closed.countDown() }
         })
         // 发一个不会被响应的命令，然后服务器断开
         val sendJob = scope.launch {
             runCatching { session.send("Test.never", JsonObject(emptyMap()), null, 5_000) }
         }
-        kotlinx.coroutines.delay(200) // 等命令真正发出
+        delay(200) // 等命令真正发出
         serverWs.close(1000, "server going away")
-        assertTrue("onClosed should fire", closed.await(5, java.util.concurrent.TimeUnit.SECONDS))
+        assertTrue("onClosed should fire", closed.await(5, TimeUnit.SECONDS))
         // pending 命令应异常完成（而非 5s 超时）：等 sendJob 结束应远快于超时
         withTimeout(3_000) { sendJob.join() }
         assertTrue(sendJob.isCompleted)
@@ -165,7 +168,7 @@ class CdpSessionTest {
     fun `timeout throws CdpCommandException`() = runBlocking {
         val session = openSession(EchoWsListener(onRequest = { null }))
         session.start(object : CdpSession.EventListener {
-            override suspend fun onEvent(method: String, params: kotlinx.serialization.json.JsonObject, sessionId: String?) {}
+            override suspend fun onEvent(method: String, params: JsonObject, sessionId: String?) {}
             override suspend fun onClosed() {}
         })
         try {

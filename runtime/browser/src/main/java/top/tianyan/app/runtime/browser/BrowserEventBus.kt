@@ -1,6 +1,7 @@
 package top.tianyan.app.runtime.browser
 
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.serialization.Serializable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -59,7 +60,7 @@ class BrowserEventBus(
 
     // —— CDP 调试事件（debug_events 工具读）——
     /** 调试事件环内单条记录（paused/resumed 摘要）。 */
-    @kotlinx.serialization.Serializable
+    @Serializable
     data class DebugEventRecord(
         val tabId: String,
         val kind: String,           // "paused" / "resumed"
@@ -111,16 +112,7 @@ class BrowserEventBus(
             }
             is BrowserEvent.NetworkCaptured -> {
                 _network.update { prev ->
-                    // upsert：同一请求（tabId + id）的响应阶段回填会覆盖请求阶段记录，
-                    // 避免 network_list 对同一条请求出现「请求阶段 + 响应阶段」两条重复条目。
-                    val idx = prev.indexOfLast {
-                        it.id == event.request.id && it.tabId == event.request.tabId
-                    }
-                    val next = if (idx >= 0) {
-                        prev.toMutableList().also { it[idx] = event.request }
-                    } else {
-                        prev + event.request
-                    }
+                    val next = (prev + event.request)
                     if (next.size > networkCapacity) next.takeLast(networkCapacity) else next
                 }
             }

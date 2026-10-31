@@ -1,28 +1,18 @@
 package top.tianyan.app.core.tools
 
-import javax.inject.Inject
-import javax.inject.Singleton
+import java.net.URI
 import kotlinx.coroutines.flow.first
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import top.tianyan.app.core.database.AiModelRepository
 
-@Singleton
 open class ProviderManager {
     private val providerRepository: ProviderRepository?
-    private val aiModelRepository: AiModelRepository?
 
-    @Inject
-    constructor(
-        providerRepository: ProviderRepository,
-        aiModelRepository: AiModelRepository,
-    ) {
+    constructor(providerRepository: ProviderRepository) {
         this.providerRepository = providerRepository
-        this.aiModelRepository = aiModelRepository
     }
 
     constructor() {
         this.providerRepository = null
-        this.aiModelRepository = null
     }
 
     open suspend fun environment(): Map<String, String> {
@@ -32,7 +22,14 @@ open class ProviderManager {
         val baseUrl = ProviderEndpointPolicy.normalizeUrl(repo.baseUrl.first())
         val model = repo.model.first().trim()
         val environment = linkedMapOf<String, String>()
-        val variable = keyVariableFor(provider)
+        val variable = when (provider) {
+            "openai" -> "OPENAI_API_KEY"
+            "anthropic", "claude" -> "ANTHROPIC_API_KEY"
+            "google", "gemini" -> "GEMINI_API_KEY"
+            "deepseek" -> "DEEPSEEK_API_KEY"
+            "openrouter" -> "OPENROUTER_API_KEY"
+            else -> null
+        }
         if (!apiKey.isNullOrBlank() && variable != null) environment[variable] = apiKey
         if (baseUrl.isNotBlank() && ProviderEndpointPolicy.isSafeBaseUrl(baseUrl)) {
             environment["LINUXAI_BASE_URL"] = baseUrl
@@ -45,77 +42,11 @@ open class ProviderManager {
         return environment
     }
 
-    /**
-     * 引擎进程启动环境：统一用**当前活跃模型档案**（用户在天衍「设置 → 模型」里
-     * 配置并激活的那份）作为凭据来源，按引擎协议翻译成对应环境变量。
-     *
-     * 为什么不用「按引擎 id 反查 provider 名再匹配档案」的方案：天衍的模型档案是唯一
-     * 事实来源，用户常把一个 DeepSeek / 自定义中转档案同时用于 Claude Code、Codex、DSH
-     * 多个引擎；按引擎 id 反查 provider 名去匹配档案，一旦档案 provider 是显示名
-     * （"Anthropic Claude"）或自定义项就匹配落空，最终连 key 都没注入——这正是上游
-     * v0.18.32 修完仍报 `Authentication required` / `no API key` 的原因。
-     *
-     * 活跃档案拿不到 key 时，回落到全局 provider key（老式「当前 provider」配置），
-     * 与 [ProviderClient] 的 [top.tianyan.app.harness.ModelConfig] 解析保持一致。
-     */
-    suspend fun engineLaunchEnvironment(engineId: String): Map<String, String> {
-        val repo = providerRepository ?: return emptyMap()
-        val credentials = activeModelCredentials(repo) ?: fallbackCredentials(repo) ?: return emptyMap()
-        return EngineLaunchEnvironment.build(engineId, credentials)
-    }
-
-    /** 引擎启动的完整凭据 + dsh dispatch patch（deepseek-harness 需要写 patch 覆盖 provider/model）。 */
-    suspend fun engineLaunchCredentials(engineId: String): EngineLaunchEnvironment.Credentials? {
-        val repo = providerRepository ?: return null
-        return activeModelCredentials(repo) ?: fallbackCredentials(repo)
-    }
-
-    /** 活跃模型档案 → 凭据三要素；无活跃档案或 key 为空时返回 null。 */
-    private suspend fun activeModelCredentials(
-        repo: ProviderRepository,
-    ): EngineLaunchEnvironment.Credentials? {
-        val dao = aiModelRepository ?: return null
-        val active = dao.activeModel() ?: return null
-        val keys = repo.readModelApiKeys(active.secretRef)
-        val apiKey = keys.firstOrNull() ?: repo.readApiKey().orEmpty()
-        if (apiKey.isBlank()) return null
-        return EngineLaunchEnvironment.Credentials(
-            apiKey = apiKey,
-            baseUrl = active.baseUrl.ifBlank { repo.baseUrl.first() },
-            model = active.model.split(',').firstOrNull()?.trim().orEmpty(),
-        )
-    }
-
-    /** 全局「当前 provider」兜底（未建立模型档案时的老配置路径）。 */
-    private suspend fun fallbackCredentials(
-        repo: ProviderRepository,
-    ): EngineLaunchEnvironment.Credentials? {
-        val apiKey = repo.readApiKey().orEmpty()
-        if (apiKey.isBlank()) return null
-        return EngineLaunchEnvironment.Credentials(
-            apiKey = apiKey,
-            baseUrl = repo.baseUrl.first(),
-            model = repo.model.first(),
-        )
-    }
-
-    /** provider id → 引擎进程认的环境变量名。Kimi Code 是 Claude Code fork，认 ANTHROPIC_API_KEY。 */
-    private fun keyVariableFor(provider: String): String? = when (provider) {
-        "openai" -> "OPENAI_API_KEY"
-        "anthropic", "claude" -> "ANTHROPIC_API_KEY"
-        "google", "gemini" -> "GEMINI_API_KEY"
-        "deepseek" -> "DEEPSEEK_API_KEY"
-        "moonshot", "kimi" -> "ANTHROPIC_API_KEY"
-        "openrouter" -> "OPENROUTER_API_KEY"
-        else -> null
-    }
-
     private fun providerEnvironmentName(provider: String, suffix: String): String? = when (provider) {
         "openai" -> "OPENAI_$suffix"
         "anthropic", "claude" -> "ANTHROPIC_$suffix"
         "google", "gemini" -> "GEMINI_$suffix"
         "deepseek" -> "DEEPSEEK_$suffix"
-        "moonshot", "kimi" -> "ANTHROPIC_$suffix"
         "openrouter" -> "OPENROUTER_$suffix"
         else -> null
     }
@@ -162,7 +93,7 @@ object ProviderEndpointPolicy {
                 httpUrl.scheme.equals("http", ignoreCase = true)
         }
 
-        val uri = runCatching { java.net.URI(normalized) }.getOrNull() ?: return false
+        val uri = runCatching { URI(normalized) }.getOrNull() ?: return false
         if (uri.userInfo != null || uri.host.isNullOrBlank()) return false
         return uri.scheme.equals("https", ignoreCase = true) ||
             uri.scheme.equals("http", ignoreCase = true)

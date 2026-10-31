@@ -1,7 +1,5 @@
 package top.tianyan.app.harness.redteam
 
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.flow.first
 import top.tianyan.app.core.database.AgentSkillRepository
 
@@ -12,8 +10,7 @@ import top.tianyan.app.core.database.AgentSkillRepository
  * 只有把正文交给 [top.tianyan.app.core.model.RedTeamSkillAvailability] 才能判出缺什么。
  * 未启用（`isEnabled == false`）的技能不体检——它们本来就不会被加载。
  */
-@Singleton
-class RepositoryRedTeamSkillSource @Inject constructor(
+class RepositoryRedTeamSkillSource(
     private val skillRepository: AgentSkillRepository,
 ) : RedTeamSkillSource {
 

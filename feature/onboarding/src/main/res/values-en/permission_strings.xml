@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="onboarding_permissions_title">Choose your permissions</string>
+    <string name="onboarding_permissions_description">Your sandbox is ready. These optional settings help with background tasks and file access. You can continue without enabling any of them and change them later in Settings.</string>
+    <string name="onboarding_permission_notification">Notifications</string>
+    <string name="onboarding_permission_notification_hint">Show runtime status, task progress, and reminders that need your attention.</string>
+    <string name="onboarding_permission_overlay">Display over other apps</string>
+    <string name="onboarding_permission_overlay_hint">View and continue conversations in a floating window while using other apps.</string>
+    <string name="onboarding_permission_files">File management</string>
+    <string name="onboarding_permission_files_hint">Access projects and files in shared storage. App files and the system file picker remain available without this permission.</string>
+    <string name="onboarding_permission_autostart">Autostart</string>
+    <string name="onboarding_permission_autostart_hint">Allow 天衍 in system autostart or app launch management. The location varies by manufacturer; some devices do not offer this setting.</string>
+    <string name="onboarding_permission_local_network">Nearby devices</string>
+    <string name="onboarding_permission_local_network_hint">Allow access to devices on the local network. SSH to a server on the same network needs this permission. Android 17 blocks that access until it is granted.</string>
+    <string name="onboarding_permission_battery">Unrestricted battery usage</string>
+    <string name="onboarding_permission_battery_hint">Help builds and AI tasks keep running with the screen off. Choose Unrestricted in app battery settings. This may increase battery use.</string>
+    <string name="onboarding_permission_manual">Check manually in system settings</string>
+    <string name="onboarding_permission_files_legacy">Use the file picker on this Android version; all files access is not required</string>
+    <string name="onboarding_permission_battery_granted">Exempt from system optimization; check manufacturer restrictions manually</string>
+    <string name="onboarding_permission_granted">Enabled</string>
+    <string name="onboarding_permission_optional">Not enabled · Optional</string>
+    <string name="onboarding_permission_manage">View settings</string>
+    <string name="onboarding_permission_configure">Set up</string>
+    <string name="onboarding_permissions_continue">Continue</string>
+    <string name="onboarding_permission_unavailable">Unable to open this page. Configure 天衍 manually in system app settings.</string>
+</resources>

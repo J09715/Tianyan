@@ -1,0 +1,5 @@
+<resources>
+    <string name="package_provider_local_notice">通过已安装的本地插件处理对话，无需填写接口地址或宿主 API Key。对话内容将交给插件；所需凭据请在插件内配置。</string>
+    <string name="package_harness_extensions">MCP 入口：%1$s\n工具 %2$d · Provider %3$d · 工作流节点 %4$d</string>
+    <string name="package_harness_provider_scope">选择此插件的 Provider 会把该次模型请求的对话内容交给插件进程。不会转发宿主默认 API Key，凭据由插件自行配置。程序使用现有 PRoot 环境，不构成强隔离。</string>
+</resources>

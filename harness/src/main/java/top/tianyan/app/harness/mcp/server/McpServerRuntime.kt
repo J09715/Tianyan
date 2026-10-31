@@ -15,8 +15,6 @@ import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -30,6 +28,8 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import top.tianyan.app.harness.mcp.MCP_PROTOCOL_VERSION
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
 
 /**
  * 进程内 MCP server：单端口（默认 8787）上提供 POST /mcp 与 GET /mcp/stats、/mcp/health。
@@ -43,10 +43,11 @@ import top.tianyan.app.harness.mcp.MCP_PROTOCOL_VERSION
  *  - start 后用 resolvedConnectors() 显式确认绑定成功（bind 失败会抛出/超时）；
  *  - 首选端口被占用时自动顺延尝试 [portFallbackRange] 个相邻端口，全部失败才返回 false。
  */
-@Singleton
-class McpServerRuntime @Inject constructor(
+class McpServerRuntime(
     private val toolDispatcher: McpToolDispatcher,
     private val resourceDispatcher: McpResourceDispatcher,
+    /** initialize 握手返回的 serverInfo.name；浏览器端与被控端各用各的名字便于客户端区分。 */
+    private val serverName: String = DEFAULT_SERVER_NAME,
 ) {
     @Volatile private var engine: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null
     @Volatile var currentToken: String? = null
@@ -139,8 +140,9 @@ class McpServerRuntime @Inject constructor(
                 if (bindOk) {
                     engine = srv
                     boundPort = candidate
-                    // 供自环客户端读取实际端口（首选端口被占用顺延后，静态预设的 URL 已过期）
-                    BuiltinBrowserMcpAccess.port = candidate
+                    // 实际绑定端口由调用方（BrowserMcpBootstrap / AgentMcpBootstrap）读取 [port] 后自行落盘，
+                    // 运行时类不再直接写自环访问点：同进程可能并存多个实例（浏览器 8787 / 被控 8890），
+                    // 在此处写死会互相覆盖。
                     if (attempt > 0) {
                         Log.w(TAG, "端口 $port 被占用，已顺延使用 $candidate")
                     }
@@ -151,20 +153,21 @@ class McpServerRuntime @Inject constructor(
                 runCatching { srv.stop(100, 300) }
             }
         }
+        // B11: 全端口绑定失败时重置本次 start 写入/残留的状态，避免暴露过期的 token 与端口信息
         engine = null
+        currentToken = null
+        currentAllowRemote = false
+        boundPort = defaultPort
         return false
     }
 
     fun stop() {
-        try {
-            engine?.stop(100, 500)
-        } catch (t: Throwable) {
-            // 关停失败会留下未释放的端口，下次 start() 撞上"端口被占用"，
-            // 而调用方只能看到 start 失败、看不到真正原因，故必须留痕。
-            Log.w(TAG, "MCP server stop 失败: ${t.message ?: t::class.simpleName}")
-        }
+        try { engine?.stop(100, 500) } catch (_: Throwable) {}
         engine = null
-        BuiltinBrowserMcpAccess.port = null
+        // B11: stop 时清理 token 等运行时状态，避免残留上一次启动的认证信息与绑定端口
+        currentToken = null
+        currentAllowRemote = false
+        boundPort = defaultPort
     }
 
     /**
@@ -176,14 +179,16 @@ class McpServerRuntime @Inject constructor(
         val req = runCatching { Json.parseToJsonElement(body) }.getOrNull() as? JsonObject
             ?: return jsonrpcError(null, -32700, "bad-json")
         val method = (req["method"] as? JsonPrimitive)?.content ?: ""
-        // id 原样保留（数字/字符串都按原始 JsonElement 回显），避免把数字 id 序列化成字符串
-        val id = req["id"]?.takeUnless { it is kotlinx.serialization.json.JsonNull }
-        if (id == null) return null
+        // B11: 区分"id 字段缺失"（notification，不回响应体）与"id 显式为 null"（按 JSON-RPC 规范
+        // 属无效请求，回 -32600）；id 原样保留（数字/字符串都按原始 JsonElement 回显）
+        if (!req.containsKey("id")) return null
+        val id = req["id"]?.takeUnless { it is JsonNull }
+            ?: return jsonrpcError(JsonNull, -32600, "invalid request: id must not be null")
         return when (method) {
             "initialize" -> jsonrpcOk(id, buildJsonObject {
                 put("protocolVersion", JsonPrimitive(MCP_PROTOCOL_VERSION))
                 put("serverInfo", buildJsonObject {
-                    put("name", JsonPrimitive("Tianyan Browser MCP Server"))
+                    put("name", JsonPrimitive(serverName))
                     put("version", JsonPrimitive("0.1.0"))
                 })
                 put("capabilities", buildJsonObject {
@@ -192,7 +197,7 @@ class McpServerRuntime @Inject constructor(
                 })
             })
             "tools/list" -> jsonrpcOk(id, buildJsonObject {
-                put("tools", kotlinx.serialization.json.JsonArray(toolDispatcher.listTools()))
+                put("tools", JsonArray(toolDispatcher.listTools()))
             })
             "tools/call" -> {
                 val params = req["params"] as? JsonObject
@@ -208,7 +213,7 @@ class McpServerRuntime @Inject constructor(
                 }
             }
             "resources/list" -> jsonrpcOk(id, buildJsonObject {
-                put("resources", kotlinx.serialization.json.JsonArray(resourceDispatcher.listResources()))
+                put("resources", JsonArray(resourceDispatcher.listResources()))
             })
             "resources/read" -> {
                 val params = req["params"] as? JsonObject
@@ -216,7 +221,7 @@ class McpServerRuntime @Inject constructor(
                 val resource = resourceDispatcher.readResource(uri)
                     ?: return jsonrpcError(id, -32004, "not_found")
                 jsonrpcOk(id, buildJsonObject {
-                    put("contents", kotlinx.serialization.json.JsonArray(listOf(resource)))
+                    put("contents", JsonArray(listOf(resource)))
                 })
             }
             "ping" -> jsonrpcOk(id, JsonObject(emptyMap()))
@@ -249,7 +254,18 @@ class McpServerRuntime @Inject constructor(
 
     companion object {
         private const val TAG = "TianyanMcpServer"
+
+        /** initialize 握手默认 serverInfo.name（内置浏览器 MCP）。 */
+        const val DEFAULT_SERVER_NAME = "Tianyan Browser MCP Server"
+
+        /** 被控端（外部客户端控制本 App）的默认 serverInfo.name。 */
+        const val AGENT_SERVER_NAME = "Tianyan Agent MCP Server"
+
         const val defaultPort = 8787
+
+        /** 被控端默认端口段起点：与浏览器端 8787 段互不重叠。 */
+        const val agentDefaultPort = 8890
+
         const val loopbackHost = "127.0.0.1"
     }
 }

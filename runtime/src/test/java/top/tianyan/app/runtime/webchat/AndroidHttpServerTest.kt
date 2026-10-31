@@ -1,12 +1,15 @@
 package top.tianyan.app.runtime.webchat
 
+import java.io.File
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketTimeoutException
+import java.nio.file.Files
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -83,15 +86,52 @@ class AndroidHttpServerTest {
                 outcome.exceptionOrNull() is SocketTimeoutException,
             )
 
-            // 监听 socket 已释放：同一端口应能重新绑定。
-            // 用有界等待而不是一次性断言 —— TCP 拆链是内核异步完成的，要求"零延迟"
-            // 在部分内核上会假失败；但真泄漏（监听 socket 没关）在超时后照样会被抓到。
-            assertTrue(
-                "stop() 必须释放监听 socket，使同端口可重新绑定",
-                awaitRebindable(port, 5_000),
-            )
+            // 监听 socket 已释放：同一端口可以立刻重新绑定。
+            ServerSocket().use { probe ->
+                probe.reuseAddress = true
+                probe.bind(InetSocketAddress("127.0.0.1", port))
+            }
         } finally {
             runCatching { client.close() }
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun `sendFileResponse streams large files with an exact content length`() {
+        val port = ServerSocket(0).use { it.localPort }
+        val server = AndroidHttpServer.create(InetSocketAddress("127.0.0.1", port), 0)
+        // 3MB：远超单次 read 缓冲，验证分块写入与 Content-Length 一致。
+        val source = File.createTempFile("tianyan-download", ".bin")
+        val payload = ByteArray(3 * 1024 * 1024) { (it % 251).toByte() }
+        Files.write(source.toPath(), payload)
+        server.createContext("/api/download") { exchange ->
+            sendFileResponse(exchange, 200, "application/octet-stream", source, fileName = "sample.bin")
+        }
+
+        try {
+            server.start()
+            val raw = Socket("127.0.0.1", port).use { socket ->
+                socket.soTimeout = 10_000
+                socket.getOutputStream().apply {
+                    write("GET /api/download HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".toByteArray())
+                    flush()
+                }
+                socket.getInputStream().readBytes()
+            }
+            // ISO-8859-1 与字节一一对应，切分头部时不会破坏二进制正文。
+            val text = String(raw, Charsets.ISO_8859_1)
+            val headerEnd = text.indexOf("\r\n\r\n") + 4
+            val headers = text.substring(0, headerEnd)
+            val body = text.substring(headerEnd).toByteArray(Charsets.ISO_8859_1)
+
+            assertTrue(headers.startsWith("HTTP/1.1 200 OK"))
+            assertTrue(headers.contains("Content-Length: ${payload.size}"))
+            assertTrue(headers.contains("Content-Disposition: attachment; filename=\"sample.bin\""))
+            assertEquals(payload.size, body.size)
+            assertTrue(payload.contentEquals(body))
+        } finally {
+            source.delete()
             server.stop(0)
         }
     }
@@ -108,9 +148,7 @@ class AndroidHttpServerTest {
         }
 
         try {
-            repeat(2) { round ->
-                // 重启前先等端口真正可用：断言的是"能重启"，不是"零延迟能重启"。
-                if (round > 0) assertTrue("端口应在 stop() 后恢复可用", awaitRebindable(port, 5_000))
+            repeat(2) {
                 server.start()
                 val response = Socket("127.0.0.1", port).use { socket ->
                     socket.soTimeout = 5_000
@@ -120,7 +158,7 @@ class AndroidHttpServerTest {
                     }
                     socket.getInputStream().bufferedReader().readText()
                 }
-                assertTrue("第 ${round + 1} 次启动应正常响应", response.endsWith("pong"))
+                assertTrue("第 ${it + 1} 次启动应正常响应", response.endsWith("pong"))
                 server.stop(0)
             }
         } finally {
@@ -142,29 +180,6 @@ class AndroidHttpServerTest {
         } finally {
             injected.shutdownNow()
             server.stop(0)
-        }
-    }
-
-    /**
-     * 轮询到同端口可重新绑定为止。
-     *
-     * 监听 socket 被 close() 之后，内核还需要一点时间回收本地端口（取决于对端是否
-     * 已回 FIN、以及内核的 TIME_WAIT/FIN_WAIT_2 处理）。所以这里给一个有界窗口，
-     * 而不是断言"立刻"。若 stop() 根本没关监听 socket，整个窗口内都会失败。
-     */
-    private fun awaitRebindable(port: Int, timeoutMs: Long): Boolean {
-        val deadline = System.currentTimeMillis() + timeoutMs
-        while (true) {
-            try {
-                ServerSocket().use { probe ->
-                    probe.reuseAddress = true
-                    probe.bind(InetSocketAddress("127.0.0.1", port))
-                }
-                return true
-            } catch (_: java.net.BindException) {
-                if (System.currentTimeMillis() >= deadline) return false
-                Thread.sleep(50)
-            }
         }
     }
 }

@@ -9,8 +9,12 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <!-- 无线 ADB：保持 mDNS 多播接收，自动发现动态配对端口与连接端口。 -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <!-- Android 17 (API 37) 本地网络权限：无线调试 mDNS，以及局域网 SSH（附近的设备，需运行时请求） -->
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- MCP 被控端常驻：外部 AI 客户端需随时可连，长时间保活不适用 dataSync 的 6 小时硬超时 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Agent 执行期间持有 PARTIAL_WAKE_LOCK 进程锁，防止息屏后 CPU 休眠冻结推理/工具执行 -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -32,6 +36,9 @@
 
     <!-- Android 11+ 包可见性：允许解析 Shizuku App 与 QQ（授权弹窗、群卡片调起与 Binder 交互） -->
     <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
         <package android:name="moe.shizuku.privileged.api" />
         <package android:name="com.tencent.mobileqq" />
         <package android:name="com.tencent.tim" />
@@ -46,15 +53,15 @@
     </queries>
 
     <application
-        android:name=".TianyanApplication"
+        android:name=".天衍Application"
         android:allowBackup="false"
         android:icon="@mipmap/tianyan_ic_launcher"
-        android:roundIcon="@mipmap/tianyan_ic_launcher_round"
         android:label="${appLabel}"
+        android:largeHeap="true"
         android:localeConfig="@xml/tianyan_locales_config"
         android:networkSecurityConfig="@xml/tianyan_network_security_config"
+        android:requestLegacyExternalStorage="true"
         android:supportsRtl="true"
-        android:largeHeap="true"
         android:theme="@style/tianyan_theme">
         <activity
             android:name=".MainActivity"
@@ -62,10 +69,22 @@
             android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|uiMode|fontScale|density|keyboardHidden|navigation"
             android:theme="@style/tianyan_theme"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="adjustResize|stateHidden">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="tianyan" android:host="oauth" android:path="/mcp" />
+            </intent-filter>
+            <!-- 系统分享入口：任意 App「分享给天衍」，仅接收纯文本 -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
         <!-- 应用内 APK 更新安装文件提供器 -->
@@ -90,10 +109,31 @@
         <service
             android:name=".runtime.service.RuntimeForegroundService"
             android:exported="false"
-            android:foregroundServiceType="dataSync"
-            android:stopWithTask="false" />
+            android:foregroundServiceType="specialUse"
+            android:stopWithTask="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="User-started Linux sandbox with persistent local plugin servers and terminals" />
+        </service>
         <service
             android:name=".service.AgentForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"
+            android:stopWithTask="false" />
+        <!-- MCP 被控端常驻：外部 AI 客户端可随时连接，需长期存活。
+             specialUse 而非 dataSync —— dataSync 在 Android 15+ 有 6 小时硬超时，会周期性掐断连接。 -->
+        <service
+            android:name=".service.AgentMcpForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            android:stopWithTask="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Local MCP server kept alive so external AI clients can connect at any time" />
+        </service>
+        <!-- 工作流后台执行保活：运行期间 dataSync 前台服务，结束自动退出 -->
+        <service
+            android:name=".service.WorkflowForegroundService"
             android:exported="false"
             android:foregroundServiceType="dataSync"
             android:stopWithTask="false" />
@@ -109,14 +149,44 @@
             android:name=".service.AgentReplyReceiver"
             android:exported="false" />
         <receiver
+            android:name=".service.ToolServiceStopReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".workflow.WorkflowApprovalReceiver"
+            android:exported="false" />
+        <receiver
             android:name=".service.adb.AdbNotificationReceiver"
             android:exported="false" />
+        <!-- Shower 虚拟屏：接收 shower-server（shell uid 独立进程）广播交出的 IShowerService Binder，
+             必须 exported=true（发送方不在本应用进程）；action 与预编译 shower-server.jar 内协议绑定，不可改名 -->
+        <receiver
+            android:name="top.tianyan.app.runtime.virtualdisplay.ShowerBinderReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.ai.assistance.operit.action.SHOWER_BINDER_READY" />
+            </intent-filter>
+        </receiver>
         <service
             android:name="top.tianyan.app.ui.chat.floating.FloatingChatService"
             android:exported="false" />
-        <!-- GUI 手势通路：exported=true 否则 Android 12+ system_server 无法绑定无障碍服务 -->
         <service
-            android:name="top.tianyan.app.runtime.gui.TianyanGuiAccessibilityService"
+            android:name="top.tianyan.app.ui.workflow.hud.WorkflowHudService"
+            android:exported="false" />
+        <!-- 工作流定时计划使用按需初始化的 WorkManager（Configuration.Provider + KoinWorkerFactory），
+             必须移除默认的 WorkManagerInitializer，否则自定义 WorkerFactory 不生效 -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+        <!-- GUI 手势通路：必须 exported=true，否则 Android 12+ system_server 无法绑定无障碍服务 -->
+        <service
+            android:name="top.tianyan.app.runtime.gui.天衍GuiAccessibilityService"
             android:exported="true"
             android:label="@string/tianyan_app_name"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
@@ -127,11 +197,6 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/tianyan_gui_accessibility_service" />
         </service>
-<!-- 工作流运行悬浮 HUD（taixu v0.13 对齐）：exported=false，仅本应用拉起 -->
-        <service
-            android:name="top.tianyan.app.ui.workflow.hud.WorkflowHudService"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
     </application>
 
 </manifest>

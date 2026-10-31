@@ -1,0 +1,22 @@
+: synthetic Responses fixture
+
+data: {"type":"response.reasoning_summary_text.delta","delta":"思考"}
+
+data: {"type":"response.output_text.delta","delta":"你"}
+
+data: {"type":"response.output_item.added","output_index":0,"item":{"type":"function_call","id":"fc1","call_id":"c1","name":"read","arguments":""}}
+
+data: {"type":"response.function_call_arguments.delta","item_id":"fc1","delta":"{\"path\":\""}
+
+data: {"type":"response.output_item.added","output_index":1,"item":{"type":"function_call","id":"fc2","call_id":"c2","name":"base","arguments":""}}
+
+data: {"type":"response.function_call_arguments.delta","item_id":"fc2","delta":"{\"command\":\""}
+
+data: {"type":"response.function_call_arguments.delta","item_id":"fc2","delta":"pwd\"}"}
+
+data: {"type":"response.function_call_arguments.delta","item_id":"fc1","delta":"你好.txt\"}"}
+
+data: {"type":"response.output_text.delta","delta":"好"}
+
+data: {"type":"response.completed","response":{"status":"completed"}}
+

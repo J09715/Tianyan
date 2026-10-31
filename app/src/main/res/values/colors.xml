@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 天衍启动页（浅色模式）：温润素白底色，深曜石黑几何图标 -->
+    <color name="tianyan_splash_background">#FAF8FD</color>
+    <color name="tianyan_splash_icon_color">#1A1B21</color>
+</resources>

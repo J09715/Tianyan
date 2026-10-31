@@ -17,9 +17,6 @@ import java.util.UUID
  * 3. 拼接短 UUID 后缀（形如 <sanitized>_<random8>），保证跨会话、跨轮次绝对唯一，
  *    同时在下一轮发回大模型 API 时，因 assistant.tool_calls[i].id 与 tool.tool_call_id 保持一致，
  *    符合各大厂商协议要求。
- *
- * （taixu v0.13 20eb4e0 原版策略，逐字对齐：所有 id 一律加随机后缀。协议安全依据：
- * tool_use/tool_result 双端都回放同一个归一化 id，id 对厂商是不透明字符串。）
  */
 object ToolCallIdNormalizer {
 

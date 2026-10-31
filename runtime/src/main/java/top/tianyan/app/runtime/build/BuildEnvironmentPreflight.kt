@@ -1,5 +1,6 @@
 package top.tianyan.app.runtime.build
 
+import top.tianyan.app.core.common.shell.ShellQuote
 import top.tianyan.app.runtime.ProjectType
 
 /**
@@ -15,7 +16,7 @@ object BuildEnvironmentPreflight {
         require(projectType == ProjectType.ANDROID || projectType == ProjectType.FLUTTER) {
             "Preflight is only supported for Android and Flutter projects"
         }
-        val project = shellQuote(projectPath)
+        val project = ShellQuote.of(projectPath)
         val lines = mutableListOf(
             "set -eu",
             "fail() { echo \"TIANYAN_PREFLIGHT_FAIL: ${'$'}1\"; exit 2; }",
@@ -136,8 +137,6 @@ object BuildEnvironmentPreflight {
             else -> "预检失败：$token"
         }
     }
-
-    private fun shellQuote(value: String): String = "'${value.replace("'", "'\\\''")}'"
 
     private val PREFLIGHT_FAIL = Regex("TIANYAN_PREFLIGHT_FAIL:\\s*(\\S.*)")
 }

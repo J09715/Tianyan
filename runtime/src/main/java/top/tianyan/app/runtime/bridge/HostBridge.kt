@@ -1,15 +1,9 @@
 package top.tianyan.app.runtime.bridge
 
 import android.content.Context
-import android.content.ClipData
-import android.content.Intent
-import android.net.Uri
-import androidx.core.content.FileProvider
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,24 +11,21 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import top.tianyan.app.core.common.logging.AppLogger
+import top.tianyan.app.runtime.RuntimePathManager
 import top.tianyan.app.runtime.privilege.PrivilegeManager
-import java.io.BufferedReader
-import java.io.File
-import java.io.InputStreamReader
-import java.io.OutputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
-import java.util.UUID
+import top.tianyan.app.runtime.bridge.HostBridgeHttp.HttpRequest
+import top.tianyan.app.runtime.bridge.HostBridgeHttp.HttpResponse
+import top.tianyan.app.runtime.bridge.HostBridgeHttp.parseHttpRequest
+import top.tianyan.app.runtime.bridge.HostBridgeHttp.writeResponse
 import top.tianyan.app.runtime.bridge.adb.EmbeddedAdbManager
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * 宿主桥接 (Host Bridge) — 沙箱与 Android 宿主之间的 localhost HTTP 通道。
@@ -47,36 +38,74 @@ import javax.inject.Singleton
  * - `POST /api/shell`        — 在宿主侧执行 Shell 命令（Shizuku/Root 或内置无线 ADB）
  * - `POST /api/logcat`       — 抓取目标应用或系统 Logcat 日志
  *
- * 安全：仅监听 127.0.0.1；所有写操作需 Bearer Token 认证（token 写入 /opt/tianyan/.bridge-key）。
+ * 安全：仅监听 127.0.0.1；每个写操作都要绑定一张由宿主签发、可撤销的凭据（[HostCredentialAuthority]），
+ * 并校验端点所需的结构化动作。凭据只经原生代码路径注入 guest 环境，不存在共享密钥文件或签发端点。
  */
-@Singleton
-class HostBridge @Inject constructor(
-    @ApplicationContext private val context: Context,
+class HostBridge(
+    private val context: Context,
     private val logger: AppLogger,
     private val privilegeManager: PrivilegeManager,
     private val embeddedAdbManager: EmbeddedAdbManager,
+    private val pathManager: RuntimePathManager,
+    private val credentialAuthority: HostCredentialAuthority,
 ) {
     companion object {
         const val BRIDGE_PORT = 7980
         const val BRIDGE_HOST = "127.0.0.1"
         const val BRIDGE_URL = "http://127.0.0.1:7980"
-        private const val MAX_BODY_BYTES = 4 * 1024 * 1024
         private const val READ_TIMEOUT_MS = 10_000
+
+        /** The plugin-facing logcat request is fixed here, so a page can never widen it. */
+        private const val PLUGIN_LOGCAT_BODY = """{"lines":200}"""
     }
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
-    /** 桥接 API 密钥——构造时生成，始终可用（即使桥接未启动）。 */
-    val bridgeKey: String = UUID.randomUUID().toString().replace("-", "")
+    private val apkInstall = HostBridgeApkInstall(context, logger, embeddedAdbManager, pathManager)
+
+    private val pluginGateway = PluginHostGateway(
+        appInfo = {
+            buildJsonObject {
+                put("package", context.packageName)
+                put("androidApi", android.os.Build.VERSION.SDK_INT)
+            }.toString()
+        },
+        clipboardWrite = { PluginHostClipboard.write(context, it) },
+        installApkFile = { path ->
+            // The page named a sandbox path; this host resolves it and reuses the guest channels.
+            val response = apkInstall.installAt(path)
+            check(response.status == 200) { "APK install refused" }
+            response.body
+        },
+        captureLogcat = {
+            // A page never chooses tag, priority or line count: one fixed bounded snapshot.
+            val response = handleLogcat(PLUGIN_LOGCAT_BODY)
+            check(response.status == 200) { "Log capture refused" }
+            response.body
+        },
+        authority = credentialAuthority,
+    )
+
+    /** Native-only call after document approval; the credential never leaves this host adapter. */
+    fun readPluginAppInfo(scope: PluginHostScope, available: () -> Boolean): String =
+        pluginGateway.readAppInfo(scope, available)
+
+    fun writePluginClipboard(scope: PluginHostScope, text: String, available: () -> Boolean): String =
+        pluginGateway.writeClipboard(scope, text, available)
+
+    /** Privileged plugin actions reuse the same one-shot authority; only native callers reach them. */
+    suspend fun installPluginApk(scope: PluginHostScope, path: String, available: () -> Boolean): String =
+        pluginGateway.installApk(scope, path, available)
+
+    suspend fun readPluginLogcat(scope: PluginHostScope, available: () -> Boolean): String =
+        pluginGateway.readLogcat(scope, available)
 
     private var serverSocket: ServerSocket? = null
     private var serverJob: Job? = null
     private val _isRunning = MutableStateFlow(false)
     val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
 
-    /** 可重建：stop() 会取消它，start() 重建，避免已取消的作用域被复用（launch 会立即失败）。 */
-    @Volatile
-    private var bridgeScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val bridgeScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     /** 启动 HTTP 监听。重复调用安全，且绑定操作不会被并发启动打断。 */
     @Synchronized
@@ -86,11 +115,6 @@ class HostBridge @Inject constructor(
             val socket = ServerSocket(BRIDGE_PORT, 16, InetAddress.getByName(BRIDGE_HOST))
             serverSocket = socket
             _isRunning.value = true
-            // stop() 取消了旧作用域，这里必须重建：复用已取消的作用域会让 launch 立刻失败，
-            // 表现为「重启监听后没有任何日志、端口也没起来」。
-            if (bridgeScope.coroutineContext[Job]?.isActive != true) {
-                bridgeScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-            }
             serverJob = bridgeScope.launch {
                 logger.i("HostBridge listening on $BRIDGE_HOST:$BRIDGE_PORT")
                 while (isActive) {
@@ -110,18 +134,11 @@ class HostBridge @Inject constructor(
         }
     }
 
-    /**
-     * 停止 HTTP 监听。
-     *
-     * 这里同时取消 [bridgeScope]：只 cancel serverJob 的话，作用域本身仍持有
-     * SupervisorJob 存活——它是 Singleton 的字段，进程生命周期内不会回收，
-     * 反复 start/stop 会让作用域里累积的挂起任务一直留着。
-     * 取消作用域后再用需重建，所以 start() 里重建它。
-     */
+    /** 停止 HTTP 监听，并撤销所有插件与沙箱凭据（代次推进，缓存层随后自愈）。 */
     @Synchronized
     fun stop() {
+        credentialAuthority.revokeAll()
         serverJob?.cancel()
-        bridgeScope.cancel()
         serverSocket?.runCatching { close() }
         serverSocket = null
         _isRunning.value = false
@@ -133,8 +150,7 @@ class HostBridge @Inject constructor(
     private suspend fun handleClient(client: Socket) {
         try {
             client.soTimeout = READ_TIMEOUT_MS
-            val reader = BufferedReader(InputStreamReader(client.getInputStream(), Charsets.UTF_8))
-            val request = parseHttpRequest(reader) ?: run {
+            val request = parseHttpRequest(client.getInputStream()) ?: run {
                 writeResponse(client, 400, errorJson("Failed to parse HTTP request"))
                 return
             }
@@ -147,77 +163,32 @@ class HostBridge @Inject constructor(
         }
     }
 
-    private data class HttpRequest(
-        val method: String,
-        val path: String,
-        val headers: Map<String, String>,
-        val body: String,
-    )
+    /** Visible to in-module tests so the converged credential path can be asserted without a socket. */
+    internal suspend fun route(request: HttpRequest): HttpResponse {
+        pluginGateway.route(request)?.let { return HttpResponse(it.status, it.body) }
+        // health 端点免认证（只暴露特权/ADB 状态，无凭证）
+        if (request.method == "GET" && request.path.startsWith("/api/health")) return handleHealth()
 
-    private data class HttpResponse(val status: Int, val body: String)
-
-    private fun parseHttpRequest(reader: BufferedReader): HttpRequest? {
-        val requestLine = reader.readLine() ?: return null
-        val parts = requestLine.split(" ", limit = 3)
-        if (parts.size < 2) return null
-        val method = parts[0].uppercase()
-        val path = parts[1]
-
-        val headers = mutableMapOf<String, String>()
-        while (true) {
-            val line = reader.readLine() ?: break
-            if (line.isEmpty()) break
-            val colonIdx = line.indexOf(':')
-            if (colonIdx > 0) {
-                val key = line.substring(0, colonIdx).trim().lowercase()
-                val value = line.substring(colonIdx + 1).trim()
-                headers[key] = value
-            }
+        // 每个写端点绑定一个结构化动作；未知路径也先过"有效凭据"这一关再 404，避免未认证探测面。
+        val action = when {
+            request.method == "POST" && request.path.startsWith("/api/install-apk") -> "host.install-apk"
+            request.method == "POST" && request.path.startsWith("/api/shell") -> "host.shell"
+            request.method == "POST" && request.path.startsWith("/api/logcat") -> "host.logcat"
+            else -> null
         }
-
-        val contentLength = headers["content-length"]?.toIntOrNull() ?: 0
-        val body = if (contentLength > 0 && contentLength <= MAX_BODY_BYTES) {
-            val chars = CharArray(contentLength)
-            var read = 0
-            while (read < contentLength) {
-                val n = reader.read(chars, read, contentLength - read)
-                if (n < 0) break
-                read += n
-            }
-            String(chars, 0, read)
-        } else {
-            ""
+        if (!credentialAuthority.authorize(bearerToken(request.headers), action)) {
+            return HttpResponse(401, errorJson("Unauthorized: missing or invalid bridge credential"))
         }
-
-        return HttpRequest(method, path, headers, body)
-    }
-
-    private suspend fun route(request: HttpRequest): HttpResponse {
-        // 认证检查（health 端点免认证）
-        val isHealth = request.path.startsWith("/api/health")
-        if (!isHealth && !checkAuth(request.headers)) {
-            return HttpResponse(401, errorJson("Unauthorized: invalid or missing API key"))
-        }
-
-        return when {
-            request.method == "GET" && request.path.startsWith("/api/health") ->
-                handleHealth()
-            request.method == "POST" && request.path.startsWith("/api/install-apk") ->
-                handleInstallApk(request.body)
-            request.method == "POST" && request.path.startsWith("/api/shell") ->
-                handleShell(request.body)
-            request.method == "POST" && request.path.startsWith("/api/logcat") ->
-                handleLogcat(request.body)
-            else ->
-                HttpResponse(404, errorJson("Not found: ${request.method} ${request.path}"))
+        return when (action) {
+            "host.install-apk" -> handleInstallApk(request.body)
+            "host.shell" -> handleShell(request.body)
+            "host.logcat" -> handleLogcat(request.body)
+            else -> HttpResponse(404, errorJson("Not found: ${request.method} ${request.path}"))
         }
     }
 
-    private fun checkAuth(headers: Map<String, String>): Boolean {
-        val auth = headers["authorization"] ?: return false
-        val token = auth.removePrefix("Bearer ").removePrefix("bearer ").trim()
-        return token == bridgeKey
-    }
+    private fun bearerToken(headers: Map<String, String>): String? =
+        headers["authorization"]?.removePrefix("Bearer ")?.removePrefix("bearer ")?.trim()?.ifEmpty { null }
 
     // ============================ 端点实现 ============================
 
@@ -252,66 +223,7 @@ class HostBridge @Inject constructor(
         if (apkPath.isNullOrBlank()) {
             return HttpResponse(400, errorJson("Missing 'path' field"))
         }
-
-        // 将沙箱路径映射到宿主路径
-        val hostPath = resolveSandboxPath(apkPath)
-        val apkFile = File(hostPath)
-        if (!apkFile.isFile) {
-            return HttpResponse(404, errorJson("APK file not found: $apkPath (resolved: $hostPath)"))
-        }
-        if (!apkFile.name.endsWith(".apk", ignoreCase = true)) {
-            return HttpResponse(400, errorJson("File does not have .apk extension: ${apkFile.name}"))
-        }
-
-        // 优先通过内置无线 ADB 静默安装（无需点击系统弹窗确认）
-        val adbState = embeddedAdbManager.state.value
-        if (adbState is EmbeddedAdbManager.ConnectionState.Connected) {
-            val installResult = embeddedAdbManager.installApk(apkFile)
-            if (installResult.isSuccess) {
-                logger.i("HostBridge: APK installed via wireless ADB for $apkPath")
-                return HttpResponse(200, buildJsonObject {
-                    put("success", true)
-                    put("message", "APK 已通过无线 ADB 静默安装成功")
-                    put("package", apkFile.name)
-                    put("channel", "wireless-adb")
-                }.toString())
-            }
-        }
-
-        // 复制到 cache 目录（FileProvider 需要 cache-path 下的文件）
-        val installDir = File(context.cacheDir, "bridge-installs").apply { mkdirs() }
-        val cachedApk = File(installDir, "tianyan-bridge-${System.currentTimeMillis()}.apk")
-        try {
-            apkFile.copyTo(cachedApk, overwrite = true)
-        } catch (e: Exception) {
-            return HttpResponse(500, errorJson("Failed to copy APK: ${e.message}"))
-        }
-
-        // 通过 FileProvider + Intent 调起系统安装器
-        try {
-            val uri: Uri = FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.fileprovider",
-                cachedApk,
-            )
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "application/vnd.android.package-archive")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                clipData = ClipData.newRawUri("APK", uri)
-            }
-            context.startActivity(intent)
-            logger.i("HostBridge: APK install triggered for $apkPath")
-            return HttpResponse(200, buildJsonObject {
-                put("success", true)
-                put("message", "安装请求已发送，请在系统弹窗中确认安装")
-                put("package", apkFile.name)
-                put("channel", "system-intent")
-            }.toString())
-        } catch (e: Exception) {
-            cachedApk.delete()
-            return HttpResponse(500, errorJson("Failed to launch installer: ${e.message}"))
-        }
+        return apkInstall.installAt(apkPath)
     }
 
     private suspend fun handleShell(body: String): HttpResponse {
@@ -337,8 +249,8 @@ class HostBridge @Inject constructor(
                 put("channel", "privilege")
             }
         } else {
-            val explicitPort = obj["port"]?.jsonPrimitive?.content?.toIntOrNull()
-            val adbResult = embeddedAdbManager.executeShell(command, explicitPort)
+            // 端口固定由内置无线 ADB 管理器持有；沙箱不得传入任意端口作为回退通道。
+            val adbResult = embeddedAdbManager.executeShell(command, null)
             buildJsonObject {
                 put("success", adbResult.success)
                 put("exitCode", adbResult.exitCode ?: if (adbResult.success) 0 else 1)
@@ -371,7 +283,6 @@ class HostBridge @Inject constructor(
         val priority = obj["priority"]?.jsonPrimitive?.content?.trim()?.uppercase()?.firstOrNull() ?: 'V'
         val keyword = obj["keyword"]?.jsonPrimitive?.content?.trim().orEmpty()
         val lines = obj["lines"]?.jsonPrimitive?.content?.toIntOrNull() ?: 200
-        val explicitPort = obj["port"]?.jsonPrimitive?.content?.toIntOrNull()
 
         val result = embeddedAdbManager.captureLogcat(
             EmbeddedAdbManager.LogcatRequest(
@@ -381,7 +292,7 @@ class HostBridge @Inject constructor(
                 keyword = keyword,
                 lines = lines,
             ),
-            explicitPort = explicitPort,
+            explicitPort = null,
         )
 
         return HttpResponse(200, buildJsonObject {
@@ -392,42 +303,6 @@ class HostBridge @Inject constructor(
     }
 
     // ============================ 工具方法 ============================
-
-    /**
-     * 将沙箱内路径映射到宿主路径。
-     * /sdcard/Download/app.apk → /storage/emulated/0/Download/app.apk
-     */
-    private fun resolveSandboxPath(sandboxPath: String): String {
-        return when {
-            sandboxPath.startsWith("/sdcard/") ->
-                "/storage/emulated/0/${sandboxPath.removePrefix("/sdcard/")}"
-            sandboxPath == "/sdcard" ->
-                "/storage/emulated/0"
-            sandboxPath.startsWith("/storage/emulated/0/") ->
-                sandboxPath // 已经是宿主路径
-            else -> sandboxPath // 原样返回（可能是宿主绝对路径）
-        }
-    }
-
-    private fun writeResponse(client: Socket, status: Int, body: String) {
-        val statusText = when (status) {
-            200 -> "OK"
-            400 -> "Bad Request"
-            401 -> "Unauthorized"
-            404 -> "Not Found"
-            500 -> "Internal Server Error"
-            else -> "OK"
-        }
-        val bodyBytes = body.toByteArray(Charsets.UTF_8)
-        val output: OutputStream = client.getOutputStream()
-        output.write("HTTP/1.1 $status $statusText\r\n".toByteArray(Charsets.US_ASCII))
-        output.write("Content-Type: application/json; charset=utf-8\r\n".toByteArray(Charsets.US_ASCII))
-        output.write("Content-Length: ${bodyBytes.size}\r\n".toByteArray(Charsets.US_ASCII))
-        output.write("Connection: close\r\n".toByteArray(Charsets.US_ASCII))
-        output.write("\r\n".toByteArray(Charsets.US_ASCII))
-        output.write(bodyBytes)
-        output.flush()
-    }
 
     private fun errorJson(message: String): String = buildJsonObject {
         put("success", false)

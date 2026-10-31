@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+"""Offline MCP example. Uses Python stdlib; never calls a model or network."""
+import json
+import sys
+
+SCHEMA = {"type": "object", "properties": {"text": {"type": "string", "maxLength": 1024}},
+          "required": ["text"], "additionalProperties": False}
+
+
+def handle(method, params):
+    if method == "initialize":
+        return {"protocolVersion": params.get("protocolVersion", "2024-11-05"),
+                "capabilities": {"tools": {}}, "serverInfo": {"name": "{{pluginId}}", "version": "{{pluginVersion}}"}}
+    if method == "ping":
+        return {}
+    if method == "tools/list":
+        return {"tools": [{"name": "echo", "description": "Offline echo", "inputSchema": SCHEMA},
+                          {"name": "provider", "description": "Offline provider", "inputSchema": {"type": "object"}}]}
+    if method == "tools/call":
+        name = params.get("name")
+        arguments = params.get("arguments", {})
+        if name == "echo":
+            text = arguments.get("text")
+            if set(arguments) != {"text"} or not isinstance(text, str) or len(text) > 1024:
+                raise ValueError("Invalid echo arguments")
+        elif name == "provider":
+            messages = arguments.get("messages", [])
+            latest = next((message.get("content", "") for message in reversed(messages) if message.get("role") == "user"), "")
+            text = json.dumps({"content": "Offline plugin: " + str(latest)[:4096], "toolCalls": []}, ensure_ascii=False)
+        else:
+            raise ValueError("Unknown tool")
+        return {"content": [{"type": "text", "text": text}], "isError": False}
+    raise ValueError("Unknown method")
+
+
+def main():
+    while True:
+        line = sys.stdin.buffer.readline(262145)
+        if not line:
+            return
+        if len(line) > 262144 or not line.endswith(b"\n"):
+            return
+        request = {}
+        try:
+            request = json.loads(line.decode("utf-8"))
+            if "id" not in request:
+                continue
+            response = {"jsonrpc": "2.0", "id": request["id"], "result": handle(request["method"], request.get("params", {}))}
+        except (ValueError, KeyError, TypeError, UnicodeError):
+            response = {"jsonrpc": "2.0", "id": request.get("id"), "error": {"code": -32602, "message": "Invalid request"}}
+        print(json.dumps(response, ensure_ascii=False), flush=True)
+
+
+if __name__ == "__main__":
+    main()

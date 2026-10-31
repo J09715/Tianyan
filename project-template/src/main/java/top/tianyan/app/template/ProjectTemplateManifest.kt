@@ -23,7 +23,7 @@ data class ProjectTemplateManifest(
     }
 }
 
-@Serializable enum class TemplateProjectType { ANDROID, FLUTTER, GENERAL }
+@Serializable enum class TemplateProjectType { ANDROID, FLUTTER, GENERAL, TIANYAN_PLUGIN }
 
 @Serializable
 data class ProjectTemplateCategory(val id: String = "general", val name: String = "General", val sortOrder: Int = 0)

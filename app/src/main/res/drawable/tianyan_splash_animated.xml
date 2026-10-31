@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/tianyan_splash_vector">
+
+    <target
+        android:name="logo_root"
+        android:animation="@animator/tianyan_splash_root_anim" />
+
+    <target
+        android:name="top_diamond"
+        android:animation="@animator/tianyan_splash_top_anim" />
+
+    <target
+        android:name="top_diamond_path"
+        android:animation="@animator/tianyan_splash_alpha_anim" />
+
+    <target
+        android:name="left_face"
+        android:animation="@animator/tianyan_splash_left_anim" />
+
+    <target
+        android:name="left_face_path"
+        android:animation="@animator/tianyan_splash_alpha_anim" />
+
+    <target
+        android:name="right_face"
+        android:animation="@animator/tianyan_splash_right_anim" />
+
+    <target
+        android:name="right_face_path"
+        android:animation="@animator/tianyan_splash_alpha_anim" />
+
+</animated-vector>

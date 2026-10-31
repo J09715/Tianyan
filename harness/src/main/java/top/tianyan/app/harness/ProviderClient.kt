@@ -1,21 +1,14 @@
 package top.tianyan.app.harness
 
-import top.tianyan.app.core.database.AiModelRepository
-import top.tianyan.app.core.datastore.AgentPreferences
-import top.tianyan.app.core.tools.ProviderRepository
+import top.tianyan.app.harness.core.LlmApi
 import java.io.IOException
-import java.net.SocketTimeoutException
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
-import javax.inject.Inject
-import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -30,116 +23,51 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import top.tianyan.app.harness.directory.HostCapabilityDirectory
 import top.tianyan.app.harness.mcp.McpToolApiName
-
-/** HTTP 429 的结构化错误，供 Harness 区分临时限流与账户额度耗尽。 */
-class LlmRateLimitException(
-    message: String,
-    val retryAfterSeconds: Long? = null,
-    val quotaExhausted: Boolean = false,
-) : IOException(message)
-
-/** HTTP 5xx / 408 服务端临时故障（如 503 网关不可用），可安全重试。 */
-class LlmServerErrorException(
-    message: String,
-    val code: Int,
-) : IOException(message)
+import top.tianyan.app.harness.mcp.toApiToolDefinition
+import java.net.URI
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
 
 /** 可独立测试的 HTTP 层：OpenAI 兼容 chat/completions 请求与响应解析。 */
 internal class ChatApi(
     private val okHttpClient: OkHttpClient,
     private val json: Json,
-) {
-    private val requestCache = LlmRequestCache()
-
-    /**
-     * 重试观察回调（对齐 DeepSeek Harness 的 durable retry 事件）：
-     * 每次重试等待前触发，供上层把重试事件记录进会话日志 / 更新 UI，而非静默重试。
-     */
-    var retryObserver: ((attempt: Int, waitMillis: Long, error: Throwable) -> Unit)? = null
-
-    suspend fun chat(model: ModelConfig, messages: List<ApiMessage>): ChatResult =
+) : LlmApiAdapter {
+    override val api = LlmApi.OPENAI_COMPLETIONS
+    @OptIn(InternalCoroutinesApi::class)
+    override suspend fun chat(model: ModelConfig, messages: List<ApiMessage>): ChatResult =
         withContext(Dispatchers.IO) {
-            val cacheKey = requestCacheKey(model, messages)
-            requestCache.get(cacheKey)?.let { cached -> return@withContext cached }
-            val result = withRetry {
-                okHttpClient.newCall(buildRequest(model, messages, stream = false)).execute().use { response ->
+            val call = okHttpClient.newCall(buildRequest(model, messages, stream = false))
+            // 与流式路径一致：取消时立即关闭 socket，否则阻塞的 execute()/body.string()
+            // 不感知协程取消，用户点"停止"后最长要等满 callTimeout。
+            val cancelHandle = coroutineContext[Job]?.invokeOnCompletion(onCancelling = true) { call.cancel() }
+            try {
+                call.execute().use { response ->
                     val body = response.body.string()
                     if (!response.isSuccessful) {
-                        throwHttpStatusError(response.code, body, response.header("Retry-After"))
+                        if (response.code == 429) {
+                            throw ProviderClient.rateLimitException(response.code, body, response.header("Retry-After"))
+                        }
+                        if (response.code in 500..599) {
+                            throw ProviderClient.transientHttpException(response.code, body, response.header("Retry-After"))
+                        }
+                        throw ProviderClient.contextOverflowException(response.code, body)
                     }
                     if (!ProviderClient.looksLikeJsonResponse(body)) {
-                    throw IllegalStateException(
-                        ProviderClient.formatHttpErrorMessage(response.code, body),
-                    )
-                }
-                val parsed = json.decodeFromString(ChatCompletionResponse.serializer(), body)
-                val message = parsed.choices.firstOrNull()?.message ?: ChatResponseMessage()
-                val calls = message.tool_calls.orEmpty().mapNotNull { call ->
-                    call.function.let { fn ->
-                        if (fn.name.isBlank()) null else ApiToolCallSpec(
-                            call.id.ifBlank { ToolCallIdNormalizer.normalize(null) },
-                            fn.name,
-                            fn.arguments.ifBlank { "{}" },
+                        throw IllegalStateException(
+                            ProviderClient.formatHttpErrorMessage(response.code, body),
                         )
                     }
+                    val parsed = json.decodeFromString(ChatCompletionResponse.serializer(), body)
+                    parsed.toValidatedResult(ProviderClient.estimateApiMessageTokens(messages))
                 }
-                val (extractedContent, extractedReasoning) = ProviderClient.extractThinkTags(message.content, message.reasoning_content)
-                ChatResult(
-                    content = extractedContent,
-                    toolCalls = calls,
-                    reasoningContent = extractedReasoning,
-                    usage = parsed.usage?.toChatUsage() ?: ChatUsage(),
-                )
-            }
-            }
-            requestCache.put(cacheKey, result)
-            result
-        }
-
-    /**
-     * 临时故障重试：指数退避 + 对称抖动（对齐 DeepSeek Harness 的 provider retry-policy）。
-     * 仅重试可恢复的传输/限流/服务端错误；额度耗尽(429 quota)与 4xx 等确定性错误直接抛出。
-     * [withRetryStatus] 只重试 HTTP 状态码（429/5xx/408），供流式调用使用——
-     * 流式内容一旦开始就不重试，避免把已输出的增量重复推给 UI。
-     */
-    private suspend fun <T> withRetry(block: suspend () -> T): T = retryLoop(includeTransport = true, block)
-
-    private suspend fun <T> withRetryStatus(block: suspend () -> T): T = retryLoop(includeTransport = false, block)
-
-    private suspend fun <T> retryLoop(includeTransport: Boolean, block: suspend () -> T): T {
-        var attempt = 0
-        var delayMs = ProviderClient.RETRY_INITIAL_DELAY_MS
-        while (true) {
-            try {
-                return block()
-            } catch (t: Throwable) {
-                if (attempt >= ProviderClient.RETRY_MAX_ATTEMPTS || !isRetryable(t, includeTransport)) throw t
-                attempt++
-                val jitter = (delayMs * ProviderClient.RETRY_JITTER_RATIO * (Math.random() * 2.0 - 1.0)).toLong()
-                val waitMillis = delayMs + jitter
-                retryObserver?.invoke(attempt, waitMillis, t)
-                delay(waitMillis)
-                delayMs = (delayMs * 2).coerceAtMost(ProviderClient.RETRY_MAX_DELAY_MS)
+            } finally {
+                cancelHandle?.dispose()
             }
         }
-    }
-
-    private fun isRetryable(t: Throwable, includeTransport: Boolean): Boolean = when (t) {
-        is LlmRateLimitException -> !t.quotaExhausted
-        is LlmServerErrorException -> true
-        is IOException -> includeTransport
-        else -> false
-    }
-
-    private fun throwHttpStatusError(code: Int, body: String, retryAfter: String?): Nothing = when {
-        code == 429 -> throw ProviderClient.rateLimitException(code, body, retryAfter)
-        code == 408 || code >= 500 -> throw ProviderClient.serverErrorException(code, body)
-        else -> throw IllegalStateException(ProviderClient.formatHttpErrorMessage(code, body))
-    }
-
-    private fun requestCacheKey(model: ModelConfig, messages: List<ApiMessage>): String =
-        "${model.hashCode()}|${messages.hashCode()}"
 
     /**
      * 流式调用：逐行读取 SSE（data: ...），每个内容增量立即通过 [onDelta] 回调
@@ -150,21 +78,19 @@ internal class ChatApi(
      * 即失败，不会有增量重复发送的风险）。
      */
     @OptIn(InternalCoroutinesApi::class)
-    suspend fun chatStream(
+    override suspend fun chatStream(
         model: ModelConfig,
         messages: List<ApiMessage>,
-        onReasoning: (String) -> Unit = {},
-        onToolProgress: (ToolCallStreamProgress) -> Unit = {},
+        onReasoning: (String) -> Unit,
+        onToolProgress: (ToolCallStreamProgress) -> Unit,
         onDelta: (String) -> Unit,
-    ): ChatResult = withRetryStatus {
-        try {
-            executeStream(model, messages, onReasoning, onToolProgress, onDelta, includeUsage = true)
-        } catch (rejected: IllegalStateException) {
-            if (rejected.message?.contains("stream_options", ignoreCase = true) == true) {
-                executeStream(model, messages, onReasoning, onToolProgress, onDelta, includeUsage = false)
-            } else {
-                throw rejected
-            }
+    ): ChatResult = try {
+        executeStream(model, messages, onReasoning, onToolProgress, onDelta, includeUsage = true)
+    } catch (rejected: IllegalStateException) {
+        if (rejected.message?.contains("stream_options", ignoreCase = true) == true) {
+            executeStream(model, messages, onReasoning, onToolProgress, onDelta, includeUsage = false)
+        } else {
+            throw rejected
         }
     }
 
@@ -179,37 +105,71 @@ internal class ChatApi(
     ): ChatResult = withContext(Dispatchers.IO) {
         val call = okHttpClient.newCall(buildRequest(model, messages, stream = true, includeUsage = includeUsage))
         // 关键：阻塞式 readUtf8Line() 不感知协程取消。用户点"停止"时必须主动 call.cancel()
-        // 关闭底层 socket，阻塞读才会立刻抛出 IOException 退出——否则要等读超时（最长 3 分钟），
+        // 关闭底层 socket，阻塞读才会立刻抛出 IOException 退出——否则要等读超时，
         // 表现为"停止按钮没反应"。
         val cancelHandle = coroutineContext[Job]?.invokeOnCompletion(onCancelling = true) { call.cancel() }
         // source.timeout() 只有收到 HTTP 响应头后才生效。看门狗覆盖 DNS、连接、请求体上传、
         // 等待响应头以及首个 SSE 事件的完整阶段，避免大请求仍静默等满 callTimeout。
-        val firstEventTimeoutMs = ProviderClient.resolveFirstEventTimeoutMs(
-            ProviderClient.estimateApiMessageTokens(messages),
-        )
+        val firstEventTimeoutMs = firstEventTimeoutMs(messages, model)
         val firstEventState = AtomicInteger(ProviderClient.FIRST_EVENT_WAITING)
-        val firstEventWatchdog = launch {
-            delay(firstEventTimeoutMs)
-            if (firstEventState.compareAndSet(ProviderClient.FIRST_EVENT_WAITING, ProviderClient.FIRST_EVENT_TIMED_OUT)) {
-                call.cancel()
-            }
-        }
+        val firstEventWatchdog = launch { awaitFirstEventTimeout(firstEventTimeoutMs, firstEventState) { call.cancel() } }
         try {
             call.execute().use { response ->
                 if (!response.isSuccessful) {
                     val rawBody = response.body.string().take(512)
-                    throwHttpStatusError(response.code, rawBody, response.header("Retry-After"))
+                    if (response.code == 429) {
+                        throw ProviderClient.rateLimitException(response.code, rawBody, response.header("Retry-After"))
+                    }
+                    if (response.code in 500..599) {
+                        throw ProviderClient.transientHttpException(response.code, rawBody, response.header("Retry-After"))
+                    }
+                    throw ProviderClient.contextOverflowException(response.code, rawBody)
                 }
                 val source = response.body.source()
-                val demuxer = ThinkTagStreamDemuxer(onReasoning, onDelta)
+                // 单轮流式输出硬失败预算：正文/思考经 demuxer 计入，工具入参在累积点计入。
+                val budget = StreamBudget()
+                val demuxer = ThinkTagStreamDemuxer(onReasoning, onDelta, budget = budget)
                 val toolCalls = mutableMapOf<Int, ToolCallAccumulator>()
+                // 网关不分发 index 时的流式调用归并状态：id → 槽位、下一个可用的合成槽、
+                // 最近活跃槽（承接无 id 的 arguments 延续分片）
+                val slotByCallId = mutableMapOf<String, Int>()
+                var nextSyntheticSlot = 0
+                var lastActiveSlot: Int? = null
                 var usage = ChatUsage()
+                // 空响应诊断首部：只缓冲到出现首个 data: 行为止（或到上限），
+                // 既不把整段流式正文留在内存，又能在"什么都没收到"时把上游真实返回写进错误。
+                val rawHead = StringBuilder()
+                var sawSseData = false
+                var completed = false
+                var finishReason: String? = null
+                // 非 SSE 响应体：部分 OpenAI 兼容网关忽略 stream:true，直接返回整段 JSON 补全。
+                // 此前这种 body 因"没有 data: 行"被逐行丢弃，最终表现为空回复。
+                var nonSseBody: String? = null
                 while (true) {
                     val line = source.readUtf8Line() ?: break
-                    if (!line.startsWith("data:")) continue
+                    observeStreamActivity(line, firstEventState, firstEventWatchdog)
+                    if (!sawSseData && rawHead.length < ProviderClient.RESPONSE_HEAD_CAPTURE_CHARS) {
+                        rawHead.append(line).append('\n')
+                    }
+                    if (!line.startsWith("data:")) {
+                        val trimmed = line.trimStart()
+                        val sseField = trimmed.isEmpty() ||
+                            trimmed.startsWith("event:") || trimmed.startsWith("id:") ||
+                            trimmed.startsWith("retry:") || trimmed.startsWith(":")
+                        if (!sawSseData && !sseField) {
+                            nonSseBody = line + "\n" + source.readUtf8()
+                            break
+                        }
+                        continue
+                    }
+                    sawSseData = true
                     val data = line.removePrefix("data:").trim()
-                    if (data == "[DONE]") break
+                    if (data == "[DONE]") {
+                        completed = true
+                        break
+                    }
                     val root = runCatching { json.parseToJsonElement(data) as? JsonObject }.getOrNull()
+                    if (root?.get("error") is JsonObject) throw providerStreamError(data)
                     if (root != null && firstEventState.compareAndSet(
                             ProviderClient.FIRST_EVENT_WAITING,
                             ProviderClient.FIRST_EVENT_RECEIVED,
@@ -225,6 +185,10 @@ internal class ChatApi(
                     val choice = root
                         ?.get("choices")?.let { it as? JsonArray }?.firstOrNull() as? JsonObject
                         ?: continue
+                    choice["finish_reason"]?.jsonPrimitive?.contentOrNull?.let {
+                        finishReason = it
+                        completed = true
+                    }
                     val delta = choice["delta"] as? JsonObject
                     delta?.get("content")?.let { it as? JsonPrimitive }?.contentOrNull?.let { chunk ->
                         if (chunk.isNotEmpty()) {
@@ -239,44 +203,133 @@ internal class ChatApi(
                             demuxer.onExplicitReasoningChunk(chunk)
                         }
                     }
-                    delta?.get("tool_calls")?.let { it as? JsonArray }?.forEach { call2 ->
-                        val callObj = call2 as? JsonObject ?: return@forEach
-                        val index = callObj["index"]?.let { it as? JsonPrimitive }?.contentOrNull?.toIntOrNull() ?: 0
-                        val accum = toolCalls.getOrPut(index) { ToolCallAccumulator() }
-                        callObj["id"]?.let { it as? JsonPrimitive }?.contentOrNull
-                            ?.takeIf { it.isNotEmpty() }?.let { accum.id = it }
+                    // 调用边界判据：显式 index 优先；网关不分发 index 时以「id 变化」识别新调用
+                    // ——tool call 首个分片必带非空 id，后续 arguments 分片不带 id。若按元素
+                    // 迭代序号 fallback（每个 chunk 恒为 0），跨 chunk 的多个并行调用会全部
+                    // 落进同一槽位：id 相互覆盖、arguments 拼成非法 JSON、其中一个调用静默丢失。
+                    delta?.get("tool_calls")?.let { it as? JsonArray }?.forEachIndexed { position, call2 ->
+                        val callObj = call2 as? JsonObject ?: return@forEachIndexed
+                        val explicitIndex = callObj["index"]?.let { it as? JsonPrimitive }?.contentOrNull?.toIntOrNull()
+                        val callId = callObj["id"]?.let { it as? JsonPrimitive }?.contentOrNull
+                            ?.takeIf { it.isNotEmpty() }
+                        val slot: Int = when {
+                            explicitIndex != null -> explicitIndex
+                            callId != null -> slotByCallId[callId] ?: run {
+                                var candidate = nextSyntheticSlot++
+                                while (candidate in toolCalls) candidate = nextSyntheticSlot++
+                                slotByCallId[callId] = candidate
+                                candidate
+                            }
+                            // 无 index 无 id 的分片：延续最近活跃调用（arguments 增量）
+                            lastActiveSlot != null -> lastActiveSlot!!
+                            else -> {
+                                var candidate = nextSyntheticSlot++
+                                while (candidate in toolCalls) candidate = nextSyntheticSlot++
+                                candidate
+                            }
+                        }
+                        lastActiveSlot = slot
+                        val accum = toolCalls.getOrPut(slot) { ToolCallAccumulator() }
+                        callId?.let {
+                            accum.id = it
+                            slotByCallId.putIfAbsent(callId, slot)
+                        }
                         val function = callObj["function"] as? JsonObject
                         function?.get("name")?.let { it as? JsonPrimitive }?.contentOrNull
                             ?.takeIf { it.isNotEmpty() }?.let { accum.name = it }
                         function?.get("arguments")?.let { it as? JsonPrimitive }?.contentOrNull
-                            ?.let { accum.arguments.append(it) }
+                            ?.let { budget.add(it); accum.arguments.append(it) }
                         accum.publishProgress(onToolProgress)
                     }
                 }
+                if (sawSseData) requireStreamCompletion(completed, "Chat Completions")
+                requireOutputCompletion(finishReason, ProviderClient.estimateApiMessageTokens(messages), demuxer.fullText.length + demuxer.fullReasoning.length)
                 demuxer.flush()
                 toolCalls.values.forEach { it.publishProgress(onToolProgress, force = true) }
                 // 部分 OpenAI 兼容端对无参数函数不下发 arguments 分片，空串须兜底为 "{}"
                 val calls = toolCalls.values.map {
-                    ApiToolCallSpec(it.id.ifBlank { ToolCallIdNormalizer.normalize(null) }, it.name, it.arguments.toString().ifBlank { "{}" })
+                    ApiToolCallSpec(
+                        it.id.ifBlank { ToolCallIdNormalizer.normalize(null) },
+                        it.name,
+                        it.arguments.toString().ifBlank { "{}" },
+                    )
                 }
                 ChatResult(
                     content = demuxer.fullText.toString().ifEmpty { null },
                     toolCalls = calls,
                     reasoningContent = demuxer.fullReasoning.toString().ifEmpty { null },
                     usage = usage,
-                )
+                ).let { streamed ->
+                    // HTTP 200 却什么都没产出：先按非流式 JSON 兜底解析，仍拿不到内容就明确报错。
+                    // 绝不允许空响应继续往下走——它会一路"无工具调用 → 收尾 → Outcome=completed"，
+                    // 前台看不到任何内容也没有任何错误，即用户反馈的「发消息没有回复」。
+                    if (streamed.isBlankResponse) {
+                        resolveBlankStreamResult(nonSseBody, rawHead.toString(), ProviderClient.estimateApiMessageTokens(messages))
+                    } else {
+                        streamed
+                    }
+                }
             }
         } catch (io: IOException) {
-            if (firstEventState.get() == ProviderClient.FIRST_EVENT_TIMED_OUT) {
-                throw SocketTimeoutException(
-                    "等待模型首个响应超过 ${firstEventTimeoutMs / 1000}s",
-                ).apply { initCause(io) }
-            }
-            throw io
+            throw streamFailure(io, firstEventState.get(), firstEventTimeoutMs, okHttpClient.readTimeoutMillis.toLong())
         } finally {
             firstEventWatchdog.cancel()
             cancelHandle?.dispose()
         }
+    }
+
+    /** 非流式补全消息 → 统一 [ChatResult]（与 [chat] 同一口径，供兜底解析复用）。 */
+    private fun ChatResponseMessage.toChatResult(usage: ChatUsage): ChatResult {
+        val calls = tool_calls.orEmpty().mapNotNull { call ->
+            call.function.let { fn ->
+                if (fn.name.isBlank()) null else ApiToolCallSpec(
+                    call.id.ifBlank { ToolCallIdNormalizer.normalize(null) },
+                    fn.name,
+                    fn.arguments.ifBlank { "{}" },
+                )
+            }
+        }
+        val (extractedContent, extractedReasoning) =
+            ProviderClient.extractThinkTags(content, reasoning_content)
+        return ChatResult(
+            content = extractedContent,
+            toolCalls = calls,
+            reasoningContent = extractedReasoning,
+            usage = usage,
+        )
+    }
+
+    /**
+     * 流式请求拿到了完全空的一轮（HTTP 200，但无正文/推理/工具调用）。
+     *
+     * 先按非流式 JSON 补全兜底解析：[nonSseBody] 非空说明响应体根本不是 SSE
+     * （网关忽略了 `stream: true`），此前这种 body 会被逐行丢弃、最终表现为"空回复"。
+     * 兜底仍无内容时抛 [LlmEmptyResponseException]，并附上原始响应首部——
+     * 把一次"什么都没有"变成可定位、可重试的失败。
+     */
+    private fun resolveBlankStreamResult(nonSseBody: String?, rawHead: String, inputTokens: Int): ChatResult {
+        val body = nonSseBody?.trim().orEmpty()
+        if (body.isNotEmpty() && ProviderClient.looksLikeJsonResponse(body)) {
+            val parsed = runCatching {
+                json.decodeFromString(ChatCompletionResponse.serializer(), body)
+            }.getOrNull()
+            if (parsed != null) {
+                val recovered = parsed.toValidatedResult(inputTokens)
+                if (!recovered.isBlankResponse) return recovered
+            }
+        }
+        throw LlmEmptyResponseException(
+            ProviderClient.EMPTY_RESPONSE_MESSAGE +
+                ProviderClient.describeResponseHead(body.ifEmpty { rawHead }),
+        )
+    }
+
+    private fun ChatCompletionResponse.toValidatedResult(inputTokens: Int): ChatResult {
+        val choice = choices.firstOrNull()
+        val result = (choice?.message ?: ChatResponseMessage()).toChatResult(usage?.toChatUsage() ?: ChatUsage())
+        requireOutputCompletion(choice?.finish_reason, inputTokens,
+            result.content.orEmpty().length + result.reasoningContent.orEmpty().length)
+        return result
     }
 
     /** 手工解析流式 chunk 顶层 usage（各 Provider 字段不统一，DTO 反而脆）。 */
@@ -295,12 +348,16 @@ internal class ChatApi(
     }
 
     private fun buildRequest(model: ModelConfig, messages: List<ApiMessage>, stream: Boolean, includeUsage: Boolean = true): Request {
-            val tools = if (model.pureChatMode) emptyList() else ProviderClient.buildDynamicTools(model.dynamicMcpTools)
-        // JSON_TEXT 模式：把工具 JSON 描述追加到 system 消息末尾，让模型在纯文本中输出工具调用
-        val effectiveMessages = if (!model.pureChatMode && model.toolCallMode == ToolCallMode.JSON_TEXT && tools.isNotEmpty()) {
+            val tools = if (model.pureChatMode) emptyList() else ProviderClient.buildDynamicTools(model, model.redTeamEnabled)
+        // JSON_TEXT 模式：把工具 JSON 描述追加到首条 system 消息末尾，让模型在纯文本中输出工具调用。
+        // 只注入首条：压缩摘要层也是 system 消息，全量注入会把数千 token 的工具 schema 复制多份，
+        // 还把 JSON 定义拼在「早期历史摘要」末尾污染摘要语义（Anthropic/Responses 路径本就只注入一次）。
+        val effectiveMessages = if (model.capabilities.textTools && tools.isNotEmpty()) {
             val desc = ProviderClient.buildToolsTextDescription(tools)
+            var injected = false
             messages.map { msg ->
-                if (msg.role == "system" && !msg.content.isNullOrBlank()) {
+                if (!injected && msg.role == "system" && !msg.content.isNullOrBlank()) {
+                    injected = true
                     msg.copy(content = msg.content + "\n\n## 可用工具 JSON 定义（必须严格按此 name 与参数输出）\n" + desc)
                 } else {
                     msg
@@ -309,52 +366,73 @@ internal class ChatApi(
         } else {
             messages
         }
-        val requestJson = kotlinx.serialization.json.buildJsonObject {
-            put("model", kotlinx.serialization.json.JsonPrimitive(model.model))
-            put("stream", kotlinx.serialization.json.JsonPrimitive(stream))
+        // NATIVE 模式下 tools 数组独立于 messages，输出预算必须显式扣掉 schema；
+        // JSON_TEXT 模式下 schema 已内联进 effectiveMessages，由 messages 口径覆盖，故传 0。
+        val toolSchemaTokens =
+            if (model.capabilities.nativeTools) {
+                ContextWindowPolicy.estimateToolDefinitionTokens(tools)
+            } else {
+                0
+            }
+        val requestJson = buildJsonObject {
+            put("model", JsonPrimitive(model.model))
+            put("stream", JsonPrimitive(stream))
             if (stream && includeUsage) {
                 // 请求最终 usage 块（OpenAI 官方规范字段；DeepSeek/DashScope/GLM/OpenRouter 均支持）
-                put("stream_options", kotlinx.serialization.json.buildJsonObject {
-                    put("include_usage", kotlinx.serialization.json.JsonPrimitive(true))
+                put("stream_options", buildJsonObject {
+                    put("include_usage", JsonPrimitive(true))
                 })
             }
-            model.temperature?.let { put("temperature", kotlinx.serialization.json.JsonPrimitive(it)) }
-            model.maxTokens?.let { put("max_tokens", kotlinx.serialization.json.JsonPrimitive(it)) }
-            model.topP?.let { put("top_p", kotlinx.serialization.json.JsonPrimitive(it)) }
+            model.temperature?.let { put("temperature", JsonPrimitive(it)) }
+            put("max_tokens", JsonPrimitive(
+                ContextWindowPolicy.outputBudget(
+                    model.maxTokens,
+                    8_192,
+                    effectiveMessages,
+                    model.contextTokens,
+                    model.model,
+                    model.provider,
+                    toolSchemaTokens,
+                ),
+            ))
+            model.topP?.let { put("top_p", JsonPrimitive(it)) }
             // 推理开关/强度：按厂商能力翻译（reasoning_effort / thinking_config / thinking / reasoning）
             ReasoningAdapter.openAiFields(model).forEach { (key, value) -> put(key, value) }
             // 工具调用：纯净模式与 DISABLED 模式完全不注入工具相关参数；仅 NATIVE 模式注入标准 tools
-            if (!model.pureChatMode && model.toolCallMode == ToolCallMode.NATIVE && tools.isNotEmpty()) {
-                put("tools", json.encodeToJsonElement(kotlinx.serialization.builtins.ListSerializer(ApiToolDefinition.serializer()), tools))
+            if (model.capabilities.nativeTools && tools.isNotEmpty()) {
+                put("tools", json.encodeToJsonElement(ListSerializer(ApiToolDefinition.serializer()), tools))
             }
-            put("messages", kotlinx.serialization.json.buildJsonArray {
+            put("messages", buildJsonArray {
                 effectiveMessages.forEach { msg ->
-                    add(kotlinx.serialization.json.buildJsonObject {
-                        put("role", kotlinx.serialization.json.JsonPrimitive(msg.role))
+                    add(buildJsonObject {
+                        put("role", JsonPrimitive(msg.role))
                         if (msg.imageUrls.isNotEmpty()) {
-                            put("content", kotlinx.serialization.json.buildJsonArray {
+                            put("content", buildJsonArray {
                                 if (!msg.content.isNullOrBlank()) {
-                                    add(kotlinx.serialization.json.buildJsonObject {
-                                        put("type", kotlinx.serialization.json.JsonPrimitive("text"))
-                                        put("text", kotlinx.serialization.json.JsonPrimitive(msg.content))
+                                    add(buildJsonObject {
+                                        put("type", JsonPrimitive("text"))
+                                        put("text", JsonPrimitive(msg.content))
                                     })
                                 }
                                 msg.imageUrls.forEach { url ->
-                                    add(kotlinx.serialization.json.buildJsonObject {
-                                        put("type", kotlinx.serialization.json.JsonPrimitive("image_url"))
-                                        put("image_url", kotlinx.serialization.json.buildJsonObject {
-                                            put("url", kotlinx.serialization.json.JsonPrimitive(url))
+                                    add(buildJsonObject {
+                                        put("type", JsonPrimitive("image_url"))
+                                        put("image_url", buildJsonObject {
+                                            put("url", JsonPrimitive(url))
                                         })
                                     })
                                 }
                             })
-                        } else if (msg.content != null) {
-                            put("content", kotlinx.serialization.json.JsonPrimitive(msg.content))
+                        } else {
+                            // Strict OpenAI-compatible gateways deserialize content as a required
+                            // String; never omit it. Assistant tool-call turns legitimately have no
+                            // text, so send an empty string instead.
+                            put("content", JsonPrimitive(msg.content ?: ""))
                         }
-                        msg.reasoning_content?.let { put("reasoning_content", kotlinx.serialization.json.JsonPrimitive(it)) }
-                        msg.tool_call_id?.let { put("tool_call_id", kotlinx.serialization.json.JsonPrimitive(it)) }
+                        msg.reasoning_content?.let { put("reasoning_content", JsonPrimitive(it)) }
+                        msg.tool_call_id?.let { put("tool_call_id", JsonPrimitive(it)) }
                         msg.tool_calls?.let { calls ->
-                            put("tool_calls", json.encodeToJsonElement(kotlinx.serialization.builtins.ListSerializer(ApiToolCall.serializer()), calls))
+                            put("tool_calls", json.encodeToJsonElement(ListSerializer(ApiToolCall.serializer()), calls))
                         }
                     })
                 }
@@ -376,185 +454,18 @@ internal class ChatApi(
     }
 }
 
-/** 分片累积一次工具调用的 id/name/arguments（OpenAI 与 Anthropic 流式均复用）。 */
-internal data class ToolCallAccumulator(
-    var id: String = "",
-    var name: String = "",
-    val arguments: StringBuilder = StringBuilder(),
-) {
-    private var lastProgressAtNanos: Long = 0L
-    private var lastProgress: Pair<Int, Int>? = null
-
-    /**
-     * 工具参数本身也是 SSE 分片。WRITE/EDIT 在完整 JSON 到达前不能执行，但可以从
-     * 已收到的 JSON 字符串片段估算增删行数，避免大文件生成期间 UI 长时间停在“思考中”。
-     */
-    fun publishProgress(onProgress: (ToolCallStreamProgress) -> Unit, force: Boolean = false) {
-        val normalizedName = name.trim().lowercase()
-        if (normalizedName != "write" && normalizedName != "edit") return
-        val now = System.nanoTime()
-        if (!force && lastProgressAtNanos != 0L && now - lastProgressAtNanos < TOOL_PROGRESS_INTERVAL_NANOS) return
-
-        val progress = when (normalizedName) {
-            "write" -> ToolCallStreamProgress(
-                name = normalizedName,
-                addedLines = countPartialJsonStringLines(arguments, "content") ?: 0,
-                deletedLines = 0,
-            )
-            else -> ToolCallStreamProgress(
-                name = normalizedName,
-                addedLines = countPartialJsonStringLines(arguments, "newText") ?: 0,
-                deletedLines = countPartialJsonStringLines(arguments, "oldText") ?: 0,
-            )
-        }
-        val counts = progress.addedLines to progress.deletedLines
-        if (force || counts != lastProgress) {
-            lastProgress = counts
-            lastProgressAtNanos = now
-            onProgress(progress)
-        }
-    }
-
-    private companion object {
-        const val TOOL_PROGRESS_INTERVAL_NANOS = 200_000_000L
-    }
-}
-
-/** WRITE/EDIT 工具参数流的轻量进度；只用于 UI，不参与最终文件写入。 */
-data class ToolCallStreamProgress(
-    val name: String,
-    val addedLines: Int,
-    val deletedLines: Int,
-)
-
 /**
- * 从尚未闭合的 JSON 参数中读取指定字符串字段的当前行数。
- * JSON 中换行通常是 `\n`；转义反斜杠 `\\n` 不应误判为新行。
+ * 残渣级思考的长度上限（字符，trim 后）：正文与工具调用全空时，思考字段只剩低于该阈值的
+ * 截断残渣（空壳 think、换行、半截标签）不算"有内容"。真实推理是成段文字，起点远高于此；
+ * 而放行这类残渣会落进"无工具调用 → Complete"分支，把中转截断产生的空壳响应记成任务完成。
  */
-internal fun countPartialJsonStringLines(arguments: CharSequence, fieldName: String): Int? {
-    val key = "\"$fieldName\""
-    var searchFrom = 0
-    while (searchFrom < arguments.length) {
-        val keyStart = arguments.indexOf(key, searchFrom)
-        if (keyStart < 0) return null
-        var cursor = keyStart + key.length
-        while (cursor < arguments.length && arguments[cursor].isWhitespace()) cursor++
-        if (cursor >= arguments.length) return null
-        if (arguments[cursor] != ':') {
-            searchFrom = keyStart + key.length
-            continue
-        }
-        cursor++
-        while (cursor < arguments.length && arguments[cursor].isWhitespace()) cursor++
-        if (cursor >= arguments.length) return null
-        if (arguments[cursor] != '"') {
-            searchFrom = keyStart + key.length
-            continue
-        }
-        cursor++
-        var lines = 1
-        var escaped = false
-        while (cursor < arguments.length) {
-            val char = arguments[cursor++]
-            if (escaped) {
-                if (char == 'n') lines++
-                escaped = false
-            } else {
-                when (char) {
-                    '\\' -> escaped = true
-                    '\n' -> lines++
-                    '"' -> return lines
-                }
-            }
-        }
-        return lines
-    }
-    return null
-}
+internal const val BLANK_REASONING_RESIDUAL_CHARS = 16
 
-/** 解析后的模型运行配置。 */
-data class ModelConfig(
-    val name: String,
-    val provider: String,
-    val model: String,
-    val baseUrl: String,
-    val apiKey: String?,
-    /** 同一接口地址下参与轮询的 Key 池；为空时兼容使用 [apiKey]。 */
-    val apiKeys: List<String> = emptyList(),
-    /** 单 Key 每分钟请求上限；0 表示不限。 */
-    val requestsPerMinutePerKey: Int = 0,
-    /** 接入协议：OPENAI 兼容或 Anthropic Messages API。 */
-    val protocol: ApiProtocol = ApiProtocol.OPENAI,
-    /** 推理参数（null = 服务端默认）。 */
-    val temperature: Float? = null,
-    val maxTokens: Int? = null,
-    val topP: Float? = null,
-    /** 推理开关：AUTO = 跟随模型服务端默认。 */
-    val reasoningMode: ReasoningMode = ReasoningMode.AUTO,
-    /** 推理强度：null = 服务端默认。 */
-    val reasoningEffort: ReasoningEffort? = null,
-    /**
-     * 工具调用模式：NATIVE = OpenAI 标准 function calling（注入 tools）；
-     * JSON_TEXT = 工具列表写入系统提示词，模型用文本输出工具调用；
-     * DISABLED = 禁用工具（纯聊天）。
-     */
-    val toolCallMode: ToolCallMode = ToolCallMode.NATIVE,
-    val dynamicMcpTools: List<top.tianyan.app.core.model.McpToolInfo> = emptyList(),
-    /** 上下文 Token 容量上限（如 128000，超出时滑动窗口压缩）。 */
-    val contextTokens: Int? = null,
-    /** 自定义请求头（多行 Key: Value 格式）。 */
-    val customHeaders: String = "",
-    /** 纯净排查模式：不注入系统提示词与工具。 */
-    val pureChatMode: Boolean = false,
-    /** 是否支持视觉多模态直接发送图片。 */
-    val visionEnabled: Boolean = true,
-    /** 是否使用 OpenAI Responses API（true = POST /responses；false = /chat/completions）。 */
-    val responseApiEnabled: Boolean = false,
-)
-
-internal data class RequestedModelTarget(
-    val profileId: String,
-    val variant: String? = null,
-)
-
-internal fun selectRequestedModelTarget(
-    profiles: List<top.tianyan.app.core.database.AiModelEntity>,
-    selection: String,
-): RequestedModelTarget? {
-    val requested = selection.trim()
-    if (requested.isBlank()) return null
-    profiles.firstOrNull {
-        it.id.equals(requested, ignoreCase = true) || it.name.equals(requested, ignoreCase = true)
-    }?.let { return RequestedModelTarget(profileId = it.id) }
-    profiles.forEach { entity ->
-        val canonicalVariant = entity.model.split(',')
-            .map { it.trim() }
-            .firstOrNull { it.equals(requested, ignoreCase = true) }
-        if (canonicalVariant != null) {
-            return RequestedModelTarget(profileId = entity.id, variant = canonicalVariant)
-        }
-    }
-    return null
-}
-
-/** LLM 接入协议：绝大多数厂商提供 OpenAI 兼容端点；Anthropic Claude 需要专用适配。 */
-enum class ApiProtocol { OPENAI, ANTHROPIC }
-
-/** 工具调用模式：NATIVE = 标准函数调用；JSON_TEXT = 文本 JSON 标记；DISABLED = 禁用。 */
-enum class ToolCallMode { NATIVE, JSON_TEXT, DISABLED }
+/** null/空白，或 trim 后低于 [BLANK_REASONING_RESIDUAL_CHARS] 的残渣级思考，均视为"没有思考内容"。 */
+internal fun String?.isNullOrResidualReasoning(): Boolean =
+    isNullOrBlank() || trim().length < BLANK_REASONING_RESIDUAL_CHARS
 
 /** LLM 返回的一轮结果：纯文本 或 一个/多个工具调用。 */
-data class ChatResult(
-    val content: String?,
-    val toolCalls: List<ApiToolCallSpec>,
-    /** 推理模型输出的思考内容（DeepSeek 等），多轮对话需原样传回 API。 */
-    val reasoningContent: String? = null,
-    /** Provider 报告的本轮 token 用量；未报告时全部为 0。 */
-    val usage: ChatUsage = ChatUsage(),
-) {
-    val hasToolCalls: Boolean get() = toolCalls.isNotEmpty()
-}
-
 /**
  * 一次补全的 token 用量（OpenAI usage 与 Anthropic usage 的统一投影）。
  * OpenAI: prompt/completion_tokens + details(cached/reasoning)；
@@ -580,23 +491,6 @@ data class ApiToolCallSpec(
 )
 
 // ---------- OpenAI 兼容 chat/completions DTO ----------
-
-@Serializable
-data class ApiMessage(
-    val role: String,
-    val content: String? = null,
-    val reasoning_content: String? = null,
-    val tool_calls: List<ApiToolCall>? = null,
-    val tool_call_id: String? = null,
-    val imageUrls: List<String> = emptyList(),
-)
-
-@Serializable
-data class ApiToolCall(
-    val id: String,
-    val type: String = "function",
-    val function: ApiFunctionCall,
-)
 
 /**
  * Provider 出口的消息序列修复（最后一道防线）。
@@ -628,13 +522,12 @@ internal fun sanitizeApiTranscript(messages: List<ApiMessage>): List<ApiMessage>
         awaitingResultIds = LinkedHashSet()
     }
 
-    for (message in messages) {
+    for (message in validateResponsesTranscript(messages)) {
         when {
             message.role == "assistant" && !message.tool_calls.isNullOrEmpty() -> {
                 flushMissingResults()
                 out.add(message)
-                awaitingResultIds = message.tool_calls.orEmpty()
-                    .mapTo(LinkedHashSet()) { it.id }
+                awaitingResultIds = message.tool_calls.mapTo(LinkedHashSet()) { it.id }
             }
             message.role == "tool" -> {
                 val id = message.tool_call_id.orEmpty()
@@ -677,7 +570,7 @@ data class ApiToolDefinition(
 data class ApiFunctionDefinition(
     val name: String,
     val description: String,
-    val parameters: kotlinx.serialization.json.JsonObject,
+    val parameters: JsonObject,
 )
 
 @Serializable
@@ -714,6 +607,7 @@ data class ChatUsageResponse(
 @Serializable
 data class ChatChoice(
     val message: ChatResponseMessage = ChatResponseMessage(),
+    val finish_reason: String? = null,
 )
 
 @Serializable
@@ -723,223 +617,56 @@ data class ChatResponseMessage(
     val tool_calls: List<ApiToolCall>? = null,
 )
 
-/**
- * 调用 LLM（OpenAI 兼容 chat/completions，支持 tools/tool_calls）。
- *
- * 模型配置优先取 [AiModelRepository] 中激活的 [top.tianyan.app.core.database.AiModelEntity]，
- * 未配置时回退到 [ProviderRepository]；API Key 始终从加密存储读取，绝不落库/落日志。
- */
-@Singleton
-class ProviderClient @Inject constructor(
-    private val okHttpClient: OkHttpClient,
-    private val providerRepository: ProviderRepository,
-    private val modelDao: AiModelRepository,
-    private val mcpManager: top.tianyan.app.harness.mcp.McpManager,
-    private val settingsDataStore: AgentPreferences,
-    private val json: Json,
+/** Compatibility facade for model resolution and the shared three-protocol request boundary. */
+class ProviderClient internal constructor(
+    private val modelResolver: ProviderModelResolver,
+    private val transport: ProviderTransport,
 ) {
-    private val apiKeyScheduler = ApiKeyScheduler()
-    private val httpClient: OkHttpClient = okHttpClient.newBuilder()
-        .callTimeout(CALL_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-        .readTimeout(READ_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-        .build()
+    suspend fun resolveModel(): ModelConfig = modelResolver.resolveModel()
 
-    suspend fun resolveModel(): ModelConfig = withContext(Dispatchers.IO) {
-        val active = modelDao.activeModel()
-        val baseConfig = if (active != null) {
-            active.toModelConfig(providerRepository)
-        } else {
-            ModelConfig(
-                name = "默认",
-                provider = providerRepository.provider.first(),
-                model = providerRepository.model.first().ifBlank { DEFAULT_MODEL },
-                baseUrl = providerRepository.baseUrl.first().ifBlank { DEFAULT_BASE_URL },
-                apiKey = providerRepository.readApiKey(),
-            )
-        }
-        val dynamicMcp = runCatching { mcpManager.getActiveMcpTools() }.getOrDefault(emptyList())
-        baseConfig.applyGlobalReasoningDepth().copy(dynamicMcpTools = dynamicMcp)
-    }
+    suspend fun resolveConfigured(modelId: String? = null, modelVariant: String? = null): ModelConfig =
+        modelResolver.resolveConfigured(modelId, modelVariant)
 
-    /**
-     * 同 [resolveModel]，但额外做最小配置校验。[modelId] 非空且存在时优先使用该会话绑定档案，
-     * [modelVariant] 用于覆盖档案里的默认模型名，实现同一供应商档案下的会话级模型隔离。
-     * 否则回退到当前激活模型。无可用模型且未设置 API Key 时直接抛出明确异常。
-     */
-    suspend fun resolveConfigured(modelId: String? = null, modelVariant: String? = null): ModelConfig = withContext(Dispatchers.IO) {
-        val requested = modelId?.takeIf { it.isNotBlank() }?.let { modelDao.findById(it) }
-        val active = requested ?: modelDao.activeModel()
-        val providerKey = providerRepository.readApiKey().orEmpty()
-        if (active == null && providerKey.isBlank()) {
-            throw IllegalStateException("未配置模型或 API Key，请先在「设置 → 模型」中添加并激活一个模型")
-        }
-        val baseConfig = if (active != null) {
-            active.toModelConfig(providerRepository)
-        } else {
-            val provider = providerRepository.provider.first()
-            val baseUrl = providerRepository.baseUrl.first().ifBlank { DEFAULT_BASE_URL }
-            ModelConfig(
-                name = "默认",
-                provider = provider,
-                model = providerRepository.model.first().ifBlank { DEFAULT_MODEL },
-                baseUrl = baseUrl,
-                apiKey = providerKey.ifBlank { null },
-                protocol = inferProtocol(baseUrl, provider),
-            )
-        }
-        val sessionConfig = if (requested != null && !modelVariant.isNullOrBlank()) {
-            baseConfig.copy(model = modelVariant.trim())
-        } else {
-            baseConfig
-        }
-        val dynamicMcp = runCatching { mcpManager.getActiveMcpTools() }.getOrDefault(emptyList())
-        sessionConfig.applyGlobalReasoningDepth().copy(dynamicMcpTools = dynamicMcp)
-    }
-
-    /**
-     * Resolve an explicit agent model selection without silently falling back to the active model.
-     * The selection may be a saved profile id/name or one concrete model configured in a profile.
-     */
     suspend fun resolveRequestedModel(
         selection: String?,
         inheritedProfileId: String? = null,
         inheritedVariant: String? = null,
-    ): ModelConfig = withContext(Dispatchers.IO) {
-        val requested = selection?.trim()?.takeIf { it.isNotBlank() && !it.equals("inherit", ignoreCase = true) }
-            ?: return@withContext resolveConfigured(inheritedProfileId, inheritedVariant)
-        val profiles = modelDao.observeAll().first()
-        val target = selectRequestedModelTarget(profiles, requested) ?: throw IllegalArgumentException(
-            "未找到模型选择“$requested”。请传入已保存的模型档案 ID/名称，或档案中已配置的具体模型名。",
-        )
-        resolveConfigured(target.profileId, target.variant)
-    }
+    ): ModelConfig = modelResolver.resolveRequestedModel(selection, inheritedProfileId, inheritedVariant)
 
-    /** Resolve a persisted role binding strictly, including its concrete model variant. */
-    suspend fun resolveSavedModelProfile(profileId: String, variant: String?): ModelConfig = withContext(Dispatchers.IO) {
-        val profile = modelDao.findById(profileId) ?: throw IllegalArgumentException(
-            "子智能体绑定的模型档案“$profileId”已不存在，请在子智能体角色设置中重新选择。",
-        )
-        val requestedVariant = variant?.trim()?.takeIf { it.isNotBlank() }
-        val canonicalVariant = requestedVariant?.let { requested ->
-            profile.model.split(',').map { it.trim() }.firstOrNull { it.equals(requested, ignoreCase = true) }
-                ?: throw IllegalArgumentException(
-                    "模型档案“${profile.name}”中已不存在模型“$requested”，请在子智能体角色设置中重新选择。",
-                )
-        }
-        resolveConfigured(profile.id, canonicalVariant)
-    }
+    suspend fun resolveSavedModelProfile(profileId: String, variant: String?): ModelConfig =
+        modelResolver.resolveSavedModelProfile(profileId, variant)
 
-    /**
-     * 把「全局推理深度」设置应用到未显式配置的模型上。**只对该厂商实际支持的能力生效**：
-     * - 先探测厂商能力（能否关闭 / 能否调强度），不支持的选项直接忽略，避免设置"改了却没反应"；
-     * - 模型已显式关闭推理 -> 保持不动（用户意图优先）；
-     * - 全局 disabled：仅当厂商 [ReasoningCapabilities.supportsDisable] 且模型 AUTO 时关闭推理；
-     * - 全局 low/medium/high：仅当厂商 [ReasoningCapabilities.supportsEffort] 时按深度设置强度
-     *   （模型 AUTO 则同时开启推理）；厂商不支持强度（如豆包）则保持 AUTO 跟随服务端默认；
-     * - 全局 auto 或未知值 -> 不动。
-     */
-    private suspend fun ModelConfig.applyGlobalReasoningDepth(): ModelConfig {
-        if (reasoningMode == ReasoningMode.DISABLED) return this
-        val depth = settingsDataStore.defaultReasoningDepth.first()
-        val caps = ReasoningAdapter.capabilities(this)
-        return when (depth) {
-            "disabled" ->
-                if (reasoningMode == ReasoningMode.AUTO && caps.supportsDisable) {
-                    copy(reasoningMode = ReasoningMode.DISABLED)
-                } else {
-                    this
-                }
-            "low", "medium", "high", "extreme", "max" -> {
-                if (!caps.supportsEffort) return this // 不支持强度 -> 跟随服务端默认
-                val effort = when (depth) {
-                    "low" -> ReasoningEffort.LOW
-                    "medium" -> ReasoningEffort.MEDIUM
-                    "high" -> ReasoningEffort.HIGH
-                    else -> ReasoningEffort.MAX
-                }
-                if (reasoningMode == ReasoningMode.AUTO) {
-                    copy(reasoningMode = ReasoningMode.ENABLED, reasoningEffort = effort)
-                } else {
-                    copy(reasoningEffort = reasoningEffort ?: effort)
-                }
-            }
-            else -> this
-        }
-    }
+    suspend fun chat(model: ModelConfig, messages: List<ApiMessage>, sessionKey: String? = null): ChatResult =
+        transport.chat(model, messages, sessionKey)
 
-    suspend fun chat(model: ModelConfig, messages: List<ApiMessage>): ChatResult =
-        executeWithRotatedApiKey(model, apiKeyScheduler) { selected ->
-            val sanitized = sanitizeApiTranscript(messages)
-            when {
-                // 用户显式开启 Responses API 时优先走该协议（仅对 OpenAI 兼容端点有意义）
-                selected.responseApiEnabled -> ResponsesApi(httpClient, json).chat(selected, sanitized)
-                selected.protocol == ApiProtocol.ANTHROPIC -> AnthropicApi(httpClient, json).chat(selected, sanitized)
-                else -> ChatApi(httpClient, json).chat(selected, sanitized)
-            }
-        }
-
-    /** 流式调用：内容增量通过 [onDelta] 实时回调，推理增量通过 [onReasoning] 实时回调。 */
     suspend fun chatStream(
         model: ModelConfig,
         messages: List<ApiMessage>,
         onReasoning: (String) -> Unit = {},
         onToolProgress: (ToolCallStreamProgress) -> Unit = {},
+        onRequest: ((String, String, Long, Collection<String>) -> Unit)? = null,
+        sessionKey: String? = null,
         onDelta: (String) -> Unit,
-    ): ChatResult = executeWithRotatedApiKey(model, apiKeyScheduler) { selected ->
-        val sanitized = sanitizeApiTranscript(messages)
-        when {
-            selected.responseApiEnabled -> ResponsesApi(httpClient, json).chatStream(
-                selected,
-                sanitized,
-                onReasoning,
-                onToolProgress,
-                onDelta,
-            )
-            selected.protocol == ApiProtocol.ANTHROPIC -> AnthropicApi(httpClient, json).chatStream(
-                selected,
-                sanitized,
-                onReasoning,
-                onToolProgress,
-                onDelta,
-            )
-            else -> ChatApi(httpClient, json).chatStream(
-                selected,
-                sanitized,
-                onReasoning,
-                onToolProgress,
-                onDelta,
-            )
-        }
-    }
+    ): ChatResult = transport.chatStream(model, messages, onReasoning, onToolProgress, onRequest, sessionKey, onDelta)
 
     companion object {
         const val DEFAULT_BASE_URL = "https://api.openai.com/v1"
         const val DEFAULT_MODEL = "gpt-4o-mini"
-        // 须覆盖最大首字看门狗（240s），否则超大上下文 Prefill 会先被 callTimeout 掐断。
-        private const val CALL_TIMEOUT_MS = 5 * 60 * 1000L
-
-        /** 大请求若迟迟没有任何合法 SSE 事件，应尽早失败并向 UI 暴露重试，而不是静默等满 3 分钟。 */
+        /** 大请求若迟迟没有任何合法 SSE 事件，应尽早失败并向 UI 暴露重试，而不是静默等满 callTimeout。 */
         internal const val FIRST_STREAM_EVENT_TIMEOUT_MS = 90_000L
-
-        /** 按预估输入规模放宽首字看门狗：超大上下文 Prefill 常超过默认 90s。 */
-        internal fun resolveFirstEventTimeoutMs(estimatedTokens: Int): Long = when {
-            estimatedTokens > 80_000 -> 240_000L
-            estimatedTokens > 40_000 -> 150_000L
-            else -> FIRST_STREAM_EVENT_TIMEOUT_MS
-        }
-
-        internal fun estimateApiMessageTokens(messages: List<ApiMessage>): Int =
-            messages.sumOf { message ->
-                ContextWindowPolicy.estimateTokens(message.content.orEmpty()) +
-                    ContextWindowPolicy.estimateTokens(message.reasoning_content.orEmpty()) +
-                    (message.tool_calls?.sumOf { call ->
-                        ContextWindowPolicy.estimateTokens(call.function.name) +
-                            ContextWindowPolicy.estimateTokens(call.function.arguments)
-                    } ?: 0)
-            }
         internal const val FIRST_EVENT_WAITING = 0
         internal const val FIRST_EVENT_RECEIVED = 1
         internal const val FIRST_EVENT_TIMED_OUT = 2
+
+        /** 隐藏推理放宽首事件等待；关闭推理时按输入规模预留 Prefill 时间。配置值只抬高下限。 */
+        internal fun resolveFirstEventTimeoutMs(
+            estimatedTokens: Int,
+            reasoningEnabled: Boolean = false,
+            configuredBaseMs: Long = FIRST_STREAM_EVENT_TIMEOUT_MS,
+        ): Long = FirstResponseWait.resolve(estimatedTokens, reasoningEnabled, configuredBaseMs)
+
+        internal fun estimateApiMessageTokens(messages: List<ApiMessage>): Int =
+            ContextWindowPolicy.estimateApiMessages(messages)
 
         /**
          * 单回合推理内容的累积上限（字符）。推理是执行过程草稿，不是长期上下文；
@@ -947,52 +674,45 @@ class ProviderClient @Inject constructor(
          */
         const val MAX_STREAM_REASONING_CHARS = 128 * 1024
 
-        /** 流式增量上屏的发布间隔：SSE chunk 频率远高于帧率，逐 chunk 全量发布是 O(n²) 分配。 */
-        const val STREAM_PUBLISH_INTERVAL_MS = 100L
+        /**
+         * 单轮流式响应（正文 + 思考 + 工具入参）的硬失败上限（字符）。远超正常输出体量，
+         * 仅用于拦截网关重复重放 / 提示注入导致的无限输出；超限即中断本轮请求而非截断，
+         * 详见 [StreamBudget]。
+         */
+        const val MAX_STREAM_CHARS = 4 * 1024 * 1024
 
-        /** Room 实体 → 运行配置：推理参数原样透传，协议按 Base URL / 厂商名自动推断。 */
-        private suspend fun top.tianyan.app.core.database.AiModelEntity.toModelConfig(
-            providerRepository: top.tianyan.app.core.tools.ProviderRepository,
-        ): ModelConfig {
-            val baseUrl = this.baseUrl.ifBlank { DEFAULT_BASE_URL }
-            val modelKeys = providerRepository.readModelApiKeys(secretRef)
-            val fallbackKey = providerRepository.readApiKey().orEmpty().ifBlank { null }
-            val effectiveKeys = modelKeys.ifEmpty { listOfNotNull(fallbackKey) }
-            return ModelConfig(
-                name = name,
-                provider = provider,
-                model = model.split(",").firstOrNull()?.trim().takeUnless { it.isNullOrBlank() } ?: model.trim(),
-                baseUrl = baseUrl,
-                apiKey = effectiveKeys.firstOrNull(),
-                apiKeys = effectiveKeys,
-                requestsPerMinutePerKey = requestsPerMinutePerKey.coerceAtLeast(0),
-                protocol = inferProtocol(baseUrl, provider),
-                temperature = temperature,
-                maxTokens = maxTokens,
-                topP = topP,
-                reasoningMode = when (reasoningMode?.lowercase()) {
-                    "disabled" -> ReasoningMode.DISABLED
-                    "enabled" -> ReasoningMode.ENABLED
-                    else -> ReasoningMode.AUTO
-                },
-                reasoningEffort = when (reasoningEffort?.lowercase()) {
-                    "low" -> ReasoningEffort.LOW
-                    "medium" -> ReasoningEffort.MEDIUM
-                    "high" -> ReasoningEffort.HIGH
-                    "extreme", "max" -> ReasoningEffort.MAX
-                    else -> null
-                },
-                toolCallMode = when (toolCallMode?.lowercase()) {
-                    "json" -> ToolCallMode.JSON_TEXT
-                    "disabled" -> ToolCallMode.DISABLED
-                    else -> ToolCallMode.NATIVE
-                },
-                contextTokens = contextTokens,
-                customHeaders = customHeaders,
-                pureChatMode = pureChatMode,
-                visionEnabled = visionEnabled,
-                responseApiEnabled = responseApiEnabled,
-            )
+        /** 流式增量上屏的发布间隔：SSE chunk 频率远高于帧率，逐 chunk 全量发布是 O(n²) 分配。 */
+        const val STREAM_PUBLISH_INTERVAL_MS = 16L // Snapshot allocation only; SSE reception is never throttled.
+
+        /**
+         * 空响应的用户可见文案（唯一来源：流式层报错与 turn 层兜底共用同一句）。
+         * 覆盖两类形态：三者全空，以及正文/工具全空、思考只剩截断残渣。
+         * 只描述可观察现象与可执行动作，不猜测具体厂商原因。
+         */
+        internal const val EMPTY_RESPONSE_MESSAGE =
+            "模型返回了空响应（HTTP 200，正文与工具调用均为空，或思考字段只剩无意义的截断残渣）。" +
+                "常见原因是该模型名在服务端不可用、被网关/风控拦截、长上下文被中转截断，或上游临时异常。" +
+                "请检查模型配置，必要时压缩上下文或切换其他模型后重试。"
+
+        /** 空响应诊断时缓冲的原始响应首部上限（字符）：只用于报错与兜底判定，不参与正文累积。 */
+        internal const val RESPONSE_HEAD_CAPTURE_CHARS = 2_000
+
+        /** 错误文案里展示的响应首部长度。 */
+        private const val RESPONSE_HEAD_DISPLAY_CHARS = 160
+
+        /**
+         * 把原始响应首部压成单行诊断片段：转义换行、截断。
+         * 目的是让"上游到底回了什么"能从错误文案里直接读到，而不是只有一句"空响应"。
+         */
+        internal fun describeResponseHead(raw: String): String {
+            val compact = raw.replace('\n', ' ').replace('\r', ' ').trim()
+            if (compact.isEmpty()) return ""
+            val clipped = if (compact.length > RESPONSE_HEAD_DISPLAY_CHARS) {
+                compact.take(RESPONSE_HEAD_DISPLAY_CHARS) + "…"
+            } else {
+                compact
+            }
+            return " 原始响应首部：$clipped"
         }
 
         /** 解析多行自定义请求头（格式为 Key: Value，支持忽略空行与 # 注释） */
@@ -1014,7 +734,7 @@ class ProviderClient @Inject constructor(
 
         /** Anthropic 协议自动识别：官方域名或厂商名含 anthropic/claude。 */
         fun inferProtocol(baseUrl: String, provider: String): ApiProtocol {
-            val host = runCatching { java.net.URI(baseUrl.trim()).host?.lowercase() }.getOrNull().orEmpty()
+            val host = runCatching { URI(baseUrl.trim()).host?.lowercase() }.getOrNull().orEmpty()
             val providerLower = provider.lowercase()
             return if (host == "api.anthropic.com" ||
                 providerLower.contains("anthropic") ||
@@ -1047,6 +767,9 @@ class ProviderClient @Inject constructor(
             // 远端把错误页（HTML/纯文本）当成 body 返回时，给出可读的固定文案，
             // 避免直接把 <html>... 拼到错误提示里刷屏。
             if (!looksLikeJsonResponse(trimmedBody)) {
+                if (code == 413) {
+                    return "请求体过大 (HTTP 413)：反向代理或网关拒绝了本次请求（常见于 Nginx client_max_body_size）。引擎将尝试压缩历史后重试。"
+                }
                 val kind = when {
                     trimmedBody.trimStart().startsWith("<", ignoreCase = true) -> "网页"
                     else -> "非 JSON 文本"
@@ -1061,14 +784,22 @@ class ProviderClient @Inject constructor(
 
             val lowerMsg = errorMsg.lowercase()
             return when {
+                code == 413 ->
+                    "请求体过大 (HTTP 413)：反向代理或网关拒绝了本次请求（常见于 Nginx client_max_body_size）。引擎将尝试压缩历史后重试。"
                 code == 403 && (lowerMsg.contains("free quota") || lowerMsg.contains("quota exhausted") || lowerMsg.contains("free tier")) ->
                     "API 免费额度已耗尽 (HTTP 403)：请前往模型服务商控制台充值、关闭免费层限制，或在天衍中切换其他可用模型。"
                 code == 401 || lowerMsg.contains("invalid api key") || lowerMsg.contains("unauthorized") ->
                     "API Key 无效或未授权 (HTTP 401)：请在模型设置中检查并更新该服务商的 API Key。"
+                // 402 与直述"余额/额度"的文案：不少厂商（DeepSeek、多数中转站）用 402 而非 429
+                // 回报余额耗尽。原实现会把它并入泛化 4xx（IllegalStateException），既不重试也不给
+                // 充值引导，用户侧表现为"每次发送都瞬间失败、且不知道原因"。
+                code == 402 || lowerMsg.contains("insufficient balance") ||
+                    lowerMsg.contains("余额") || lowerMsg.contains("额度已用尽") ->
+                    "API 余额/额度已耗尽 (HTTP $code)：请前往模型服务商控制台充值，或在天衍中切换其他可用模型。$errorMsg"
                 code == 429 || lowerMsg.contains("rate limit") || lowerMsg.contains("insufficient_quota") || lowerMsg.contains("quota") ->
                     "API 额度已用尽或请求频率超限 (HTTP $code)：$errorMsg"
                 code == 404 ->
-                    "模型名称或 API 地址不存在 (HTTP 404)：请检查「模型名称」是否拼写正确，以及「Base URL」路径是否完整正确（例如结尾是否缺少 /v1、是否指向了不存在的模型端点）。若该模型已改名或下线，请在模型设置中更新模型名或 Base URL。"
+                    "模型名称或 API 地址不存在 (HTTP 404)：请检查模型名称是否拼写正确。"
                 errorMsg.isNotBlank() ->
                     "LLM 请求失败 (HTTP $code)：$errorMsg"
                 else ->
@@ -1078,10 +809,12 @@ class ProviderClient @Inject constructor(
 
         internal fun rateLimitException(code: Int, rawBody: String, retryAfter: String?): LlmRateLimitException {
             val message = formatHttpErrorMessage(code, rawBody)
-            val lower = message.lowercase()
+            val lower = rawBody.lowercase()
             val quotaExhausted = listOf(
                 "insufficient_quota",
                 "quota exceeded",
+                "quota_exceeded",
+                "quota_exhausted",
                 "allocated quota",
                 "quota exhausted",
                 "resource_exhausted",
@@ -1096,18 +829,69 @@ class ProviderClient @Inject constructor(
             return LlmRateLimitException(message, retrySeconds, quotaExhausted)
         }
 
-        internal fun serverErrorException(code: Int, rawBody: String): LlmServerErrorException =
-            LlmServerErrorException(formatHttpErrorMessage(code, rawBody), code)
+        /** 5xx 上游临时故障（如 Cloudflare 524 origin timeout）：包装为可退避重试的 IOException。 */
+        internal fun transientHttpException(code: Int, rawBody: String, retryAfter: String?): TransientHttpException {
+            val message = formatHttpErrorMessage(code, rawBody)
+            val retrySeconds = retryAfter?.trim()?.toLongOrNull()?.coerceIn(1L, 300L)
+            return TransientHttpException(message, code, retrySeconds)
+        }
 
-        internal const val READ_TIMEOUT_MS = 3 * 60 * 1000L
+        /**
+         * 上下文超限识别（对齐 opencode session/retry 的 RETRYABLE 思路，但走压缩恢复而非重试）：
+         * HTTP 413 一律视为可恢复的荷载超限（Nginx/中转 HTML 页往往不含 token 文案）；
+         * 其余 4xx 命中 [CONTEXT_OVERFLOW_PATTERNS] 时返回 [LlmContextOverflowException]，
+         * 否则仍是 [IllegalStateException]。
+         * 匹配对 rawBody 原文做小写包含——各家 400 文案不同，宁滥勿缺：误报的代价只是
+         * 多一次机械压缩尝试（有界），漏报则用户直接看到失败。
+         */
+        internal fun contextOverflowException(code: Int, rawBody: String): Exception =
+            when {
+                code == 413 -> LlmContextOverflowException(formatHttpErrorMessage(code, rawBody))
+                isContextOverflowMessage(rawBody) -> LlmContextOverflowException(formatHttpErrorMessage(code, rawBody))
+                isInvalidOutputTokensMessage(rawBody) -> LlmInvalidOutputTokensException(formatHttpErrorMessage(code, rawBody))
+                else -> IllegalStateException(formatHttpErrorMessage(code, rawBody))
+            }
+
+        internal fun isInvalidOutputTokensMessage(rawBody: String): Boolean {
+            val lower = rawBody.lowercase()
+            val names = listOf("max_tokens", "max_output_tokens", "output tokens", "output_token")
+            val invalid = listOf("invalid", "must be", "cannot", "should be", "greater than", "positive", "at least", "too large")
+            return names.any { it in lower } && invalid.any { it in lower } &&
+                !isContextOverflowMessage(rawBody)
+        }
+
+        internal fun isContextOverflowMessage(rawBody: String): Boolean {
+            val lower = rawBody.lowercase()
+            return CONTEXT_OVERFLOW_PATTERNS.any { it in lower }
+        }
+
+        private val CONTEXT_OVERFLOW_PATTERNS = listOf(
+            // OpenAI 家族："This model's maximum context length is ... tokens"
+            "maximum context length",
+            "context length",
+            "context_length",
+            // Anthropic："prompt is too long: N tokens > M maximum"
+            "prompt is too long",
+            "exceed context limit",
+            "context window",
+            // Gemini："input token count ... exceeds the maximum number of tokens allowed"
+            "exceeds the maximum number of tokens",
+            "input token count",
+            "too many input tokens",
+            // 通用
+            "reduce the length",
+            "too many tokens",
+            "input is too long",
+            "context token limit",
+            "request entity too large",
+            "payload too large",
+            "上下文超限",
+            "超出上下文",
+            "上下文长度",
+        )
+
+        internal const val READ_TIMEOUT_MS = 5 * 60 * 1000L
         internal val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
-
-        // 临时故障重试（对齐 DeepSeek Harness 的 provider retry-policy）：
-        // 指数退避 + 对称抖动，仅重试可恢复的传输/限流/服务端错误。
-        internal const val RETRY_MAX_ATTEMPTS = 5
-        internal const val RETRY_INITIAL_DELAY_MS = 500L
-        internal const val RETRY_MAX_DELAY_MS = 10_000L
-        internal const val RETRY_JITTER_RATIO = 0.1
 
         /** 工具 JSON Schema，与 ToolExecutor 的参数契约一一对应。 */
         val TOOLS: List<ApiToolDefinition> = listOf(
@@ -1123,7 +907,7 @@ class ProviderClient @Inject constructor(
             ApiToolDefinition(
                 function = ApiFunctionDefinition(
                     name = "history_search",
-                    description = "在当前会话的完整历史中按关键词检索旧消息。压缩摘要缺少关键细节时先用它定位消息，再用 history_read 读取原文。只读，不修改历史。",
+                    description = "在当前会话的完整历史中按关键词检索旧消息。结果中的 index 是活动分支的 0 起始消息索引，包含工具消息，可直接传给 history_read；message_id 更稳定。只读，不修改历史。",
                     parameters = Json.parseToJsonElement(
                         """{"type":"object","properties":{"query":{"type":"string","description":"要检索的关键词、文件名、错误信息或约束"},"limit":{"type":"integer","minimum":1,"maximum":20,"description":"最多返回命中条数，默认 8"}},"required":["query"]}""",
                     ).jsonObject,
@@ -1132,18 +916,18 @@ class ProviderClient @Inject constructor(
             ApiToolDefinition(
                 function = ApiFunctionDefinition(
                     name = "history_read",
-                    description = "读取当前会话某条历史消息的原文。使用 history_search 返回的 message_id，或使用稳定的历史 index。单条返回有大小上限。只读。",
+                    description = "分页读取当前会话活动分支的历史原文及关联工具调用/结果。message_id 或 0 起始 index 至少提供一个，同时提供时优先 message_id。offset/limit 是包含 id/标签的关联文本的 UTF-16 字符数（非行号）；默认 offset=0、limit=8000，上限16000。用返回的 message_id 和 next_offset 续读至 truncated=false。仅供参考，不重放操作。只读。",
                     parameters = Json.parseToJsonElement(
-                        """{"type":"object","properties":{"message_id":{"type":"string","description":"history_search 返回的消息 ID"},"index":{"type":"integer","minimum":0,"description":"历史消息的 0 起始索引；与 message_id 二选一"}},"anyOf":[{"required":["message_id"]},{"required":["index"]}]}""",
+                        """{"type":"object","properties":{"message_id":{"type":"string","description":"history_search 或上一页返回的消息 ID；与 index 至少提供一个"},"index":{"type":"integer","minimum":0,"description":"活动分支的 0 起始消息索引；与 message_id 至少提供一个"},"offset":{"type":"integer","minimum":0,"description":"UTF-16 字符偏移，默认0；续读使用 next_offset"},"limit":{"type":"integer","minimum":1,"maximum":16000,"description":"UTF-16 字符页大小，默认8000"}}}""",
                     ).jsonObject,
                 ),
             ),
             ApiToolDefinition(
                 function = ApiFunctionDefinition(
                     name = "read",
-                    description = "读取文件内容（UTF-8，单文件上限 1MB）。路径可用相对路径或以 /workspace/ 开头。优先用它检查文件内容，而不是用 cat/sed。大文件用 offset（1 起始行号）和 limit（行数）分页读取，返回头部会标注总行数与当前窗口。若文件不存在或读取失败，用 base 的 ls/find 定位。",
+                    description = "读取 UTF-8 文件（上限 1MB），路径为相对路径或 /workspace/ 路径；offset（1 起始）和 limit 用于分页。历史产物可携带 expected_sha256 核验版本；缺失/变更/无法核验明确失败，不自动重放原操作。可选 query 对文件或目录进行区分大小写的字面文本检索，返回相对路径和行号；max_results 默认50、上限100。检索有深度/文件/字节/时间限制，跳过符号链接、二进制及常见构建/依赖目录；不能与 offset/limit/expected_sha256 混用。远程未支持时改用当前环境 base/grep。",
                     parameters = Json.parseToJsonElement(
-                        """{"type":"object","properties":{"path":{"type":"string","description":"文件路径"},"offset":{"type":"integer","description":"起始行号（1 起始），可选"},"limit":{"type":"integer","description":"读取的最大行数，可选"}},"required":["path"]}""",
+                        """{"type":"object","properties":{"path":{"type":"string","description":"文件路径；检索时也可为目录"},"offset":{"type":"integer","description":"起始行号（1 起始），可选"},"limit":{"type":"integer","description":"读取的最大行数，可选"},"expected_sha256":{"type":"string","description":"历史产物的64位小写SHA-256；核验读取前后版本，仅限当前执行环境"},"query":{"type":"string","description":"可选，1–256 字符单行字面文本；不解释正则或 Shell"},"max_results":{"type":"integer","minimum":1,"maximum":100,"description":"仅检索使用，默认 50"}},"required":["path"]}""",
                     ).jsonObject,
                 ),
             ),
@@ -1167,19 +951,10 @@ class ProviderClient @Inject constructor(
             ),
             ApiToolDefinition(
                 function = ApiFunctionDefinition(
-                    name = "verify",
-                    description = "在 Debian Linux 沙箱中执行一条验证命令，并把结果登记为交付证据（测试 / 构建 / 类型检查）。只有当命令真正运行且退出码为 0 时，才算作「已验证」；验证失败会被记为本回合的未认领失败，必须修复后才能声称完成。可与 base 执行同样的命令，但 base 不会留下验证证据。任何编辑代码后的收尾都应当用它跑一次相关验证。",
-                    parameters = Json.parseToJsonElement(
-                        """{"type":"object","properties":{"command":{"type":"string","description":"要运行的验证命令，例如 ./gradlew :app:testDebugUnitTest 或 tsc --noEmit"},"cwd":{"type":"string","description":"工作目录；关联工作区时默认使用工作区，否则为 /root"}},"required":["command"]}""",
-                    ).jsonObject,
-                ),
-            ),
-            ApiToolDefinition(
-                function = ApiFunctionDefinition(
                     name = "base",
-                    description = "在 Debian Linux 沙箱中执行前台 shell 命令，返回退出码/stdout/stderr。用于安装软件、运行脚本、检查状态和执行构建。默认超时由用户在 Agent 设置中配置；可用 timeout_seconds 为单次调用指定 1-3600 秒。常驻服务不要使用 nohup 或 &，应改用 process 工具。",
+                    description = "在 Debian Linux 沙箱中执行前台 shell 命令，返回退出码/stdout/stderr。用于安装软件、运行脚本、检查状态和执行构建。默认超时由用户在 Agent 设置中配置；可用 timeout_seconds 为单次调用指定 1-900 秒。常驻服务不要使用 nohup 或 &，应改用 process 工具。",
                     parameters = Json.parseToJsonElement(
-                        """{"type":"object","properties":{"command":{"type":"string","description":"要执行的 shell 命令"},"cwd":{"type":"string","description":"工作目录；关联工作区时默认使用工作区，否则为 /root"},"timeout_seconds":{"type":"integer","minimum":1,"maximum":3600,"description":"可选的单次超时秒数；省略时使用用户设置的默认值"}},"required":["command"]}""",
+                        """{"type":"object","properties":{"command":{"type":"string","description":"要执行的 shell 命令"},"cwd":{"type":"string","description":"工作目录；关联工作区时默认使用工作区，否则为 /root"},"timeout_seconds":{"type":"integer","minimum":1,"maximum":900,"description":"可选的单次超时秒数；省略时使用用户设置的默认值"}},"required":["command"]}""",
                     ).jsonObject,
                 ),
             ),
@@ -1192,15 +967,7 @@ class ProviderClient @Inject constructor(
                     ).jsonObject,
                 ),
             ),
-            ApiToolDefinition(
-                function = ApiFunctionDefinition(
-                    name = "host",
-                    description = "在 Android 宿主侧执行系统设置、应用管理、Logcat 或屏幕 GUI 自动化。抓取日志（logcat）首选内置无线 ADB（无需 Shizuku/Root 授权，支持可选指定 port），其余特权操作需 Shizuku 或 Root。支持 screen_observe 查看当前前台应用与屏幕节点树，screen_click 点击坐标，screen_swipe 滑动屏幕，screen_input_text 输入文本，screen_key 按键导航，app_launch 启动应用。",
-                    parameters = Json.parseToJsonElement(
-                        """{"type":"object","properties":{"action":{"type":"string","enum":["status","exec","settings_get","settings_put","package_list","package_disable","package_enable","package_uninstall_user","app_list","app_freeze","app_unfreeze","app_grant_permission","logcat","device_status","screen_observe","screen_click","screen_swipe","screen_input_text","screen_key","app_launch","screen_capture"]},"command":{"type":"string","description":"仅 exec 使用的原始宿主命令"},"namespace":{"type":"string","enum":["system","secure","global"],"description":"settings_get/settings_put 的设置命名空间"},"key":{"type":"string","description":"系统设置键名，或 screen_key 的按键名(back/home/recents/enter/delete/power)"},"value":{"type":"string","description":"settings_put 的值"},"text":{"type":"string","description":"screen_input_text 要输入的文本"},"x":{"type":"integer","description":"screen_click 的点击 X 坐标"},"y":{"type":"integer","description":"screen_click 的点击 Y 坐标"},"x1":{"type":"integer","description":"screen_swipe 起点 X 坐标"},"y1":{"type":"integer","description":"screen_swipe 起点 Y 坐标"},"x2":{"type":"integer","description":"screen_swipe 终点 X 坐标"},"y2":{"type":"integer","description":"screen_swipe 终点 Y 坐标"},"duration_ms":{"type":"integer","description":"screen_swipe 滑动持续时间毫秒数，默认 300"},"package":{"type":"string","description":"应用操作或 logcat PID 过滤的 Android 包名（如 com.tencent.mm）"},"path":{"type":"string","description":"screen_capture 保存截图的目标绝对路径"},"permission":{"type":"string","description":"app_grant_permission 的 Android 权限名"},"query":{"type":"string","description":"app_list 的包名或应用名搜索词"},"include_system":{"type":"boolean","description":"app_list 是否显示系统应用，默认 false"},"limit":{"type":"integer","minimum":1,"maximum":200,"description":"app_list 返回数量，默认 50"},"user":{"type":"integer","minimum":0,"maximum":999,"description":"Android 用户 ID，默认 0"},"filter":{"type":"string","description":"package_list 的可选字面量过滤词"},"tail_lines":{"type":"integer","minimum":1,"maximum":2000,"description":"logcat 返回行数，默认 200"},"tag":{"type":"string","description":"logcat 的可选 tag"},"priority":{"type":"string","enum":["V","D","I","W","E","F"],"description":"logcat 最低优先级，默认 V"},"keyword":{"type":"string","description":"logcat 可选关键词（忽略大小写）"},"port":{"type":"integer","minimum":1,"maximum":65535,"description":"无线 ADB 端口（如 12345），logcat 时可选显式指定"}},"required":["action"]}""",
-                    ).jsonObject,
-                ),
-            ),
+            HostCapabilityDirectory.directHostTool(),
             ApiToolDefinition(
                 function = ApiFunctionDefinition(
                     name = "download",
@@ -1224,7 +991,7 @@ class ProviderClient @Inject constructor(
                     name = "plan",
                     description = "结构化多步骤任务规划管理：拆解长任务子步骤并持续跟踪推进进度。当任务预计需要 3 次以上工具调用、存在多个相互依赖的执行阶段、失败后需要分支排查，或会修改多个文件/系统状态时，第一轮工具调用先 replace_active 建立规划，每步完成后 advance；简单单步或双步任务不要建 plan。详细规则见 workflow 规则块（未注入时可用 load_rule 获取）。支持 action: replace_active, get_active, advance, clear_active。",
                     parameters = Json.parseToJsonElement(
-                        """{"type":"object","properties":{"action":{"type":"string","enum":["replace_active","get_active","advance","clear_active"],"description":"规划操作动作"},"goal":{"type":"string","description":"任务总体目标"},"steps":{"type":"array","description":"规划步骤列表（每个步骤包含 id, title, status: pending|in_progress|completed|failed）","items":{"type":"object","properties":{"id":{"type":"string"},"title":{"type":"string"},"status":{"type":"string"}},"required":["id","title","status"]}},"status":{"type":"string","description":"任务整体状态"}},"required":["action"]}""",
+                        """{"type":"object","properties":{"action":{"type":"string","enum":["replace_active","get_active","advance","clear_active"],"description":"规划操作动作"},"goal":{"type":"string","description":"任务总体目标"},"steps":{"type":"array","description":"规划步骤列表（每个步骤包含 id, title, status: pending|in_progress|completed|failed）","items":{"type":"object","properties":{"id":{"type":"string"},"title":{"type":"string"},"status":{"type":"string"}},"required":["id","title","status"]}},"status":{"type":"string","enum":["active","completed","cancelled"],"description":"可选：计划整体生命周期状态（仅限 active/completed/cancelled，步骤进度请写在 steps[].status）"}},"required":["action"]}""",
                     ).jsonObject,
                 ),
             ),
@@ -1240,10 +1007,9 @@ class ProviderClient @Inject constructor(
             ApiToolDefinition(
                 function = ApiFunctionDefinition(
                     name = "invoke_subagent",
-                    description = "按研发部门和简短专业关键词从本地索引解析角色，并发派发隔离子智能体。用户枚举多个独立子任务时，必须在同一次调用的 subagents 数组中完整提交，禁止逐个派发；结果保持数组顺序。writePaths=[] 表示只读并行，精确路径表示局部写租约，[\"*\"] 表示整工作区独占写入。候选目录不会进入主对话。",
+                    description = "按研发部门和简短专业关键词从本地索引解析角色，并发派发隔离子智能体。用户枚举多个独立子任务时，必须在同一次调用的 subagents 数组中完整提交，禁止逐个派发；结果保持数组顺序。writePaths=[] 表示只读并行，精确路径表示局部写租约，[\"*\"] 表示整工作区独占写入。写租约对 write/edit/download 是强制闸门：writePaths=[] 的子任务调用这些工具会被直接拦截，越界路径同样拦截，需要落盘必须先声明具体路径；base 的 shell 写不受闸门约束，写租约也只在同一次调用内协调。子任务需要审批类操作（后台 Lane 无法暂停审批）时会作为待办上交，必须由你在主会话重新发起。候选目录不会进入主对话。summary 中每个子任务都带有 task_id，把未完结子任务的 task_id 连同新指令再次提交（task_id 字段）可在同一子会话上续跑，而不是从零开始。",
                     parameters = Json.parseToJsonElement(
-                        """{"type":"object","properties":{"subagents":{"type":"array","description":"一次性提交的完整独立子任务列表；用户枚举 N 项时必须包含全部 N 项","minItems":1,"maxItems":6,"items":{"type":"object","properties":{"taskName":{"type":"string","description":"简短子任务名称"},"department":{"type":"string","enum":["engineering","design","product","project-management","testing","security","game-development","spatial-computing","specialized"],"description":"先选研发部门，匹配严格限制在该部门"},"agentQuery":{"type":"string","minLength":2,"maxLength":80,"description":"2-5 个简短英文专业关键词，如 frontend react、mobile android、test automation；不要复制完整任务"},"role":{"type":"string","description":"可选：仅兼容已知 profile id/name 的精确覆盖；存在时优先于索引匹配"},"prompt":{"type":"string","description":"详细任务指令与交付要求"},"writePaths":{"type":"array","description":"必须声明。纯调研/分析填空数组 []；修改文件时列出精确相对路径；只有整工作区独占写入才填 [\"*\"]","items":{"type":"string"}},"model":{"type":"string","description":"可选：已保存模型档案的 ID/名称，或档案中已配置的具体模型名；优先于角色默认模型。传 inherit 强制继承父会话模型；不填则使用角色默认模型，角色未配置时继承父会话"}},"required":["taskName","department","agentQuery","prompt","writePaths"]}}},"required":["subagents"]}""",
-
+                        """{"type":"object","properties":{"subagents":{"type":"array","description":"一次性提交的完整独立子任务列表；用户枚举 N 项时必须包含全部 N 项","minItems":1,"maxItems":6,"items":{"type":"object","properties":{"taskName":{"type":"string","description":"简短子任务名称"},"department":{"type":"string","enum":["engineering","design","product","project-management","testing","security","game-development","spatial-computing","specialized"],"description":"先选研发部门，匹配严格限制在该部门"},"agentQuery":{"type":"string","minLength":2,"maxLength":80,"description":"2-5 个简短英文专业关键词，如 frontend react、mobile android、test automation；不要复制完整任务"},"role":{"type":"string","description":"可选：仅兼容已知 profile id/name 的精确覆盖；存在时优先于索引匹配"},"prompt":{"type":"string","description":"详细任务指令与交付要求；填写 task_id 时为本轮续跑指令"},"writePaths":{"type":"array","description":"必须声明。纯调研/分析填空数组 []；修改文件时列出精确相对路径；只有整工作区独占写入才填 [\"*\"]","items":{"type":"string"}},"model":{"type":"string","description":"可选：已保存模型档案的 ID/名称，或档案中已配置的具体模型名；优先于角色默认模型。传 inherit 强制继承父会话模型；不填则使用角色默认模型，角色未配置时继承父会话"},"task_id":{"type":"string","description":"可选：续跑已有子任务时填入上次汇总中的 task_id（原样复制），本次在该子会话已有上下文上继续；此时 role/department/agentQuery 会被忽略"}},"required":["taskName","department","agentQuery","prompt","writePaths"]}}},"required":["subagents"]}""",
                     ).jsonObject,
                 ),
             ),
@@ -1256,58 +1022,64 @@ class ProviderClient @Inject constructor(
                     ).jsonObject,
                 ),
             ),
+            A2uiSurfaceContract.TOOL_DEFINITION,
             ApiToolDefinition(
                 function = ApiFunctionDefinition(
-                    name = "redteam",
-                    description = "会话级红队工作区工具。先 preflight 与 session_info 确认目标已绑定；写入用 asset_add/asset_link/vuln_add 等，图谱与报告用 asset_graph/attack_path/report。事实只读写当前会话，目标与其他会话互不可见。主动探测通过 Tianyan 已审批的 base/process 与 invoke_subagent 完成。",
-                    parameters = top.tianyan.app.harness.redteam.RedTeamToolSchema.parameters(),
+                    name = "load_skill",
+                    description = "按需加载技能（Skill）的完整说明或子资源。系统提示末尾的「可用技能」目录只列出名称与适用场景；" +
+                        "当用户请求与某个技能的描述匹配时，先用本工具加载其完整指导规则与资源路径，再按说明执行。" +
+                        "传入 path 时按技能目录内相对路径读取附属文件（如 references/spec.md、scripts/run.sh）；" +
+                        "省略 path 时读取根 SKILL.md 正文（已剔除 YAML frontmatter）。用户已 @提及 的技能会自动生效，无需重复加载。只读。",
+                    parameters = Json.parseToJsonElement(
+                        """{"type":"object","properties":{"name":{"type":"string","description":"技能名称或触发命令（不含 / 前缀），须与目录中列出的一致"},"path":{"type":"string","description":"可选：技能目录内相对资源路径（如 references/foo.md 或 scripts/bar.sh）；省略时读取根 SKILL.md 正文"}},"required":["name"]}""",
+                    ).jsonObject,
                 ),
             ),
             ApiToolDefinition(
                 function = ApiFunctionDefinition(
                     name = "load_rule",
-                    description = "按需加载规则或专精技能正文。规则块：workflow / code-navigation / security / memory / environment-proot / tools。技能正文：填 skill:<id>（id 见提示词里的技能发现块）。技能只给摘要不预载正文，确实需要某项技能时先用本工具读取它的完整规则再执行；只读，无副作用。",
+                    description = "按需加载系统提示词的详细规则块（含 image-delivery / browser-reverse）。当当前任务需要某块规则但系统提示词中未注入时调用；只读，无副作用。",
                     parameters = Json.parseToJsonElement(
-                        """{"type":"object","properties":{"rule":{"type":"string","description":"规则块名称（workflow/code-navigation/security/memory/environment-proot/tools），或技能正文 key：skill:<id>"}},"required":["rule"]}""",
+                        """{"type":"object","properties":{"rule":{"type":"string","enum":[${top.tianyan.app.harness.prompt.PromptRouter.RuleBlock.entries.joinToString(",") { "\"${it.loadName}\"" }}],"description":"要加载的规则块名称"}},"required":["rule"]}""",
                     ).jsonObject,
                 ),
             ),
             ApiToolDefinition(
                 function = ApiFunctionDefinition(
-                    name = "ask_user_question",
-                    description = "向用户提问以取得确认、选择或补充缺失信息，然后等待作答再继续。需要用户拿主意、信息不足无法推进、或要让用户在若干方案间选择时用它，不要凭空猜测用户意图。一次调用可带多个问题，按顺序逐题呈现、可跳过。若推荐某选项，把它放在 options 第一位并在标签末尾加 \"(Recommended)\"。",
+                    name = "ask_user",
+                    description = "在关键决策点向用户提出结构化问题（选择题或自由输入）。当多个合理方案难以自行取舍、或缺失会显著影响结果的关键信息时使用；不要用它确认显而易见的步骤，也不要频繁调用打断用户。最多等待60秒，未回复自动采用推荐答案继续；将推荐选项放第一项并标记 recommended=true，自由输入问题提供 default_answer。",
                     parameters = Json.parseToJsonElement(
-                        """{"type":"object","properties":{"questions":{"type":"array","minItems":1,"maxItems":8,"description":"要问的问题列表，按顺序呈现","items":{"type":"object","properties":{"id":{"type":"string","description":"本问题的稳定标识，作答结果按它对应"},"question":{"type":"string","description":"问题正文"},"header":{"type":"string","description":"可选短标题，如「确认」「选择模式」"},"options":{"type":"array","description":"候选选项；省略则由用户自由文本作答。推荐项放第一位并在标签末尾加 \"(Recommended)\"","items":{"type":"object","properties":{"label":{"type":"string","description":"选项标签；推荐项末尾加 \"(Recommended)\""},"description":{"type":"string","description":"可选补充说明"}},"required":["label"]}},"multi_select":{"type":"boolean","description":"是否多选，默认 false"}},"required":["id","question"]}}},"required":["questions"]}""",
+                        """{"type":"object","properties":{"questions":{"type":"array","minItems":1,"maxItems":4,"items":{"type":"object","properties":{"question":{"type":"string","description":"问题正文，具体、可直接回答"},"default_answer":{"type":"string","description":"自由输入问题的推荐答案，60秒未回复时采用"},"header":{"type":"string","description":"短标签（≤12 字），用于卡片分组"},"options":{"type":"array","minItems":0,"maxItems":6,"items":{"type":"object","properties":{"label":{"type":"string","description":"选项短文本"},"description":{"type":"string","description":"选项补充说明，可省略"},"recommended":{"type":"boolean","description":"是否为推荐答案；超时优先采用"}},"required":["label"]},"description":"候选项；省略或为空表示自由文本问题"},"allow_custom":{"type":"boolean","description":"除候选项外是否允许用户自定义输入；有 options 时默认 true"}},"required":["question"]}}},"required":["questions"]}""",
+                    ).jsonObject,
+                ),
+            ),
+            ApiToolDefinition(
+                function = ApiFunctionDefinition(
+                    name = "compress",
+                    description = "把较早的会话历史压缩为结构化摘要以释放上下文空间；被折叠的原文仍可通过 history_read 按需回读。仅在用户明确要求压缩上下文/节省空间时调用，不要自行决定使用。",
+                    parameters = Json.parseToJsonElement(
+                        """{"type":"object","properties":{"mode":{"type":"string","enum":["before","after"],"description":"before=压缩锚点轮之前的全部历史，保留锚点轮及之后；after=压缩除当前进行中轮次外的全部已完成历史"},"anchor":{"type":"string","description":"某条用户消息中一段原样、唯一的文字摘录（至少 8 字符），用于定位压缩边界；匹配到多条时会被拒绝"}},"required":["mode","anchor"]}""",
+                    ).jsonObject,
+                ),
+            ),
+            ApiToolDefinition(
+                function = ApiFunctionDefinition(
+                    name = "use_capability",
+                    description = "MCP 服务与内置宿主能力域（server=\"host\"，含虚拟屏与应用管理等低频能力）的统一代理入口。action=list 列出能力域（不启动任何进程）；action=inspect + server 查看工具清单与参数；action=call + server + tool + arguments 执行（未连接的 MCP 服务自动启动）；action=decline + server + tool 表示放弃该能力；action=script + code 写 JS 批量/循环/条件调用能力（每条内层调用照常校验、审批与留痕）。遇到待审批调用时脚本停止；批准后仅执行该条调用，请根据结果继续剩余任务，不要重放此前完成的操作。",
+                    parameters = Json.parseToJsonElement(
+                        """{"type":"object","properties":{"action":{"type":"string","enum":["list","inspect","call","decline","script"],"description":"list=列出能力域；inspect=查看某能力域的工具清单；call=调用工具；decline=放弃某能力；script=执行 JS 脚本批量/循环调用能力"},"server":{"type":"string","description":"能力域 id（list 时省略；inspect/call/decline 必填）"},"tool":{"type":"string","description":"目标工具名（call/decline 必填；inspect 省略则列出该能力域全部工具）"},"arguments":{"type":"object","description":"call 时传给目标工具的参数对象，结构与 inspect 输出的参数 schema 一致"},"code":{"type":"string","description":"script 时必填的 JS 脚本；全局对象 capability.call(server, tool, args) 返回 {ok, output}；注意不支持顶层 return（程序模式下是语法错误），最后一条表达式的完成值即脚本返回值（字符串或对象）"},"timeout_seconds":{"type":"integer","minimum":1,"maximum":300,"description":"script 的整体超时，默认 60 秒"}},"required":["action"]}""",
                     ).jsonObject,
                 ),
             ),
         )
 
-        /** 组装静态基础工具 + 动态 MCP 插件工具 */
-        fun buildDynamicTools(mcpTools: List<top.tianyan.app.core.model.McpToolInfo> = emptyList()): List<ApiToolDefinition> {
-            val list = TOOLS.toMutableList()
-            mcpTools.forEach { mcp ->
-                val fullToolName = McpToolApiName.encode(mcp)
-                val params = runCatching {
-                    Json.parseToJsonElement(mcp.parametersJson).jsonObject
-                }.getOrDefault(JsonObject(emptyMap()))
-                list.add(
-                    ApiToolDefinition(
-                        function = ApiFunctionDefinition(
-                            name = fullToolName,
-                            description = "【MCP 插件: ${mcp.serverName}】${mcp.description}",
-                            parameters = params,
-                        ),
-                    ),
-                )
-            }
-            return list
+        /** 静态基础工具（含红队开关）+ 会话内 @ 挂载的 MCP 工具；挂载集合由调用方保持稳定排序。 */
+        fun buildDynamicTools(model: ModelConfig, redTeamEnabled: Boolean = false): List<ApiToolDefinition> {
+            val base = if (redTeamEnabled) TOOLS + RedTeamToolDefinitions.TOOLS else TOOLS
+            return if (model.dynamicMcpTools.isEmpty()) base else base + model.dynamicMcpTools.map { it.toApiToolDefinition() }
         }
 
-        /**
-         * 把工具定义转成给模型看的 JSON 文本描述（JSON_TEXT 工具调用模式使用）。
-         * 每个工具一行 JSON，格式与 OpenAI function calling 一致，模型按 name/parameters 输出调用。
-         */
+        /** 把工具定义转成给模型看的 JSON 文本描述（JSON_TEXT 模式）；每工具一行，格式同 OpenAI function calling。 */
         fun buildToolsTextDescription(tools: List<ApiToolDefinition>): String {
             if (tools.isEmpty()) return "（无可用工具）"
             return tools.joinToString("\n") { tool ->
@@ -1367,6 +1139,8 @@ internal class ThinkTagStreamDemuxer(
     private val onReasoning: (String) -> Unit,
     private val onDelta: (String) -> Unit,
     private val maxReasoningChars: Int = ProviderClient.MAX_STREAM_REASONING_CHARS,
+    /** 跨协议流式输出硬失败预算；非空时正文/思考增量计入，超限抛异常终止本轮请求。 */
+    private val budget: StreamBudget? = null,
 ) {
     val fullText = StringBuilder()
     val fullReasoning = StringBuilder()
@@ -1456,13 +1230,16 @@ internal class ThinkTagStreamDemuxer(
 
     private fun appendText(str: String) {
         if (str.isEmpty()) return
+        budget?.add(str)
         fullText.append(str)
         onDelta(str)
     }
 
     private fun appendReasoning(str: String) {
         if (str.isEmpty()) return
+        // 死循环静默后的重复思考不再计入预算：它已被丢弃、不会继续占用内存。
         if (reasoningMutedDueToLoop) return
+        budget?.add(str)
 
         if (detectRepetitionLoop(fullReasoning, str)) {
             reasoningMutedDueToLoop = true

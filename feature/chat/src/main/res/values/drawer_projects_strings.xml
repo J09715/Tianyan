@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_drawer_section_collapse">收起 %1$s</string>
+    <string name="chat_drawer_section_expand">展开 %1$s</string>
+    <string name="chat_drawer_section_expanded">已展开</string>
+    <string name="chat_drawer_section_collapsed">已收起</string>
+</resources>

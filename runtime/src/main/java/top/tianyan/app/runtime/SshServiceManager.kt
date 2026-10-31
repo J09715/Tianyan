@@ -3,15 +3,12 @@ package top.tianyan.app.runtime
 import android.content.Context
 import android.net.wifi.WifiManager
 import android.os.PowerManager
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.net.Inet4Address
 import java.net.InetSocketAddress
 import java.net.NetworkInterface
 import java.net.Socket
 import java.util.Base64
 import java.util.concurrent.atomic.AtomicBoolean
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -67,9 +64,8 @@ sealed interface SshServiceState {
 }
 
 /** Owns the built-in OpenSSH server for the currently active Linux distribution. */
-@Singleton
-class SshServiceManager @Inject constructor(
-    @ApplicationContext private val context: Context,
+class SshServiceManager(
+    private val context: Context,
     private val linuxRuntime: LinuxRuntime,
     private val preferences: SshPreferences,
     private val serviceLauncher: LocalServiceLauncher,

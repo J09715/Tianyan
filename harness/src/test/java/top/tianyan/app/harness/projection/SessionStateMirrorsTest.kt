@@ -68,6 +68,41 @@ class SessionStateMirrorsTest {
     }
 
     @Test
+    fun `terminal state resets running even after foreground switched away`() = runBlocking {
+        val (tracker, m) = mirrors("s1")
+        m.setRunState("s1", SessionRunState.RUNNING)
+        assertTrue(m.running.value)
+
+        // 运行期间用户切到别的会话：前台焦点不再是 s1
+        tracker.setCurrent("s2")
+        m.setRunState("s1", SessionRunState.FAILED)
+
+        // 旧实现只在 isForeground 时复位，running 会永久卡在 true（聊天页一直"执行中"、停止键无效）
+        assertFalse(m.running.value)
+        assertEquals(SessionRunState.FAILED, m.runStateOf("s1"))
+    }
+
+    @Test
+    fun `onRunFinished resets running even when session is no longer foreground`() = runBlocking {
+        val (tracker, m) = mirrors("s1")
+        m.setRunState("s1", SessionRunState.RUNNING)
+        tracker.setCurrent("s2")
+
+        assertFalse(m.onRunFinished("s1"))
+        assertFalse(m.running.value)
+    }
+
+    @Test
+    fun `background session run does not lock the foreground composer`() = runBlocking {
+        val (_, m) = mirrors("s1")
+        m.setRunState("bg", SessionRunState.RUNNING)
+        assertFalse(m.running.value)
+
+        m.setRunState("bg", SessionRunState.IDLE)
+        assertFalse(m.running.value)
+    }
+
+    @Test
     fun `onRunFinished resets mirrors and reports waiting approval`() = runBlocking {
         val (_, m) = mirrors("cur")
         m.setStatus("cur", "回复中")
@@ -118,5 +153,22 @@ class SessionStateMirrorsTest {
         m.removeSession("gone")
         assertEquals(null, m.runStateOf("gone"))
         assertEquals(null, m.lastStatus("gone"))
+    }
+
+    @Test
+    fun `removeSession resets running when the removed session owns the mirror`() = runBlocking {
+        val (tracker, m) = mirrors("s1")
+        m.setRunState("s1", SessionRunState.RUNNING)
+        assertTrue(m.running.value)
+
+        // 删掉非 owner 会话不得误清前台运行镜像
+        m.removeSession("other")
+        assertTrue(m.running.value)
+
+        // 删除时前台可能已经切走；复位不能依赖 isForeground
+        tracker.setCurrent("s2")
+        m.removeSession("s1")
+        assertFalse(m.running.value)
+        assertEquals(null, m.runStateOf("s1"))
     }
 }

@@ -147,6 +147,15 @@ class AnthropicApiTest {
     }
 
     @Test
+    fun `non-positive max tokens is normalized and thinking stays below output budget`() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"content":[{"type":"text","text":"ok"}]}"""))
+        api.chat(model().copy(maxTokens = 0, reasoningMode = ReasoningMode.ENABLED), listOf(ApiMessage(role = "user", content = "hi")))
+        val body = Json.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject
+        assertTrue(body.getValue("max_tokens").jsonPrimitive.content.toInt() > 0)
+        assertTrue(body.getValue("thinking").jsonObject.getValue("budget_tokens").jsonPrimitive.content.toInt() < body.getValue("max_tokens").jsonPrimitive.content.toInt())
+    }
+
+    @Test
     fun `max tokens is required and defaults when unset`() = runBlocking {
         server.enqueue(MockResponse().setBody("""{"content":[{"type":"text","text":"ok"}]}"""))
         api.chat(model(), listOf(ApiMessage(role = "user", content = "hi")))
@@ -351,5 +360,166 @@ class AnthropicApiTest {
         val thrown = runCatching { api.chat(model(), listOf(ApiMessage(role = "user", content = "hi"))) }.exceptionOrNull()
         assertTrue(thrown is IllegalStateException)
         assertFalse("Raw HTML must not leak into the message", thrown!!.message!!.contains("<html"))
+    }
+
+    @Test
+    fun `prompt caching injects system tools and penultimate user breakpoints`() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"content":[{"type":"text","text":"ok"}]}"""))
+        api.chat(
+            model().copy(promptCachingEnabled = true),
+            listOf(
+                ApiMessage(role = "system", content = "你是天衍 Agent"),
+                ApiMessage(role = "user", content = "first"),
+                ApiMessage(role = "assistant", content = "answer"),
+                ApiMessage(role = "user", content = "next"),
+            ),
+        )
+        val body = Json.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject
+        // 断点 1：system 转为结构化 block 并带 cache_control
+        val system = body.getValue("system").jsonArray.single().jsonObject
+        assertEquals("text", system.getValue("type").jsonPrimitive.content)
+        assertEquals("ephemeral", system.getValue("cache_control").jsonObject.getValue("type").jsonPrimitive.content)
+        // 断点 2：tools 数组最后一个工具定义
+        val lastTool = body.getValue("tools").jsonArray.last().jsonObject
+        assertEquals("ephemeral", lastTool.getValue("cache_control").jsonObject.getValue("type").jsonPrimitive.content)
+        // 断点 3：倒数第二条真实用户消息（index 0）；最新 user（index 2）不注入
+        val messages = body.getValue("messages").jsonArray
+        val firstUserText = messages[0].jsonObject.getValue("content").jsonArray.single().jsonObject
+        assertEquals("ephemeral", firstUserText.getValue("cache_control").jsonObject.getValue("type").jsonPrimitive.content)
+        val lastUserText = messages[2].jsonObject.getValue("content").jsonArray.single().jsonObject
+        assertFalse(lastUserText.containsKey("cache_control"))
+        // 总数恰好 3，不超过 Anthropic 的 4 断点上限
+        val breakpoints = Regex(""""cache_control":\{"type":"ephemeral"\}""").findAll(body.toString()).count()
+        assertEquals(3, breakpoints)
+    }
+
+    @Test
+    fun `prompt caching is off by default and keeps plain system string`() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"content":[{"type":"text","text":"ok"}]}"""))
+        api.chat(
+            model(),
+            listOf(
+                ApiMessage(role = "system", content = "sys"),
+                ApiMessage(role = "user", content = "first"),
+                ApiMessage(role = "assistant", content = "a"),
+                ApiMessage(role = "user", content = "next"),
+            ),
+        )
+        val body = server.takeRequest().body.readUtf8()
+        assertFalse(body.contains("cache_control"))
+        assertTrue(body.contains(""""system":"sys""""))
+    }
+
+
+    @Test
+    fun `pause turn resumes by replaying assistant message without synthetic user turn`() = runBlocking {
+        val first = buildString {
+            append("data: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}\n\n")
+            append("data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"前半段\"}}\n\n")
+            append("data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"pause_turn\"},\"usage\":{\"output_tokens\":5}}\n\n")
+            append("data: {\"type\":\"message_stop\"}\n\n")
+        }
+        val second = buildString {
+            append("data: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":20,\"output_tokens\":1}}}\n\n")
+            append("data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"后半段\"}}\n\n")
+            append("data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":7}}\n\n")
+            append("data: {\"type\":\"message_stop\"}\n\n")
+        }
+        server.enqueue(MockResponse().setBody(first).setHeader("Content-Type", "text/event-stream"))
+        server.enqueue(MockResponse().setBody(second).setHeader("Content-Type", "text/event-stream"))
+
+        var streamed = ""
+        val result = api.chatStream(
+            model(),
+            listOf(ApiMessage(role = "user", content = "hi")),
+            onReasoning = {},
+            onDelta = { streamed += it },
+        )
+
+        assertEquals("前半段后半段", result.content)
+        assertEquals("前半段后半段", streamed)
+        assertEquals(12L, result.usage.outputTokens)
+        assertEquals(30L, result.usage.inputTokens)
+        server.takeRequest()
+        val secondBody = server.takeRequest().body.readUtf8()
+        assertTrue(secondBody.contains("前半段"))
+        assertTrue(secondBody.contains("\"role\":\"assistant\""))
+        assertFalse(secondBody.contains("Continue"))
+    }
+
+
+    @Test
+    fun `vision bridge image user message merges into preceding tool result user message`() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"content":[{"type":"text","text":"ok"}]}"""))
+        api.chat(
+            model(),
+            listOf(
+                ApiMessage(role = "user", content = "看看这张图"),
+                ApiMessage(
+                    role = "assistant",
+                    content = null,
+                    tool_calls = listOf(
+                        ApiToolCall(
+                            id = "t1",
+                            function = ApiFunctionCall(name = "read", arguments = """{"path":"a.png"}"""),
+                        ),
+                    ),
+                ),
+                ApiMessage(role = "tool", content = "图片已读取", tool_call_id = "t1"),
+                ApiMessage(
+                    role = "user",
+                    content = "[read 工具读取的图片]",
+                    imageUrls = listOf("data:image/png;base64,AAAA"),
+                ),
+            ),
+        )
+
+        val body = Json.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject
+        val messages = body.getValue("messages").jsonArray.map { it.jsonObject }
+        messages.zipWithNext().forEach { (first, second) ->
+            val firstRole = first.getValue("role").jsonPrimitive.content
+            val secondRole = second.getValue("role").jsonPrimitive.content
+            assertFalse("相邻 user 消息必须合并", firstRole == "user" && secondRole == "user")
+        }
+        val userWithToolResult = messages.first { message ->
+            message.getValue("role").jsonPrimitive.content == "user" &&
+                message.getValue("content").jsonArray.any {
+                    it.jsonObject["type"]?.jsonPrimitive?.content == "tool_result"
+                }
+        }
+        val contentTypes = userWithToolResult.getValue("content").jsonArray.map {
+            it.jsonObject["type"]?.jsonPrimitive?.content
+        }
+        assertTrue(contentTypes.contains("tool_result"))
+        assertTrue(contentTypes.contains("image"))
+    }
+
+
+    @Test
+    fun `prompt caching 1h ttl adds ttl field and beta header`() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"content":[{"type":"text","text":"ok"}]}"""))
+        api.chat(
+            model().copy(promptCachingEnabled = true, promptCacheTtl1h = true),
+            listOf(
+                ApiMessage(role = "system", content = "sys"),
+                ApiMessage(role = "user", content = "hi"),
+            ),
+        )
+        val recorded = server.takeRequest()
+        assertEquals("extended-cache-ttl-2025-04-11", recorded.getHeader("anthropic-beta"))
+        val body = Json.parseToJsonElement(recorded.body.readUtf8()).jsonObject
+        val cacheControl = body.getValue("system").jsonArray.single().jsonObject
+            .getValue("cache_control").jsonObject
+        assertEquals("ephemeral", cacheControl.getValue("type").jsonPrimitive.content)
+        assertEquals("1h", cacheControl.getValue("ttl").jsonPrimitive.content)
+    }
+
+    @Test
+    fun `prompt caching without 1h ttl omits ttl and beta header`() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"content":[{"type":"text","text":"ok"}]}"""))
+        api.chat(model().copy(promptCachingEnabled = true), listOf(ApiMessage(role = "user", content = "hi")))
+        val recorded = server.takeRequest()
+        assertNull(recorded.getHeader("anthropic-beta"))
+        assertFalse(recorded.body.readUtf8().contains("\"ttl\""))
     }
 }

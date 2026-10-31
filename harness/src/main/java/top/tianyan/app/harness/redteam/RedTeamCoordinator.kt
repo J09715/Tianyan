@@ -1,8 +1,6 @@
 package top.tianyan.app.harness.redteam
 
 import java.util.UUID
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
@@ -17,6 +15,7 @@ import kotlinx.serialization.json.contentOrNull
 import top.tianyan.app.core.database.HarnessSessionRepository
 import top.tianyan.app.core.database.RedTeamFactEntity
 import top.tianyan.app.core.database.RedTeamFactRepository
+import top.tianyan.app.core.database.updateRedTeamBinding
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import top.tianyan.app.core.model.RedTeamFactKind
@@ -42,8 +41,7 @@ import top.tianyan.app.core.model.RedTeamNucleiIndex
 import top.tianyan.app.harness.events.HarnessEvent
 import top.tianyan.app.harness.events.HarnessEventBus
 
-@Singleton
-class RedTeamCoordinator @Inject constructor(
+class RedTeamCoordinator(
     private val facts: RedTeamFactRepository,
     private val sessions: HarnessSessionRepository,
     private val events: HarnessEventBus,
@@ -220,7 +218,6 @@ class RedTeamCoordinator @Inject constructor(
             }
         }
     }
-
 
     suspend fun execute(args: JsonObject, sessionId: String): Pair<Boolean, String> {
         return runCatching {
@@ -2135,7 +2132,6 @@ class RedTeamCoordinator @Inject constructor(
                         ).multiplier,
                 )
             }
-
 
     /**
      * 读回攻击文件内容。

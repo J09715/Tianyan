@@ -1,14 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Material Symbols Outlined (Apache 2.0) via Google Fonts, converted to Android vector drawable -->
+<!-- Material Symbols Rounded, weight 300, optical size 24; Apache-2.0. Glyph: sd_card.
+     Source: google/material-design-icons@49d4db35df873165d6bd6ba09b063c7dafbac2f4; converted from SVG. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp"
-    android:height="24dp"
-    android:viewportWidth="960"
-    android:viewportHeight="960">
-    <group
-        android:translateY="960">
-        <path
-            android:pathData="M360-520h80v-160h-80v160Zm120 0h80v-160h-80v160Zm120 0h80v-160h-80v160ZM240-80q-33 0-56.5-23.5T160-160v-480l240-240h320q33 0 56.5 23.5T800-800v640q0 33-23.5 56.5T720-80H240Zm0-80h480v-640H434L240-606v446Zm0 0h480-480Z"
-            android:fillColor="#FF000000" />
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="960" android:viewportHeight="960">
+    <group android:translateX="-0" android:translateY="960">
+        <path android:fillColor="#FF000000" android:pathData="M401.54-524.62q12.77 0 21.38-8.61 8.62-8.62 8.62-21.38v-88.47q0-12.77-8.62-21.38-8.61-8.62-21.38-8.62t-21.39 8.62q-8.61 8.61-8.61 21.38v88.47q0 12.76 8.61 21.38 8.62 8.61 21.39 8.61Zm116.15 0q12.77 0 21.39-8.61 8.61-8.62 8.61-21.38v-88.47q0-12.77-8.61-21.38-8.62-8.62-21.39-8.62-12.77 0-21.38 8.62-8.62 8.61-8.62 21.38v88.47q0 12.76 8.62 21.38 8.61 8.61 21.38 8.61Zm116.16 0q12.76 0 21.38-8.61 8.61-8.62 8.61-21.38v-88.47q0-12.77-8.61-21.38-8.62-8.62-21.38-8.62-12.77 0-21.39 8.62-8.61 8.61-8.61 21.38v88.47q0 12.76 8.61 21.38 8.62 8.61 21.39 8.61ZM252.31-100Q222-100 201-121q-21-21-21-51.31v-429.3q0-14.47 5.62-27.81 5.61-13.35 15.46-23.19l186.31-186.31q9.84-9.85 23.19-15.46 13.34-5.62 27.81-5.62h269.3Q738-860 759-839q21 21 21 51.31v615.38Q780-142 759-121q-21 21-51.31 21H252.31Zm0-60h455.38q4.62 0 8.46-3.85 3.85-3.84 3.85-8.46v-615.38q0-4.62-3.85-8.46-3.84-3.85-8.46-3.85H434L240-606v433.69q0 4.62 3.85 8.46 3.84 3.85 8.46 3.85Zm0 0H240h480-467.69Z" />
     </group>
 </vector>

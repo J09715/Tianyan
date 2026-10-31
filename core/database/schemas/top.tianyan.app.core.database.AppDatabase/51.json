@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 51,
-    "identityHash": "18a2994a1880ed9792699a08d6dcbef0",
+    "identityHash": "e7ea45220bd3aeab25cbb05b75ce39d3",
     "entities": [
       {
         "tableName": "tools",
@@ -275,7 +275,7 @@
       },
       {
         "tableName": "harness_sessions",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `title` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `modelId` TEXT, `modelVariant` TEXT, `agentId` TEXT, `workspace` TEXT NOT NULL, `projectType` TEXT NOT NULL, `approvalMode` TEXT NOT NULL, `redTeamMode` TEXT NOT NULL, `redTeamTarget` TEXT, `redTeamScope` TEXT NOT NULL, `redTeamPhase` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `title` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `modelId` TEXT, `modelVariant` TEXT, `workspace` TEXT NOT NULL, `projectType` TEXT NOT NULL, `approvalMode` TEXT NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -312,11 +312,6 @@
             "affinity": "TEXT"
           },
           {
-            "fieldPath": "agentId",
-            "columnName": "agentId",
-            "affinity": "TEXT"
-          },
-          {
             "fieldPath": "workspace",
             "columnName": "workspace",
             "affinity": "TEXT",
@@ -331,29 +326,6 @@
           {
             "fieldPath": "approvalMode",
             "columnName": "approvalMode",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "redTeamMode",
-            "columnName": "redTeamMode",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "redTeamTarget",
-            "columnName": "redTeamTarget",
-            "affinity": "TEXT"
-          },
-          {
-            "fieldPath": "redTeamScope",
-            "columnName": "redTeamScope",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "redTeamPhase",
-            "columnName": "redTeamPhase",
             "affinity": "TEXT",
             "notNull": true
           }
@@ -378,7 +350,7 @@
       },
       {
         "tableName": "harness_models",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `provider` TEXT NOT NULL, `model` TEXT NOT NULL, `baseUrl` TEXT NOT NULL, `secretRef` TEXT NOT NULL, `isActive` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `temperature` REAL, `maxTokens` INTEGER, `topP` REAL, `reasoningMode` TEXT, `reasoningEffort` TEXT, `toolCallMode` TEXT, `contextTokens` INTEGER, `customHeaders` TEXT NOT NULL, `pureChatMode` INTEGER NOT NULL, `visionEnabled` INTEGER NOT NULL, `imageGenerationEnabled` INTEGER NOT NULL, `responseApiEnabled` INTEGER NOT NULL, `apiKeyCount` INTEGER NOT NULL, `requestsPerMinutePerKey` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `provider` TEXT NOT NULL, `model` TEXT NOT NULL, `baseUrl` TEXT NOT NULL, `secretRef` TEXT NOT NULL, `isActive` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `temperature` REAL, `maxTokens` INTEGER, `topP` REAL, `reasoningMode` TEXT, `reasoningEffort` TEXT, `toolCallMode` TEXT, `contextTokens` INTEGER, `customHeaders` TEXT NOT NULL, `pureChatMode` INTEGER NOT NULL, `visionEnabled` INTEGER NOT NULL, `imageGenerationEnabled` INTEGER NOT NULL, `responseApiEnabled` INTEGER NOT NULL, `apiKeyCount` INTEGER NOT NULL, `requestsPerMinutePerKey` INTEGER NOT NULL, `compactionKeepRecentTokens` INTEGER, `compactionReserveTokens` INTEGER, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -504,6 +476,16 @@
             "columnName": "requestsPerMinutePerKey",
             "affinity": "INTEGER",
             "notNull": true
+          },
+          {
+            "fieldPath": "compactionKeepRecentTokens",
+            "columnName": "compactionKeepRecentTokens",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "compactionReserveTokens",
+            "columnName": "compactionReserveTokens",
+            "affinity": "INTEGER"
           }
         ],
         "primaryKey": {
@@ -937,7 +919,7 @@
       },
       {
         "tableName": "mcp_servers",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `description` TEXT NOT NULL, `transportType` TEXT NOT NULL, `command` TEXT NOT NULL, `argsCiphertext` TEXT NOT NULL, `envCiphertext` TEXT NOT NULL, `serverUrl` TEXT NOT NULL, `isEnabled` INTEGER NOT NULL, `isBuiltin` INTEGER NOT NULL, `authTokenCiphertext` TEXT NOT NULL, `userToggled` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `description` TEXT NOT NULL, `transportType` TEXT NOT NULL, `command` TEXT NOT NULL, `argsCiphertext` TEXT NOT NULL, `envCiphertext` TEXT NOT NULL, `serverUrl` TEXT NOT NULL, `authMode` TEXT NOT NULL, `oauthClientId` TEXT NOT NULL, `oauthAuthorizationEndpoint` TEXT NOT NULL, `oauthTokenEndpoint` TEXT NOT NULL, `oauthRedirectUri` TEXT NOT NULL, `oauthScope` TEXT NOT NULL, `oauthResource` TEXT NOT NULL, `isEnabled` INTEGER NOT NULL, `isBuiltin` INTEGER NOT NULL, `userToggled` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -988,6 +970,48 @@
             "notNull": true
           },
           {
+            "fieldPath": "authMode",
+            "columnName": "authMode",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "oauthClientId",
+            "columnName": "oauthClientId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "oauthAuthorizationEndpoint",
+            "columnName": "oauthAuthorizationEndpoint",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "oauthTokenEndpoint",
+            "columnName": "oauthTokenEndpoint",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "oauthRedirectUri",
+            "columnName": "oauthRedirectUri",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "oauthScope",
+            "columnName": "oauthScope",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "oauthResource",
+            "columnName": "oauthResource",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
             "fieldPath": "isEnabled",
             "columnName": "isEnabled",
             "affinity": "INTEGER",
@@ -997,12 +1021,6 @@
             "fieldPath": "isBuiltin",
             "columnName": "isBuiltin",
             "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "authTokenCiphertext",
-            "columnName": "authTokenCiphertext",
-            "affinity": "TEXT",
             "notNull": true
           },
           {
@@ -1018,6 +1036,176 @@
             "id"
           ]
         }
+      },
+      {
+        "tableName": "mcp_oauth_credentials",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`serverId` TEXT NOT NULL, `accessTokenCiphertext` TEXT NOT NULL, `refreshTokenCiphertext` TEXT NOT NULL, `tokenType` TEXT NOT NULL, `scope` TEXT, `expiresAt` INTEGER, `authorizationServer` TEXT, `tokenEndpoint` TEXT, `clientId` TEXT NOT NULL, `resource` TEXT, `credentialRevision` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`serverId`))",
+        "fields": [
+          {
+            "fieldPath": "serverId",
+            "columnName": "serverId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "accessTokenCiphertext",
+            "columnName": "accessTokenCiphertext",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "refreshTokenCiphertext",
+            "columnName": "refreshTokenCiphertext",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tokenType",
+            "columnName": "tokenType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "scope",
+            "columnName": "scope",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "expiresAt",
+            "columnName": "expiresAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "authorizationServer",
+            "columnName": "authorizationServer",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "tokenEndpoint",
+            "columnName": "tokenEndpoint",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "clientId",
+            "columnName": "clientId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "resource",
+            "columnName": "resource",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "credentialRevision",
+            "columnName": "credentialRevision",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "serverId"
+          ]
+        }
+      },
+      {
+        "tableName": "mcp_oauth_transactions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`state` TEXT NOT NULL, `serverId` TEXT NOT NULL, `codeVerifierCiphertext` TEXT NOT NULL, `redirectUri` TEXT NOT NULL, `clientId` TEXT NOT NULL, `authorizationEndpoint` TEXT NOT NULL, `tokenEndpoint` TEXT NOT NULL, `resource` TEXT, `createdAt` INTEGER NOT NULL, `expiresAt` INTEGER NOT NULL, PRIMARY KEY(`state`))",
+        "fields": [
+          {
+            "fieldPath": "state",
+            "columnName": "state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "serverId",
+            "columnName": "serverId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "codeVerifierCiphertext",
+            "columnName": "codeVerifierCiphertext",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "redirectUri",
+            "columnName": "redirectUri",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "clientId",
+            "columnName": "clientId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "authorizationEndpoint",
+            "columnName": "authorizationEndpoint",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tokenEndpoint",
+            "columnName": "tokenEndpoint",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "resource",
+            "columnName": "resource",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "expiresAt",
+            "columnName": "expiresAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "state"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_mcp_oauth_transactions_serverId",
+            "unique": false,
+            "columnNames": [
+              "serverId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_mcp_oauth_transactions_serverId` ON `${TABLE_NAME}` (`serverId`)"
+          },
+          {
+            "name": "index_mcp_oauth_transactions_expiresAt",
+            "unique": false,
+            "columnNames": [
+              "expiresAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_mcp_oauth_transactions_expiresAt` ON `${TABLE_NAME}` (`expiresAt`)"
+          }
+        ]
       },
       {
         "tableName": "agent_skills",
@@ -2309,7 +2497,7 @@
       },
       {
         "tableName": "workflow_execution_logs",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`executionId` TEXT NOT NULL, `workflowId` TEXT NOT NULL, `startTime` INTEGER NOT NULL, `endTime` INTEGER, `status` TEXT NOT NULL, `finalContextJson` TEXT NOT NULL, PRIMARY KEY(`executionId`), FOREIGN KEY(`workflowId`) REFERENCES `workflows`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`executionId` TEXT NOT NULL, `workflowId` TEXT NOT NULL, `startTime` INTEGER NOT NULL, `endTime` INTEGER, `status` TEXT NOT NULL, `finalContextJson` TEXT NOT NULL, `triggerSource` TEXT NOT NULL DEFAULT 'MANUAL', `workflowName` TEXT NOT NULL DEFAULT '', `scheduleId` TEXT, PRIMARY KEY(`executionId`), FOREIGN KEY(`workflowId`) REFERENCES `workflows`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "executionId",
@@ -2345,6 +2533,25 @@
             "columnName": "finalContextJson",
             "affinity": "TEXT",
             "notNull": true
+          },
+          {
+            "fieldPath": "triggerSource",
+            "columnName": "triggerSource",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'MANUAL'"
+          },
+          {
+            "fieldPath": "workflowName",
+            "columnName": "workflowName",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "scheduleId",
+            "columnName": "scheduleId",
+            "affinity": "TEXT"
           }
         ],
         "primaryKey": {
@@ -2388,15 +2595,9 @@
         ]
       },
       {
-        "tableName": "red_team_facts",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`sessionId` TEXT NOT NULL, `id` TEXT NOT NULL, `kind` TEXT NOT NULL, `title` TEXT NOT NULL, `target` TEXT, `severity` TEXT, `status` TEXT NOT NULL, `payload` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`sessionId`, `id`))",
+        "tableName": "workflow_schedules",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `workflowId` TEXT NOT NULL, `name` TEXT NOT NULL, `enabled` INTEGER NOT NULL, `repeatType` TEXT NOT NULL, `hour` INTEGER, `minute` INTEGER, `intervalMinutes` INTEGER, `onceAtEpochMillis` INTEGER, `variablesJson` TEXT NOT NULL, `workspacePath` TEXT NOT NULL, `modelId` TEXT, `modelVariant` TEXT, `lastExecutionId` TEXT, `lastRunAt` INTEGER, `nextRunAt` INTEGER, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`workflowId`) REFERENCES `workflows`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
-          {
-            "fieldPath": "sessionId",
-            "columnName": "sessionId",
-            "affinity": "TEXT",
-            "notNull": true
-          },
           {
             "fieldPath": "id",
             "columnName": "id",
@@ -2404,48 +2605,89 @@
             "notNull": true
           },
           {
-            "fieldPath": "kind",
-            "columnName": "kind",
+            "fieldPath": "workflowId",
+            "columnName": "workflowId",
             "affinity": "TEXT",
             "notNull": true
           },
           {
-            "fieldPath": "title",
-            "columnName": "title",
+            "fieldPath": "name",
+            "columnName": "name",
             "affinity": "TEXT",
             "notNull": true
           },
           {
-            "fieldPath": "target",
-            "columnName": "target",
-            "affinity": "TEXT"
-          },
-          {
-            "fieldPath": "severity",
-            "columnName": "severity",
-            "affinity": "TEXT"
-          },
-          {
-            "fieldPath": "status",
-            "columnName": "status",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "payload",
-            "columnName": "payload",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "createdAt",
-            "columnName": "createdAt",
+            "fieldPath": "enabled",
+            "columnName": "enabled",
             "affinity": "INTEGER",
             "notNull": true
           },
           {
-            "fieldPath": "updatedAt",
-            "columnName": "updatedAt",
+            "fieldPath": "repeatType",
+            "columnName": "repeatType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hour",
+            "columnName": "hour",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "minute",
+            "columnName": "minute",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "intervalMinutes",
+            "columnName": "intervalMinutes",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "onceAtEpochMillis",
+            "columnName": "onceAtEpochMillis",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "variablesJson",
+            "columnName": "variablesJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "workspacePath",
+            "columnName": "workspacePath",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "modelId",
+            "columnName": "modelId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "modelVariant",
+            "columnName": "modelVariant",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lastExecutionId",
+            "columnName": "lastExecutionId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lastRunAt",
+            "columnName": "lastRunAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "nextRunAt",
+            "columnName": "nextRunAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
             "affinity": "INTEGER",
             "notNull": true
           }
@@ -2453,37 +2695,47 @@
         "primaryKey": {
           "autoGenerate": false,
           "columnNames": [
-            "sessionId",
             "id"
           ]
         },
         "indices": [
           {
-            "name": "index_red_team_facts_sessionId_kind",
+            "name": "index_workflow_schedules_workflowId",
             "unique": false,
             "columnNames": [
-              "sessionId",
-              "kind"
+              "workflowId"
             ],
             "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_red_team_facts_sessionId_kind` ON `${TABLE_NAME}` (`sessionId`, `kind`)"
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_workflow_schedules_workflowId` ON `${TABLE_NAME}` (`workflowId`)"
           },
           {
-            "name": "index_red_team_facts_sessionId_updatedAt",
+            "name": "index_workflow_schedules_nextRunAt",
             "unique": false,
             "columnNames": [
-              "sessionId",
-              "updatedAt"
+              "nextRunAt"
             ],
             "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_red_team_facts_sessionId_updatedAt` ON `${TABLE_NAME}` (`sessionId`, `updatedAt`)"
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_workflow_schedules_nextRunAt` ON `${TABLE_NAME}` (`nextRunAt`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "workflows",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "workflowId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
           }
         ]
       }
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '18a2994a1880ed9792699a08d6dcbef0')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'e7ea45220bd3aeab25cbb05b75ce39d3')"
     ]
   }
 }

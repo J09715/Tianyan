@@ -110,6 +110,18 @@ class WorkspaceManagerTest {
     }
 
     @Test
+    fun rejectsRenamingWorkspaceRootThroughRelativeOrAbsolutePaths() = runTest {
+        manager.createProject("safe-proj")
+        manager.writeFile("safe-proj", "keep.txt", "keep")
+        listOf("", ".", "/workspace/safe-proj").forEach { path ->
+            assertFalse(manager.renameItem("safe-proj", path, "moved").isSuccess)
+        }
+        assertFalse(File(workspaceDir, "moved").exists())
+        assertEquals("keep", manager.readFile("safe-proj", "keep.txt").getOrNull())
+        assertFalse(manager.renameItem("safe-proj", "keep.txt", "..").isSuccess)
+    }
+
+    @Test
     fun linksExistingInternalDirectoryWithoutDeletingItsFiles() = runTest {
         val existing = File(pathManager.workspaceDir, "existing-source").apply {
             mkdirs()
@@ -166,6 +178,32 @@ class WorkspaceManagerTest {
             project.resolve("settings.gradle.kts").readText()
                 .contains("import org.gradle.api.initialization.resolve.RepositoriesMode"),
         )
+    }
+
+    @Test
+    fun pluginTemplateCreatesEditablePackageAndPersistsProjectType() = runTest {
+        val result = manager.createProject("plugin-demo", templateId = "builtin.tianyan-local-plugin",
+            templateVariables = mapOf("toolId" to "demo-tool", "pluginId" to "example.demo", "pluginName" to "演示插件"))
+        assertTrue(result.toString(), result.isSuccess)
+        assertEquals(ProjectType.TIANYAN_PLUGIN, result.getOrNull()?.projectType)
+        assertEquals(ProjectType.TIANYAN_PLUGIN, manager.listProjects().single().projectType)
+        val root = File(workspaceDir, "plugin-demo")
+        assertTrue(root.resolve("payload/bin/demo-tool").readText().contains("example.demo"))
+        assertTrue(root.resolve("manifest.json").readText().contains("演示插件"))
+        assertTrue(root.resolve("tools/package_plugin.py").isFile)
+        assertTrue(root.resolve("AGENTS.md").isFile)
+        assertFalse(root.walkTopDown().filter { it.isFile }.any { it.name.endsWith(".template") || it.readText().contains("{{pluginId}}") })
+        assertEquals("", result.getOrNull()?.packageName)
+    }
+
+    @Test
+    fun pluginTemplateRejectsReservedIdentityAndUnsafeCommandName() = runTest {
+        listOf(mapOf("pluginId" to "tianyan.reserved"), mapOf("toolId" to "../escape"),
+            mapOf("pluginName" to "name\"; unsafe")).forEachIndexed { index, variables ->
+            val result = manager.createProject("invalid-plugin-$index", templateId = "builtin.tianyan-local-plugin", templateVariables = variables)
+            assertTrue(result.isFailure)
+            assertFalse(File(workspaceDir, "invalid-plugin-$index/manifest.json").exists())
+        }
     }
 
     @Test

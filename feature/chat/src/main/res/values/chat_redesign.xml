@@ -1,0 +1,31 @@
+<resources>
+    <string name="chat_reasoning_action">调整推理强度</string>
+    <string name="chat_install_mcp">去安装</string>
+    <string name="chat_message_placeholder">描述你的想法，或需要解决的问题…</string>
+    <string name="chat_more_controls">更多会话操作</string>
+    <string name="chat_workbench_controls">工作台控制</string>
+    <string name="chat_hide_controls">收起工作台控制</string>
+    <string name="chat_browser_entry">浏览器</string>
+    <string name="chat_runtime_overview">运行记录</string>
+    <string name="chat_toolchain_entry">工具链</string>
+    <string name="chat_welcome_subtitle">选择一个方向，或直接在下方描述需求。</string>
+    <string name="chat_welcome_project">项目快捷操作</string>
+    <string name="chat_welcome_project_subtitle">描述目标或遇到的问题，天衍会结合当前项目协助你。</string>
+    <string name="chat_welcome_suggestions">快捷开始</string>
+    <string name="chat_start_build">做一个小工具</string>
+    <string name="chat_start_build_detail">从需求到实现，一起搭好第一版。</string>
+    <string name="chat_start_build_prompt">我想做一个小工具。请先帮我明确需求，再给出实现方案。</string>
+    <string name="chat_start_fix">解决一个问题</string>
+    <string name="chat_start_fix_detail">分析报错、定位原因，找到修复方法。</string>
+    <string name="chat_start_fix_prompt">我遇到了一个问题。请先问我具体的现象和报错，再协助定位原因。</string>
+    <string name="chat_start_explore">了解当前项目</string>
+    <string name="chat_start_explore_detail">梳理代码结构，找出下一步的方向。</string>
+    <string name="chat_start_explore_prompt">请先查看当前工作区，说明有哪些文件和项目；如果还没有项目，请告诉我如何开始。</string>
+    <string name="chat_workbench_workspace">工作空间</string>
+    <string name="chat_workbench_session">会话控制</string>
+    <string name="chat_workbench_tools_attention">有待处理项</string>
+    <string name="chat_redteam_entry">红队模式</string>
+    <string name="chat_redteam_active">作战中</string>
+    <string name="chat_redteam_inactive">未绑定目标</string>
+    <string name="chat_attachment_missing">附件已失效：%1$s</string>
+</resources>

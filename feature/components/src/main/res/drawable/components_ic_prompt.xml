@@ -1,24 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Lucide Icons (ISC License) via Iconify, converted to Android vector drawable -->
+<!-- Material Symbols Rounded, weight 300, optical size 24; Apache-2.0. Glyph: text_fields.
+     Source: google/material-design-icons@49d4db35df873165d6bd6ba09b063c7dafbac2f4; converted from SVG. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp"
-    android:height="24dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
-    <path
-        android:pathData="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"
-        android:fillColor="#00000000"
-        android:strokeColor="#FF000000"
-        android:strokeWidth="2"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        />
-    <path
-        android:pathData="m10 8l-3 3l3 3m4 0l3-3l-3-3"
-        android:fillColor="#00000000"
-        android:strokeColor="#FF000000"
-        android:strokeWidth="2"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        />
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="960" android:viewportHeight="960">
+    <group android:translateX="-0" android:translateY="960">
+        <path android:fillColor="#FF000000" android:pathData="M341.11-180q-17.65 0-30.15-12.34t-12.5-29.97V-695H142.69q-17.79 0-30.24-12.43T100-737.62q0-17.76 12.34-30.07Q124.68-780 142.31-780h396.92q17.79 0 30.24 12.35 12.45 12.36 12.45 30 0 17.65-12.34 30.15T539.62-695H383.46v472.31q0 17.79-12.35 30.24t-30 12.45Zm357.31 0q-17.65 0-29.96-12.34-12.3-12.34-12.3-29.97v-274.61h-76.54q-17.79 0-30.24-12.44-12.46-12.43-12.46-30.19t12.34-30.06q12.34-12.31 29.97-12.31h238.08q17.79 0 30.24 12.35t12.45 30q0 17.65-12.34 30.15t-29.97 12.5h-76.92v274.61q0 17.63-12.35 29.97-12.36 12.34-30 12.34Z" />
+    </group>
 </vector>

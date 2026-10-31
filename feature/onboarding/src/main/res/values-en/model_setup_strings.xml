@@ -1,0 +1,12 @@
+<resources>
+    <string name="model_setup_import">Import configuration</string>
+    <string name="model_setup_connection">Connection</string>
+    <string name="model_setup_url">Endpoint · Base URL</string>
+    <string name="model_setup_key">API Key</string>
+    <string name="model_setup_model">Choose a model</string>
+    <string name="model_setup_discover">Fetch available models</string>
+    <string name="model_setup_show_key">Show API key</string>
+    <string name="model_setup_hide_key">Hide API key</string>
+    <string name="model_setup_protocol_openai">OpenAI-compatible API</string>
+    <string name="model_setup_protocol_anthropic">Claude Messages API</string>
+</resources>

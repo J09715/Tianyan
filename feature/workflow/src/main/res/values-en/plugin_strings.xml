@@ -1,0 +1,7 @@
+<resources>
+    <string name="workflow_review_configuration">I have reviewed the full configuration for this action</string>
+    <string name="plugin_node_id">Plugin ID</string>
+    <string name="plugin_node_extension">Node extension ID</string>
+    <string name="plugin_node_arguments">JSON arguments</string>
+    <string name="plugin_node_scope">Each plugin action requires confirmation. Only compiled extensions are available; arguments must match their Schema.</string>
+</resources>

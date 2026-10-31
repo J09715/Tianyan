@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_scroll_to_bottom">Jump to latest message</string>
+    <string name="chat_waiting_first_token">Waiting for a response</string>
+</resources>

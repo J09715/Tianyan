@@ -1,128 +1,236 @@
 package top.tianyan.app.harness.mcp
 
-import java.util.UUID
+import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import top.tianyan.app.runtime.environment.ExecutionEnvironmentContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.encodeToJsonElement
 import top.tianyan.app.core.model.McpServerConfig
+import top.tianyan.app.core.model.McpConnectionState
+import top.tianyan.app.core.model.McpIdlePolicy
 import top.tianyan.app.core.model.McpToolInfo
 import kotlin.time.Duration.Companion.milliseconds
 
-/**
- * Reusable newline-framed JSON-RPC sessions for stateful STDIO MCP servers.
- *
- * Process lifecycle is delegated to [McpStdioChannelFactory]; unit tests can inject an
- * in-memory factory to exercise idle reaping, fail-fast cooldown, ignore-frame thresholds,
- * and process death recovery without a real PRoot subprocess.
- */
-@Singleton
-class McpStdioTransport @Inject constructor(
+internal class McpStdioChannelException(message: String) : IOException(message)
+
+/** server 正常返回的 JSON-RPC error 响应（unknown tool / invalid params 等）：连接本身健康，错误应作为结果传回调用方 */
+internal class McpJsonRpcErrorException(val code: Int, message: String) :
+    IllegalStateException("MCP JSON-RPC $code: $message")
+
+/** Reusable JSON-RPC sessions; subprocess ownership belongs to McpStdioChannelFactory. */
+class McpStdioTransport(
     private val json: Json,
     private val commandBuilder: McpCommandBuilder,
     private val channelFactory: McpStdioChannelFactory,
+    internal val standaloneScope: StandaloneMcpScope? = null,
+    private val idleTimeoutMinutes: Flow<Int> = flowOf(McpIdlePolicy.DEFAULT_MINUTES),
+    internal val clock: () -> Long = { System.nanoTime() / 1_000_000L },
 ) : McpTransport {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val connections = ConcurrentHashMap<String, Connection>()
+    private val connections = ConcurrentHashMap<String, McpStdioConnection>()
     private val startupMutexes = ConcurrentHashMap<String, Mutex>()
     private val downUntil = ConcurrentHashMap<String, Long>()
+    private val processState = MutableStateFlow<Map<String, McpConnectionState>>(emptyMap())
+    internal val processStates = processState.asStateFlow()
+
+    /** server 主动声明工具目录变更（scoped server id）：上层据此丢弃缓存、下次调用重新发现。 */
+    private val toolListChanges = MutableSharedFlow<String>(
+        extraBufferCapacity = 16,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    internal val toolListChanged: SharedFlow<String> = toolListChanges.asSharedFlow()
+    internal fun forgetProcessState(key: String) { if (connections[key] == null) processState.update { it - key } }
+
+    private fun publishState(connection: McpStdioConnection, state: McpConnectionState) {
+        processState.update { states ->
+            if (connections[connection.serverId] === connection) states + (connection.serverId to state) else states
+        }
+    }
+    private fun setProcessState(id: String, state: McpConnectionState) { processState.update { it + (id to state) } }
 
     init {
         scope.launch {
+            top.tianyan.app.core.common.McpCatalogRevisions.changes.collect { changes ->
+                connections.values.forEach { conn ->
+                    val revision = changes[top.tianyan.app.core.common.McpCatalogRevisions.Key(conn.distribution, conn.serverId.mcpServerKey())] ?: 0L
+                    if (conn.distribution.isNotBlank() && revision > conn.revision) retire(conn)
+                }
+            }
+        }
+        scope.launch {
             while (isActive) {
                 delay(SWEEP_INTERVAL_MS.milliseconds)
-                runCatching { sweepIdleOnce(System.currentTimeMillis()) }
+                runCatching { sweepIdleOnce(clock()) }
             }
         }
     }
 
-    override suspend fun check(server: McpServerConfig): Boolean = try {
-        connection(server, bypassCooldown = true).withInitialized { true }
-    } catch (cancellation: CancellationException) {
-        discardConnection(server.id)
-        throw cancellation
-    } catch (_: Throwable) {
-        discardConnection(server.id)
-        false
-    }
-
-    override suspend fun discover(server: McpServerConfig): List<McpToolInfo> = try {
-        connection(server).withInitialized {
-            val response = request("tools/list", JsonObject(emptyMap()))
-            val result = response.result?.let {
-                json.decodeFromJsonElement(McpToolsListResponse.serializer(), it)
-            } ?: error("MCP tools/list did not return a result")
-            result.tools.map { dto -> dto.toInfo(server, json.encodeToString(JsonObject.serializer(), dto.inputSchema)) }
+    override suspend fun check(server: McpServerConfig): McpCheckResult {
+        val conn = try {
+            connection(server, bypassCooldown = true)
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (t: Throwable) {
+            return McpCheckResult(false, t.message ?: t::class.simpleName)
         }
-    } catch (throwable: Throwable) {
-        discardConnection(server.id)
-        throw throwable
+        return try {
+            conn.withInitialized { McpCheckResult(true) }
+        } catch (cancellation: CancellationException) {
+            // B2: 取消（如 checkConnection 8s 超时、等待 initialize 握手锁被取消）不代表进程损坏， 不销毁连接——握手锁只挡毫秒级握手，绝不会误杀在飞的最长 600s 的 tools/call
+            throw cancellation
+        } catch (t: Throwable) {
+            // B2: 仅传输层故障（进程退出/EOF/IO）才销毁；server 返回错误响应等本次探测失败保留连接
+            if (isChannelFailure(t)) discardConnection(conn.serverId, conn)
+            McpCheckResult(false, t.message ?: t::class.simpleName)
+        } finally { conn.markActive(); conn.uses.release() }
     }
 
-    override suspend fun execute(server: McpServerConfig, toolName: String, arguments: JsonObject): Pair<Boolean, String> =
-        try {
-            connection(server).withInitialized {
+    override suspend fun discover(server: McpServerConfig): List<McpToolInfo> {
+        val conn = connection(server)
+        return try {
+            conn.withInitialized {
+                val response = requestReadOnly("tools/list", JsonObject(emptyMap()))
+                val result = response.result?.let {
+                    json.decodeFromJsonElement(McpToolsListResponse.serializer(), it)
+                } ?: error("MCP tools/list did not return a result")
+                result.tools.map { dto -> dto.toInfo(server, json.encodeToString(JsonObject.serializer(), dto.inputSchema)) }
+            }
+        } catch (t: Throwable) {
+            // B2: 取消（含发现总超时）与业务错误响应不销毁连接，仅传输层故障销毁
+            if (t !is CancellationException && isChannelFailure(t)) discardConnection(conn.serverId, conn)
+            throw t
+        } finally { conn.markActive(); conn.uses.release() }
+    }
+
+    override suspend fun execute(server: McpServerConfig, toolName: String, arguments: JsonObject): Pair<Boolean, String> {
+        val conn = connection(server)
+        return try {
+            conn.withInitialized {
                 val params = json.encodeToJsonElement(McpCallToolParams.serializer(), McpCallToolParams(toolName, arguments))
-                val response = request("tools/call", params)
+                val response = requestCall("tools/call", params)
                 val result = response.result?.let {
                     json.decodeFromJsonElement(McpCallToolResult.serializer(), it)
                 } ?: error("MCP tools/call did not return a result")
                 !result.isError to result.content.joinToString("\n") { it.text.orEmpty() }
                     .ifBlank { if (result.isError) "执行失败" else "执行成功" }
             }
-        } catch (throwable: Throwable) {
-            discardConnection(server.id)
-            throw throwable
-        }
-
-    suspend fun closeConnection(serverId: String) {
-        downUntil.remove(serverId)
-        discardConnection(serverId)
+        } catch (e: McpJsonRpcErrorException) {
+            // B5: server 返回的 JSON-RPC 错误响应是正常协议行为，连接健康； 错误作为结果返回给模型，而不是销毁子进程重启（丢失有状态上下文）
+            false to (e.message ?: "MCP JSON-RPC 错误")
+        } catch (cancellation: CancellationException) {
+            // B2: 调用被取消不代表进程损坏，保留连接
+            throw cancellation
+        } catch (t: Throwable) {
+            // B5: 仅传输层失败（EOF/IO/进程死亡）才 discard，其余（序列化/业务异常等）透传且保留连接
+            if (isChannelFailure(t)) discardConnection(conn.serverId, conn)
+            throw t
+        } finally { conn.markActive(); conn.uses.release() }
     }
 
-    private suspend fun discardConnection(serverId: String) {
+    private fun isChannelFailure(t: Throwable): Boolean = t is McpStdioChannelException || t is IOException
+
+    suspend fun closeConnection(serverId: String) = startupMutexes.getOrPut(serverId) { Mutex() }.withLock {
+        val ids = (connections.keys + downUntil.keys + processStates.value.keys + serverId).filter { it == serverId || it.startsWith("$serverId@environment:") }
+        closeMcpActions(listOf(
+            { closeMcpResources(ids) { id -> downUntil.remove(id); discardConnection(id) } },
+            { channelFactory.closePending(serverId) },
+        ))
+        processState.update { it - ids.toSet() }
+    }
+
+    private suspend fun discardConnection(serverId: String, failed: McpStdioConnection? = null) {
         withContext(NonCancellable + Dispatchers.IO) {
-            connections.remove(serverId)?.close()
+            // 释放成功后按引用删除；失败保留重试入口，迟到的旧连接清理不能误删替代连接。
+            val target = failed ?: connections[serverId] ?: return@withContext
+            target.close()
+            publishState(target, McpConnectionState.OFFLINE)
+            connections.remove(serverId, target)
         }
     }
-
     internal suspend fun sweepIdleOnce(nowMs: Long): Int {
+        val timeout = McpIdlePolicy.timeoutMillis(idleTimeoutMinutes.first())
         var closed = 0
+        var failure: Throwable? = null
         val entries = connections.entries.toList()
         for ((id, connection) in entries) {
             if (connection.inFlight) continue
-            if (nowMs - connection.lastActivityMs >= IDLE_TIMEOUT_MS) {
-                if (connections.remove(id, connection)) {
-                    connection.close()
-                    closed++
+            if (nowMs - connection.lastActivityMs < timeout) continue
+            // 获取连接与登记使用租约共用启动锁；锁内复核活跃时间，避免清扫误关新请求。
+            val removed = try { startupMutexes.getOrPut(id.mcpServerKey()) { Mutex() }.withLock {
+                !connection.inFlight &&
+                    nowMs - connection.lastActivityMs >= timeout &&
+                    connections[id] === connection && run {
+                        discardConnection(id, connection)
+                        setProcessState(id, McpConnectionState.SLEEPING)
+                        true
+                    }
+            } } catch (cancelled: CancellationException) { throw cancelled }
+                catch (error: Exception) {
+                    setProcessState(id, McpConnectionState.OFFLINE)
+                    if (failure == null) failure = error else failure!!.addSuppressed(error)
+                    false // Preserve failed ownership; sweep other servers before reporting the failure.
                 }
+            if (removed) {
+                closed++
             }
         }
+        failure?.let { throw it }
         return closed
     }
 
-    private suspend fun connection(server: McpServerConfig, bypassCooldown: Boolean = false): Connection =
-        startupMutexes.getOrPut(server.id) { Mutex() }.withLock {
-            connectionLocked(server, bypassCooldown)
+    private fun retire(conn: McpStdioConnection) = conn.uses.retire(scope) {
+        startupMutexes.getOrPut(conn.serverId.mcpServerKey()) { Mutex() }.withLock {
+            if (connections[conn.serverId] === conn) discardConnection(conn.serverId, conn)
         }
-
-    private suspend fun connectionLocked(server: McpServerConfig, bypassCooldown: Boolean): Connection {
-        connections[server.id]?.takeIf { it.channel.isAlive && it.fingerprint == commandBuilder.fingerprint(server) }?.let {
+    }
+    private suspend fun connection(server: McpServerConfig, bypassCooldown: Boolean = false): McpStdioConnection {
+        val scopedId = scopedMcpKey(server, standaloneScope)
+        while (true) {
+            var waiting: McpStdioConnection? = null
+            val acquired = startupMutexes.getOrPut(server.id.mcpServerKey()) { Mutex() }.withLock {
+                val revision = if (server.catalogDistribution.isBlank()) server.catalogRevision else
+                    top.tianyan.app.core.common.McpCatalogRevisions.current(server.catalogDistribution, server.id.mcpServerKey())
+                val scoped = server.copy(id = scopedId, catalogRevision = revision)
+                val old = connections[scopedId]
+                if (old != null && (old.uses.retiring || old.fingerprint != commandBuilder.fingerprint(scoped))) {
+                    retire(old)
+                    if (old.uses.busy()) { waiting = old; return@withLock null }
+                }
+                val conn = connectionLocked(scoped, bypassCooldown)
+                if (scoped.catalogDistribution.isNotBlank() && top.tianyan.app.core.common.McpCatalogRevisions.current(scoped.catalogDistribution, server.id.mcpServerKey()) != revision) { retire(conn); null }
+                else conn.takeIf { it.uses.acquire() }
+            }
+            if (acquired != null) return acquired
+            waiting?.uses?.awaitIdle()
+        }
+    }
+    private suspend fun connectionLocked(server: McpServerConfig, bypassCooldown: Boolean): McpStdioConnection {
+        connections[server.id]?.takeIf { !it.uses.retiring && it.dead == null && it.channel.isAlive && it.fingerprint == commandBuilder.fingerprint(server) }?.let {
             it.markActive()
             return it
         }
@@ -135,7 +243,8 @@ class McpStdioTransport @Inject constructor(
                 )
             }
         }
-        connections.remove(server.id)?.close()
+        discardConnection(server.id)
+        setProcessState(server.id, McpConnectionState.WAKING)
         val channel = try {
             withTimeoutOrNull(STARTUP_TIMEOUT_MS.milliseconds) {
                 channelFactory.open(server)
@@ -144,111 +253,49 @@ class McpStdioTransport @Inject constructor(
                 error("MCP 沙箱会话启动超时（" + STARTUP_TIMEOUT_MS / 1000 + "s）：" + server.command)
             }
         } catch (t: Throwable) {
+            setProcessState(server.id, if (t is CancellationException) McpConnectionState.UNKNOWN else McpConnectionState.OFFLINE)
             downUntil[server.id] = System.currentTimeMillis() + FAILURE_COOLDOWN_MS
             throw t
         }
         downUntil.remove(server.id)
-        return Connection(channel, commandBuilder.fingerprint(server)).also { connection ->
+        return McpStdioConnection(json, scope, { requestTimeoutOverrideMs }, { discardConnection(it.serverId, it) }, ::publishState, clock, server.id, channel, commandBuilder.fingerprint(server), server.catalogDistribution, server.catalogRevision, { toolListChanges.tryEmit(server.id) }).also { connection ->
             connections[server.id] = connection
+            startReaderLoop(connection)
+            try { connection.ownership = currentCoroutineContext()[ExecutionEnvironmentContext]?.own { discardConnection(server.id, connection) } }
+            catch (t: Throwable) { rollbackMcpFailure(t) { discardConnection(server.id, connection) } }
         }
     }
-
-    private inner class Connection(
-        val channel: McpStdioChannel,
-        val fingerprint: String,
-    ) {
-        private val mutex = Mutex()
-        val inFlight: Boolean get() = mutex.isLocked
-        private var initialized = false
-
-        @Volatile
-        internal var lastActivityMs: Long = System.currentTimeMillis()
-
-        fun markActive() {
-            lastActivityMs = System.currentTimeMillis()
-        }
-
-        suspend fun <T> withInitialized(block: suspend Connection.() -> T): T = mutex.withLock {
-            markActive()
-            if (!initialized) {
-                val params = json.encodeToJsonElement(McpInitializeParams.serializer(), McpInitializeParams())
-                val response = requestUnlocked("initialize", params)
-                val result = response.result?.let {
-                    json.decodeFromJsonElement(McpInitializeResult.serializer(), it)
-                } ?: error("MCP initialize did not return a result")
-                require(result.protocolVersion.isNotBlank())
-                notifyUnlocked("notifications/initialized")
-                initialized = true
+    private fun startReaderLoop(connection: McpStdioConnection) {
+        connection.readerJob = scope.launch {
+            try {
+                while (true) connection.route(connection.channel.incoming.receive())
+            } catch (cancellation: CancellationException) {
+                throw cancellation // close() 主动取消，等待者已由 close 收尾
+            } catch (t: Throwable) {
+                // B5/B2: EOF/进程退出/IO 是传输层故障，只有此类失败才值得销毁重建
+                connection.failPending(McpStdioChannelException("MCP 通道读取终止：" +
+                    if (t is kotlinx.coroutines.channels.ClosedReceiveChannelException) "子进程输出已结束（无诊断输出）" else (t.message ?: t::class.simpleName)))
             }
-            block()
-        }
-
-        suspend fun request(method: String, params: kotlinx.serialization.json.JsonElement) =
-            requestUnlocked(method, params, CALL_REQUEST_TIMEOUT_MS)
-
-        private suspend fun requestUnlocked(
-            method: String,
-            params: kotlinx.serialization.json.JsonElement,
-            timeoutMs: Long = REQUEST_TIMEOUT_MS,
-        ): JsonRpcResponse {
-            markActive()
-            val id = UUID.randomUUID().toString()
-            writeLine(json.encodeToString(JsonRpcRequest.serializer(), JsonRpcRequest(id = id, method = method, params = params)))
-            return withTimeout(timeoutMs.milliseconds) {
-                var ignoredFrames = 0
-                while (true) {
-                    val rawLine = try {
-                        channel.incoming.receive()
-                    } catch (t: CancellationException) {
-                        throw t
-                    } catch (t: Throwable) {
-                        error("MCP 请求 " + method + " 通道异常：" + t.message)
-                    }
-                    val element = runCatching { json.parseToJsonElement(rawLine) }.getOrNull()
-                    if (element == null) {
-                        ignoredFrames++
-                        require(ignoredFrames <= MAX_IGNORED_FRAMES) { "MCP 输出了过多无效 JSON 行" }
-                        continue
-                    }
-                    if (element is JsonObject && element.containsKey("method")) {
-                        ignoredFrames++
-                        require(ignoredFrames <= MAX_IGNORED_FRAMES) { "MCP 输出了过多请求回显或通知" }
-                        continue
-                    }
-                    val parsed = runCatching { json.decodeFromJsonElement(JsonRpcResponse.serializer(), element) }.getOrNull()
-                    if (parsed?.id == id) {
-                        parsed.error?.let { error("MCP JSON-RPC " + it.code + ": " + it.message) }
-                        return@withTimeout parsed
-                    }
-                    ignoredFrames++
-                    require(ignoredFrames <= MAX_IGNORED_FRAMES) { "MCP 未返回当前请求的响应（id=" + id + "）" }
-                }
-                @Suppress("UNREACHABLE_CODE") error("unreachable")
-            }
-        }
-
-        private suspend fun notifyUnlocked(method: String) =
-            writeLine(json.encodeToString(JsonRpcNotification.serializer(), JsonRpcNotification(method = method)))
-
-        private suspend fun writeLine(payload: String) = channel.writeLine(payload)
-
-        suspend fun close() {
-            runCatching { channel.close() }
         }
     }
-
-
     internal fun injectConnectionForTest(server: McpServerConfig, channel: McpStdioChannel) {
-        connections[server.id] = Connection(channel, commandBuilder.fingerprint(server))
+        McpStdioConnection(json, scope, { requestTimeoutOverrideMs }, { discardConnection(it.serverId, it) }, ::publishState, clock, server.id, channel, commandBuilder.fingerprint(server), server.catalogDistribution, server.catalogRevision, { toolListChanges.tryEmit(server.id) }).also { connection ->
+            connections[server.id] = connection
+            startReaderLoop(connection)
+        }
     }
+
+    @Volatile internal var requestTimeoutOverrideMs: Long? = null
 
     companion object {
         internal const val STARTUP_TIMEOUT_MS = 3500L
         private const val FAILURE_COOLDOWN_MS = 3L * 60L * 1000L
-        private const val REQUEST_TIMEOUT_MS = 120_000L
-        private const val CALL_REQUEST_TIMEOUT_MS = 600_000L
+        internal const val REQUEST_TIMEOUT_MS = 120_000L
+        internal const val CALL_REQUEST_TIMEOUT_MS = 600_000L
         internal const val MAX_BUFFERED_LINES = 64
         internal const val MAX_FRAME_CHARS = 1 * 1024 * 1024
+        /** STDIO 超长行落盘转存硬顶：8MB（超过则回退熔断跳过），与 McpResponseSizeLimiter 的 SSE 硬顶对齐。 */
+        internal const val MAX_SPILL_FRAME_CHARS = 8L * 1024 * 1024
         internal const val MAX_IGNORED_FRAMES = 256
         internal const val IDLE_TIMEOUT_MS = 10L * 60L * 1000L
         internal const val SWEEP_INTERVAL_MS = 60L * 1000L

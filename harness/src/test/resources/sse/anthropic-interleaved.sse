@@ -1,0 +1,24 @@
+: synthetic Messages fixture; interleaved blocks stress the accumulator
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"思考"}}
+
+data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"你"}}
+
+data: {"type":"content_block_start","index":2,"content_block":{"type":"tool_use","id":"c1","name":"read","input":{}}}
+
+data: {"type":"content_block_delta","index":2,"delta":{"type":"input_json_delta","partial_json":"{\"path\":\""}}
+
+data: {"type":"content_block_start","index":3,"content_block":{"type":"tool_use","id":"c2","name":"base","input":{}}}
+
+data: {"type":"content_block_delta","index":3,"delta":{"type":"input_json_delta","partial_json":"{\"command\":\""}}
+
+data: {"type":"content_block_delta","index":3,"delta":{"type":"input_json_delta","partial_json":"pwd\"}"}}
+
+data: {"type":"content_block_delta","index":2,"delta":{"type":"input_json_delta","partial_json":"你好.txt\"}"}}
+
+data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"好"}}
+
+event: message_stop
+data: {"type":"message_stop"}
+

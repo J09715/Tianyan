@@ -1,7 +1,5 @@
 package top.tianyan.app.harness.workflow
 
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -37,15 +35,19 @@ sealed interface WorkflowSignal {
         override val workspacePath: String,
         val apkPath: String,
         override val timestamp: Long = System.currentTimeMillis(),
+        val sha256: String? = null,
+        val sizeBytes: Long? = null,
     ) : WorkflowSignal {
         override val eventType = "APK_GENERATED"
-        override val description = "已生成 ${apkPath.substringAfterLast('/')}，可以确认后直接安装。"
-        override val variables = mapOf("APK_PATH" to apkPath, "TARGET_WORKSPACE" to workspacePath)
+        override val description = "观察到 ${apkPath.substringAfterLast('/')} 的新增或变化版本；安装和运行情况尚未验证。"
+        override val variables = buildMap {
+            put("APK_PATH", apkPath); put("TARGET_WORKSPACE", workspacePath)
+            sha256?.let { put("APK_SHA256", it) }; sizeBytes?.let { put("APK_BYTES", it.toString()) }
+        }
     }
 }
 
-@Singleton
-class WorkflowSignalBus @Inject constructor() {
+class WorkflowSignalBus() {
     private val mutableEvents = MutableSharedFlow<WorkflowSignal>(
         extraBufferCapacity = 32,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
@@ -66,8 +68,7 @@ data class ProactiveWorkflowSuggestion(
     val createdAt: Long,
 )
 
-@Singleton
-class ProactiveWorkflowAdvisor @Inject constructor(
+class ProactiveWorkflowAdvisor(
     private val signalBus: WorkflowSignalBus,
     private val workflows: WorkflowRepository,
 ) {

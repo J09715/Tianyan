@@ -1,15 +1,16 @@
 package top.tianyan.app.core.tools
 
+import top.tianyan.app.core.common.result.AppError
 import top.tianyan.app.core.common.result.AppResult
+import top.tianyan.app.core.common.result.ErrorCode
 import top.tianyan.app.core.database.RuntimeEntity
 import top.tianyan.app.core.model.InstalledRuntime
 import top.tianyan.app.core.model.RuntimeName
 import top.tianyan.app.core.model.RuntimeRequirement
+import top.tianyan.app.core.model.RuntimeState
 import top.tianyan.app.runtime.LinuxRuntime
 import top.tianyan.app.runtime.tools.RuntimeBinaryInstaller
 import top.tianyan.app.runtime.shell.ShellCommand
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -22,8 +23,7 @@ interface RuntimeManager {
     suspend fun cleanup(runtimeId: String): AppResult<Unit>
 }
 
-@Singleton
-class RuntimeManagerImpl @Inject constructor(
+class RuntimeManagerImpl(
     private val linuxRuntime: LinuxRuntime,
     private val runtimeRepository: RuntimeRepository,
     private val runtimeBinaryInstaller: RuntimeBinaryInstaller,
@@ -59,8 +59,8 @@ class RuntimeManagerImpl @Inject constructor(
         val incompatible = runtimeRepository.findRuntime(id)
         if (incompatible != null && runtimeRepository.referenceCount(id) > 0) {
             return AppResult.Failure(
-                top.tianyan.app.core.common.result.AppError(
-                    top.tianyan.app.core.common.result.ErrorCode.INSTALLATION_FAILED,
+                AppError(
+                    ErrorCode.INSTALLATION_FAILED,
                     "Runtime ${requirement.name} 已被其他工具引用，当前版本 ${incompatible.version ?: "未知"} " +
                         "不满足 ${requirement.constraint ?: "当前"} 要求，拒绝原地替换共享 Runtime",
                 ),
@@ -68,7 +68,7 @@ class RuntimeManagerImpl @Inject constructor(
         }
 
         return try {
-            if (linuxRuntime.state.value !is top.tianyan.app.core.model.RuntimeState.Ready) {
+            if (linuxRuntime.state.value !is RuntimeState.Ready) {
                 error("Linux Runtime 未就绪")
             }
             val packageName = packageName(requirement.name)
@@ -95,14 +95,14 @@ class RuntimeManagerImpl @Inject constructor(
                 )
             }
             var executable = executablePath(requirement.name)
-            var versionResult = linuxRuntime.execute(ShellCommand("$executable --version", timeoutMs = 60_000L))
+            var versionResult = linuxRuntime.execute(ShellCommand("$executable --version"))
             var version = versionResult.stdout.trim().lineSequence().firstOrNull()
             if ((!install.isSuccess || !versionResult.isSuccess || !versionSatisfies(version, requirement.constraint)) &&
                 requirement.name == RuntimeName.NODE
             ) {
                 runtimeBinaryInstaller.installNode()
                 executable = executablePath(RuntimeName.NODE, official = true)
-                versionResult = linuxRuntime.execute(ShellCommand("$executable --version", timeoutMs = 60_000L))
+                versionResult = linuxRuntime.execute(ShellCommand("$executable --version"))
                 version = versionResult.stdout.trim().lineSequence().firstOrNull()
             }
             if (!versionResult.isSuccess) {
@@ -118,8 +118,8 @@ class RuntimeManagerImpl @Inject constructor(
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (throwable: Throwable) {
-            AppResult.Failure(top.tianyan.app.core.common.result.AppError(
-                top.tianyan.app.core.common.result.ErrorCode.INSTALLATION_FAILED,
+            AppResult.Failure(AppError(
+                ErrorCode.INSTALLATION_FAILED,
                 throwable.message ?: "共享 Runtime 安装失败",
                 throwable,
             ))
@@ -133,8 +133,8 @@ class RuntimeManagerImpl @Inject constructor(
         }
         AppResult.Success(Unit)
     } catch (throwable: Throwable) {
-        AppResult.Failure(top.tianyan.app.core.common.result.AppError(
-            top.tianyan.app.core.common.result.ErrorCode.IO,
+        AppResult.Failure(AppError(
+            ErrorCode.IO,
             throwable.message ?: "释放 Runtime 引用失败",
             throwable,
         ))
@@ -157,7 +157,7 @@ class RuntimeManagerImpl @Inject constructor(
             check(runtimeRepository.referenceCount(runtimeId) == 0) {
                 "Runtime 仍被工具引用，不能清理：${entity.name}"
             }
-            if (linuxRuntime.state.value !is top.tianyan.app.core.model.RuntimeState.Ready) {
+            if (linuxRuntime.state.value !is RuntimeState.Ready) {
                 error("Linux Runtime 未就绪")
             }
             val result = if (entity.executablePath.startsWith("/opt/tianyan/")) {
@@ -182,8 +182,8 @@ class RuntimeManagerImpl @Inject constructor(
             throw cancellation
         } catch (throwable: Throwable) {
             AppResult.Failure(
-                top.tianyan.app.core.common.result.AppError(
-                    top.tianyan.app.core.common.result.ErrorCode.IO,
+                AppError(
+                    ErrorCode.IO,
                     throwable.message ?: "清理共享 Runtime 失败",
                     throwable,
                 ),

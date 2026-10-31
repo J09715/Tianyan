@@ -1,11 +1,9 @@
-package top.tianyan.app.runtime.service
+﻿package top.tianyan.app.runtime.service
 
 import top.tianyan.app.runtime.LinuxRuntime
 import top.tianyan.app.runtime.shell.ManagedProcess
 import java.net.InetSocketAddress
 import java.net.Socket
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -24,6 +22,9 @@ data class LocalServiceSpec(
     val path: String = "/",
     val startupTimeoutMs: Long = DEFAULT_STARTUP_TIMEOUT_MS,
     val pollIntervalMs: Long = DEFAULT_POLL_INTERVAL_MS,
+    val authenticated: Boolean = false,
+    val authentication: ToolServiceAuthentication? = null,
+    val distroId: String? = null,
 ) {
     init {
         require(SERVICE_ID.matches(serviceId)) { "本地服务 ID 无效：$serviceId" }
@@ -65,8 +66,7 @@ interface LocalServiceLauncher {
     suspend fun stopAll()
 }
 
-@Singleton
-class LocalServiceLauncherImpl @Inject constructor(
+class LocalServiceLauncherImpl(
     private val linuxRuntime: LinuxRuntime,
 ) : LocalServiceLauncher {
     private val mutex = Mutex()

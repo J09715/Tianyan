@@ -26,16 +26,20 @@ data class TerminalCursor(
 /**
  * Small stateful ANSI/VT100 renderer for CLI output.
  *
- * It intentionally covers the control sequences emitted by common AI CLIs:
- * SGR colors, cursor movement, erase line/screen, carriage return, wrapping,
- * scrollback and OSC title sequences. The parser keeps escape state between
- * chunks so UTF-8/ANSI sequences split across pipe reads remain valid.
+ * Cursor addressing is relative to a fixed-height **viewport** (like Termux's
+ * emulator), not the entire scrollback. Absolute CUP/`CSI H` therefore lands on
+ * the visible screen top even after history has grown — which is what Codex and
+ * other TUIs expect.
  */
 class AnsiTerminalBuffer(
     columns: Int = DEFAULT_COLUMNS,
+    rows: Int = DEFAULT_ROWS,
     private val maxRows: Int = DEFAULT_MAX_ROWS,
 ) {
     private var columns: Int = columns.coerceIn(MIN_COLUMNS, MAX_COLUMNS)
+    private var rows: Int = rows.coerceIn(MIN_ROWS, MAX_ROWS)
+    /** Index in [activeRows] of screen row 0 (top of the visible viewport). */
+    private var viewportTop = 0
     private var cursorRow = 0
     private var cursorColumn = 0
     private var savedRow = 0
@@ -59,16 +63,30 @@ class AnsiTerminalBuffer(
     private var activeRows: MutableList<MutableList<TerminalCell>> = mainRows
     private var mainCursorRow = 0
     private var mainCursorColumn = 0
+    private var mainViewportTop = 0
     private var cursorVisible = true
     private var pendingHighSurrogate: Char? = null
+    private var altScreen = false
 
     init {
         mainRows.add(mutableListOf())
         altRows.add(mutableListOf())
+        ensureViewportRows()
     }
 
-    fun resize(newColumns: Int) = synchronized(this) {
+    fun resize(newColumns: Int, newRows: Int = rows) = synchronized(this) {
         columns = newColumns.coerceIn(MIN_COLUMNS, MAX_COLUMNS)
+        val nextRows = newRows.coerceIn(MIN_ROWS, MAX_ROWS)
+        if (nextRows != rows) {
+            rows = nextRows
+            // Keep the cursor inside the new viewport; grow/shrink from the bottom.
+            ensureViewportRows()
+            val bottom = viewportBottom()
+            if (cursorRow > bottom) {
+                viewportTop = (cursorRow - rows + 1).coerceAtLeast(0)
+            }
+            cursorRow = cursorRow.coerceIn(viewportTop, viewportBottom())
+        }
         cursorColumn = cursorColumn.coerceAtMost(columns)
     }
 
@@ -107,12 +125,40 @@ class AnsiTerminalBuffer(
     }
 
     /** 内部快照，调用方必须已持有 this 锁。 */
-    private fun snapshotLocked(): List<TerminalLine> = activeRows.mapIndexed { rowIndex, row ->
-        val copy = ArrayList(row)          // 先拷贝一份，防止 row 在 map 过程中被写入
-        val minimumEnd = if (rowIndex == cursorRow) cursorColumn.coerceAtMost(copy.size) else 0
-        var end = copy.size
-        while (end > minimumEnd && copy[end - 1].character == " ") end -= 1
-        TerminalLine(copy.subList(0, end).toList())
+    private fun snapshotLocked(): List<TerminalLine> {
+        // Don't expose empty viewport padding below the last content/cursor row —
+        // LazyColumn would otherwise show a tall blank region. Still keep those
+        // rows in memory so CUP can address the full viewport.
+        val lastContent = activeRows.indexOfLast { it.isNotEmpty() }.coerceAtLeast(cursorRow)
+        val endExclusive = (lastContent + 1).coerceAtMost(activeRows.size)
+        return (0 until endExclusive).map { rowIndex ->
+            val row = activeRows[rowIndex]
+            val copy = ArrayList(row)
+            val minimumEnd = if (rowIndex == cursorRow) cursorColumn.coerceAtMost(copy.size) else 0
+            var end = copy.size
+            while (end > minimumEnd && copy[end - 1].character == " ") end -= 1
+            TerminalLine(copy.subList(0, end).toList())
+        }
+    }
+
+    private fun viewportBottom(): Int = viewportTop + rows - 1
+
+    private fun ensureViewportRows() {
+        while (activeRows.size <= viewportBottom()) {
+            activeRows.add(mutableListOf())
+        }
+    }
+
+    private fun ensureRow(absRow: Int) {
+        while (activeRows.size <= absRow) {
+            activeRows.add(mutableListOf())
+        }
+    }
+
+    private fun setCursorViewport(rowInViewport: Int, column: Int) {
+        ensureViewportRows()
+        cursorRow = viewportTop + rowInViewport.coerceIn(0, rows - 1)
+        cursorColumn = column.coerceIn(0, columns)
     }
 
     private fun consumeText(text: String) {
@@ -166,7 +212,7 @@ class AnsiTerminalBuffer(
                 state = ParserState.NORMAL
             }
             '8' -> {
-                cursorRow = savedRow.coerceIn(0, activeRows.lastIndex)
+                cursorRow = savedRow.coerceIn(viewportTop, viewportBottom())
                 cursorColumn = savedColumn.coerceIn(0, columns)
                 state = ParserState.NORMAL
             }
@@ -190,16 +236,16 @@ class AnsiTerminalBuffer(
         val params = raw.removePrefix("?").split(';').map { it.toIntOrNull() ?: 0 }
         fun param(index: Int, default: Int = 1) = params.getOrNull(index)?.takeIf { it > 0 } ?: default
         when (final) {
-            'A' -> cursorRow = (cursorRow - param(0)).coerceAtLeast(0)
-            'B', 'e' -> cursorRow = (cursorRow + param(0)).coerceAtMost(activeRows.lastIndex)
+            'A' -> cursorRow = (cursorRow - param(0)).coerceAtLeast(viewportTop)
+            'B', 'e' -> {
+                cursorRow = (cursorRow + param(0)).coerceAtMost(viewportBottom())
+                ensureRow(cursorRow)
+            }
             'C', 'a' -> cursorColumn = (cursorColumn + param(0)).coerceAtMost(columns)
             'D' -> cursorColumn = (cursorColumn - param(0)).coerceAtLeast(0)
             'G', '`' -> cursorColumn = (param(0) - 1).coerceIn(0, columns)
-            'd' -> cursorRow = (param(0) - 1).coerceIn(0, activeRows.lastIndex)
-            'H', 'f' -> {
-                cursorRow = (param(0) - 1).coerceIn(0, activeRows.lastIndex)
-                cursorColumn = (param(1) - 1).coerceIn(0, columns)
-            }
+            'd' -> setCursorViewport(param(0) - 1, cursorColumn)
+            'H', 'f' -> setCursorViewport(param(0) - 1, param(1) - 1)
             'J' -> eraseScreen(params.firstOrNull()?.coerceAtLeast(0) ?: 0)
             'K' -> eraseLine(params.firstOrNull()?.coerceAtLeast(0) ?: 0)
             'm' -> applySgr(params)
@@ -208,7 +254,7 @@ class AnsiTerminalBuffer(
                 savedColumn = cursorColumn
             }
             'u' -> {
-                cursorRow = savedRow.coerceIn(0, activeRows.lastIndex)
+                cursorRow = savedRow.coerceIn(viewportTop, viewportBottom())
                 cursorColumn = savedColumn.coerceIn(0, columns)
             }
             'h', 'l' -> if (privateMode) applyPrivateMode(final, params)
@@ -228,16 +274,23 @@ class AnsiTerminalBuffer(
     private fun enterAltScreen() {
         mainCursorRow = cursorRow
         mainCursorColumn = cursorColumn
+        mainViewportTop = viewportTop
         activeRows = altRows
         altRows.clear()
         altRows.add(mutableListOf())
+        viewportTop = 0
+        altScreen = true
+        ensureViewportRows()
         cursorRow = 0
         cursorColumn = 0
     }
 
     private fun exitAltScreen() {
         activeRows = mainRows
-        cursorRow = mainCursorRow.coerceIn(0, mainRows.lastIndex)
+        altScreen = false
+        viewportTop = mainViewportTop.coerceAtLeast(0)
+        ensureViewportRows()
+        cursorRow = mainCursorRow.coerceIn(viewportTop, viewportBottom())
         cursorColumn = mainCursorColumn.coerceIn(0, columns)
     }
 
@@ -304,6 +357,7 @@ class AnsiTerminalBuffer(
             lineFeed()
             cursorColumn = 0
         }
+        ensureRow(cursorRow)
         val row = activeRows[cursorRow]
         while (row.size <= cursorColumn) row += TerminalCell(" ")
         if (cellWidth == 0 && cursorColumn > 0 && cursorColumn - 1 < row.size) {
@@ -335,15 +389,39 @@ class AnsiTerminalBuffer(
 
     private fun lineFeed() {
         cursorColumn = 0
-        cursorRow += 1
-        if (cursorRow >= activeRows.size) activeRows.add(mutableListOf())
-        if (activeRows.size > maxRows) {
-            activeRows.removeAt(0)
-            cursorRow -= 1
+        if (cursorRow >= viewportBottom()) {
+            // Scroll the viewport: history keeps the line that left the top.
+            viewportTop += 1
+            ensureViewportRows()
+            cursorRow = viewportBottom()
+            activeRows[cursorRow] = mutableListOf()
+            trimScrollback()
+        } else {
+            cursorRow += 1
+            ensureRow(cursorRow)
         }
     }
 
+    private fun trimScrollback() {
+        while (activeRows.size > maxRows && viewportTop > 0) {
+            activeRows.removeAt(0)
+            viewportTop -= 1
+            cursorRow -= 1
+            savedRow = (savedRow - 1).coerceAtLeast(0)
+            mainCursorRow = (mainCursorRow - 1).coerceAtLeast(0)
+            mainViewportTop = (mainViewportTop - 1).coerceAtLeast(0)
+        }
+        while (activeRows.size > maxRows) {
+            // Alt screen / empty history: drop from top and keep viewport pinned.
+            activeRows.removeAt(0)
+            cursorRow = (cursorRow - 1).coerceAtLeast(0)
+        }
+        viewportTop = viewportTop.coerceAtLeast(0)
+        cursorRow = cursorRow.coerceIn(0, activeRows.lastIndex.coerceAtLeast(0))
+    }
+
     private fun eraseLine(mode: Int) {
+        ensureRow(cursorRow)
         val row = activeRows[cursorRow]
         when (mode) {
             2 -> for (index in row.indices) row[index] = TerminalCell(" ")
@@ -353,15 +431,28 @@ class AnsiTerminalBuffer(
     }
 
     private fun eraseScreen(mode: Int) {
+        ensureViewportRows()
         when (mode) {
             2, 3 -> {
-                activeRows.clear()
-                activeRows.add(mutableListOf())
-                cursorRow = 0
+                // Clear visible viewport only; keep scrollback above viewportTop.
+                for (rowIndex in viewportTop..viewportBottom()) {
+                    ensureRow(rowIndex)
+                    activeRows[rowIndex] = mutableListOf()
+                }
+                if (mode == 3 && !altScreen) {
+                    // CSI 3 J also drops scrollback.
+                    while (viewportTop > 0) {
+                        activeRows.removeAt(0)
+                        viewportTop -= 1
+                        cursorRow -= 1
+                    }
+                    viewportTop = 0
+                }
+                cursorRow = viewportTop
                 cursorColumn = 0
             }
             1 -> {
-                for (rowIndex in 0..cursorRow.coerceAtMost(activeRows.lastIndex)) {
+                for (rowIndex in viewportTop..cursorRow.coerceAtMost(viewportBottom())) {
                     val row = activeRows[rowIndex]
                     val end = if (rowIndex == cursorRow) cursorColumn else row.size
                     for (index in 0 until end.coerceAtMost(row.size)) row[index] = TerminalCell(" ")
@@ -369,7 +460,10 @@ class AnsiTerminalBuffer(
             }
             else -> {
                 eraseLine(0)
-                for (rowIndex in cursorRow + 1 until activeRows.size) activeRows[rowIndex].clear()
+                for (rowIndex in cursorRow + 1..viewportBottom()) {
+                    ensureRow(rowIndex)
+                    activeRows[rowIndex] = mutableListOf()
+                }
             }
         }
     }
@@ -380,6 +474,9 @@ class AnsiTerminalBuffer(
         altRows.clear()
         altRows.add(mutableListOf())
         activeRows = mainRows
+        altScreen = false
+        viewportTop = 0
+        mainViewportTop = 0
         cursorRow = 0
         cursorColumn = 0
         savedRow = 0
@@ -398,6 +495,7 @@ class AnsiTerminalBuffer(
         strikeThrough = false
         bracketedPaste = false
         state = ParserState.NORMAL
+        ensureViewportRows()
     }
 
     /** xterm 256 色板：16 基础色 + 6×6×6 立方体 + 24 级灰度。 */
@@ -437,9 +535,12 @@ class AnsiTerminalBuffer(
 
     private companion object {
         const val DEFAULT_COLUMNS = 120
+        const val DEFAULT_ROWS = 24
         const val DEFAULT_MAX_ROWS = 2000
         const val MIN_COLUMNS = 20
         const val MAX_COLUMNS = 400
+        const val MIN_ROWS = 5
+        const val MAX_ROWS = 200
         const val TAB_SIZE = 8
         const val MAX_CONTROL_LENGTH = 64
         val ANSI_COLORS = longArrayOf(

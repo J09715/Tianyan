@@ -1,0 +1,14 @@
+<resources>
+    <string name="settings_chat_identity_title">聊天标识</string>
+    <string name="settings_chat_identity_description">自定义名称与 头像，保存在本地。图片大小不超过 10 MB。</string>
+    <string name="settings_chat_identity_name">名称（最多 40 字）</string>
+    <string name="settings_chat_identity_save">保存名称</string>
+    <string name="settings_chat_identity_avatar">选择 头像</string>
+    <string name="settings_chat_identity_reset">恢复默认名称与 头像</string>
+    <string name="settings_chat_identity_error">保存失败，请重试或选择其他图片。</string>
+    <string name="settings_avatar_crop_title">裁切头像</string>
+    <string name="settings_avatar_crop_hint">拖动图片、双指缩放，调整正方形裁切区域。</string>
+    <string name="settings_avatar_crop_zoom">缩放</string>
+    <string name="settings_avatar_crop_confirm">使用头像</string>
+    <string name="settings_avatar_crop_cancel">取消</string>
+</resources>

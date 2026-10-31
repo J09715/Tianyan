@@ -1,7 +1,9 @@
 package top.tianyan.app.ui.settings
-
+import top.tianyan.app.ui.components.previewOrNull
+import top.tianyan.app.ui.components.previewStateOf
+import org.koin.compose.viewmodel.koinViewModel
 import top.tianyan.app.ui.components.RuntimeAlertDialog
-
+import top.tianyan.app.ui.components.RuntimeCircularProgressIndicator as CircularProgressIndicator
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,6 +19,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -28,14 +31,13 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import top.tianyan.app.ui.components.RuntimeIconButton as IconButton
 import androidx.compose.material3.MaterialTheme
 import top.tianyan.app.ui.components.RuntimeOutlinedButton as OutlinedButton
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Scaffold
 import top.tianyan.app.ui.components.RuntimeSlider as Slider
 import androidx.compose.material3.Surface
@@ -52,58 +54,80 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.tianyan.app.core.model.AgentPlugin
+import top.tianyan.app.harness.ContextWindowPolicy
 import top.tianyan.app.core.database.AiModelEntity
 import top.tianyan.app.core.model.AgentSkill
 import top.tianyan.app.core.model.AgentSubagent
 import top.tianyan.app.core.model.AgentDepartments
-import top.tianyan.app.core.model.ApprovalMode
 import top.tianyan.app.ui.components.RuntimeCard
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeTopBar
 import top.tianyan.app.ui.components.SectionHeader
+import kotlinx.coroutines.delay
+import top.tianyan.app.core.model.skill.ClawHubMarketItem
+import top.tianyan.app.ui.settings.skill.SkillSecurityAuditDialog
 
 enum class AgentSettingsCategory { EXECUTION, SUBAGENTS, SKILLS }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun AgentSettingsScreen(
     onBack: () -> Unit,
     category: AgentSettingsCategory = AgentSettingsCategory.EXECUTION,
-    viewModel: SettingsViewModel = hiltViewModel(),
+    viewModel: SettingsViewModel? = previewOrNull { koinViewModel() },
 ) {
-    val thinkingExpanded by viewModel.thinkingExpanded.collectAsStateWithLifecycle()
-    val thinkingLanguage by viewModel.thinkingLanguage.collectAsStateWithLifecycle()
-    val customSystemPromptEnabled by viewModel.customSystemPromptEnabled.collectAsStateWithLifecycle()
-    val customSystemPrompt by viewModel.customSystemPrompt.collectAsStateWithLifecycle()
-    val compactionEnabled by viewModel.contextCompactionEnabled.collectAsStateWithLifecycle()
-    val compactionThreshold by viewModel.contextCompactionThreshold.collectAsStateWithLifecycle()
-    val maxToolRounds by viewModel.maxToolRounds.collectAsStateWithLifecycle()
-    val autoWorkspaceCwd by viewModel.autoWorkspaceCwd.collectAsStateWithLifecycle()
-    val commandOutputCompressionEnabled by viewModel.commandOutputCompressionEnabled.collectAsStateWithLifecycle()
-    val baseCommandTimeoutSeconds by viewModel.baseCommandTimeoutSeconds.collectAsStateWithLifecycle()
-    val approvalMode by viewModel.approvalMode.collectAsStateWithLifecycle()
-    val maxToolsPerRound by viewModel.maxToolsPerRound.collectAsStateWithLifecycle()
-    val maxConsecutiveFailures by viewModel.maxConsecutiveFailures.collectAsStateWithLifecycle()
-    val contextBudgetTokens by viewModel.contextBudgetTokens.collectAsStateWithLifecycle()
-    val skills by viewModel.allSkills.collectAsStateWithLifecycle()
-    val subagents by viewModel.allSubagents.collectAsStateWithLifecycle()
-    val autoSubagentDelegation by viewModel.autoSubagentDelegationEnabled.collectAsStateWithLifecycle()
-    val models by viewModel.models.collectAsStateWithLifecycle()
-    val plugins by viewModel.allPlugins.collectAsStateWithLifecycle()
-    val skillArchiveMessage by viewModel.skillArchiveMessage.collectAsStateWithLifecycle()
-    val skillArchiveMessageIsError by viewModel.skillArchiveMessageIsError.collectAsStateWithLifecycle()
+    val thinkingExpanded by viewModel?.thinkingExpanded?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val translationModelStatus by viewModel?.translationModelStatus?.collectAsStateWithLifecycle() ?: previewStateOf(top.tianyan.app.core.common.translation.TranslationModelStatus.NotDownloaded)
+    val thinkingAutoTranslate by viewModel?.thinkingAutoTranslate?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val chatRoundCollapse by viewModel?.chatRoundCollapse?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val customSystemPromptEnabled by viewModel?.customSystemPromptEnabled?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val customSystemPrompt by viewModel?.customSystemPrompt?.collectAsStateWithLifecycle() ?: previewStateOf("")
+    val agentCharName by viewModel?.agentCharName?.collectAsStateWithLifecycle() ?: previewStateOf("")
+    val agentUserName by viewModel?.agentUserName?.collectAsStateWithLifecycle() ?: previewStateOf("")
+    val compactionEnabled by viewModel?.contextCompactionEnabled?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val maxToolRounds by viewModel?.maxToolRounds?.collectAsStateWithLifecycle() ?: previewStateOf(0)
+    val roundLimitAutoContinuations by viewModel?.roundLimitAutoContinuations?.collectAsStateWithLifecycle() ?: previewStateOf(0)
+    val autoWorkspaceCwd by viewModel?.autoWorkspaceCwd?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val commandOutputCompressionEnabled by viewModel?.commandOutputCompressionEnabled?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val baseCommandTimeoutSeconds by viewModel?.baseCommandTimeoutSeconds?.collectAsStateWithLifecycle() ?: previewStateOf(0)
+    val approvalMode by viewModel?.approvalMode?.collectAsStateWithLifecycle() ?: previewStateOf(top.tianyan.app.core.model.ApprovalMode.ASSISTED)
+    val runMode by viewModel?.runMode?.collectAsStateWithLifecycle() ?: previewStateOf(top.tianyan.app.core.model.RunMode.BUILD)
+    val runningSendMode by viewModel?.runningSendMode?.collectAsStateWithLifecycle() ?: previewStateOf(top.tianyan.app.core.model.RunningSendMode.QUEUE)
+    val maxToolsPerRound by viewModel?.maxToolsPerRound?.collectAsStateWithLifecycle() ?: previewStateOf(0)
+    val maxConsecutiveFailures by viewModel?.maxConsecutiveFailures?.collectAsStateWithLifecycle() ?: previewStateOf(0)
+    val contextBudgetTokens by viewModel?.contextBudgetTokens?.collectAsStateWithLifecycle() ?: previewStateOf(0)
+    val effectiveContextBudget by viewModel?.effectiveContextBudget?.collectAsStateWithLifecycle() ?: previewStateOf(0)
+    val activeModelDeclaredTokens by viewModel?.activeModelDeclaredTokens?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val contextFoldingRatioPercent by viewModel?.contextFoldingRatioPercent?.collectAsStateWithLifecycle() ?: previewStateOf(0)
+    val skills by viewModel?.allSkills?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val subagents by viewModel?.allSubagents?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val autoSubagentDelegation by viewModel?.autoSubagentDelegationEnabled?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val models by viewModel?.models?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val plugins by viewModel?.allPlugins?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val skillArchiveMessage by viewModel?.skillArchiveMessage?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val skillArchiveMessageIsError by viewModel?.skillArchiveMessageIsError?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val skillEvolutionSuggestions by viewModel?.skillEvolutionSuggestions?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val marketSkills by viewModel?.clawHubMarketSkills?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val isMarketLoading by viewModel?.isMarketLoading?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val isMarketOfflinePreset by viewModel?.isMarketOfflinePreset?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val pendingSkillInspection by viewModel?.pendingSkillInspection?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val preparingSkillId by viewModel?.preparingSkillId?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val isCommittingInstallation by viewModel?.isCommittingInstallation?.collectAsStateWithLifecycle() ?: previewStateOf(false)
 
     var showAddSkillDialog by remember { mutableStateOf(false) }
     var viewingSkillPrompt by remember { mutableStateOf<AgentSkill?>(null) }
@@ -112,6 +136,7 @@ fun AgentSettingsScreen(
     var deletingSubagent by remember { mutableStateOf<AgentSubagent?>(null) }
     var deletingSkill by remember { mutableStateOf<AgentSkill?>(null) }
     var subagentQuery by rememberSaveable { mutableStateOf("") }
+    var skillQuery by rememberSaveable { mutableStateOf("") }
     var expandedDepartmentIds by rememberSaveable { mutableStateOf(listOf<String>()) }
     val visibleSubagentGroups = remember(subagents, subagentQuery) {
         val query = subagentQuery.trim().lowercase()
@@ -124,11 +149,30 @@ fun AgentSettingsScreen(
             .entries
             .sortedBy { AgentDepartments.find(it.key).sortOrder }
     }
-    val skillArchivePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris -> if (uris.isNotEmpty()) viewModel.importSkillArchives(uris) }
-    val skillDirPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> if (uri != null) viewModel.importSkillsFromTree(uri) }
+    val visibleSkills = remember(skills, skillQuery) {
+        val query = skillQuery.trim().lowercase()
+        if (query.isBlank()) {
+            skills
+        } else {
+            skills.filter { skill ->
+                skill.name.lowercase().contains(query) || skill.id.lowercase().contains(query) ||
+                    skill.description.lowercase().contains(query) || skill.category.lowercase().contains(query)
+            }
+        }
+    }
+    val skillArchivePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.size == 1) {
+            viewModel?.inspectLocalSkillZip(uris.first())
+        } else if (uris.isNotEmpty()) {
+            viewModel?.importSkillArchives(uris)
+        }
+    }
+    val skillDirPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> if (uri != null) viewModel?.importSkillsFromTree(uri) }
 
+    val scrollBehavior = androidx.compose.material3.TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             RuntimeTopBar(
                 title = when (category) {
@@ -136,16 +180,16 @@ fun AgentSettingsScreen(
                     AgentSettingsCategory.SUBAGENTS -> "子智能体角色"
                     AgentSettingsCategory.SKILLS -> "Skills 与插件"
                 },
-                statusText = "按领域独立管理 Agent 能力",
                 onBack = onBack,
+                scrollBehavior = scrollBehavior,
             )
         },
     ) { padding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                .then(top.tianyan.app.ui.components.runtimeScrollViewport(padding)),
+            contentPadding = top.tianyan.app.ui.components.runtimeScrollContentPadding(padding, top.tianyan.app.ui.components.runtimeContentPadding(horizontal = 16.dp, top = 16.dp, bottom = 32.dp)),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             if (category == AgentSettingsCategory.EXECUTION) {
@@ -157,7 +201,7 @@ fun AgentSettingsScreen(
                 )
             }
             item {
-                AgentBlockTitle("思考呈现")
+                AgentBlockTitle("思考呈现与翻译")
             }
             item {
                 AgentSettingsGroup {
@@ -166,12 +210,36 @@ fun AgentSettingsScreen(
                         title = "默认展开模型思考过程",
                         subtitle = if (thinkingExpanded) "聊天界面中新生成的思考过程将默认展开呈现" else "思考过程（包括生成中内容）默认折叠，点击可展开查看",
                         checked = thinkingExpanded,
-                        onCheckedChange = viewModel::setThinkingExpanded,
+                        onCheckedChange = { arg0 -> viewModel?.setThinkingExpanded(arg0) },
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    ThinkingLanguageSelectorRow(
-                        currentLang = thinkingLanguage,
-                        onLangChange = viewModel::setThinkingLanguage,
+                    AgentToggleRow(
+                        icon = RuntimeIconName.Globe,
+                        title = "展开时自动翻译英文思考为中文",
+                        subtitle = if (thinkingAutoTranslate) "展开思考块时若检测为英文将自动调用本地离线模型翻译呈现" else "仅在点击思考块上的翻译按钮时进行翻译",
+                        checked = thinkingAutoTranslate,
+                        onCheckedChange = { arg0 -> viewModel?.setThinkingAutoTranslate(arg0) },
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    AgentToggleRow(
+                        icon = RuntimeIconName.Compress,
+                        title = "自动收拢历史轮次的思考与工具过程",
+                        subtitle = if (chatRoundCollapse) "已结束的历史轮次中，超过 2 步的思考与工具调用将收拢为「展开更多」摘要，点击即可展开；当前进行中的轮次始终完整呈现" else "关闭时保持自然单行流：全部思考过程与工具调用逐条平铺呈现",
+                        checked = chatRoundCollapse,
+                        onCheckedChange = { arg0 -> viewModel?.setChatRoundCollapse(arg0) },
+                    )
+                }
+            }
+            item {
+                AgentBlockTitle("思考流离线翻译语种模型")
+            }
+            item {
+                AgentSettingsGroup {
+                    TranslationModelCard(
+                        status = translationModelStatus,
+                        onDownload = { viewModel?.downloadTranslationModel() },
+                        onDelete = { viewModel?.deleteTranslationModel() },
+                        onRetry = { viewModel?.downloadTranslationModel() },
                     )
                 }
             }
@@ -185,7 +253,7 @@ fun AgentSettingsScreen(
                         title = "自动注入关联工作区路径",
                         subtitle = "当会话关联了工作区时，执行 base 命令默认以该目录为工作路径 (cwd)",
                         checked = autoWorkspaceCwd,
-                        onCheckedChange = viewModel::setAutoWorkspaceCwd,
+                        onCheckedChange = { arg0 -> viewModel?.setAutoWorkspaceCwd(arg0) },
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     AgentToggleRow(
@@ -193,12 +261,22 @@ fun AgentSettingsScreen(
                         title = "智能压缩 Agent 命令输出",
                         subtitle = "减少 Agent 读取 git、搜索、测试与构建日志时的上下文消耗；终端与原始文件不受影响",
                         checked = commandOutputCompressionEnabled,
-                        onCheckedChange = viewModel::setCommandOutputCompressionEnabled,
+                        onCheckedChange = { arg0 -> viewModel?.setCommandOutputCompressionEnabled(arg0) },
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     ApprovalModeSelectorRow(
                         mode = approvalMode,
-                        onModeChange = viewModel::setApprovalMode,
+                        onModeChange = { arg0 -> viewModel?.setApprovalMode(arg0) },
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    RunModeSelectorRow(
+                        mode = runMode,
+                        onModeChange = { arg0 -> viewModel?.setRunMode(arg0) },
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    RunningSendModeSelectorRow(
+                        mode = runningSendMode,
+                        onModeChange = { arg0 -> viewModel?.setRunningSendMode(arg0) },
                     )
                 }
             }
@@ -209,22 +287,30 @@ fun AgentSettingsScreen(
                 AgentSettingsGroup {
                     BaseCommandTimeoutSliderRow(
                         currentValue = baseCommandTimeoutSeconds,
-                        onValueChange = viewModel::setBaseCommandTimeoutSeconds,
+                        onValueChange = { arg0 -> viewModel?.setBaseCommandTimeoutSeconds(arg0) },
                     )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    FirstResponseTimeoutRow()
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     RoundsSliderRow(
                         currentValue = maxToolRounds,
-                        onValueChange = viewModel::setMaxToolRounds,
+                        onValueChange = { arg0 -> viewModel?.setMaxToolRounds(arg0) },
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    AutoContinuationSliderRow(
+                        currentValue = roundLimitAutoContinuations,
+                        roundsPerSegment = maxToolRounds,
+                        onValueChange = { arg0 -> viewModel?.setRoundLimitAutoContinuations(arg0) },
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     ToolsPerRoundSliderRow(
                         currentValue = maxToolsPerRound,
-                        onValueChange = viewModel::setMaxToolsPerRound,
+                        onValueChange = { arg0 -> viewModel?.setMaxToolsPerRound(arg0) },
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     ConsecutiveFailuresSliderRow(
                         currentValue = maxConsecutiveFailures,
-                        onValueChange = viewModel::setMaxConsecutiveFailures,
+                        onValueChange = { arg0 -> viewModel?.setMaxConsecutiveFailures(arg0) },
                     )
                 }
             }
@@ -242,9 +328,13 @@ fun AgentSettingsScreen(
             item {
                 SystemPromptCustomCard(
                     enabled = customSystemPromptEnabled,
-                    onEnabledChange = viewModel::setCustomSystemPromptEnabled,
+                    onEnabledChange = { arg0 -> viewModel?.setCustomSystemPromptEnabled(arg0) },
                     prompt = customSystemPrompt,
-                    onPromptChange = viewModel::setCustomSystemPrompt,
+                    onPromptChange = { arg0 -> viewModel?.setCustomSystemPrompt(arg0) },
+                    charName = agentCharName,
+                    onCharNameChange = { arg0 -> viewModel?.setAgentCharName(arg0) },
+                    userName = agentUserName,
+                    onUserNameChange = { arg0 -> viewModel?.setAgentUserName(arg0) },
                 )
             }
 
@@ -263,20 +353,23 @@ fun AgentSettingsScreen(
                     AgentToggleRow(
                         icon = RuntimeIconName.Compress,
                         title = "开启上下文智能压缩 (Context Compaction)",
-                        subtitle = "多轮工具调用超出阈值时，自动压缩历史中间工具输出日志，保留任务首尾与关键状态",
+                        subtitle = "历史超过 Token 折叠线时自动生成结构化摘要，保留近期原文、任务状态与关键文件足迹",
                         checked = compactionEnabled,
-                        onCheckedChange = viewModel::setContextCompactionEnabled,
+                        onCheckedChange = { arg0 -> viewModel?.setContextCompactionEnabled(arg0) },
                     )
                     if (compactionEnabled) {
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                        ThresholdSliderRow(
-                            currentThreshold = compactionThreshold,
-                            onThresholdChange = viewModel::setContextCompactionThreshold,
-                        )
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         ContextBudgetSliderRow(
                             currentValue = contextBudgetTokens,
-                            onValueChange = viewModel::setContextBudgetTokens,
+                            declaredTokens = activeModelDeclaredTokens,
+                            onValueChange = { arg0 -> viewModel?.setContextBudgetTokens(arg0) },
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        ContextFoldingRatioSliderRow(
+                            currentValue = contextFoldingRatioPercent,
+                            budget = effectiveContextBudget,
+                            declaredTokens = activeModelDeclaredTokens,
+                            onValueChange = { arg0 -> viewModel?.setContextFoldingRatioPercent(arg0) },
                         )
                     }
                 }
@@ -306,7 +399,7 @@ fun AgentSettingsScreen(
                             "仅在用户明确要求并行或子智能体协同时派发"
                         },
                         checked = autoSubagentDelegation,
-                        onCheckedChange = viewModel::setAutoSubagentDelegationEnabled,
+                        onCheckedChange = { arg0 -> viewModel?.setAutoSubagentDelegationEnabled(arg0) },
                     )
                 }
             }
@@ -314,7 +407,7 @@ fun AgentSettingsScreen(
                 AgentBlockTitle("角色列表")
             }
             item {
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = subagentQuery,
                     onValueChange = { subagentQuery = it },
                     modifier = Modifier.fillMaxWidth(),
@@ -368,7 +461,7 @@ fun AgentSettingsScreen(
                                     "${model.name} · ${profile.defaultModelVariant ?: model.model.substringBefore(',').trim()}"
                                 } ?: "模型档案已删除"
                             } ?: "跟随主智能体",
-                            onToggle = { enabled -> viewModel.toggleSubagent(profile.id, enabled) },
+                            onToggle = { enabled -> viewModel?.toggleSubagent(profile.id, enabled) },
                             onEdit = {
                                 editingSubagent = profile
                                 showSubagentDialog = true
@@ -396,6 +489,24 @@ fun AgentSettingsScreen(
                 }
             }
             item {
+                AgentBlockTitle("技能进化")
+            }
+            item {
+                AgentSettingsGroup {
+                    AgentToggleRow(
+                        icon = RuntimeIconName.Sparkles,
+                        title = "对话后建议沉淀或修复技能",
+                        subtitle = if (skillEvolutionSuggestions) {
+                            "成功完成一轮含工具调用的工作后，可建议创建新技能或修复既有自定义技能"
+                        } else {
+                            "已关闭：对话结束后不再弹出技能进化建议卡片"
+                        },
+                        checked = skillEvolutionSuggestions,
+                        onCheckedChange = { arg0 -> viewModel?.setSkillEvolutionSuggestions(arg0) },
+                    )
+                }
+            }
+            item {
                 AgentBlockTitle("技能管理")
             }
             item {
@@ -407,7 +518,7 @@ fun AgentSettingsScreen(
                 }
             }
             item {
-                OutlinedButton(onClick = viewModel::scanSkillDirectories, modifier = Modifier.fillMaxWidth().height(44.dp)) {
+                OutlinedButton(onClick = { viewModel?.scanSkillDirectories() }, modifier = Modifier.fillMaxWidth().height(44.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         RuntimeIcon(RuntimeIconName.FolderOpen, Modifier.size(16.dp))
                         Text("扫描 Skill 目录批量导入")
@@ -428,7 +539,7 @@ fun AgentSettingsScreen(
                     }
                 }
                 Text(
-                    text = "在文件管理器中任选一个目录（支持任意深度嵌套，含 Skill 目录内再嵌套 Skill 子目录的情况），自动查找其中所有包含 SKILL.md 的技能文件夹并导入",
+                    text = "可选择单个 Skill 或技能集合目录。包含 SKILL.md 的目录作为一个完整 Skill 导入，内部子文档和脚本保留为资源，不单独列出",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 6.dp, start = 4.dp),
@@ -448,13 +559,67 @@ fun AgentSettingsScreen(
                 }
             }
 
-            items(skills, key = { it.id }) { skill ->
+            item {
+                RuntimeFilledTextField(
+                    value = skillQuery,
+                    onValueChange = { skillQuery = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("搜索 Skill") },
+                    placeholder = { Text("名称、标识、分类或描述") },
+                    leadingIcon = { RuntimeIcon(RuntimeIconName.Search, Modifier.size(18.dp)) },
+                    singleLine = true,
+                )
+            }
+
+            items(visibleSkills, key = { it.id }) { skill ->
                 SkillCard(
                     skill = skill,
-                    onToggle = { enabled -> viewModel.toggleSkill(skill.id, enabled) },
+                    onToggle = { enabled -> viewModel?.toggleSkill(skill.id, enabled) },
                     onViewPrompt = { viewingSkillPrompt = skill },
                     onDelete = if (!skill.isBuiltin) { { deletingSkill = skill } } else null,
                 )
+            }
+            if (visibleSkills.isEmpty()) {
+                item {
+                    Text(
+                        text = "没有匹配 \"${skillQuery.trim()}\" 的技能",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+
+            // ---- 模块 4.5：ClawHub 技能生态市场 ----
+            item {
+                SectionHeader(
+                    title = "ClawHub 技能生态市场",
+                    subtitle = if (isMarketOfflinePreset) {
+                        "离线精选模式：以下为内置精选生态包（远端市场暂未接入）；安装前仍由本地引擎执行静态安全与兼容性审查"
+                    } else {
+                        "精选社区标准生态技能包，下载前由本地引擎执行静态安全与兼容性审查"
+                    },
+                )
+            }
+
+            if (isMarketLoading && marketSkills.isEmpty()) {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                    }
+                }
+            } else {
+                items(marketSkills, key = { "clawhub_" + it.id }) { marketItem ->
+                    ClawHubMarketSkillCard(
+                        item = marketItem,
+                        isPreparing = preparingSkillId == marketItem.id,
+                        onInstall = { viewModel?.prepareInstallMarketSkill(marketItem.id) },
+                    )
+                }
             }
 
             // ---- 模块 5：Plugin 插件生态管理 ----
@@ -471,7 +636,7 @@ fun AgentSettingsScreen(
             items(plugins, key = { it.id }) { plugin ->
                 PluginCard(
                     plugin = plugin,
-                    onToggle = { enabled -> viewModel.togglePlugin(plugin.id, enabled) },
+                    onToggle = { enabled -> viewModel?.togglePlugin(plugin.id, enabled) },
                 )
             }
             }
@@ -480,12 +645,21 @@ fun AgentSettingsScreen(
         }
     }
 
+    pendingSkillInspection?.let { inspection ->
+        SkillSecurityAuditDialog(
+            inspection = inspection,
+            isCommitting = isCommittingInstallation,
+            onConfirmInstall = { viewModel?.confirmSkillInstallation() },
+            onDismiss = { viewModel?.dismissSkillInspection() },
+        )
+    }
+
     skillArchiveMessage?.let { message ->
         RuntimeAlertDialog(
-            onDismissRequest = viewModel::clearSkillArchiveMessage,
+            onDismissRequest = { viewModel?.clearSkillArchiveMessage() },
             title = { Text(if (!skillArchiveMessageIsError) "Skill 导入完成" else "Skill 导入失败", fontWeight = FontWeight.Bold) },
             text = { Text(message) },
-            confirmButton = { TextButton(onClick = viewModel::clearSkillArchiveMessage) { Text("知道了") } },
+            confirmButton = { TextButton(onClick = { viewModel?.clearSkillArchiveMessage() }) { Text("知道了") } },
         )
     }
 
@@ -535,7 +709,7 @@ fun AgentSettingsScreen(
         AddSkillDialog(
             onDismiss = { showAddSkillDialog = false },
             onConfirm = { name, desc, prompt, cmd ->
-                viewModel.addCustomSkill(name, desc, prompt, cmd)
+                viewModel?.addCustomSkill(name, desc, prompt, cmd)
                 showAddSkillDialog = false
             },
         )
@@ -551,7 +725,7 @@ fun AgentSettingsScreen(
                 editingSubagent = null
             },
             onConfirm = { roleId, name, description, prompt, defaultModelId, defaultModelVariant ->
-                viewModel.saveSubagent(
+                viewModel?.saveSubagent(
                     editingSubagent,
                     roleId,
                     name,
@@ -574,7 +748,7 @@ fun AgentSettingsScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        viewModel.deleteCustomSkill(skill.id)
+                        viewModel?.deleteCustomSkill(skill.id)
                         deletingSkill = null
                     },
                 ) {
@@ -595,7 +769,7 @@ fun AgentSettingsScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        viewModel.deleteSubagent(profile.id)
+                        viewModel?.deleteSubagent(profile.id)
                         deletingSubagent = null
                     },
                 ) {
@@ -610,301 +784,13 @@ fun AgentSettingsScreen(
 }
 
 @Composable
-private fun BaseCommandTimeoutSliderRow(
+private fun AutoContinuationSliderRow(
     currentValue: Int,
-    onValueChange: (Int) -> Unit,
-) {
-    var sliderMinutes by remember(currentValue) {
-        mutableFloatStateOf((currentValue / 60f).coerceIn(1f, 60f))
-    }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("base 命令默认超时", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
-            Text(
-                "${sliderMinutes.toInt()} 分钟",
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace),
-                color = MaterialTheme.colorScheme.primary,
-            )
-        }
-        Text(
-            "适用于普通前台命令；模型可为单次命令指定 1–60 分钟，常驻任务应使用 process 工具",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Slider(
-            value = sliderMinutes,
-            onValueChange = { sliderMinutes = it },
-            onValueChangeFinished = { onValueChange(sliderMinutes.toInt() * 60) },
-            valueRange = 1f..60f,
-            steps = 58,
-        )
-    }
-}
-
-@Composable
-private fun AgentSettingsGroup(content: @Composable () -> Unit) {
-    RuntimeCard(
-        Modifier.fillMaxWidth(),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        borderColor = MaterialTheme.colorScheme.outlineVariant,
-        contentPadding = PaddingValues(0.dp),
-    ) {
-        Column { content() }
-    }
-}
-
-@Composable
-private fun AgentBlockTitle(title: String) {
-    Text(
-        text = title,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
-        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-        color = MaterialTheme.colorScheme.primary,
-    )
-}
-
-@Composable
-private fun AgentToggleRow(
-    icon: RuntimeIconName,
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .heightIn(min = 68.dp)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            RuntimeIcon(icon, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
-        }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                checkedTrackColor = MaterialTheme.colorScheme.primary,
-            ),
-        )
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun ApprovalModeSelectorRow(
-    mode: ApprovalMode,
-    onModeChange: (ApprovalMode) -> Unit,
-) {
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(
-                modifier = Modifier.size(36.dp).clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                RuntimeIcon(RuntimeIconName.Shield, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
-            }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("新会话默认工具权限", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
-                Text(
-                    "仅作为新建会话初始值，已存在会话可在聊天顶部单独切换。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf(
-                ApprovalMode.REQUEST to "请求批准",
-                ApprovalMode.ASSISTED to "帮我批准",
-                ApprovalMode.FULL_ACCESS to "完全访问",
-            ).forEach { (value, label) ->
-                FilterChip(
-                    selected = mode == value,
-                    onClick = { onModeChange(value) },
-                    label = { Text(label) },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun AgentDepartmentCard(
-    departmentId: String,
-    enabledCount: Int,
-    agentCount: Int,
-    expanded: Boolean,
-    onClick: () -> Unit,
-) {
-    val department = AgentDepartments.find(departmentId)
-    val departmentColor = Color(department.colorArgb)
-    RuntimeCard(
-        modifier = Modifier.fillMaxWidth(),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        borderColor = departmentColor.copy(alpha = 0.4f),
-        onClick = onClick,
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(departmentColor.copy(alpha = 0.14f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                RuntimeIcon(RuntimeIconName.Bot, Modifier.size(20.dp), departmentColor)
-            }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    "${department.localizedName} · ${department.name}",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    maxLines = 1,
-                )
-                Text(
-                    "$enabledCount/$agentCount 已启用",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            RuntimeIcon(
-                if (expanded) RuntimeIconName.ChevronUp else RuntimeIconName.ChevronDown,
-                Modifier.size(20.dp),
-                MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
-private fun SubagentProfileCard(
-    profile: AgentSubagent,
-    modelLabel: String,
-    onToggle: (Boolean) -> Unit,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
-) {
-    RuntimeCard(
-        modifier = Modifier.fillMaxWidth(),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        borderColor = if (profile.isEnabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant,
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    RuntimeIcon(RuntimeIconName.Bot, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
-                }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(profile.name, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                    Text(profile.id, style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = MaterialTheme.colorScheme.primary)
-                }
-                if (profile.isBuiltin) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        shape = RoundedCornerShape(4.dp),
-                    ) {
-                        Text(
-                            "Agency",
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-
-            Text(profile.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(
-                "默认模型：$modelLabel",
-                style = MaterialTheme.typography.labelSmall,
-                color = if (profile.defaultModelId == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.End,
-            ) {
-                IconButton(
-                    onClick = onEdit,
-                    modifier = Modifier
-                        .minimumInteractiveComponentSize()
-                        .size(36.dp),
-                    contentDescription = "编辑角色",
-                ) {
-                    RuntimeIcon(RuntimeIconName.Edit, Modifier.size(17.dp), MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                IconButton(
-                    onClick = onDelete,
-                    modifier = Modifier
-                        .minimumInteractiveComponentSize()
-                        .size(36.dp),
-                    contentDescription = "删除角色",
-                ) {
-                    RuntimeIcon(RuntimeIconName.Trash, Modifier.size(17.dp), MaterialTheme.colorScheme.error)
-                }
-                Spacer(Modifier.width(6.dp))
-                Switch(
-                    checked = profile.isEnabled,
-                    onCheckedChange = onToggle,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                        checkedTrackColor = MaterialTheme.colorScheme.primary,
-                    ),
-                )
-            }
-        }
-    }
-}
-
-
-
-@Composable
-private fun RoundsSliderRow(
-    currentValue: Int,
+    roundsPerSegment: Int,
     onValueChange: (Int) -> Unit,
 ) {
     var sliderVal by remember(currentValue) { mutableFloatStateOf(currentValue.toFloat()) }
+    val continuations = sliderVal.toInt()
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -916,15 +802,20 @@ private fun RoundsSliderRow(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("单回合最大工具轮次上限", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
+            Text("轮次用尽后自动续跑", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
             Text(
-                "${sliderVal.toInt()} 轮",
+                if (continuations == 0) "关闭" else "$continuations 次",
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace),
                 color = MaterialTheme.colorScheme.primary,
             )
         }
         Text(
-            "防止复杂任务中模型陷入死循环；达到轮次后将输出总结并请用户分步进行",
+            if (continuations == 0) {
+                "轮次用尽即停下等待用户确认；适合希望逐段把关的场景"
+            } else {
+                "轮次用尽时先让模型收束并记录进度，再自动续跑，无需用户点击继续；" +
+                    "总预算上限 ${roundsPerSegment * (continuations + 1)} 轮"
+            },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -932,47 +823,8 @@ private fun RoundsSliderRow(
             value = sliderVal,
             onValueChange = { sliderVal = it },
             onValueChangeFinished = { onValueChange(sliderVal.toInt()) },
-            valueRange = 10f..250f,
-            steps = 23, // 10, 20, 30 ... 250
-        )
-    }
-}
-
-@Composable
-private fun ThresholdSliderRow(
-    currentThreshold: Int,
-    onThresholdChange: (Int) -> Unit,
-) {
-    var sliderVal by remember(currentThreshold) { mutableFloatStateOf(currentThreshold.toFloat()) }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("压缩触发阈值（用户轮次）", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
-            Text(
-                "${sliderVal.toInt()} 轮",
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace),
-                color = MaterialTheme.colorScheme.primary,
-            )
-        }
-        Text(
-            "当会话历史超过该轮数时，启动智能剪裁，最近 4 轮保持无损",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Slider(
-            value = sliderVal,
-            onValueChange = { sliderVal = it },
-            onValueChangeFinished = { onThresholdChange(sliderVal.toInt()) },
-            valueRange = 5f..40f,
-            steps = 6,
+            valueRange = 0f..10f,
+            steps = 9, // 0, 1, 2 ... 10
         )
     }
 }
@@ -980,6 +832,7 @@ private fun ThresholdSliderRow(
 @Composable
 private fun ContextBudgetSliderRow(
     currentValue: Int,
+    declaredTokens: Int?,
     onValueChange: (Int) -> Unit,
 ) {
     var sliderVal by remember(currentValue) { mutableFloatStateOf(currentValue.toFloat()) }
@@ -1002,7 +855,13 @@ private fun ContextBudgetSliderRow(
             )
         }
         Text(
-            "模型未单独配置 contextTokens 时生效；长会话历史超出预算将自动折叠早期内容",
+            if (declaredTokens != null) {
+                "当前激活模型已适配上下文上限 ${declaredTokens / 1000}K（显式配置或自动识别），此滑块暂不生效；" +
+                    "仅在模型无法识别且未配置 contextTokens 时，本值才作为兜底预算。"
+            } else {
+                "当前未识别到激活模型上下文上限，本值即实际生效预算；" +
+                    "长会话历史超出预算将自动折叠早期内容。"
+            },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -1010,8 +869,96 @@ private fun ContextBudgetSliderRow(
             value = sliderVal,
             onValueChange = { sliderVal = it },
             onValueChangeFinished = { onValueChange(sliderVal.toInt()) },
-            valueRange = 8000f..1000000f,
-            steps = 48, // 步长约 2 万 tok
+            valueRange = 8000f..2000000f,
+            steps = 49, // 步长约 4 万 tok
+        )
+    }
+}
+
+/**
+ * 「历史折叠线比例」滑块。
+ *
+ * 让历史在预算的一部分处就开始折叠，而不是等到预算减预留的硬线才动手——
+ * 长会话可借此显著降低单次请求的 input token 量（省费用、降首字延迟）。
+ */
+@Composable
+private fun ContextFoldingRatioSliderRow(
+    currentValue: Int,
+    budget: Int,
+    declaredTokens: Int?,
+    onValueChange: (Int) -> Unit,
+) {
+    var sliderVal by remember(currentValue) { mutableFloatStateOf(currentValue.toFloat()) }
+    // 实时预览：按当前比例算出的折叠线，让用户直观看到「拖到多少就按多少折叠」。
+    // 关键：budget 必须是**实际生效预算**（模型档案 contextTokens 优先，再钳到 MAX_CONTEXT_BUDGET），
+    // 并且扣减引擎同款 system/输出/工具 schema 预留，否则设置页会高于真实折叠触发线。
+    val previewSystemTokens = ContextWindowPolicy.estimateReservedPromptTokens(
+        pureChat = false,
+        toolDisabled = false,
+    )
+    val previewLimit = remember(sliderVal, budget, previewSystemTokens) {
+        ContextWindowPolicy.foldingLimitFor(
+            budget = budget,
+            ratioPercent = sliderVal.toInt(),
+            systemTokens = previewSystemTokens,
+        ).coerceAtLeast(0)
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("历史折叠线比例", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
+            Text(
+                "${sliderVal.toInt()}%",
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace),
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        Text(
+            "历史在「预算 × 比例」处开始折叠；默认 100%，对齐主流 harness 的" +
+                " contextWindow - reserveTokens - toolSchemaReserve - systemTokens。" +
+                "调低比例可让历史更早进入摘要、节省 input token；大窗口模型不再被 96K 封顶。" +
+                "走 Nginx/中转时请把 client_max_body_size 调到 20m 以上，否则可能 HTTP 413。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            "按当前设置，折叠线约为 ${previewLimit / 1000}K tok",
+            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+            color = MaterialTheme.colorScheme.primary,
+        )
+        // 说明这个预览数按什么预算折算，避免用户误以为它基于「上下文预算上限」滑块。
+        Text(
+            if (declaredTokens != null) {
+                "以上按当前生效模型窗口 ${budget / 1000}K 计算" +
+                    "（显式配置或自动适配）" +
+                    (if (declaredTokens > ContextWindowPolicy.MAX_CONTEXT_BUDGET) {
+                        "，引擎钳制到 ${ContextWindowPolicy.MAX_CONTEXT_BUDGET / 1000}K"
+                    } else {
+                        ""
+                    }) +
+                    "。预览已扣除系统提示/输出/工具 schema 预留。"
+            } else {
+                "以上按上方「上下文预算上限」滑块的值计算（当前未识别到模型上下文上限）。" +
+                    "预览已扣除系统提示/输出/工具 schema 预留。"
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Slider(
+            value = sliderVal,
+            onValueChange = { sliderVal = it },
+            onValueChangeFinished = { onValueChange(sliderVal.toInt()) },
+            // 与 SettingsDataStore.setContextFoldingRatioPercent 的 coerceIn(10, 100) 对齐
+            valueRange = 10f..100f,
+            steps = 8, // 步长 10%
         )
     }
 }
@@ -1094,6 +1041,7 @@ private fun ConsecutiveFailuresSliderRow(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SkillCard(
     skill: AgentSkill,
@@ -1107,40 +1055,41 @@ private fun SkillCard(
         borderColor = if (skill.isEnabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant,
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                Text(
+                    skill.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    shape = RoundedCornerShape(4.dp),
                 ) {
-                    Text(skill.name, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                    Text(
+                        skill.category,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                val cmd = skill.triggerCommand
+                if (cmd != null) {
                     Surface(
-                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
                         shape = RoundedCornerShape(4.dp),
                     ) {
                         Text(
-                            skill.category,
-                            style = MaterialTheme.typography.labelSmall,
+                            cmd,
+                            style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold),
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = MaterialTheme.colorScheme.primary,
                         )
-                    }
-                    val cmd = skill.triggerCommand
-                    if (cmd != null) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                            shape = RoundedCornerShape(4.dp),
-                        ) {
-                            Text(
-                                cmd,
-                                style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold),
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                        }
                     }
                 }
             }
@@ -1193,6 +1142,114 @@ private fun SkillCard(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ClawHubMarketSkillCard(
+    item: ClawHubMarketItem,
+    isPreparing: Boolean,
+    onInstall: () -> Unit,
+) {
+    RuntimeCard(
+        modifier = Modifier.fillMaxWidth(),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        borderColor = MaterialTheme.colorScheme.outlineVariant,
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    item.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    shape = RoundedCornerShape(4.dp),
+                ) {
+                    Text(
+                        item.category,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Surface(
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(4.dp),
+                ) {
+                    Text(
+                        "v${item.version}",
+                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+            Text(item.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    "作者: ${item.author} · ★ ${item.stars}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                when {
+                    isPreparing -> {
+                        Button(
+                            onClick = {},
+                            enabled = false,
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 2.dp)
+                                Text("审查中…", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
+                    item.isInstalled -> {
+                        OutlinedButton(
+                            onClick = {},
+                            enabled = false,
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        ) {
+                            Text("已安装", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                    else -> {
+                        Button(
+                            onClick = onInstall,
+                            enabled = !isPreparing,
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                RuntimeIcon(name = RuntimeIconName.Shield, modifier = Modifier.size(14.dp))
+                                Text("审查并安装", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PluginCard(
     plugin: AgentPlugin,
@@ -1209,12 +1266,27 @@ private fun PluginCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(plugin.name, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                        Text(
+                            plugin.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
                         Text("v${plugin.version}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Text("作者: ${plugin.author}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        "作者: ${plugin.author}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
                 Switch(
                     checked = plugin.isEnabled,
@@ -1229,14 +1301,44 @@ private fun PluginCard(
             Text(plugin.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
             if (plugin.permissions.isNotEmpty()) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("权限:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    plugin.permissions.forEach { perm ->
+                val visiblePermissions = plugin.permissions.take(4)
+                val hiddenCount = plugin.permissions.size - visiblePermissions.size
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        "权限:",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    visiblePermissions.forEach { perm ->
                         Surface(
                             color = MaterialTheme.colorScheme.surfaceContainerHighest,
                             shape = RoundedCornerShape(4.dp),
                         ) {
-                            Text(perm, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                perm,
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.widthIn(max = 140.dp).padding(horizontal = 4.dp, vertical = 2.dp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    if (hiddenCount > 0) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            shape = RoundedCornerShape(4.dp),
+                        ) {
+                            Text(
+                                "等 ${plugin.permissions.size} 项权限",
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     }
                 }
@@ -1265,28 +1367,28 @@ private fun AddSkillDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("技能名称（如: Rust 编译专家）") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = desc,
                     onValueChange = { desc = it },
                     label = { Text("简要描述") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = cmd,
                     onValueChange = { cmd = it },
                     label = { Text("触发指令（选填，如 /rust）") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = prompt,
                     onValueChange = { prompt = it },
                     label = { Text("系统提示词规则 (System Prompt)") },
@@ -1352,7 +1454,7 @@ private fun SubagentEditorDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = roleId,
                     onValueChange = { roleId = it },
                     label = { Text("角色标识") },
@@ -1363,14 +1465,14 @@ private fun SubagentEditorDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("显示名称") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = description,
                     onValueChange = { description = it },
                     label = { Text("职责简介") },
@@ -1378,7 +1480,7 @@ private fun SubagentEditorDialog(
                     maxLines = 3,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = prompt,
                     onValueChange = { prompt = it },
                     label = { Text("角色指导词") },
@@ -1462,75 +1564,77 @@ private fun SubagentEditorDialog(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ThinkingLanguageSelectorRow(
-    currentLang: String,
-    onLangChange: (String) -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            RuntimeIcon(RuntimeIconName.Globe, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
-            Column(Modifier.weight(1f)) {
-                Text("思考与推理语言偏好 (Thinking Language)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text(
-                    text = when (currentLang) {
-                        "zh" -> "强约束模型思考过程全程使用中文（解决 DeepSeek/Claude 思考总跑英文的问题）"
-                        "en" -> "强制模型思考过程全程使用英文 (English)"
-                        else -> "由模型根据上下文或底层默认策略自主决定思考语言"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-
-        FlowRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            listOf(
-                "zh" to "强制中文 (推荐)",
-                "en" to "英文 (English)",
-                "auto" to "自动 (Auto)",
-            ).forEach { (lang, label) ->
-                FilterChip(
-                    selected = currentLang == lang,
-                    onClick = { onLangChange(lang) },
-                    label = { Text(label, style = MaterialTheme.typography.labelMedium) },
-                )
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
 private fun SystemPromptCustomCard(
     enabled: Boolean,
     onEnabledChange: (Boolean) -> Unit,
     prompt: String,
     onPromptChange: (String) -> Unit,
+    charName: String,
+    onCharNameChange: (String) -> Unit,
+    userName: String,
+    onUserNameChange: (String) -> Unit,
 ) {
     // 仅在首次进入时以持久化值初始化缓冲，避免 remember(prompt) 键在每次 Datastore 回写时重置输入；
     // 输入经 400ms 防抖后再写入 Datastore，避免每次按键都落盘
     var textBuffer by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(prompt) }
     androidx.compose.runtime.LaunchedEffect(textBuffer) {
         if (textBuffer != prompt) {
-            kotlinx.coroutines.delay(400)
+            delay(400)
             onPromptChange(textBuffer)
         }
     }
 
+    // 称呼输入同样走 400ms 防抖落盘；留空即回退默认值
+    var charNameBuffer by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(charName) }
+    androidx.compose.runtime.LaunchedEffect(charNameBuffer) {
+        if (charNameBuffer != charName) {
+            delay(400)
+            onCharNameChange(charNameBuffer)
+        }
+    }
+    var userNameBuffer by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(userName) }
+    androidx.compose.runtime.LaunchedEffect(userNameBuffer) {
+        if (userNameBuffer != userName) {
+            delay(400)
+            onUserNameChange(userNameBuffer)
+        }
+    }
+
+    var showDefaultPromptDialog by remember { mutableStateOf(false) }
+    var defaultPromptAsset by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+    val androidContext = androidx.compose.ui.platform.LocalContext.current
+    if (showDefaultPromptDialog) {
+        androidx.compose.runtime.LaunchedEffect(showDefaultPromptDialog) {
+            if (defaultPromptAsset.isBlank()) {
+                defaultPromptAsset = runCatching {
+                    androidContext.assets.open("prompts/system/core.md").bufferedReader().use { it.readText() }
+                }.getOrDefault("（默认系统提示词加载失败）")
+            }
+        }
+        RuntimeAlertDialog(
+            onDismissRequest = { showDefaultPromptDialog = false },
+            title = { Text("默认系统提示词 (core.md)", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                    Text(
+                        defaultPromptAsset,
+                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showDefaultPromptDialog = false }) { Text("知道了") }
+            },
+        )
+    }
+
     val defaultPromptTemplate = """
 You are a helpful and expert AI assistant called {{char}}, based on model {{model_name}}.
+
+## Persona
+- You refer to yourself as {{char}} in conversations.
+- You address the user as {{user}}.
 
 ## System & Device Context
 - Time: {{cur_datetime}}
@@ -1591,6 +1695,54 @@ You are a helpful and expert AI assistant called {{char}}, based on model {{mode
                 )
             }
 
+            // 称呼配置独立于自定义提示词开关：默认提示词同样生效
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text("称呼与人设", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                TextButton(
+                    onClick = { showDefaultPromptDialog = true },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        RuntimeIcon(RuntimeIconName.Visibility, Modifier.size(12.dp))
+                        Text("查看默认系统提示词", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                RuntimeFilledTextField(
+                    value = charNameBuffer,
+                    onValueChange = { charNameBuffer = it },
+                    label = { Text("模型自称") },
+                    placeholder = { Text("天衍智枢") },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodySmall,
+                )
+                RuntimeFilledTextField(
+                    value = userNameBuffer,
+                    onValueChange = { userNameBuffer = it },
+                    label = { Text("对用户的称呼") },
+                    placeholder = { Text("用户") },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodySmall,
+                )
+            }
+
+            Text(
+                "修改后立即对所有对话生效（留空恢复默认）；自定义提示词中的 {{char}} / {{user}} 宏变量也将使用这两个值。",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
             if (enabled) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
@@ -1614,7 +1766,7 @@ You are a helpful and expert AI assistant called {{char}}, based on model {{mode
                     }
                 }
 
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = textBuffer,
                     onValueChange = { textBuffer = it },
                     placeholder = { Text("在此输入自定义系统提示词，支持 {{cur_datetime}} 等宏变量...") },

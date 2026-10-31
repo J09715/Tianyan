@@ -1,12 +1,8 @@
 package top.tianyan.app.harness.checkpoint
 
-import java.io.File
 import java.util.concurrent.ConcurrentHashMap
-import javax.inject.Inject
-import javax.inject.Singleton
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
+import java.util.concurrent.Executor
+import java.util.concurrent.Executors
 
 /**
  * 文件快照的按会话存储与重放规划。不触碰 git：
@@ -17,22 +13,34 @@ import kotlinx.serialization.json.Json
  *
  * 落盘布局（[Persistence] 配置了根目录时启用）：
  * `<root>/<sessionId>/<turn>.index.json` + `<turn>/<seq>-<safeName>`（内容文件，null 快照无内容文件）。
- * 关轮时异步写入（失败仅放弃持久化，不影响内存态）；启动后首次访问该会话时从磁盘恢复。
+ * 关轮时异步写入（失败仅放弃持久化，不影响内存态；进程在写入前被杀会丢最近一轮的持久化——
+ * 安全网特性可接受，且该轮大概率会被重做）；启动后首次访问该会话时从磁盘恢复。
  * 未配置根目录时退化为纯内存（进程被杀后 rewind 丢失），行为与旧版一致。
  */
-@Singleton
-class CheckpointStore @Inject constructor() {
+class CheckpointStore() {
 
     /** 持久化配置；null = 纯内存模式。由宿主在初始化期一次性注入。 */
     @Volatile
     var persistence: Persistence? = null
+
+    /**
+     * 落盘执行器：单线程串行（写索引与内容文件、超龄清理无并发竞争）。写入绝不能在
+     * [closeTurn] 的实例锁内同步执行——@Synchronized 覆盖全部方法，一次慢盘（listFiles +
+     * deleteRecursively 清理）会串行阻塞其他会话每次 write/edit 前的 capture 路径。
+     */
+    @Volatile
+    internal var diskWriteExecutor: Executor =
+        Executors.newSingleThreadExecutor { runnable ->
+            Thread(runnable, "checkpoint-disk").apply { isDaemon = true }
+        }
 
     /** 磁盘恢复标记：会话首次访问时懒恢复，避免启动期全量 IO。 */
     private val restoredSessions = ConcurrentHashMap.newKeySet<String>()
 
     private val sessions = ConcurrentHashMap<String, SessionState>()
 
-    private val json = Json { ignoreUnknownKeys = true }
+    /** 每次 rewind 的撤销记录（单层级）；新写入/新 rewind/会话删除时失效。 */
+    private val rewindUndoRecords = ConcurrentHashMap<String, RewindUndoRecord>()
 
     /** 磁盘持久化接缝：把轮 checkpoint 以索引 + 内容文件形式落盘/读回。 */
     interface Persistence {
@@ -57,16 +65,21 @@ class CheckpointStore @Inject constructor() {
         var lastTurn = -1
     }
 
-    /** 开启一个新的用户轮次 checkpoint，并关闭上一轮（若有）。 */
+    /**
+     * 开启一个新的用户轮次 checkpoint，并关闭上一轮（若有）。
+     * @return 被关闭的上一轮 checkpoint（无上一轮或空轮丢弃时为 null）——
+     *   供轮改动卡片在下一轮开头补发（见 TurnChangeCards）。
+     */
     @Synchronized
-    fun beginTurn(sessionId: String, prompt: String, anchorMessageId: String? = null) {
+    fun beginTurn(sessionId: String, prompt: String, anchorMessageId: String? = null): Checkpoint? {
         val state = stateOf(sessionId)
-        closeTurn(sessionId, state)
+        val closed = closeTurn(sessionId, state)
         state.activeTurn = state.lastTurn + 1
         state.activePrompt = prompt.ifBlank { "（空白输入）" }
         state.activeAnchorMessageId = anchorMessageId
         state.active = LinkedHashMap()
         state.open = true
+        return closed
     }
 
     /** 记录某路径在该轮"触碰前"的内容；无活动轮或路径已记录时忽略。 */
@@ -76,7 +89,47 @@ class CheckpointStore @Inject constructor() {
         val active = state.active ?: return false
         if (path in active) return false
         active[path] = FileSnap(path, before)
+        // rewind 之后智能体又开始写文件：撤销窗口关闭（再 undo 会覆盖新写入）
+        rewindUndoRecords.remove(sessionId)
         return true
+    }
+
+    /** 覆盖式记录某次 rewind 的撤销快照（同会话重复 rewind 以最后一次为准）。 */
+    @Synchronized
+    fun recordRewindUndo(sessionId: String, record: RewindUndoRecord) {
+        rewindUndoRecords[sessionId] = record
+    }
+
+    /** 取出（消费）撤销记录；null = 当前没有可撤销的 rewind。 */
+    @Synchronized
+    fun takeRewindUndo(sessionId: String): RewindUndoRecord? = rewindUndoRecords.remove(sessionId)
+
+    /**
+     * 记录某路径**成功写入后**的内容（改动后凭据）。同轮同路径多次写入时后者覆盖前者，
+     * 关轮时落盘的是最后一次写入后的状态。无活动轮或该路径无 pre-image（超大文件跳过）
+     * 时忽略——改动后凭据永远与轮初快照成对。
+     */
+    @Synchronized
+    fun captureAfterImage(sessionId: String, path: String, content: String): Boolean {
+        val state = sessions[sessionId] ?: return false
+        val active = state.active ?: return false
+        val snap = active[path] ?: return false
+        active[path] = snap.copy(afterContent = content)
+        return true
+    }
+
+    /**
+     * 某路径在本 store 记录中的**最后改动后凭据**：活动轮优先，其余按关闭轮新→旧取第一个。
+     * restore 的冲突检测用它判断"当前文件是否被外部改动过"；null = 无凭据（不检测）。
+     */
+    @Synchronized
+    fun latestAfterImage(sessionId: String, path: String): String? {
+        val state = stateOf(sessionId)
+        state.active?.get(path)?.afterContent?.let { return it }
+        for (checkpoint in state.checkpoints.asReversed()) {
+            checkpoint.files.firstOrNull { it.path == path }?.afterContent?.let { return it }
+        }
+        return null
     }
 
     /** 强制关闭当前活动轮（无触碰则丢弃空轮）。 */
@@ -85,12 +138,25 @@ class CheckpointStore @Inject constructor() {
         sessions[sessionId]?.let { closeTurn(sessionId, it) }
     }
 
+    /** 当前活动轮的轮次号；无活动轮为 null（供轮改动卡片的确定性 id）。 */
+    @Synchronized
+    fun activeTurnNumber(sessionId: String): Int? =
+        sessions[sessionId]?.takeIf { it.open }?.activeTurn
+
+    /** 当前活动轮的快照副本（轮初内容 + 最后写入后凭据）；无活动轮为空列表。 */
+    @Synchronized
+    fun activeTurnFiles(sessionId: String): List<FileSnap> =
+        sessions[sessionId]?.active?.values?.map { it.copy() } ?: emptyList()
+
     /** 会话删除/重建时清理。 */
     @Synchronized
     fun dropSession(sessionId: String) {
         sessions.remove(sessionId)
         restoredSessions.remove(sessionId)
-        persistence?.delete(sessionId)
+        rewindUndoRecords.remove(sessionId)
+        // 删除走同一单线程执行器排队：先于它的待写任务先落盘、随后被整体删除——
+        // 消除"异步写在 dropSession 之后执行、write() 的 mkdirs 复活已删目录"的竞态
+        persistence?.let { disk -> diskWriteExecutor.execute { runCatching { disk.delete(sessionId) } } }
     }
 
     @Synchronized
@@ -113,16 +179,22 @@ class CheckpointStore @Inject constructor() {
     fun planCodeRewind(sessionId: String, turn: Int): List<FileSnap> {
         val state = stateOf(sessionId)
         val open = state.active
-        val totalTurns = state.checkpoints.size + if (open != null) 1 else 0
-        if (turn < 0 || turn >= totalTurns) return emptyList()
+        // 轮号全局单调（活动轮 = activeTurn = lastTurn+1），MAX_KEPT 裁剪或空轮缺号后
+        // 与 checkpoints.size/下标错位；必须按轮号比较，否则目标轮/活动轮会被错误纳入或漏掉。
+        val newestClosedTurn = state.checkpoints.lastOrNull()?.turn ?: -1
+        val newestTurn = if (open != null) maxOf(newestClosedTurn, state.activeTurn) else newestClosedTurn
+        if (turn < 0 || turn > newestTurn) return emptyList()
         val merged = LinkedHashMap<String, FileSnap>()
-        for (index in turn until state.checkpoints.size) {
-            for (snap in state.checkpoints[index].files) {
-                merged.putIfAbsent(snap.path, snap)
+        for (checkpoint in state.checkpoints) {
+            if (checkpoint.turn >= turn) {
+                for (snap in checkpoint.files) {
+                    merged.putIfAbsent(snap.path, snap)
+                }
             }
         }
-        // 当前（尚未关闭）的轮次也纳入回滚范围
-        if (open != null && turn <= state.checkpoints.size) {
+        // 当前（尚未关闭）的轮次也纳入回滚范围：用 activeTurn 判断而非 checkpoints.size
+        //（活动轮轮号是 lastTurn+1，裁剪后远大于 checkpoints.size，原条件会漏掉当前进行轮的改动）
+        if (open != null && turn <= state.activeTurn) {
             for (snap in open.values) merged.putIfAbsent(snap.path, snap)
         }
         return merged.values.toList()
@@ -141,14 +213,21 @@ class CheckpointStore @Inject constructor() {
                 if (missing.isNotEmpty()) {
                     state.checkpoints.addAll(0, missing.sortedBy { it.turn })
                 }
+                // 恢复后裁剪到 MAX_KEPT（保留最新），与 write() 的 keptFloor 磁盘清理窗口对齐，
+                // 避免恢复列表超过 100 项且与磁盘清理错位
+                while (state.checkpoints.size > MAX_KEPT) state.checkpoints.removeAt(0)
                 restored.maxOfOrNull { it.turn }?.let { if (it > state.lastTurn) state.lastTurn = it }
+            }.onFailure {
+                restoredSessions.remove(sessionId)
+                System.err.println("Checkpoint restore failed for $sessionId; will retry: ${it.message}")
             }
         }
         return state
     }
 
-    private fun closeTurn(sessionId: String, state: SessionState) {
-        val active = state.active ?: return
+    private fun closeTurn(sessionId: String, state: SessionState): Checkpoint? {
+        val active = state.active ?: return null
+        var closed: Checkpoint? = null
         if (active.isNotEmpty()) {
             val checkpoint = Checkpoint(
                 turn = state.activeTurn,
@@ -160,111 +239,22 @@ class CheckpointStore @Inject constructor() {
             state.checkpoints.add(checkpoint)
             while (state.checkpoints.size > MAX_KEPT) state.checkpoints.removeAt(0)
             if (checkpoint.turn > state.lastTurn) state.lastTurn = checkpoint.turn
-            // 同步落盘：每轮一次、单文件 ≤1MiB（快照捕获上限），失败只放弃持久化不影响内存态
-            persistence?.let { disk -> runCatching { disk.write(sessionId, checkpoint) } }
+            // 异步落盘（checkpoint 不可变，可安全移交）：失败只放弃持久化不影响内存态
+            persistence?.let { disk ->
+                diskWriteExecutor.execute { runCatching { disk.write(sessionId, checkpoint) } }
+            }
+            closed = checkpoint
         }
         state.active = null
         state.activeAnchorMessageId = null
         state.open = false
+        return closed
     }
 
     companion object {
         const val MAX_KEPT = 100
-    }
-}
 
-/**
- * 默认文件系统持久化：`<root>/<sessionId>/<turn>.index.json` + `<root>/<sessionId>/<turn>/<seq>.snap`。
- * 根目录由宿主指定（应用私有目录，不经 SAF；不会出现在 PRoot 工作区中，模型不可见）。
- */
-class FileCheckpointPersistence(private val root: File) : CheckpointStore.Persistence {
-
-    @Serializable
-    private data class IndexEntry(
-        val turn: Int,
-        val time: Long,
-        val prompt: String,
-        val anchorMessageId: String? = null,
-        /** seq -> 快照内容文件名；content 为 null（文件不存在）的快照无条目。 */
-        val files: Map<Int, String> = emptyMap(),
-        /** seq -> 快照原始路径。 */
-        val paths: Map<Int, String> = emptyMap(),
-        /** 记录 content==null 的 seq（恢复时区分"不存在"与"空内容文件"）。 */
-        val absent: List<Int> = emptyList(),
-    )
-
-    private val json = Json { ignoreUnknownKeys = true }
-
-    override fun write(sessionId: String, checkpoint: Checkpoint) {
-        val sessionDir = File(root, sessionId)
-        val turnDir = File(sessionDir, checkpoint.turn.toString())
-        turnDir.mkdirs()
-        val entries = mutableMapOf<Int, String>()
-        val paths = mutableMapOf<Int, String>()
-        val absent = mutableListOf<Int>()
-        checkpoint.files.forEachIndexed { seq, snap ->
-            paths[seq] = snap.path
-            val content = snap.content ?: run { absent += seq; return@forEachIndexed }
-            val file = File(turnDir, "$seq.snap")
-            file.writeText(content, Charsets.UTF_8)
-            entries[seq] = file.name
-        }
-        File(sessionDir, "${checkpoint.turn}.index.json").writeText(
-            json.encodeToString(
-                IndexEntry(
-                    turn = checkpoint.turn,
-                    time = checkpoint.time,
-                    prompt = checkpoint.prompt,
-                    anchorMessageId = checkpoint.anchorMessageId,
-                    files = entries,
-                    paths = paths,
-                    absent = absent,
-                ),
-            ),
-        )
-        // 与内存保留窗口对齐：超龄轮的索引与内容目录一并清掉
-        val keptFloor = (checkpoint.turn - CheckpointStore.MAX_KEPT + 1).coerceAtLeast(0)
-        sessionDir.listFiles()
-            ?.filter { it.isDirectory }
-            ?.forEach { dir ->
-                dir.name.toIntOrNull()?.let { turn -> if (turn < keptFloor) dir.deleteRecursively() }
-            }
-        sessionDir.listFiles { file -> file.name.endsWith(".index.json") }
-            ?.forEach { index ->
-                index.name.removeSuffix(".index.json").toIntOrNull()?.let { turn ->
-                    if (turn < keptFloor) index.delete()
-                }
-            }
-    }
-
-    override fun readAll(sessionId: String): List<Checkpoint> {
-        val sessionDir = File(root, sessionId)
-        val indexFiles = sessionDir.listFiles { file -> file.name.endsWith(".index.json") } ?: return emptyList()
-        return indexFiles.mapNotNull { indexFile ->
-            runCatching {
-                val entry = json.decodeFromString<IndexEntry>(indexFile.readText(Charsets.UTF_8))
-                val snaps = entry.paths.keys.sorted().mapNotNull { seq ->
-                    val path = entry.paths.getValue(seq)
-                    val content: String? = if (seq in entry.absent) {
-                        null
-                    } else {
-                        val snapFile = File(sessionDir, "${entry.turn}/${entry.files[seq] ?: return@mapNotNull null}")
-                        if (snapFile.isFile) snapFile.readText(Charsets.UTF_8) else null
-                    }
-                    FileSnap(path, content)
-                }
-                Checkpoint(
-                    turn = entry.turn,
-                    time = entry.time,
-                    prompt = entry.prompt,
-                    files = snaps,
-                    anchorMessageId = entry.anchorMessageId,
-                )
-            }.getOrNull()
-        }.sortedBy { it.turn }
-    }
-
-    override fun delete(sessionId: String) {
-        File(root, sessionId).deleteRecursively()
+        /** 单文件快照上限：超过即整体跳过捕获（pre-image 与改动后凭据同规则）。 */
+        const val SNAPSHOT_MAX_BYTES = 1L * 1024L * 1024L
     }
 }

@@ -1,10 +1,7 @@
 package top.tianyan.app.core.database
 
 import android.content.Context
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * 🌟 天衍大载荷离线沙箱持久化存储 (Harness Large Payload Storage)
@@ -15,9 +12,8 @@ import javax.inject.Singleton
  *   数据库内仅记录引用标识 (`@@TIANYAN_BLOB@@:harness_blobs/...`)。
  * - 会话删除时：自动级联清理该会话名下的所有外置沙箱文件。
  */
-@Singleton
-class HarnessBlobStore @Inject constructor(
-    @ApplicationContext private val context: Context,
+class HarnessBlobStore(
+    private val context: Context,
 ) {
     private val blobBaseDir by lazy {
         File(context.filesDir, "harness_blobs").apply { mkdirs() }

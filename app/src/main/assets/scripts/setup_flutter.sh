@@ -17,9 +17,6 @@ flock -x -w 1800 9 || {
     exit 1
 }
 
-# 引入共享镜像库（全量节点 + 并行测速函数）
-. /opt/tianyan/scripts/tianyan-mirror-lib.sh
-
 # Flutter's artifact and pub mirrors avoid routing the large SDK cache through
 # GitHub/pub.dev when the Android suite is installed in mainland China.
 export PUB_HOSTED_URL="${PUB_HOSTED_URL:-https://pub.flutter-io.cn}"
@@ -49,9 +46,7 @@ if [ ! -f /opt/flutter/bin/flutter ] || [ ! -f "$FLUTTER_ARM64_MARKER" ]; then
     FLUTTER_META_URL="https://api.github.com/repos/MohamedAlkindi/flutter-native-arm64/releases/tags/${FLUTTER_PINNED_TAG}"
     rm -f "$FLUTTER_META"
     curl -fsSL --retry 4 --retry-all-errors --connect-timeout 20 --max-time 120 \
-        "$FLUTTER_META_URL" -o "$FLUTTER_META" || \
-    curl -fsSL --retry 4 --retry-all-errors --connect-timeout 20 --max-time 120 \
-        "https://gh.dpik.top/$FLUTTER_META_URL" -o "$FLUTTER_META" || {
+        "$FLUTTER_META_URL" -o "$FLUTTER_META" || {
         echo "!! [Tianyan] Flutter 发布信息获取失败"
         exit 1
     }
@@ -156,22 +151,9 @@ if [ ! -f /opt/flutter/bin/flutter ] || [ ! -f "$FLUTTER_ARM64_MARKER" ]; then
     case "$FLUTTER_ARCHIVE" in
         /tmp/*) rm -f "$FLUTTER_ARCHIVE" ;;
     esac
-    # 候选镜像：github.akams.cn 节点 + 国内代理，末尾官方直连兜底。
-    echo "==> [Tianyan] 正在并行测速选择最快镜像 (github.akams.cn 全量节点)..."
-    FLUTTER_FAST_BASE=$(pick_fastest_mirror "$FLUTTER_ARCHIVE_REL")
-    FLUTTER_CANDIDATES=""
-    if [ -n "$FLUTTER_FAST_BASE" ]; then
-        FLUTTER_CANDIDATES="${FLUTTER_FAST_BASE}${FLUTTER_ARCHIVE_REL}"
-        echo "==> [Tianyan] 已选择最快镜像: $FLUTTER_FAST_BASE"
-    else
-        echo "==> [Tianyan] 镜像全部不可用，直接官方直连"
-    fi
-    for FLUTTER_BASE in $TIANYAN_MIRROR_NODES; do
-        [ -n "$FLUTTER_BASE" ] || continue
-        FLUTTER_CANDIDATES="$FLUTTER_CANDIDATES ${FLUTTER_BASE}${FLUTTER_ARCHIVE_REL}"
-    done
-    FLUTTER_CANDIDATES="$FLUTTER_CANDIDATES $FLUTTER_ARCHIVE_REL"
-    for FLUTTER_URL in $FLUTTER_CANDIDATES; do
+    for FLUTTER_BASE in \
+        ""; do
+        FLUTTER_URL="$FLUTTER_ARCHIVE_REL"
         if download_flutter_archive "$FLUTTER_URL"; then
             FLUTTER_SDK_READY=1
             break

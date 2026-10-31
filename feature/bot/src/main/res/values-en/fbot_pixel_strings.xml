@@ -1,0 +1,225 @@
+<resources>
+    <string name="fbot_pixel_apply">Use this look</string>
+    <string name="fbot_pixel_edit">Design pixel character</string>
+    <string name="fbot_pixel_title">Pixel character</string>
+    <string name="fbot_pixel_random">Randomize</string>
+    <string name="fbot_pixel_kind">Character</string>
+    <string name="fbot_pixel_hair">Hair (human)</string>
+    <string name="fbot_pixel_eyes">Eyes</string>
+    <string name="fbot_pixel_mouth">Mouth</string>
+    <string name="fbot_pixel_outfit">Outfit</string>
+    <string name="fbot_pixel_accessory">Accessory</string>
+    <string name="fbot_pixel_skin">Skin / body color</string>
+    <string name="fbot_pixel_hair_color">Hair / panel color</string>
+    <string name="fbot_pixel_outfit_color">Outfit color</string>
+    <string name="fbot_pixel_backdrop">Backdrop</string>
+    <string name="fbot_pixel_state_idle">Idle</string>
+    <string name="fbot_pixel_state_thinking">Thinking</string>
+    <string name="fbot_pixel_state_executing">Coding</string>
+    <string name="fbot_pixel_state_blocked">Blocked</string>
+    <string name="fbot_desk_title">Coworking Desks</string>
+    <string name="fbot_desk_expand">Expand desks</string>
+    <string name="fbot_desk_collapse">Collapse desks</string>
+    <string name="fbot_desk_members_count">%1$d desks</string>
+    <string name="fbot_desk_busy_count"> · %1$d busy</string>
+    <string name="fbot_desk_status_thinking">Thinking</string>
+    <string name="fbot_desk_status_executing">Coding</string>
+    <string name="fbot_desk_status_active">Responding</string>
+    <string name="fbot_desk_status_blocked">Blocked</string>
+    <string name="fbot_desk_status_success">Done</string>
+    <string name="fbot_desk_status_failed">Failed</string>
+    <string name="fbot_desk_status_idle">Ready</string>
+    <string name="fbot_desk_mention_hint">Tap to @mention</string>
+    <string name="fbot_cyber_studio">Pixel Office</string>
+    <string name="fbot_cyber_studio_desc">A full-screen pixel office. Watch the team work, then tap someone to give them a job</string>
+    <string name="fbot_pixel_office_status_idle">[Standing by]</string>
+    <string name="fbot_pixel_office_status_busy">[%1$d busy]</string>
+    <string name="fbot_pixel_office_empty">The office is empty. Invite teammates into the group and they will show up here.</string>
+    <string name="fbot_pixel_office_idle_line">Standing by, ready when you are</string>
+    <string name="fbot_pixel_office_say">Say something to the office…</string>
+    <string name="fbot_pixel_office_waiting">Waiting on you</string>
+    <string name="fbot_pixel_office_banner">Studio</string>
+    <string name="fbot_pixel_office_pet_cat">Pet the cat</string>
+    <string name="fbot_pixel_office_brew_coffee">Brew coffee</string>
+    <string name="fbot_pixel_office_zoom_in">Zoom office in</string>
+    <string name="fbot_pixel_office_zoom_out">Zoom office out</string>
+    <string name="fbot_pixel_office_fit_view">Fit office in view</string>
+    <string name="fbot_pixel_office_reset_view">Reset view</string>
+    <string name="fbot_pixel_office_show_paths">Show navigation debug</string>
+    <string name="fbot_pixel_office_hide_paths">Hide navigation debug</string>
+    <string name="fbot_pixel_office_select_actor">Select %1$s</string>
+    <string name="fbot_pixel_office_actor_description">%1$s, %2$s</string>
+    <string name="fbot_pixel_office_actor_waiting">%1$s, %2$s, waiting for approval for %3$d seconds</string>
+    <string name="fbot_office_step_read">Reading %1$s</string>
+    <string name="fbot_office_step_read_file">Reading a file</string>
+    <string name="fbot_office_step_write">Writing %1$s</string>
+    <string name="fbot_office_step_write_file">Writing a file</string>
+    <string name="fbot_office_step_edit">Editing %1$s</string>
+    <string name="fbot_office_step_edit_file">Editing a file</string>
+    <string name="fbot_office_step_command">Running a command</string>
+    <string name="fbot_office_step_command_detail">Running %1$s</string>
+    <string name="fbot_office_step_search">Searching %1$s</string>
+    <string name="fbot_office_step_search_any">Searching the workspace</string>
+    <string name="fbot_office_step_test">Running tests</string>
+    <string name="fbot_office_step_web">Browsing the web</string>
+    <string name="fbot_office_step_delegate">Briefing a teammate</string>
+    <string name="fbot_office_step_delegate_detail">Briefing %1$s</string>
+    <string name="fbot_office_step_file">a file</string>
+    <string name="fbot_office_thinking_fallback">Building the answer…</string>
+    <string name="fbot_office_screen_read">Read</string>
+    <string name="fbot_office_screen_write">Write</string>
+    <string name="fbot_office_screen_edit">Edit</string>
+    <string name="fbot_office_screen_command">Shell</string>
+    <string name="fbot_office_screen_search">Search</string>
+    <string name="fbot_office_screen_test">Test</string>
+    <string name="fbot_office_screen_web">Web</string>
+    <string name="fbot_office_screen_delegate">Brief</string>
+    <string name="fbot_office_kanban_title">Task board</string>
+    <string name="fbot_office_board_thought">Thinking: %1$s</string>
+    <string name="fbot_office_kanban_todo">To do</string>
+    <string name="fbot_office_kanban_doing">Doing</string>
+    <string name="fbot_office_kanban_done">Done</string>
+    <string name="fbot_office_kanban_empty">No tasks</string>
+    <string name="fbot_office_kanban_more">+%1$d</string>
+    <string name="fbot_office_kanban_elapsed">%1$ds</string>
+    <string name="fbot_office_kanban_open">Open task board</string>
+    <string name="fbot_office_kanban_close">Close task board</string>
+    <string name="fbot_office_kanban_locate">Locate</string>
+    <string name="fbot_office_kanban_failed">Failed</string>
+    <string name="fbot_office_kanban_summary">%1$d tasks · %2$d doing</string>
+    <string name="fbot_office_kanban_depends">Depends on: %1$s</string>
+    <string name="fbot_office_standup_host">Align the split first</string>
+    <string-array name="fbot_office_idle_general">
+        <item>Tidying the desk</item>
+        <item>Looking at what is next</item>
+        <item>Ready when you are</item>
+        <item>Getting some water</item>
+    </string-array>
+    <string-array name="fbot_office_idle_frontend">
+        <item>UI spec is aligned</item>
+        <item>Waiting for an interaction draft</item>
+        <item>The component library changed again</item>
+    </string-array>
+    <string-array name="fbot_office_idle_backend">
+        <item>API contract looks stable</item>
+        <item>Cache hit rate is good</item>
+        <item>Checking the slow queries</item>
+    </string-array>
+    <string-array name="fbot_office_idle_test">
+        <item>Test cases are ready</item>
+        <item>Want a regression pass first?</item>
+        <item>Adding one more edge case</item>
+    </string-array>
+    <string-array name="fbot_office_idle_ops">
+        <item>PRoot sandbox is stable</item>
+        <item>Deploy lane is ready</item>
+        <item>No anomalies in the logs</item>
+    </string-array>
+    <string-array name="fbot_office_idle_product">
+        <item>Confirming the task boundary</item>
+        <item>Priorities are lined up</item>
+        <item>Let me rethink this scenario</item>
+    </string-array>
+    <string-array name="fbot_office_idle_data">
+        <item>Metric definitions are aligned</item>
+        <item>Waiting for data to flow back</item>
+        <item>Sample size is a bit short</item>
+    </string-array>
+    <string-array name="fbot_office_idle_design">
+        <item>Tightening the palette</item>
+        <item>Spacing is aligned</item>
+        <item>Motion rhythm feels right</item>
+    </string-array>
+    <string-array name="fbot_office_idle_writer">
+        <item>Doc structure is ready</item>
+        <item>One more polish pass</item>
+        <item>Adding the code examples</item>
+    </string-array>
+    <string name="fbot_pixel_zone_think">Think</string>
+    <string name="fbot_pixel_zone_meet">Meet</string>
+    <string name="fbot_pixel_zone_work">Work</string>
+    <string name="fbot_pixel_zone_coffee">Coffee</string>
+    <string name="fbot_pixel_zone_rest">Rest</string>
+    <string name="fbot_cyber_studio_back_chat">Back to Chat</string>
+    <string name="fbot_cyber_studio_desks_section">Workstations</string>
+    <string name="fbot_cyber_studio_pipeline_section">Task Pipeline</string>
+    <string name="fbot_cyber_studio_mention_action">Mention</string>
+    <string name="fbot_cyber_studio_profile_action">Profile</string>
+    <string name="fbot_cyber_studio_no_assignments">No active tasks. Mention @Bot in chat to assign tasks</string>
+    <string name="fbot_cyber_studio_summary">%1$d members on duty · %2$d assignments</string>
+    <string-array name="fbot_pixel_kinds">
+        <item>Human</item>
+        <item>Cat ears</item>
+        <item>Robot</item>
+        <item>Cyborg</item>
+    </string-array>
+    <string-array name="fbot_pixel_hairs">
+        <item>Short</item>
+        <item>Bob</item>
+        <item>Long</item>
+        <item>Spiky</item>
+        <item>Topknot</item>
+    </string-array>
+    <string-array name="fbot_pixel_eye_styles">
+        <item>Bright</item>
+        <item>Happy</item>
+        <item>Focused</item>
+        <item>Wink</item>
+    </string-array>
+    <string-array name="fbot_pixel_mouth_styles">
+        <item>Smile</item>
+        <item>Calm</item>
+        <item>Open</item>
+        <item>Cool</item>
+    </string-array>
+    <string-array name="fbot_pixel_outfits">
+        <item>T-shirt</item>
+        <item>Hoodie</item>
+        <item>Suit</item>
+        <item>Robe</item>
+    </string-array>
+    <string-array name="fbot_pixel_accessories">
+        <item>None</item>
+        <item>Glasses</item>
+        <item>Headphones</item>
+        <item>Cap</item>
+        <item>Official hat</item>
+        <item>Cyber goggles</item>
+        <item>ID badge</item>
+    </string-array>
+    <string-array name="fbot_pixel_skins">
+        <item>Light</item>
+        <item>Warm</item>
+        <item>Tan</item>
+        <item>Brown</item>
+        <item>Deep</item>
+    </string-array>
+    <string-array name="fbot_pixel_hair_colors">
+        <item>Ink</item>
+        <item>Chestnut</item>
+        <item>Copper</item>
+        <item>Gold</item>
+        <item>Silver</item>
+        <item>Blue</item>
+        <item>Pink</item>
+        <item>Teal</item>
+    </string-array>
+    <string-array name="fbot_pixel_outfit_colors">
+        <item>Indigo</item>
+        <item>Teal</item>
+        <item>Rose</item>
+        <item>Amber</item>
+        <item>Lilac</item>
+        <item>Navy</item>
+        <item>Red</item>
+        <item>Cream</item>
+    </string-array>
+    <string-array name="fbot_pixel_backdrops">
+        <item>Lilac</item>
+        <item>Mint</item>
+        <item>Peach</item>
+        <item>Sky</item>
+        <item>Cream</item>
+        <item>Gray</item>
+    </string-array>
+</resources>

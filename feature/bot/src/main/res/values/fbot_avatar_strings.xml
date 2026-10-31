@@ -1,0 +1,6 @@
+<resources>
+    <string name="fbot_avatar_choose">选择头像</string>
+    <string name="fbot_avatar_reset">恢复默认头像</string>
+    <string name="fbot_avatar_loading">正在处理图片…</string>
+    <string name="fbot_avatar_failed">图片读取失败，请重新选择</string>
+</resources>

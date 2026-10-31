@@ -1,5 +1,8 @@
 package top.tianyan.app.ui.workflow
 
+import android.content.ClipData
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -36,7 +39,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -46,7 +48,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
@@ -61,9 +63,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -83,6 +86,9 @@ import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeOutlinedButton
 
+/** 共享的 pretty Json：构建实例开销大，不在 remember/重组中反复创建。 */
+private val PrettyJson = Json { prettyPrint = true }
+
 @Composable
 fun WorkflowEditorView(
     state: WorkflowEditorUiState,
@@ -96,7 +102,7 @@ fun WorkflowEditorView(
     onConnect: (String) -> Unit,
     onAddNode: (WorkflowNodeType) -> Unit,
     onUpdateNode: (WorkflowNode) -> Unit,
-    onUpdateMetadata: (String, String, String) -> Unit,
+    onUpdateMetadata: (String, String, String, Int) -> Unit,
     onRemoveNode: () -> Unit,
     onRemoveNodeById: (String) -> Unit = {},
     onConnectNodes: (String, String, String, String?) -> Unit = { _, _, _, _ -> },
@@ -117,7 +123,7 @@ fun WorkflowEditorView(
 
     BoxWithConstraints(modifier) {
         val editorHeight = maxHeight
-        val isWideScreen = maxWidth >= 820.dp
+        val isWideScreen = top.tianyan.app.ui.components.widthClassOf(maxWidth.value) == top.tianyan.app.ui.components.RuntimeWidthClass.Expanded
         val selectedNode = state.definition.nodes.firstOrNull { it.id == state.selectedNodeId }
         val isInspectorOpen = !isWideScreen && sheetExpanded && selectedNode != null
 
@@ -643,7 +649,8 @@ private fun RunConsoleModal(
     onCancelRun: () -> Unit,
     onRerun: () -> Unit,
 ) {
-    val copyText = top.tianyan.app.ui.components.rememberTextCopier()
+    val clipboard = LocalClipboard.current
+    val clipboardScope = rememberCoroutineScope()
     val isRunning = activeRunState.status in setOf(WorkflowRunStatus.RUNNING, WorkflowRunStatus.WAITING_APPROVAL)
     val startedAt = activeRunState.startedAt ?: 0L
     val finishedAt = activeRunState.finishedAt ?: 0L
@@ -774,7 +781,9 @@ private fun RunConsoleModal(
         confirmButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 RuntimeOutlinedButton(onClick = {
-                    copyText(consoleOutput)
+                    clipboardScope.launch {
+                        clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("workflow_console", consoleOutput)))
+                    }
                 }) {
                     Text("复制日志")
                 }
@@ -892,7 +901,7 @@ private fun EditorInspector(
     state: WorkflowEditorUiState,
     activeRunState: WorkflowRuntimeState?,
     onUpdateNode: (WorkflowNode) -> Unit,
-    onUpdateMetadata: (String, String, String) -> Unit,
+    onUpdateMetadata: (String, String, String, Int) -> Unit,
     onBeginConnection: (String) -> Unit,
     onCancelConnection: () -> Unit,
     onRemoveNode: () -> Unit,
@@ -972,44 +981,6 @@ private fun EditorInspector(
 }
 
 @Composable
-private fun WorkflowMetadataCard(state: WorkflowEditorUiState, onApply: (String, String, String) -> Unit) {
-    var name by remember(state.definition.id, state.definition.name) { mutableStateOf(state.definition.name) }
-    var description by remember(state.definition.id, state.definition.description) { mutableStateOf(state.definition.description) }
-    var category by remember(state.definition.id, state.definition.category) { mutableStateOf(state.definition.category) }
-    var expanded by remember { mutableStateOf(false) }
-
-    RuntimeCard(Modifier.fillMaxWidth(), contentPadding = PaddingValues(14.dp)) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("工作流信息", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                Text(
-                    text = if (expanded) "收起" else "修改",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-            if (expanded) {
-                OutlinedTextField(name, { name = it }, label = { Text("工作流名称") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(category, { category = it }, label = { Text("分类") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(description, { description = it }, label = { Text("说明") }, minLines = 2, maxLines = 3, modifier = Modifier.fillMaxWidth())
-                RuntimeOutlinedButton(onClick = { onApply(name, description, category) }, modifier = Modifier.align(Alignment.End)) { Text("应用信息") }
-            } else {
-                Text(
-                    text = "${name} · [${category}] - ${description.ifBlank { "暂无说明" }}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
-}
-
-@Composable
 private fun NodeInspectorCard(
     state: WorkflowEditorUiState,
     node: WorkflowNode,
@@ -1026,17 +997,16 @@ private fun NodeInspectorCard(
     var description by remember(node.id, node.description) { mutableStateOf(node.description) }
     var timeout by remember(node.id, node.timeoutSeconds) { mutableStateOf(node.timeoutSeconds.toString()) }
     var policy by remember(node.id, node.failurePolicy) { mutableStateOf(node.failurePolicy) }
-    var policyExpanded by remember { mutableStateOf(false) }
 
     val configMap = remember(node.id, node.config) {
         mutableStateMapOf<String, String>().apply { putAll(node.config) }
     }
     var showAdvancedJson by remember { mutableStateOf(false) }
     var rawJsonText by remember(node.id, node.config) {
-        mutableStateOf(Json { prettyPrint = true }.encodeToString(node.config))
+        mutableStateOf(PrettyJson.encodeToString(node.config))
     }
     val parsedConfig = remember(rawJsonText) {
-        runCatching { Json.decodeFromString<Map<String, String>>(rawJsonText) }.getOrNull()
+        runCatching { PrettyJson.decodeFromString<Map<String, String>>(rawJsonText) }.getOrNull()
     }
 
     RuntimeCard(Modifier.fillMaxWidth(), contentPadding = PaddingValues(14.dp)) {
@@ -1077,7 +1047,7 @@ private fun NodeInspectorCard(
                 shape = RoundedCornerShape(10.dp),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
                         text = "💡 节点作用：${meta.summary}",
                         style = MaterialTheme.typography.labelMedium,
@@ -1092,14 +1062,14 @@ private fun NodeInspectorCard(
                 }
             }
 
-            OutlinedTextField(
+            RuntimeFilledTextField(
                 value = title,
                 onValueChange = { title = it },
                 label = { Text("节点标题") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
-            OutlinedTextField(
+            RuntimeFilledTextField(
                 value = description,
                 onValueChange = { description = it },
                 label = { Text("节点备注 / 说明") },
@@ -1115,15 +1085,15 @@ private fun NodeInspectorCard(
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f),
                         shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, Color(0xFF06B6D4).copy(alpha = 0.4f)),
+                        border = BorderStroke(1.dp, top.tianyan.app.ui.theme.semanticColors().info.copy(alpha = 0.4f)),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                RuntimeIcon(RuntimeIconName.Terminal, Modifier.size(16.dp), tint = Color(0xFF06B6D4))
-                                Text("终端 Shell 命令行（在沙箱环境中执行）", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Color(0xFF06B6D4))
+                                RuntimeIcon(RuntimeIconName.Terminal, Modifier.size(16.dp), tint = top.tianyan.app.ui.theme.semanticColors().info)
+                                Text("终端 Shell 命令行（在沙箱环境中执行）", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = top.tianyan.app.ui.theme.semanticColors().info)
                             }
-                            OutlinedTextField(
+                            RuntimeFilledTextField(
                                 value = configMap["command"].orEmpty(),
                                 onValueChange = { configMap["command"] = it },
                                 label = { Text("Bash 命令（在此输入执行的命令）") },
@@ -1145,18 +1115,18 @@ private fun NodeInspectorCard(
                                     Surface(
                                         onClick = { configMap["command"] = cmd },
                                         shape = RoundedCornerShape(50),
-                                        color = Color(0xFF06B6D4).copy(alpha = 0.14f),
+                                        color = top.tianyan.app.ui.theme.semanticColors().info.copy(alpha = 0.14f),
                                     ) {
                                         Text(
                                             text = "+ $name",
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = Color(0xFF06B6D4),
+                                            color = top.tianyan.app.ui.theme.semanticColors().info,
                                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                         )
                                     }
                                 }
                             }
-                            OutlinedTextField(
+                            RuntimeFilledTextField(
                                 value = configMap["workingDirectory"].orEmpty(),
                                 onValueChange = { configMap["workingDirectory"] = it },
                                 label = { Text("工作目录（可选）") },
@@ -1169,7 +1139,7 @@ private fun NodeInspectorCard(
                 }
 
                 WorkflowNodeType.CONDITION_BRANCH -> {
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = configMap["expression"] ?: configMap["condition"].orEmpty(),
                         onValueChange = {
                             configMap["expression"] = it
@@ -1193,7 +1163,7 @@ private fun NodeInspectorCard(
                 }
 
                 WorkflowNodeType.PROCESS_SERVICE -> {
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = configMap["command"].orEmpty(),
                         onValueChange = { configMap["command"] = it },
                         label = { Text("后台服务启动命令（必填）") },
@@ -1203,7 +1173,7 @@ private fun NodeInspectorCard(
                         maxLines = 4,
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = configMap["workingDirectory"].orEmpty(),
                         onValueChange = { configMap["workingDirectory"] = it },
                         label = { Text("工作目录（可选）") },
@@ -1213,57 +1183,10 @@ private fun NodeInspectorCard(
                     )
                 }
 
-                WorkflowNodeType.AGENT_INFERENCE -> {
-                    OutlinedTextField(
-                        value = configMap["prompt"].orEmpty(),
-                        onValueChange = { configMap["prompt"] = it },
-                        label = { Text("任务需求 / 提示词（必填）") },
-                        placeholder = { Text("例如：审阅上一节点的差异并提出优化建议") },
-                        supportingText = { Text("支持使用 \${previous.output} 引用上游节点输出") },
-                        minLines = 3,
-                        maxLines = 6,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    OutlinedTextField(
-                        value = configMap["role"].orEmpty(),
-                        onValueChange = { configMap["role"] = it },
-                        label = { Text("智能体角色（可选）") },
-                        placeholder = { Text("例如：Android 资深架构师") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    OutlinedTextField(
-                        value = configMap["modelId"].orEmpty(),
-                        onValueChange = { configMap["modelId"] = it },
-                        label = { Text("固定模型配置 ID（可选）") },
-                        placeholder = { Text("留空则使用运行时选择的 WORKFLOW_MODEL_ID") },
-                        supportingText = { Text("优先于运行对话框所选模型；一般留空即可") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
+                WorkflowNodeType.AGENT_INFERENCE -> WorkflowAgentFields(configMap, delegate = false)
+                WorkflowNodeType.SUBAGENT_DELEGATE -> WorkflowAgentFields(configMap, delegate = true)
 
-                WorkflowNodeType.SUBAGENT_DELEGATE -> {
-                    OutlinedTextField(
-                        value = configMap["prompt"].orEmpty(),
-                        onValueChange = { configMap["prompt"] = it },
-                        label = { Text("子任务需求（必填）") },
-                        placeholder = { Text("例如：执行单元测试并尝试修复失败用例") },
-                        minLines = 3,
-                        maxLines = 5,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    OutlinedTextField(
-                        value = configMap["role"].orEmpty(),
-                        onValueChange = { configMap["role"] = it },
-                        label = { Text("子智能体角色（可选）") },
-                        placeholder = { Text("例如：测试修复助手") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-
-                WorkflowNodeType.TAIXU_BUILD -> {
+                WorkflowNodeType.TIANYAN_BUILD -> {
                     var modeExpanded by remember { mutableStateOf(false) }
                     var typeExpanded by remember { mutableStateOf(false) }
                     val currentMode = configMap["mode"] ?: "build"
@@ -1291,7 +1214,7 @@ private fun NodeInspectorCard(
                             }
                         }
                     }
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = configMap["task"] ?: "assembleDebug",
                         onValueChange = { configMap["task"] = it },
                         label = { Text("构建 Task 任务") },
@@ -1306,19 +1229,11 @@ private fun NodeInspectorCard(
                 }
 
                 WorkflowNodeType.DELAY -> {
-                    OutlinedTextField(
-                        value = configMap["seconds"] ?: "1",
-                        onValueChange = { configMap["seconds"] = it.filter { ch -> ch.isDigit() || ch == '.' }.take(6) },
-                        label = { Text("等待秒数") },
-                        supportingText = { Text("支持 0–600 秒，可写小数") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    WorkflowDelayFields(configMap)
                 }
 
                 WorkflowNodeType.SET_VARIABLE -> {
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = configMap["variables"].orEmpty(),
                         onValueChange = { configMap["variables"] = it },
                         label = { Text("变量赋值（每行 KEY=value）") },
@@ -1331,15 +1246,7 @@ private fun NodeInspectorCard(
                 }
 
                 WorkflowNodeType.HUMAN_APPROVAL -> {
-                    OutlinedTextField(
-                        value = configMap["prompt"].orEmpty(),
-                        onValueChange = { configMap["prompt"] = it },
-                        label = { Text("审批确认说明（必填）") },
-                        placeholder = { Text("例如：是否确认将修复推送到远程仓库？") },
-                        minLines = 2,
-                        maxLines = 4,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    WorkflowApprovalFields(configMap)
                 }
 
                 WorkflowNodeType.TRIGGER -> {
@@ -1350,6 +1257,7 @@ private fun NodeInspectorCard(
                     )
                 }
 
+                WorkflowNodeType.PLUGIN_ACTION -> PluginNodeConfigFields(configMap)
                 WorkflowNodeType.TERMINAL_OUTPUT -> {
                     Text(
                         text = "工作流终点节点。将自动收集并归档上游所有步骤的标准输出、错误日志与产物文件。",
@@ -1379,7 +1287,7 @@ private fun NodeInspectorCard(
                 )
             }
             if (showAdvancedJson) {
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = rawJsonText,
                     onValueChange = {
                         rawJsonText = it
@@ -1396,26 +1304,7 @@ private fun NodeInspectorCard(
                 )
             }
 
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = timeout,
-                    onValueChange = { timeout = it.filter(Char::isDigit).take(4) },
-                    label = { Text("超时（秒）") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.weight(1f),
-                )
-                Column(Modifier.weight(1.2f)) {
-                    RuntimeOutlinedButton(onClick = { policyExpanded = true }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                        Text("策略：${policy.editorLabel()}", maxLines = 1)
-                    }
-                    DropdownMenu(expanded = policyExpanded, onDismissRequest = { policyExpanded = false }) {
-                        FailurePolicy.entries.forEach { item ->
-                            DropdownMenuItem(text = { Text(item.editorLabel()) }, onClick = { policy = item; policyExpanded = false })
-                        }
-                    }
-                }
-            }
+            WorkflowNodePolicyFields(node.type, timeout, { timeout = it }, policy, { policy = it })
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 RuntimeOutlinedButton(
@@ -1426,17 +1315,21 @@ private fun NodeInspectorCard(
                 }
                 RuntimeButton(
                     onClick = {
-                        val finalConfig = if (showAdvancedJson && parsedConfig != null) parsedConfig else configMap.toMap()
+                        val finalConfig = if (showAdvancedJson) parsedConfig ?: return@RuntimeButton else configMap.toMap()
+                        val timeoutValue = if (node.type == WorkflowNodeType.HUMAN_APPROVAL) node.timeoutSeconds
+                            else timeout.toIntOrNull()?.takeIf { it in 1..3600 } ?: return@RuntimeButton
                         onApply(
                             node.copy(
                                 title = title.trim().ifBlank { node.title },
                                 description = description.trim(),
-                                timeoutSeconds = timeout.toIntOrNull()?.coerceIn(1, 7200) ?: node.timeoutSeconds,
+                                timeoutSeconds = timeoutValue,
                                 config = finalConfig,
                                 failurePolicy = policy,
                             ),
                         )
                     },
+                    enabled = (node.type == WorkflowNodeType.HUMAN_APPROVAL || timeout.toIntOrNull()?.let { it in 1..3600 } == true) &&
+                        (!showAdvancedJson || parsedConfig != null),
                     modifier = Modifier.weight(1f),
                 ) {
                     Text("应用参数更改", maxLines = 1)
@@ -1508,7 +1401,7 @@ private fun HostActionConfigFields(configMap: MutableMap<String, String>) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             def.fields.forEach { field ->
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = configMap[field.key].orEmpty(),
                     onValueChange = { configMap[field.key] = it },
                     label = { Text(if (field.required) "${field.label} *" else field.label) },
@@ -1519,7 +1412,7 @@ private fun HostActionConfigFields(configMap: MutableMap<String, String>) {
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
-        } ?: OutlinedTextField(
+        } ?: RuntimeFilledTextField(
             value = configMap["command"].orEmpty(),
             onValueChange = { configMap["command"] = it },
             label = { Text("自定义宿主命令（逃逸舱）") },
@@ -1576,8 +1469,8 @@ private fun BranchRouterCard(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Surface(shape = RoundedCornerShape(50), color = Color(0xFF10B981).copy(alpha = 0.18f)) {
-                    Text("✔ 成功分支 (exitCode == 0)", style = MaterialTheme.typography.labelSmall, color = Color(0xFF10B981), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                Surface(shape = RoundedCornerShape(50), color = top.tianyan.app.ui.theme.semanticColors().success.copy(alpha = 0.18f)) {
+                    Text("✔ 成功分支 (exitCode == 0)", style = MaterialTheme.typography.labelSmall, color = top.tianyan.app.ui.theme.semanticColors().success, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
                 }
                 if (successEdge != null) {
                     val target = state.definition.nodes.firstOrNull { it.id == successEdge.toNodeId }
@@ -1869,7 +1762,7 @@ private fun NodeConnectionsCard(
                                 }
                             }
                         }
-                        OutlinedTextField(
+                        RuntimeFilledTextField(
                             value = conditionText,
                             onValueChange = { conditionText = it },
                             label = { Text("条件（可选）") },
@@ -1895,109 +1788,7 @@ private fun NodeConnectionsCard(
     }
 }
 
-data class NodeTypeMeta(
-    val type: WorkflowNodeType,
-    val label: String,
-    val icon: RuntimeIconName,
-    val summary: String,
-    val guide: String,
-)
-
-fun WorkflowNodeType.metadata(): NodeTypeMeta = when (this) {
-    WorkflowNodeType.TRIGGER -> NodeTypeMeta(
-        type = this,
-        label = "触发器",
-        icon = RuntimeIconName.Play,
-        summary = "流程启动入口，支持手动点击或外部事件触发",
-        guide = "作为 DAG 图的起始节点。当您在顶部点击“运行调试”或接收到触发信号时，工作流从这里开始向下执行。",
-    )
-    WorkflowNodeType.BASH_COMMAND -> NodeTypeMeta(
-        type = this,
-        label = "Shell 命令行",
-        icon = RuntimeIconName.Terminal,
-        summary = "在 Linux PRoot 沙箱中执行一条 Shell 命令或脚本",
-        guide = "可执行任何沙箱内已安装的命令（如 git, make, python, curl 等）。支持通过 \${WORKSPACE_PATH} 引用工程根目录，或使用 \${previous.output} 获取上游输出。",
-    )
-    WorkflowNodeType.PROCESS_SERVICE -> NodeTypeMeta(
-        type = this,
-        label = "后台常驻服务",
-        icon = RuntimeIconName.Settings,
-        summary = "启动沙箱后台常驻守护进程，不阻塞后续流程继续执行",
-        guide = "适用于启动 http-server、Web 服务或监听器进程。进程 ID 会自动保存在变量 \${PROCESS_ID} 中供后续流程引用。",
-    )
-    WorkflowNodeType.AGENT_INFERENCE -> NodeTypeMeta(
-        type = this,
-        label = "AI 智能体推理",
-        icon = RuntimeIconName.Sparkles,
-        summary = "调度 AI 智能体结合任务指令与上游输出分析并生成结果",
-        guide = "将任务指令（Prompt）与上游产出交给 AI 智能体处理。支持结合 \${previous.output} 进行代码审查、故障排查或生成修复补丁。",
-    )
-    WorkflowNodeType.SUBAGENT_DELEGATE -> NodeTypeMeta(
-        type = this,
-        label = "子智能体委派",
-        icon = RuntimeIconName.Hub,
-        summary = "委派独立专属子智能体执行更细粒度的任务",
-        guide = "委派特定角色的子智能体（如单元测试生成器、构建错误分析员）处理专属任务，隔离主智能体上下文。",
-    )
-    WorkflowNodeType.TAIXU_BUILD -> NodeTypeMeta(
-        type = this,
-        label = "天衍离线构建",
-        icon = RuntimeIconName.Package,
-        summary = "调用沙箱内离线构建引擎编译打包 Android/C++/Rust",
-        guide = "调用沙箱内置的 taixu-build 编译引擎。支持 android、cmake、cargo 等类型，可直接产出 APK 安装包或可执行二进制文件。",
-    )
-    WorkflowNodeType.CONDITION_BRANCH -> NodeTypeMeta(
-        type = this,
-        label = "条件分支路由",
-        icon = RuntimeIconName.Link,
-        summary = "求值表达式并按成立/不成立分流",
-        guide = "支持 exitCode、output contains、\${变量} 比较，以及 && / ||。成立时 exitCode=0，否则为 1；请用边上的条件或 success/failure 端口承接分支。",
-    )
-    WorkflowNodeType.HUMAN_APPROVAL -> NodeTypeMeta(
-        type = this,
-        label = "人工审批把关",
-        icon = RuntimeIconName.Alert,
-        summary = "暂停流程并弹出确认对话框，等待人工确认或输入参数后继续",
-        guide = "重要步骤（如发布、破坏性清理或上线）前的安全把关点。流程执行至此时将自动暂停并弹出弹窗，等待您手动确认或填写必要参数。",
-    )
-    WorkflowNodeType.HOST_ACTION -> NodeTypeMeta(
-        type = this,
-        label = "宿主系统动作",
-        icon = RuntimeIconName.Android,
-        summary = "打开应用、发广播、改设置、操控屏幕等 Android 宿主能力",
-        guide = "穿透沙箱调用 Android：应用管理、Intent/广播、系统设置、GUI 自动化、通知与特权 shell。标「需特权」的动作要求 Shizuku 或 Root。",
-    )
-    WorkflowNodeType.DELAY -> NodeTypeMeta(
-        type = this,
-        label = "延时等待",
-        icon = RuntimeIconName.Speed,
-        summary = "暂停若干秒后再继续后续节点",
-        guide = "用于等待界面切换、广播落地或给人工留出观察时间。",
-    )
-    WorkflowNodeType.SET_VARIABLE -> NodeTypeMeta(
-        type = this,
-        label = "设置变量",
-        icon = RuntimeIconName.Tune,
-        summary = "向后续节点注入 KEY=value 变量",
-        guide = "每行一个赋值，右侧支持 \${VAR} 插值。写入的变量会进入全局上下文，可供条件与宿主动作引用。",
-    )
-    WorkflowNodeType.TERMINAL_OUTPUT -> NodeTypeMeta(
-        type = this,
-        label = "结果归档输出",
-        icon = RuntimeIconName.Check,
-        summary = "工作流终点，自动汇总所有输出日志、耗时与产出文件",
-        guide = "DAG 流程的最终收尾节点。将自动收集并展示上游所有阶段的终端标准输出、退出码与生成的产物文件列表。",
-    )
-}
-
 private fun WorkflowNodeType.editorLabel() = metadata().label
-
-private fun FailurePolicy.editorLabel() = when (this) {
-    FailurePolicy.ABORT -> "终止流程"
-    FailurePolicy.CONTINUE -> "继续执行"
-    FailurePolicy.RETRY_ONCE -> "重试一次"
-    FailurePolicy.ASK_USER -> "询问用户"
-}
 
 private fun String.portLabel() = when (lowercase()) {
     "success" -> "成功 (success)"

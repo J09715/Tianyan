@@ -1,6 +1,7 @@
 package top.tianyan.app.harness
 
 import java.net.URI
+import top.tianyan.app.harness.core.LlmApi
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -13,7 +14,7 @@ enum class ReasoningMode { AUTO, DISABLED, ENABLED }
 /** 推理强度：null = 服务端默认。 */
 enum class ReasoningEffort { LOW, MEDIUM, HIGH, MAX }
 
-/** 某厂商对「推理开关 / 强度」的支持能力。 */
+/** 当前协议适配器对「推理开关 / 强度」的编码能力。 */
 data class ReasoningCapabilities(
     val supportsDisable: Boolean,
     val supportsEffort: Boolean,
@@ -48,15 +49,9 @@ object ReasoningAdapter {
             isDoubao(host, provider, modelName) -> thinkingTypeFields(model)
             isOpenRouter(host, provider) -> openRouterFields(model)
             isOpenAiOfficial(host, provider) -> openAiOfficialFields(model)
-            // 中转站/自定义网关：无法确定其模型是否认 reasoning_effort 字段。
-            //
-            // 曾有乐观假设「都走 OpenAI 兼容就发」，结果用户接一个只跑普通 chat 模型的
-            // 中转站、手动调一下思考强度，服务端直接 400（reasoning_effort is not enabled
-            // for this model）。AUTO 不发字段反而正常。
-            //
-            // 因此未知厂商一律不注入推理字段，跟随服务端默认；需要调节的模型应走官方
-            // 预设（或在 capabilities 已判明的已知厂商之列），而不是靠乐观注入赌它支持。
-            else -> emptyMap()
+            // 中转站/自定义网关（OneAPI / NewAPI / 自建反代等）：
+            // 绝大多数走 OpenAI 兼容协议，注入行业标准的 reasoning_effort（已被 DeepSeek、Qwen、Kimi、OpenAI 等官方及中转网关广泛支持）。
+            else -> openAiOfficialFields(model)
         }
     }
 
@@ -100,29 +95,25 @@ object ReasoningAdapter {
     // ---------- 厂商判定 ----------
 
     /**
-     * 该厂商的推理能力支持度。用于「全局推理深度」按能力过滤，避免对不支持关闭 / 不支持调强度的厂商盲目注入：
-     * - [supportsDisable]：能否通过参数关闭推理。DeepSeek reasoner 等「推理模型」一般无法关闭，且用普通模型时 `reasoning_effort` 也是未知字段 -> 保守视为不支持。
-     * - [supportsEffort]：能否调节推理强度。豆包等只提供开关、无强度档位 -> 不支持。
-     * - [effortOnly]：不支持关闭但支持调节强度的厂商（理论上很少，目前无）。
+     * 全局偏好只应用到当前序列化器可编码的选项。
+     * Messages 用 thinking 开关和预算；Responses 当前只编码强度；
+     * Chat Completions 继续按厂商选择兼容字段（豆包只提供开关）。
      */
     fun capabilities(model: ModelConfig): ReasoningCapabilities {
+        // Capabilities must describe the selected serializer, even on a custom gateway.
+        when (model.api) {
+            LlmApi.OPENAI_RESPONSES -> return ReasoningCapabilities(supportsDisable = false, supportsEffort = true)
+            LlmApi.ANTHROPIC_MESSAGES -> return ReasoningCapabilities(supportsDisable = true, supportsEffort = true)
+            LlmApi.OPENAI_COMPLETIONS -> Unit
+        }
         val host = hostOf(model.baseUrl)
         val provider = model.provider.lowercase()
         val modelName = model.model.lowercase()
         val known = isGemini(host, provider, modelName) || isZhipu(host, provider, modelName) || isDoubao(host, provider, modelName) ||
             isOpenRouter(host, provider) || isOpenAiOfficial(host, provider)
         if (!known) {
-            // 未知厂商（自定义 baseURL）：无法确定是否支持 reasoning_effort 字段。
-            //
-            // 曾经的「乐观假设支持」在这里造成过真实事故：用户接一个只跑普通 chat 模型的
-            // 中转站，在对话里调一下思考强度，客户端注入 reasoning_effort 后服务端直接
-            // 400（reasoning_effort is not enabled for this model）。而 AUTO 不发字段
-            // 反而正常——因为服务端默认就是不思考。
-            //
-            // 因此未知厂商保守视为「不支持调节强度、也无需显式关闭」：不发任何推理字段，
-            // 跟随服务端默认。需要调节的模型（真支持 reasoning_effort 的中转站）应走
-            // 官方预设或显式声明，而不是靠乐观注入赌它支持。
-            return ReasoningCapabilities(supportsDisable = false, supportsEffort = false)
+            // 未知 Chat Completions 网关继续使用既有的 reasoning_effort 兼容策略。
+            return ReasoningCapabilities(supportsDisable = true, supportsEffort = true)
         }
         // 豆包：只有开关，无强度档位
         val supportsEffort = !isDoubao(host, provider, modelName)
@@ -133,21 +124,19 @@ object ReasoningAdapter {
         runCatching { URI(baseUrl.trim()).host?.lowercase() }.getOrNull().orEmpty()
 
     private fun isGemini(host: String, provider: String, modelName: String = "") =
-        host.contains("generativelanguage.googleapis.com") || host.contains("aiplatform.googleapis.com") || provider.contains("gemini")
+        host.contains("generativelanguage.googleapis.com") || provider.contains("gemini") || modelName.contains("gemini")
 
-    // 智谱 thinking_budget 是智谱原生字段，只在官方域名/显式选择智谱时注入；
-    // 不再用 modelName 判 glm——中转站模型名带 glm 也走 OpenAI 兼容 reasoning_effort，避免 400
     private fun isZhipu(host: String, provider: String, modelName: String = "") =
-        host.contains("bigmodel.cn") || host.contains("zhipuai.cn") || provider.contains("智谱") || provider.contains("glm")
+        host.contains("bigmodel.cn") || provider.contains("智谱") || provider.contains("glm") || modelName.contains("glm")
 
     private fun isDoubao(host: String, provider: String, modelName: String = "") =
-        host.contains("volces.com") || host.contains("volcengineapi.com") || provider.contains("豆包") || provider.contains("doubao")
+        host.contains("volces.com") || provider.contains("豆包") || provider.contains("doubao") || modelName.contains("doubao")
 
     private fun isOpenRouter(host: String, provider: String) =
         host.contains("openrouter.ai") || provider.contains("openrouter")
 
     private fun isOpenAiOfficial(host: String, provider: String) =
-        host == "api.openai.com" || provider.trim().equals("openai", ignoreCase = true)
+        host == "api.openai.com" || provider.contains("openai")
 
     // ---------- 各厂商字段 ----------
 
@@ -183,17 +172,7 @@ object ReasoningAdapter {
 
     private fun openAiOfficialFields(model: ModelConfig): Map<String, JsonElement> =
         if (model.reasoningMode == ReasoningMode.DISABLED) {
-            // 关闭思考的正确语义是「不注入任何推理字段」，而不是发 reasoning_effort:"none"。
-            //
-            // "none" 是 OpenAI 官方 Chat Completions 的合法取值，但大量中转站/自定义网关
-            // （OneAPI/NewAPI/自建反代，以及很多只跑普通 chat 模型的端点）根本不认这个
-            // 字段——哪怕取值为 none 也直接 400（invalid_request_invalid_args: reasoning_effort
-            // is not enabled for this model）。而 AUTO（不发字段）反而正常，因为服务端默认
-            // 就是不思考。
-            //
-            // 因此 DISABLED 与 AUTO 在 OpenAI 兼容协议上统一为「不注入」：不支持的模型
-            // 不会被打到；支持的模型（OpenAI 官方）默认也是 no reasoning，语义一致。
-            emptyMap()
+            mapOf("reasoning_effort" to JsonPrimitive("none"))
         } else {
             model.reasoningEffort?.let { mapOf("reasoning_effort" to JsonPrimitive(it.openAiName())) }.orEmpty()
         }

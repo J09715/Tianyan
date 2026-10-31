@@ -18,20 +18,48 @@ jobs:
       contents: write
 
     steps:
+      # release_tag 会进入 softprops/action-gh-release 的 tag_name / name。
+      # 经 env 传入，避免 ${{ }} 直接拼进 shell。空值与纯空白表示不创建 Release；
+      # 其余必须整段匹配 ReleaseTagValidator 的形状：v<主>.<次>.<补丁>[-后缀]，
+      # 后缀仅字母、数字、点、连字符。下划线（如 v1.0.0_rc1）故意拒绝。
+      # 非法输入在构建之前失败关闭；Release 步骤只消费这里写出的已校验 tag。
+      - name: Validate release tag
+        id: release_tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.release_tag }}
+        run: |
+          tag="$RELEASE_TAG"
+          if [[ "$tag" =~ ^[[:space:]]*$ ]]; then
+            echo "create=false" >> "$GITHUB_OUTPUT"
+            echo "release_tag is empty; GitHub Release will not be created"
+            exit 0
+          fi
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]]; then
+            echo "::error::Invalid release_tag. Expected v<major>.<minor>.<patch>[-suffix] (letters, digits, dot, hyphen). Underscores are rejected."
+            exit 1
+          fi
+          echo "create=true" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set up JDK 25
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '25'
+          java-version: '17'
           cache: 'gradle'
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # 'tools' 包已于 2026-09 被 Google 下线，不能再用默认值（tools platform-tools）
+          # 参考 https://github.com/android-actions/setup-android/issues/537
+          packages: 'platform-tools'
 
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
@@ -62,11 +90,11 @@ jobs:
           retention-days: 7
 
       - name: Create GitHub Release (Optional)
-        if: "${{ github.event.inputs.release_tag != '' }}"
+        if: steps.release_tag.outputs.create == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "${{ github.event.inputs.release_tag }}"
-          name: "TianyanDev Preview ${{ github.event.inputs.release_tag }}"
+          tag_name: "${{ steps.release_tag.outputs.tag }}"
+          name: "TianyanDev Preview ${{ steps.release_tag.outputs.tag }}"
           files: output/*
           draft: false
           prerelease: true

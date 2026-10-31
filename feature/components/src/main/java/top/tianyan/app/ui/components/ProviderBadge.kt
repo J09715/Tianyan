@@ -116,6 +116,8 @@ fun ProviderBadge(
                 fontSize = fontSize,
                 fontWeight = FontWeight.Bold,
                 style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                softWrap = false,
             )
         } else {
             // 空 provider：渲染通用模型图标，避免无意义的 "?" 占位

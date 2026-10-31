@@ -1,0 +1,9 @@
+<resources>
+    <string name="mcp_client_intro">MCP 为智能体提供外部工具能力。STDIO 服务在绑定的 Linux 环境中运行，HTTP 服务通过配置的端点连接。</string>
+    <string name="mcp_client_idle_title">STDIO 空闲休眠时间</string>
+    <string name="mcp_client_minutes">%1$d 分钟</string>
+    <string name="mcp_client_idle_hint">空闲超过所选时间后回收进程，保留工具目录；下次调用自动重新连接。执行中的请求不会被回收。检查每分钟进行一次，仅影响 STDIO 服务。</string>
+    <string name="mcp_client_save_failed">保存失败，请重新选择。</string>
+    <string name="mcp_client_sleeping">已就绪（休眠），下次调用自动连接</string>
+    <string name="mcp_client_waking">正在唤醒进程…</string>
+</resources>

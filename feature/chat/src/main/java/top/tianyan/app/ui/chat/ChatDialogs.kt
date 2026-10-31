@@ -8,8 +8,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
@@ -21,21 +19,18 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import top.tianyan.app.ui.components.RuntimeButton as Button
 import androidx.compose.material3.ButtonDefaults
 import top.tianyan.app.ui.components.RuntimeCircularProgressIndicator as CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
 import top.tianyan.app.ui.components.RuntimeIconButton as IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import top.tianyan.app.ui.components.RuntimeTextButton as TextButton
@@ -47,7 +42,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import top.tianyan.app.feature.chat.R
@@ -58,12 +52,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.tianyan.app.core.database.AiModelEntity
 import top.tianyan.app.core.database.HarnessSessionEntity
-import top.tianyan.app.runtime.WorkspaceProject
 import top.tianyan.app.ui.components.RuntimeIcon
+import top.tianyan.app.ui.theme.semanticColors
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.core.model.SessionRunState
-import top.tianyan.app.runtime.ProjectType
-import top.tianyan.app.ui.components.ProviderBadge
+import top.tianyan.app.ui.components.ModelBadge
 
 /** 会话 / 模型 / 新建会话对话框。 */
 @Composable
@@ -77,8 +70,13 @@ internal fun EditAndResendDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.chat_edit_resend), fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                RuntimeFilledTextField(
                     value = text,
                     onValueChange = { text = it },
                     label = { Text(stringResource(R.string.chat_user_request_clipboard)) },
@@ -180,12 +178,13 @@ internal fun SessionsDialog(
                         val isCurrent = session.id == currentSessionId
                         val runState = sessionRunStates[session.id] ?: SessionRunState.IDLE
 
+                        val semantics = semanticColors()
                         val (dotColor, stateLabel) = when (runState) {
-                            SessionRunState.RUNNING -> StatusRunning to stringResource(R.string.chat_state_running)
-                            SessionRunState.WAITING_APPROVAL -> StatusApproval to stringResource(R.string.chat_state_approval)
-                            SessionRunState.FAILED -> StatusFailed to stringResource(R.string.chat_state_failed)
-                            SessionRunState.COMPLETED -> StatusReady to stringResource(R.string.chat_state_completed)
-                            SessionRunState.IDLE -> StatusReady to stringResource(R.string.chat_state_ready)
+                            SessionRunState.RUNNING -> semantics.warning to stringResource(R.string.chat_state_running)
+                            SessionRunState.WAITING_APPROVAL -> semantics.agent to stringResource(R.string.chat_state_approval)
+                            SessionRunState.FAILED -> MaterialTheme.colorScheme.error to stringResource(R.string.chat_state_failed)
+                            SessionRunState.COMPLETED -> semantics.success to stringResource(R.string.chat_state_completed)
+                            SessionRunState.IDLE -> semantics.success to stringResource(R.string.chat_state_ready)
                         }
 
                         Surface(
@@ -194,8 +193,8 @@ internal fun SessionsDialog(
                                 else MaterialTheme.colorScheme.surfaceContainerLow,
                             border = androidx.compose.foundation.BorderStroke(
                                 if (isCurrent) 1.5.dp else 1.dp,
-                                if (isCurrent) LinearAccent
-                                else LinearBorder,
+                                if (isCurrent) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                             ),
                             modifier = Modifier.fillMaxWidth(),
                         ) {
@@ -215,7 +214,7 @@ internal fun SessionsDialog(
                                         .background(dotColor),
                                 )
 
-                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -278,7 +277,7 @@ internal fun SessionsDialog(
                                             Text(
                                                 stringResource(R.string.chat_isolated_sandbox),
                                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                                color = linearSecondary(),
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
                                         }
                                     }
@@ -375,22 +374,28 @@ internal fun RenameSessionDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.chat_rename_session), fontWeight = FontWeight.Bold) },
         text = {
-            OutlinedTextField(
-                value = title,
-                onValueChange = { title = it },
-                label = { Text(stringResource(R.string.chat_title_label)) },
-                singleLine = true,
-                isError = titleBlank,
-                supportingText = {
-                    if (titleBlank) {
-                        Text(
-                            stringResource(R.string.chat_title_required),
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                RuntimeFilledTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text(stringResource(R.string.chat_title_label)) },
+                    singleLine = true,
+                    isError = titleBlank,
+                    supportingText = {
+                        if (titleBlank) {
+                            Text(
+                                stringResource(R.string.chat_title_required),
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         },
         confirmButton = {
             TextButton(
@@ -403,974 +408,18 @@ internal fun RenameSessionDialog(
 }
 
 @Composable
-internal fun ModelDialog(
-    models: List<AiModelEntity>,
-    selectedProfileId: String?,
-    selectedModelVariant: String?,
-    providerModelIds: List<String>,
-    discoveringProviderModels: Boolean,
-    providerModelDiscoveryError: String?,
-    modelPickerProfileId: String?,
-    onDismiss: () -> Unit,
-    onSelectProfile: (String) -> Unit,
-    onSelectSubModel: (profileId: String, subModel: String) -> Unit,
-    onOpenModelPicker: (String) -> Unit,
-    onCloseModelPicker: () -> Unit,
-    onRefreshModels: (String) -> Unit,
-    onSwitchModel: (profileId: String, modelId: String) -> Unit,
-    onAdd: (String, String, String, String) -> Unit,
-    onDelete: (String) -> Unit,
-) {
-    var showAdd by rememberSaveable { mutableStateOf(false) }
-    // 删除模型档案为破坏性操作，先记录目标 id 并经确认对话框
-    var deleteModelTargetId by rememberSaveable { mutableStateOf<String?>(null) }
-    if (showAdd) {
-        AddModelDialog(
-            onDismiss = { showAdd = false },
-            onAdd = { name, provider, model, baseUrl ->
-                onAdd(name, provider, model, baseUrl)
-                showAdd = false
-            },
-        )
-    }
-    val pickingProfile = modelPickerProfileId?.let { id -> models.firstOrNull { it.id == id } }
-    if (pickingProfile != null) {
-        ProviderModelPickerDialog(
-            profile = pickingProfile,
-            selectedModelVariant = selectedModelVariant.takeIf { pickingProfile.id == selectedProfileId },
-            modelIds = providerModelIds,
-            discovering = discoveringProviderModels,
-            error = providerModelDiscoveryError,
-            onDismiss = onCloseModelPicker,
-            onRefresh = { onRefreshModels(pickingProfile.id) },
-            onSelect = { modelId -> onSwitchModel(pickingProfile.id, modelId) },
-        )
-        return
-    }
-    RuntimeAlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.chat_select_model), fontWeight = FontWeight.Bold) },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 400.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Text(
-                    stringResource(R.string.chat_select_provider_hint),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                if (models.isEmpty()) {
-                    Text(
-                        stringResource(R.string.chat_no_models),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        items(models, key = { it.id }) { model ->
-                    val subModels = model.model.split(",").map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { listOf(model.model) }
-                    val isProfileSelected = model.id == selectedProfileId
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(MaterialTheme.shapes.small)
-                            .background(
-                                if (isProfileSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent,
-                                MaterialTheme.shapes.small,
-                            )
-                            .border(
-                                1.dp,
-                                if (isProfileSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f) else Color.Transparent,
-                                MaterialTheme.shapes.small,
-                            )
-                            .padding(horizontal = 10.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable { onSelectProfile(model.id) },
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            ProviderBadge(
-                                providerIdOrName = model.provider,
-                                size = 26.dp,
-                            )
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    model.name.ifBlank { model.provider },
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Text(
-                                    model.provider,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                            if (isProfileSelected) {
-                                Surface(
-                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
-                                    shape = RoundedCornerShape(6.dp),
-                                ) {
-                                    Text(
-                                        stringResource(R.string.chat_current),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                    )
-                                }
-                            }
-                            IconButton(
-                                onClick = { deleteModelTargetId = model.id },
-                                modifier = Modifier.minimumInteractiveComponentSize(),
-                                contentDescription = stringResource(R.string.chat_delete_model_profile),
-                            ) {
-                                RuntimeIcon(RuntimeIconName.Trash, Modifier.size(15.dp), MaterialTheme.colorScheme.error)
-                            }
-                        }
-
-                        if (subModels.size > 1) {
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp),
-                            ) {
-                                subModels.forEach { subModel ->
-                                    val isSubActive = isProfileSelected && subModel == selectedModelVariant
-                                    Surface(
-                                        color = if (isSubActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceContainerHighest,
-                                        shape = RoundedCornerShape(8.dp),
-                                        border = if (isSubActive) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
-                                        modifier = Modifier.clickable {
-                                            onSelectSubModel(model.id, subModel)
-                                            onDismiss()
-                                        },
-                                    ) {
-                                        Text(
-                                            subModel,
-                                            style = MaterialTheme.typography.labelMedium.copy(
-                                                fontFamily = FontFamily.Monospace,
-                                                fontWeight = if (isSubActive) FontWeight.Bold else FontWeight.Normal,
-                                            ),
-                                            color = if (isSubActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            if (subModels.size <= 1) {
-                                Surface(
-                                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.weight(1f),
-                                ) {
-                                    Text(
-                                        model.model.ifBlank { stringResource(R.string.chat_model_not_set) },
-                                        style = MaterialTheme.typography.labelMedium.copy(fontFamily = FontFamily.Monospace),
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                                    )
-                                }
-                            } else {
-                                Spacer(Modifier.weight(1f))
-                            }
-                            Surface(
-                                onClick = { onOpenModelPicker(model.id) },
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.secondaryContainer,
-                            ) {
-                                Row(
-                                    Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                ) {
-                                    RuntimeIcon(RuntimeIconName.Tune, Modifier.size(14.dp), MaterialTheme.colorScheme.onSecondaryContainer)
-                                    Text(
-                                        stringResource(R.string.chat_switch_model),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    )
-                                }
-                            }
-                        }
-                    }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { showAdd = true }) { Text(stringResource(R.string.chat_add_model), color = MaterialTheme.colorScheme.primary) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.chat_close)) }
-        },
-    )
-
-    // 删除模型档案二次确认
-    deleteModelTargetId?.let { targetId ->
-        RuntimeAlertDialog(
-            onDismissRequest = { deleteModelTargetId = null },
-            title = { Text(stringResource(R.string.chat_delete_model_title), fontWeight = FontWeight.Bold) },
-            text = {
-                Text(
-                    stringResource(R.string.chat_delete_model_message),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        deleteModelTargetId = null
-                        onDelete(targetId)
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        disabledContainerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.3f),
-                    ),
-                ) {
-                    Text(stringResource(R.string.chat_confirm_delete), color = MaterialTheme.colorScheme.onError)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { deleteModelTargetId = null }) { Text(stringResource(R.string.chat_cancel)) }
-            },
-        )
-    }
-}
-
-@Composable
-internal fun ProviderModelPickerDialog(
-    profile: AiModelEntity,
-    selectedModelVariant: String?,
-    modelIds: List<String>,
-    discovering: Boolean,
-    error: String?,
-    onDismiss: () -> Unit,
-    onRefresh: () -> Unit,
-    onSelect: (String) -> Unit,
-) {
-    var manualId by remember(profile.id, profile.model, selectedModelVariant) {
-        mutableStateOf(selectedModelVariant ?: profile.model.substringBefore(',').trim())
-    }
-    RuntimeAlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(stringResource(R.string.chat_switch_model_title), fontWeight = FontWeight.Bold)
-                Text(
-                    profile.name.ifBlank { profile.provider },
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    stringResource(R.string.chat_switch_model_hint),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                when {
-                    discovering -> {
-                        Row(
-                            Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                stringResource(R.string.chat_model_discovering),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                    error != null && modelIds.isEmpty() -> {
-                        Text(
-                            error,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                    modelIds.isNotEmpty() -> {
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = 280.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            items(modelIds, key = { it }) { modelId ->
-                                val selected = modelId == selectedModelVariant
-                                Row(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(
-                                            if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                                            else MaterialTheme.colorScheme.surfaceContainerLow,
-                                        )
-                                        .clickable { onSelect(modelId) }
-                                        .padding(horizontal = 10.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    Text(
-                                        modelId,
-                                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                                        modifier = Modifier.weight(1f),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                    if (selected) {
-                                        RuntimeIcon(RuntimeIconName.Check, Modifier.size(16.dp), MaterialTheme.colorScheme.primary)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                if (!error.isNullOrBlank() && modelIds.isNotEmpty()) {
-                    Text(error, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
-                }
-                OutlinedTextField(
-                    value = manualId,
-                    onValueChange = { manualId = it },
-                    label = { Text(stringResource(R.string.chat_model_id)) },
-                    placeholder = { Text("gpt-4o / deepseek-chat") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        },
-        confirmButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = onRefresh, enabled = !discovering) {
-                    Text(stringResource(R.string.chat_refresh_models), color = MaterialTheme.colorScheme.primary)
-                }
-                TextButton(
-                    onClick = { onSelect(manualId) },
-                    enabled = manualId.isNotBlank(),
-                ) {
-                    Text(stringResource(R.string.chat_apply_model), color = MaterialTheme.colorScheme.primary)
-                }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.chat_cancel)) }
-        },
-    )
-}
-
-@Composable
-internal fun AddModelDialog(
-    onDismiss: () -> Unit,
-    onAdd: (String, String, String, String) -> Unit,
-) {
-    var name by rememberSaveable { mutableStateOf("") }
-    val defaultProvider = stringResource(R.string.chat_custom_provider)
-    var provider by rememberSaveable { mutableStateOf(defaultProvider) }
-    var model by rememberSaveable { mutableStateOf("") }
-    var baseUrl by rememberSaveable { mutableStateOf("") }
-    // baseUrl 基础格式校验：必须以 http:// 或 https:// 开头（留空走供应商默认端点）
-    val baseUrlInvalid = baseUrl.isNotBlank() && !baseUrl.trim().startsWith("http://") && !baseUrl.trim().startsWith("https://")
-    RuntimeAlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.chat_add_model), fontWeight = FontWeight.Bold) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text(stringResource(R.string.chat_optional_name)) }, singleLine = true)
-                OutlinedTextField(value = provider, onValueChange = { provider = it }, label = { Text(stringResource(R.string.chat_provider_label)) }, singleLine = true)
-                OutlinedTextField(
-                    value = baseUrl,
-                    onValueChange = { baseUrl = it },
-                    label = { Text(stringResource(R.string.chat_optional_base_url)) },
-                    placeholder = { Text("https://api.openai.com/v1") },
-                    isError = baseUrlInvalid,
-                    supportingText = {
-                        if (baseUrlInvalid) {
-                            Text(
-                                stringResource(R.string.chat_base_url_invalid),
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                        }
-                    },
-                    singleLine = true,
-                )
-                OutlinedTextField(value = model, onValueChange = { model = it }, label = { Text(stringResource(R.string.chat_model_id)) }, placeholder = { Text("deepseek-chat / gpt-4o") }, singleLine = true)
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onAdd(name, provider, model, baseUrl) },
-                enabled = model.isNotBlank() && !baseUrlInvalid,
-            ) { Text(stringResource(R.string.chat_confirm_add), color = MaterialTheme.colorScheme.primary) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.chat_cancel)) }
-        },
-    )
-}
-
-@Composable
-internal fun NewSessionDialog(
-    workspaces: List<WorkspaceProject>,
-    onDismiss: () -> Unit,
-    onCreate: (title: String, workspace: String, projectType: ProjectType, agentId: String?) -> Unit,
-    agents: List<top.tianyan.app.core.model.AgentSubagent> = emptyList(),
-    engines: List<top.tianyan.app.harness.acp.AgentEngineProfile> = emptyList(),
-) {
-    val defaultTitle = stringResource(R.string.chat_new_session)
-    // 表单状态旋转后保留；枚举以 name 字符串保存
-    var title by rememberSaveable { mutableStateOf(defaultTitle) }
-    var selected by rememberSaveable { mutableStateOf("") }
-    var selectedTypeName by rememberSaveable { mutableStateOf(ProjectType.GENERAL.name) }
-    val selectedType = ProjectType.valueOf(selectedTypeName)
-    // 用户是否亲手点过工程类型。点过之后不再被工作区自动识别覆盖 ——
-    // 否则「先选红队演练、再关联一个 Android 工程」会把类型悄悄换回 Android，
-    // 建出来的会话与用户看到的不一致。
-    var typeExplicit by rememberSaveable { mutableStateOf(false) }
-    // 智能体绑定：空串表示沿用默认天衍本体；记住的是 agent id，不是索引，
-    // 这样列表在对话框打开期间变化（设置页增删）也不会错绑。
-    var selectedAgentId by rememberSaveable { mutableStateOf("") }
-    val quickTags = listOf(
-        defaultTitle,
-        stringResource(R.string.chat_quick_bug),
-        stringResource(R.string.chat_quick_feature),
-        stringResource(R.string.chat_quick_environment),
-        stringResource(R.string.chat_quick_refactor),
-    )
-
-    RuntimeAlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    RuntimeIcon(RuntimeIconName.Plus, Modifier.size(18.dp), tint = LinearAccent)
-                    Text(
-                        stringResource(R.string.chat_new_agent_session),
-                        fontWeight = FontWeight.SemiBold,
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                }
-                Text(
-                    "会话建立后工程类型与智能体固定，用于确定工具集与提示词分层",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = linearSecondary(),
-                )
-            }
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 470.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                LinearFieldLabel(stringResource(R.string.chat_session_title))
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it },
-                    placeholder = { Text(stringResource(R.string.chat_session_name_hint)) },
-                    singleLine = true,
-                    shape = RoundedCornerShape(6.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-
-                // 快捷预设标题标签：Linear 的 Pill —— 透明底 + 细边框，选中才上色。
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    quickTags.forEach { tag ->
-                        val active = title == tag
-                        Surface(
-                            shape = RoundedCornerShape(999.dp),
-                            color = if (active) LinearAccent.copy(alpha = 0.16f) else Color.Transparent,
-                            border = BorderStroke(1.dp, if (active) LinearAccent.copy(alpha = 0.55f) else LinearBorder),
-                            modifier = Modifier.clickable { title = tag },
-                        ) {
-                            Text(
-                                tag,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (active) LinearAccent else linearSecondary(),
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                            )
-                        }
-                    }
-                }
-
-                HorizontalDivider(color = LinearBorder)
-
-                LinearFieldLabel(stringResource(R.string.chat_link_workspace))
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    WorkspaceOption(stringResource(R.string.chat_no_workspace), "/root", selected == "", onSelect = {
-                        selected = ""
-                        if (!typeExplicit) selectedTypeName = ProjectType.GENERAL.name
-                    })
-                    workspaces.forEach { ws ->
-                        WorkspaceOption(ws.name, ws.linuxPath, selected == ws.linuxPath) {
-                            selected = ws.linuxPath
-                            if (!typeExplicit) selectedTypeName = ws.projectType.name
-                        }
-                    }
-                }
-
-                HorizontalDivider(color = LinearBorder)
-
-                // 工程类型即模式：红队演练是列表里的一项，而不是另挂一个开关。
-                // 一个会话只能有一种类型，界面上不可能选出「红队 + 通用」这种矛盾组合。
-                val selectedProject = workspaces.firstOrNull { it.linuxPath == selected }
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    LinearFieldLabel(stringResource(R.string.chat_agent_project_type))
-                    Text(
-                        if (selectedProject == null || selectedProject.projectType == ProjectType.GENERAL) {
-                            stringResource(R.string.chat_project_type_manual)
-                        } else {
-                            stringResource(R.string.chat_project_type_detected)
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = linearSecondary(),
-                    )
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    ProjectTypeOptions.chunked(2).forEach { rowTypes ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            rowTypes.forEach { option ->
-                                val active = selectedType == option.type
-                                Surface(
-                                    color = if (active) option.accent.copy(alpha = 0.16f)
-                                    else option.accent.copy(alpha = 0.07f),
-                                    shape = RoundedCornerShape(10.dp),
-                                    border = BorderStroke(
-                                        // 选中态实线加粗，未选中态也留一道极淡的品牌色描边——
-                                        // 五种类型各有主色，卡片本身就在"报自己的身份"。
-                                        if (active) 1.5.dp else 1.dp,
-                                        if (active) option.accent.copy(alpha = 0.75f)
-                                        else option.accent.copy(alpha = 0.22f),
-                                    ),
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clickable {
-                                            selectedTypeName = option.type.name
-                                            typeExplicit = true
-                                        },
-                                ) {
-                                    Row(
-                                        Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 10.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    ) {
-                                        // 图标带自己的色底，不再是灰图标
-                                        Box(
-                                            Modifier
-                                                .size(28.dp)
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(option.accent.copy(alpha = if (active) 0.26f else 0.16f)),
-                                            contentAlignment = Alignment.Center,
-                                        ) {
-                                            RuntimeIcon(
-                                                option.icon,
-                                                Modifier.size(16.dp),
-                                                tint = if (active) option.accent else option.accent.copy(alpha = 0.78f),
-                                            )
-                                        }
-                                        Column(Modifier.weight(1f)) {
-                                            Text(
-                                                option.title,
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
-                                                color = if (active) MaterialTheme.colorScheme.onSurface
-                                                else linearSecondary(),
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                            )
-                                            Text(
-                                                option.hint,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = linearMuted(),
-                                                maxLines = 2,
-                                                overflow = TextOverflow.Ellipsis,
-                                            )
-                                        }
-                                        if (active) {
-                                            RuntimeIcon(RuntimeIconName.Check, Modifier.size(15.dp), tint = option.accent)
-                                        }
-                                    }
-                                }
-                            }
-                            repeat(2 - rowTypes.size) { Spacer(Modifier.weight(1f)) }
-                        }
-                    }
-                }
-                if (selectedType == ProjectType.RED_TEAM) {
-                    Surface(
-                        color = LinearDanger.copy(alpha = 0.10f),
-                        shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(1.dp, LinearDanger.copy(alpha = 0.35f)),
-                    ) {
-                        Row(
-                            Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 9.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.Top,
-                        ) {
-                            RuntimeIcon(RuntimeIconName.Shield, Modifier.size(16.dp), tint = LinearDanger)
-                            Text(
-                                "红队演练会话：建立后需在会话内绑定目标与授权范围，所有探测动作受该范围约束；" +
-                                    "目标与事实只属于本会话，其他会话不可见。",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = linearSecondary(),
-                            )
-                        }
-                    }
-                }
-
-                HorizontalDivider(color = LinearBorder)
-
-                AgentPicker(
-                    agents = agents,
-                    engines = engines,
-                    selectedAgentId = selectedAgentId,
-                    onSelect = { id -> selectedAgentId = id },
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    onCreate(
-                        title.ifBlank { defaultTitle },
-                        selected,
-                        selectedType,
-                        selectedAgentId.takeIf { it.isNotBlank() },
-                    )
-                },
-                shape = RoundedCornerShape(6.dp),
-            ) {
-                Text(stringResource(R.string.chat_create_session))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.chat_cancel)) }
-        },
-    )
-}
-
-// ── Linear 设计令牌 ───────────────────────────────────────────────────────────
-// 深色原生：面板 #0f1011、抬升表面 #191a1b、半透明细边框，唯一彩色是靛紫强调。
-// 这里不引 MaterialTheme 的容器色，因为对话框自带玻璃背板，语义色叠上去会发灰。
-private val LinearAccent = Color(0xFF7170FF)
-private val LinearDanger = Color(0xFFB3261E)
-private val LinearBorder = Color(0x14FFFFFF)
-private val LinearSurface = Color(0x0AFFFFFF)
-
-// Linear 文字令牌跟随主题切色：这套色板原本为深色玻璃背板设计（#0f1011 面板 + 浅灰字），
-// 但 RuntimeAlertDialog 背景跟 Material 主题走——亮主题白底下浅灰字对比度塌掉、发灰看不清。
-// 彩色令牌（Accent/Danger/Border/Surface/Status*）两种背景都够醒目，保持写死；
-// 只有两档中性文字（字段标签 / 副文案）在亮底上需要换成深灰，暗底保留原浅灰。
-// 判断范式与 RuntimeComponents 的 RuntimeAlertDialog 一致：onSurface.luminance() < 0.5 → 亮。
-@Composable
-private fun linearSecondary(): Color =
-    if (MaterialTheme.colorScheme.onSurface.luminance() < 0.5f) Color(0xFF44494F) else Color(0xFFD0D6E0)
-
-@Composable
-private fun linearMuted(): Color =
-    if (MaterialTheme.colorScheme.onSurface.luminance() < 0.5f) Color(0xFF5F6368) else Color(0xFF9AA3B0)
-
-// ── 会话状态色板 ───────────────────────────────────────────────────────────────
-// 与会话管理列表（SessionsDialog）同一套色，跨弹窗保持一致：
-// 进行中=橙、失败=红、就绪/完成=绿、待审批=紫。状态即颜色，一眼可辨。
-private val StatusRunning = Color(0xFFF59E0B)
-private val StatusFailed = Color(0xFFEF4444)
-private val StatusReady = Color(0xFF10B981)
-private val StatusApproval = Color(0xFF8B5CF6)
-
-@Composable
-private fun LinearFieldLabel(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.Medium,
-        color = linearSecondary(),
-    )
-}
-
-private data class ProjectTypeOption(
-    val type: ProjectType,
-    val title: String,
-    val hint: String,
-    val icon: RuntimeIconName,
-    val accent: Color,
-)
-
-/** 工程类型清单：红队演练与 Android / Flutter / 逆向并列，是同一层的选择。 */
-private val ProjectTypeOptions = listOf(
-    ProjectTypeOption(ProjectType.ANDROID, "Android", "Gradle 构建与安装", RuntimeIconName.Android, Color(0xFF2E7D32)),
-    ProjectTypeOption(ProjectType.FLUTTER, "Flutter", "Flutter 构建与安装", RuntimeIconName.Flutter, Color(0xFF0288D1)),
-    ProjectTypeOption(ProjectType.REVERSE, "APK 逆向", "jadx / apktool 分析", RuntimeIconName.Reverse, Color(0xFF6A1B9A)),
-    ProjectTypeOption(ProjectType.RED_TEAM, "红队演练", "绑定目标与作战状态", RuntimeIconName.Shield, Color(0xFFB3261E)),
-    ProjectTypeOption(ProjectType.GENERAL, "通用", "自定义命令与脚本", RuntimeIconName.Code, Color(0xFF7170FF)),
-)
-
-/**
- * 新建会话的智能体选择器。
- *
- * 两类绑定，共用同一个 agentId：
- * - **引擎**（Claude Code / Codex / DSH 等）：真实进程，自带工具循环，天衍退回宿主；
- * - **人格**（Agency 目录）：只改天衍本体的系统提示词，执行仍由天衍自己做。
- * 分组展示是为了不让用户把「换个说法」和「换套引擎」当成同一件事。
- *
- * 交互取舍：用下拉而非横向 chip 列表——启用项可达数十个，横向 chip 会挤成
- * 一条无法定位的长条。菜单用带权重的 LazyColumn 并给整列留出滚动余量，
- * 否则项目一多菜单会顶出对话框边缘，用户看到的就是「只能看到一半字体」。
- *
- * 被禁用的智能体仍然列出但置灰：用户能看见「我有这个角色，只是关了」，
- * 而不是以为它消失了。
- */
-@Composable
-private fun AgentPicker(
-    agents: List<top.tianyan.app.core.model.AgentSubagent>,
-    engines: List<top.tianyan.app.harness.acp.AgentEngineProfile>,
-    selectedAgentId: String,
-    onSelect: (String) -> Unit,
-) {
-    val enabled = remember(agents) { agents.filter { it.isEnabled } }
-    val ordered = remember(enabled) {
-        enabled.sortedWith(
-            compareBy(
-                { top.tianyan.app.core.model.AgentDepartments.find(it.departmentId).sortOrder },
-                { it.sortOrder },
-                { it.name },
-            ),
-        )
-    }
-
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(
-                "智能体",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                "（会话身份，建立后固定）",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        // 卡片组：默认 + 引擎一行、人格一行，各自横向滚动。
-        // 分两行横滑而不是单条长横滑——启用项可达数十个，单行会挤成无法定位的长条；
-        // 按类型分行后，每行长度可控，且"换引擎"和"换人格"在视觉上就分开了。
-        AgentCardRow(
-            cards = buildList {
-                add(
-                    AgentCard(
-                        id = "",
-                        title = "默认（天衍本体）",
-                        badge = "本体",
-                        badgeColor = LinearAccent,
-                        icon = RuntimeIconName.Bot,
-                        accent = LinearAccent,
-                        subtitle = "不绑定智能体，使用天衍默认提示词与执行循环",
-                    )
-                )
-                engines.forEach { engine ->
-                    add(
-                        AgentCard(
-                            id = engine.id,
-                            title = engine.name,
-                            badge = "引擎",
-                            badgeColor = StatusApproval,
-                            icon = RuntimeIconName.Cpu,
-                            accent = StatusApproval,
-                            subtitle = engine.description.ifBlank { "真实进程，接管执行" },
-                        )
-                    )
-                }
-            },
-            selectedId = selectedAgentId,
-            onSelect = { id -> onSelect(id) },
-        )
-
-        if (ordered.isEmpty()) {
-            Text(
-                "暂无已启用的人格智能体（到设置 → 智能体目录开启）",
-                style = MaterialTheme.typography.labelSmall,
-                color = linearMuted(),
-            )
-        } else {
-            AgentCardRow(
-                cards = ordered.map { agent ->
-                    val dept = top.tianyan.app.core.model.AgentDepartments.find(agent.departmentId)
-                    // colorArgb 是 0xAARRGGBB 打包的 Long，Compose 的 Color(Long) 直接按这个格式解析，
-                    // 部门各自的主色（工程蓝/测试橙/安全红/游戏紫…）因此天然带进来。
-                    val deptColor = Color(dept.colorArgb)
-                    AgentCard(
-                        id = agent.id,
-                        title = agent.name,
-                        badge = dept.localizedName,
-                        badgeColor = deptColor,
-                        icon = RuntimeIconName.Bot,
-                        accent = deptColor,
-                        subtitle = agent.description,
-                    )
-                },
-                selectedId = selectedAgentId,
-                onSelect = { id -> onSelect(id) },
-            )
-        }
-    }
-}
-
-/** 智能体卡片：图标色底 + 名称 + 类型徽章 + 副说明，选中态加粗描边。 */
-private data class AgentCard(
-    val id: String,
-    val title: String,
-    val badge: String,
-    val badgeColor: Color,
-    val icon: RuntimeIconName,
-    val accent: Color,
-    val subtitle: String,
-)
-
-/**
- * 智能体卡片行：横向滚动的卡片组。
- *
- * 每张卡 = 彩色图标底 + 名称 + 类型徽章 + 副说明，选中态加粗描边 + 对勾。
- * 分组纵向堆叠、组内横向滚动：类型边界直接落在行与行之间，
- * 不用把「引擎」和「人格」塞进一个混合下拉里让人自己分辨。
- */
-@Composable
-private fun AgentCardRow(
-    cards: List<AgentCard>,
-    selectedId: String,
-    onSelect: (String) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            cards.forEach { card ->
-                val active = card.id == selectedId
-                Surface(
-                    color = if (active) card.accent.copy(alpha = 0.15f) else card.accent.copy(alpha = 0.06f),
-                    shape = RoundedCornerShape(10.dp),
-                    border = BorderStroke(
-                        if (active) 1.5.dp else 1.dp,
-                        if (active) card.accent.copy(alpha = 0.7f) else card.accent.copy(alpha = 0.20f),
-                    ),
-                    modifier = Modifier
-                        .width(140.dp)
-                        .clickable { onSelect(card.id) },
-                ) {
-                    Row(
-                        Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Box(
-                            Modifier
-                                .size(28.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(card.accent.copy(alpha = if (active) 0.26f else 0.15f)),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            RuntimeIcon(
-                                card.icon,
-                                Modifier.size(15.dp),
-                                tint = card.accent.copy(alpha = if (active) 1f else 0.8f),
-                            )
-                        }
-                        Column(Modifier.weight(1f)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                Text(
-                                    card.title,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
-                                    color = if (active) MaterialTheme.colorScheme.onSurface else linearSecondary(),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f, fill = false),
-                                )
-                                if (active) {
-                                    RuntimeIcon(RuntimeIconName.Check, Modifier.size(13.dp), tint = card.accent)
-                                }
-                            }
-                            Surface(
-                                color = card.badgeColor.copy(alpha = 0.16f),
-                                shape = RoundedCornerShape(3.dp),
-                            ) {
-                                Text(
-                                    card.badge,
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                                    color = card.badgeColor,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                                )
-                            }
-                            Text(
-                                card.subtitle,
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                color = linearMuted(),
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 internal fun WorkspaceOption(name: String, path: String, selected: Boolean, onSelect: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
             .clickable(onClick = onSelect)
             .background(
-                if (selected) LinearAccent.copy(alpha = 0.10f) else LinearSurface,
+                if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceContainerLow,
                 RoundedCornerShape(8.dp),
             )
             .border(
                 1.dp,
-                if (selected) LinearAccent.copy(alpha = 0.55f) else LinearBorder,
+                if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outlineVariant,
                 RoundedCornerShape(8.dp),
             )
             .padding(10.dp),
@@ -1379,20 +428,14 @@ internal fun WorkspaceOption(name: String, path: String, selected: Boolean, onSe
     ) {
         Box(
             Modifier.size(12.dp).clip(CircleShape).background(
-                if (selected) LinearAccent else linearMuted(),
+                if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             ),
         )
         Column {
-            Text(
-                name.ifBlank { path },
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
-                color = if (selected) MaterialTheme.colorScheme.onSurface else linearSecondary(),
-            )
+            Text(name.ifBlank { path }, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal))
             if (path.isNotBlank()) {
-                Text(path, style = MaterialTheme.typography.labelSmall, color = linearMuted())
+                Text(path, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
 }
-

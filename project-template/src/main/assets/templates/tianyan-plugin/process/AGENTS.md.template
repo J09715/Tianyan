@@ -1,0 +1,15 @@
+# {{pluginName}} — 天衍本地插件开发
+
+本项目生成 v2 PROCESS `.txplugin`，工具 ID `{{toolId}}`，插件身份 `{{pluginId}}`。
+
+- 先读 README.md；修改功能入口 `payload/bin/{{toolId}}` 与 `manifest.json`。
+- 保留 `--version` 校验入口；先运行 Shell 示例，再执行 `python3 tools/package_plugin.py`。
+- 应用内优先点击项目卡片“一键导入调试”，无需 Python；确认清单后安装，从插件详情启动或查看日志。改动后再次点击生成独立调试版本，不改源清单；正式发布仍递增版本并运行 Python 打包脚本。
+- 仅打包 manifest.json 和 payload；不要手工填写过期的完整性哈希，打包器会重算。
+- 发布改动必须递增清单版本；已导入同版本不可覆盖。不要更换已发布的插件身份。
+- 不把凭证、开发日志、缓存或 dist 输出放进 payload。
+- 不用安装步骤申请 Root 或宿主权限；能力声明不等于授权，也不是恶意代码隔离。
+- 不写自定义卸载脚本；只使用本插件程序/数据目录，显式声明依赖及共享资源。
+- 不调用付费模型 API 作为默认测试；优先离线命令与假服务。
+
+- MCP 示例在 payload/lib/plugin_server.py，运行需目标系统 Python 3；工具、Provider、节点契约在 plugin.harness，扩展列表须一致。默认使用离线 Provider，不继承全局模型 Key。

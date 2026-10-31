@@ -21,7 +21,13 @@ ARM64_TOOLS_VERSION="35.0.2"
 ARM64_TOOLS_SHA256="DB1CEA2C4454D5F9C5A802646B2D1CF560B4EE7BADBE23E51AB8E1881BB50FC2"
 ARM64_TOOLS_ARTIFACT_ID="db1cea2c4454d5f9c5a802646b2d1cf560b4ee7badbe23e51ab8e1881bb50fc2"
 ARM64_TOOLS_URL="https://github.com/lzhiyong/android-sdk-tools/releases/download/${ARM64_TOOLS_VERSION}/android-sdk-tools-static-aarch64.zip"
-# 镜像节点与测速函数统一来自 tianyan-mirror-lib.sh（github.akams.cn 全量节点）
+ARM64_TOOLS_URLS="
+https://ghfast.top/${ARM64_TOOLS_URL}
+https://ghproxy.net/${ARM64_TOOLS_URL}
+https://gh.llkk.cc/${ARM64_TOOLS_URL}
+https://gh-proxy.com/${ARM64_TOOLS_URL}
+${ARM64_TOOLS_URL}
+"
 ARM64_TOOLS_DIR="/opt/tianyan/toolchains/android/sdk-tools/artifacts/${ARM64_TOOLS_ARTIFACT_ID}"
 AAPT2_STABLE_PATH="/opt/tianyan/android-sdk-tools/aapt2"
 TOOLCHAIN_LOCK_FILE="/opt/tianyan/locks/android-toolchain.lock"
@@ -37,9 +43,6 @@ flock -x -w 1800 9 || {
     exit 1
 }
 export TIANYAN_TOOLCHAIN_LOCK_HELD=1
-
-# 引入共享镜像库（全量节点 + 并行测速函数）
-. /opt/tianyan/scripts/tianyan-mirror-lib.sh
 
 # Remove the obsolete x86_64 AAPT2 wrapper and payload from upgraded sandboxes.
 rm -rf /opt/tianyan/android-sdk-tools/qemu 2>/dev/null || true
@@ -296,23 +299,8 @@ if [ ! -x "$ARM64_TOOLS_DIR/build-tools/aapt2" ] || \
     ARM64_STAGING="/tmp/android-sdk-tools-aarch64-staging"
     rm -f "$ARM64_ARCHIVE"
     rm -rf "$ARM64_STAGING"
-    # 自动测速选最快镜像，最快失败则按序回退其余全量节点，官方直连兜底。
-    echo "==> [Tianyan] 正在并行测速选择最快镜像 (github.akams.cn 全量节点)..."
-    ARM64_FAST_BASE=$(pick_fastest_mirror "$ARM64_TOOLS_URL")
-    ORDERED_TOOL_URLS=""
-    if [ -n "$ARM64_FAST_BASE" ]; then
-        ORDERED_TOOL_URLS="${ARM64_FAST_BASE}${ARM64_TOOLS_URL}"
-        echo "==> [Tianyan] 已选择最快镜像: $ARM64_FAST_BASE"
-    else
-        echo "==> [Tianyan] 镜像全部不可用，直接官方直连"
-    fi
-    for base in $TIANYAN_MIRROR_NODES; do
-        [ -n "$base" ] || continue
-        ORDERED_TOOL_URLS="$ORDERED_TOOL_URLS ${base}${ARM64_TOOLS_URL}"
-    done
-    ORDERED_TOOL_URLS="$ORDERED_TOOL_URLS $ARM64_TOOLS_URL"
     ARM64_DOWNLOADED=0
-    for ARM64_URL in $ORDERED_TOOL_URLS; do
+    for ARM64_URL in $ARM64_TOOLS_URLS; do
         echo "==> [Tianyan] 尝试下载第三方 ARM64 工具包: $ARM64_URL"
         if curl -fsSL -m 300 "$ARM64_URL" -o "$ARM64_ARCHIVE" 2>/dev/null && [ -s "$ARM64_ARCHIVE" ]; then
             if command -v sha256sum >/dev/null 2>&1 &&
@@ -483,7 +471,6 @@ if [ -n "$TIANYAN_AAPT2_PATH" ] && [ -x "$TIANYAN_AAPT2_PATH" ] && \
     if [ -f "$GRADLE_PROPERTIES" ]; then
         sed \
             -e '/^[[:space:]]*android\.aapt2FromMavenOverride[[:space:]]*=/d' \
-            -e '/^[[:space:]]*android\.enableResourceOptimizations[[:space:]]*=/d' \
             -e '/^[[:space:]]*android\.builder\.sdkDownload[[:space:]]*=/d' \
             -e '/^[[:space:]]*org\.gradle\.daemon[[:space:]]*=/d' \
             -e '/^[[:space:]]*org\.gradle\.parallel[[:space:]]*=/d' \
@@ -494,7 +481,7 @@ if [ -n "$TIANYAN_AAPT2_PATH" ] && [ -x "$TIANYAN_AAPT2_PATH" ] && \
     else
         : > "$GRADLE_PROPERTIES_TMP"
     fi
-    printf '\n# Tianyan: immutable ARM64 toolchain and mobile-safe build limits.\nandroid.aapt2FromMavenOverride=%s\nandroid.builder.sdkDownload=false\nandroid.enableResourceOptimizations=false\norg.gradle.daemon=false\norg.gradle.parallel=false\norg.gradle.workers.max=2\norg.gradle.jvmargs=-Xmx1024m -XX:MaxMetaspaceSize=384m -XX:+UseSerialGC -Dfile.encoding=UTF-8\nsystemProp.org.gradle.internal.http.connectionTimeout=30000\nsystemProp.org.gradle.internal.http.socketTimeout=60000\nkotlin.daemon.jvmargs=-Xmx512m -XX:MaxMetaspaceSize=256m\n' \
+    printf '\n# Tianyan: immutable ARM64 toolchain and mobile-safe build limits.\nandroid.aapt2FromMavenOverride=%s\nandroid.builder.sdkDownload=false\norg.gradle.daemon=false\norg.gradle.parallel=false\norg.gradle.workers.max=2\norg.gradle.jvmargs=-Xmx1024m -XX:MaxMetaspaceSize=384m -XX:+UseSerialGC -Dfile.encoding=UTF-8\nsystemProp.org.gradle.internal.http.connectionTimeout=30000\nsystemProp.org.gradle.internal.http.socketTimeout=60000\nkotlin.daemon.jvmargs=-Xmx512m -XX:MaxMetaspaceSize=256m\n' \
         "$TIANYAN_AAPT2_PATH" >> "$GRADLE_PROPERTIES_TMP"
     mv -f "$GRADLE_PROPERTIES_TMP" "$GRADLE_PROPERTIES"
     echo "==> [Tianyan] Gradle 全局 AAPT2 覆盖: $TIANYAN_AAPT2_PATH"

@@ -7,7 +7,7 @@ enum class ApprovalMode(val id: String) {
     FULL_ACCESS("full_access");
 
     companion object {
-        fun fromId(id: String?): ApprovalMode = entries.firstOrNull { it.id == id } ?: ASSISTED
+        fun fromId(id: String?): ApprovalMode = entries.firstOrNull { it.id == id } ?: FULL_ACCESS
     }
 }
 

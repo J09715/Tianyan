@@ -1,35 +1,42 @@
 package top.tianyan.app.core.datastore
-
-import javax.inject.Inject
-import javax.inject.Singleton
-
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
+import kotlinx.coroutines.flow.Flow
+import top.tianyan.app.core.model.EnvironmentVariable
+import top.tianyan.app.core.model.ExecutionMode
+import top.tianyan.app.core.model.RunningSendMode
 /** Narrow preference views keep consumers from depending on the complete settings schema. */
-@Singleton
-class AppearancePreferences @Inject constructor(private val store: SettingsDataStore) {
+class AppearancePreferences(private val store: SettingsDataStore) {
+    private val toolStatusStore = ToolStatusPreferences(store.appearanceDataStore)
+    val classicToolStatusDots = toolStatusStore.classicDots
+    suspend fun setClassicToolStatusDots(value: Boolean) = toolStatusStore.setClassicDots(value)
+    private val paletteStore = ThemePalettePreferences(store.appearanceDataStore)
+    val themePalette get() = paletteStore.palette
+    suspend fun selectThemeColor(id: String) = paletteStore.selectColor(id)
+    suspend fun setPaletteStyle(style: top.tianyan.app.core.model.ThemePaletteStyle) = paletteStore.selectStyle(style)
     val themeMode get() = store.themeMode
-    val themeStyle get() = store.themeStyle
-    val chengmingBackgroundUri get() = store.chengmingBackgroundUri
+    val dynamicColorEnabled get() = store.dynamicColorEnabled
     val appFontScale get() = store.appFontScale
-
-    /**
-     * 冷启动时同步读一次外观设置，供首帧直接使用。
-     *
-     * 不这样做的话，主题/壁纸/缩放都要等 DataStore 异步回调，
-     * 首帧按默认值渲染、随后整棵树重排一次，表现为「启动时界面不对，过一会自己好了」。
-     */
-    suspend fun appearanceSnapshot() = store.appearanceSnapshot()
+    val autoCheckUpdates get() = store.autoCheckUpdates
+    val developerMode get() = store.developerMode
+    suspend fun setThemeMode(value: String) = store.setThemeMode(value)
+    suspend fun setDynamicColorEnabled(value: Boolean) = store.setDynamicColorEnabled(value)
+    suspend fun setAppFontScale(value: Float) = store.setAppFontScale(value)
+    suspend fun setAutoCheckUpdates(value: Boolean) = store.setAutoCheckUpdates(value)
+    suspend fun setDeveloperMode(value: Boolean) = store.setDeveloperMode(value)
 }
 
-@Singleton
-class TerminalPreferences @Inject constructor(private val store: SettingsDataStore) {
+class TerminalPreferences(private val store: SettingsDataStore) {
     val terminalFontSize get() = store.terminalFontSize
     val terminalColorScheme get() = store.terminalColorScheme
     val terminalHapticsEnabled get() = store.terminalHapticsEnabled
     suspend fun setTerminalFontSize(value: Int) = store.setTerminalFontSize(value)
+    suspend fun setTerminalColorScheme(value: String) = store.setTerminalColorScheme(value)
+    suspend fun setTerminalHapticsEnabled(value: Boolean) = store.setTerminalHapticsEnabled(value)
 }
 
-@Singleton
-class RuntimePreferences @Inject constructor(private val store: SettingsDataStore) {
+class RuntimePreferences(private val store: SettingsDataStore) {
     val selectedDistribution get() = store.selectedDistribution
     val mirrorPolicy get() = store.mirrorPolicy
     val mountDownloadEnabled get() = store.mountDownloadEnabled
@@ -46,21 +53,23 @@ class RuntimePreferences @Inject constructor(private val store: SettingsDataStor
     suspend fun clearLegacyEnvironmentVariables() = store.clearLegacyEnvironmentVariables()
     suspend fun setSelectedDistribution(value: String) = store.setSelectedDistribution(value)
     suspend fun setMirrorPolicy(value: String) = store.setMirrorPolicy(value)
-    suspend fun setExecutionMode(value: top.tianyan.app.core.model.ExecutionMode) = store.setExecutionMode(value)
-    suspend fun setPreferredExecutionMode(value: top.tianyan.app.core.model.ExecutionMode) = store.setPreferredExecutionMode(value)
-    suspend fun setEffectiveExecutionMode(value: top.tianyan.app.core.model.ExecutionMode) = store.setEffectiveExecutionMode(value)
+    suspend fun setExecutionMode(value: ExecutionMode) = store.setExecutionMode(value)
+    suspend fun setPreferredExecutionMode(value: ExecutionMode) = store.setPreferredExecutionMode(value)
+    suspend fun setEffectiveExecutionMode(value: ExecutionMode) = store.setEffectiveExecutionMode(value)
     suspend fun setExecutionModes(
-        preferred: top.tianyan.app.core.model.ExecutionMode,
-        effective: top.tianyan.app.core.model.ExecutionMode,
+        preferred: ExecutionMode,
+        effective: ExecutionMode,
     ) = store.setExecutionModes(preferred, effective)
     suspend fun setQemuCompatibilityEnabled(value: Boolean) = store.setQemuCompatibilityEnabled(value)
     suspend fun setAdbWirelessPort(value: Int) = store.setAdbWirelessPort(value)
     suspend fun setAdbPairedOnce(value: Boolean) = store.setAdbPairedOnce(value)
     suspend fun setAdbNotificationEnabled(value: Boolean) = store.setAdbNotificationEnabled(value)
+    suspend fun setMountDownloadEnabled(value: Boolean) = store.setMountDownloadEnabled(value)
+    suspend fun setMountDocumentsEnabled(value: Boolean) = store.setMountDocumentsEnabled(value)
+    suspend fun setMountSharedStorageEnabled(value: Boolean) = store.setMountSharedStorageEnabled(value)
 }
 
-@Singleton
-class WorkshopPreferences @Inject constructor(private val store: SettingsDataStore) {
+class WorkshopPreferences(private val store: SettingsDataStore) {
     val androidSdkPath get() = store.workshopAndroidSdkPath
     val ndkPath get() = store.workshopNdkPath
     val flutterSdkPath get() = store.workshopFlutterSdkPath
@@ -93,16 +102,8 @@ class WorkshopPreferences @Inject constructor(private val store: SettingsDataSto
     suspend fun resetScripts() = store.resetWorkshopScripts()
 }
 
-/** Git HTTPS 凭证仓库（GitHub / Gitee / GitLab 私有仓库 PAT 等），整表加密。 */
-@Singleton
-class GitPreferences @Inject constructor(private val store: SettingsDataStore) {
-    val credentials get() = store.gitCredentials
-    suspend fun setCredentials(value: List<GitCredential>) = store.setGitCredentials(value)
-}
-
 /** Per-distro SSH settings exposed only to the runtime service and its settings UI. */
-@Singleton
-class SshPreferences @Inject constructor(private val store: SettingsDataStore) {
+class SshPreferences(private val store: SettingsDataStore) {
     fun enabled(distroId: String) = store.sshEnabled(distroId)
     fun port(distroId: String) = store.sshPort(distroId)
     fun authorizedKeys(distroId: String) = store.sshAuthorizedKeys(distroId)
@@ -118,8 +119,7 @@ class SshPreferences @Inject constructor(private val store: SettingsDataStore) {
 }
 
 /** Per-distro FTP settings exposed to the runtime FTP service and settings UI. */
-@Singleton
-class FtpPreferences @Inject constructor(private val store: SettingsDataStore) {
+class FtpPreferences(private val store: SettingsDataStore) {
     fun enabled(distroId: String) = store.ftpEnabled(distroId)
     fun port(distroId: String) = store.ftpPort(distroId)
     fun username(distroId: String) = store.ftpUsername(distroId)
@@ -137,37 +137,86 @@ class FtpPreferences @Inject constructor(private val store: SettingsDataStore) {
 }
 
 data class LegacyEnvironmentVariable(
-    val metadata: top.tianyan.app.core.model.EnvironmentVariable,
+    val metadata: EnvironmentVariable,
     val value: String,
 )
 
-@Singleton
-class AgentPreferences @Inject constructor(private val store: SettingsDataStore) {
-    val thinkingLanguage get() = store.thinkingLanguage
+class AgentPreferences(private val store: SettingsDataStore) {
+    companion object {
+        const val DEFAULT_BASE_COMMAND_TIMEOUT_SECONDS = SettingsDataStore.DEFAULT_BASE_COMMAND_TIMEOUT_SECONDS
+    }
+
+    /** 对话结束后自动建议沉淀/进化技能（默认开启） */
+    val skillEvolutionSuggestions: Flow<Boolean> = store.skillEvolutionSuggestions
+
+    suspend fun setSkillEvolutionSuggestions(enabled: Boolean) = store.setSkillEvolutionSuggestions(enabled)
+
+    /** 已忽略或已应用的技能进化建议 id 集合流（持久化） */
+    val dismissedSkillSuggestions: Flow<Set<String>> = store.dismissedSkillSuggestions
+
+    suspend fun dismissSkillSuggestion(id: String) = store.dismissSkillSuggestion(id)
+
     val customSystemPromptEnabled get() = store.customSystemPromptEnabled
     val customSystemPrompt get() = store.customSystemPrompt
+    val agentCharName get() = store.agentCharName
+    val agentUserName get() = store.agentUserName
     val agentLoggingEnabled get() = store.agentLoggingEnabled
     val selectedDistribution get() = store.selectedDistribution
     val thinkingExpanded get() = store.thinkingExpanded
+    val thinkingAutoTranslate get() = store.thinkingAutoTranslate
+    val chatRoundCollapse get() = store.chatRoundCollapse
+    val autoReadReplies get() = store.autoReadReplies
+    suspend fun setAutoReadReplies(value: Boolean) = store.setAutoReadReplies(value)
+    suspend fun setChatRoundCollapse(value: Boolean) = store.setChatRoundCollapse(value)
+    val runningSendMode get() = store.runningSendMode
+    suspend fun setRunningSendMode(value: RunningSendMode) = store.setRunningSendMode(value)
     val defaultReasoningDepth get() = store.defaultReasoningDepth
     val contextCompactionEnabled get() = store.contextCompactionEnabled
-    val contextCompactionThreshold get() = store.contextCompactionThreshold
     val maxToolRounds get() = store.maxToolRounds
+    val roundLimitAutoContinuations get() = store.roundLimitAutoContinuations
     val autoWorkspaceCwd get() = store.autoWorkspaceCwd
     val commandOutputCompressionEnabled get() = store.commandOutputCompressionEnabled
     val baseCommandTimeoutSeconds get() = store.baseCommandTimeoutSeconds
+    val firstResponseTimeoutSeconds get() = store.firstResponseTimeoutSeconds
+    suspend fun setFirstResponseTimeoutSeconds(value: Int) = store.setFirstResponseTimeoutSeconds(value)
     val contextBudgetTokens get() = store.contextBudgetTokens
+    val contextFoldingRatioPercent get() = store.contextFoldingRatioPercent
     val maxToolsPerRound get() = store.maxToolsPerRound
     val maxConsecutiveFailures get() = store.maxConsecutiveFailures
     val providerModel get() = store.providerModel
+    val phoneAgentConfig get() = store.phoneAgentConfig
+    suspend fun setPhoneAgentConfig(value: PhoneAgentEndpoint) = store.setPhoneAgentConfig(value)
     val environmentPrivacyMode get() = store.environmentPrivacyMode
+    val allPlugins get() = store.allPlugins
+    val maxConcurrentAgentTurns get() = store.maxConcurrentAgentTurns
+    val defaultMaxConcurrentAgentTurns get() = SettingsDataStore.DEFAULT_MAX_CONCURRENT_AGENT_TURNS
+    val defaultRoundLimitAutoContinuations get() = SettingsDataStore.DEFAULT_ROUND_LIMIT_AUTO_CONTINUATIONS
+    val defaultBaseCommandTimeoutSeconds get() = DEFAULT_BASE_COMMAND_TIMEOUT_SECONDS
+    suspend fun setMaxConcurrentAgentTurns(value: Int) = store.setMaxConcurrentAgentTurns(value)
     suspend fun setThinkingExpanded(value: Boolean) = store.setThinkingExpanded(value)
+    suspend fun setThinkingAutoTranslate(value: Boolean) = store.setThinkingAutoTranslate(value)
     suspend fun setCommandOutputCompressionEnabled(value: Boolean) = store.setCommandOutputCompressionEnabled(value)
     suspend fun removeModelApiKey(secretRef: String) = store.removeModelApiKey(secretRef)
+    suspend fun setEnvironmentPrivacyMode(value: Boolean) = store.setEnvironmentPrivacyMode(value)
+    suspend fun setCustomSystemPromptEnabled(value: Boolean) = store.setCustomSystemPromptEnabled(value)
+    suspend fun setCustomSystemPrompt(value: String) = store.setCustomSystemPrompt(value)
+    suspend fun setAgentCharName(value: String) = store.setAgentCharName(value)
+    suspend fun setAgentUserName(value: String) = store.setAgentUserName(value)
+    suspend fun setAgentLoggingEnabled(value: Boolean) = store.setAgentLoggingEnabled(value)
+    suspend fun setDefaultReasoningDepth(value: String) = store.setDefaultReasoningDepth(value)
+    suspend fun setContextCompactionEnabled(value: Boolean) = store.setContextCompactionEnabled(value)
+    suspend fun setMaxToolRounds(value: Int) = store.setMaxToolRounds(value)
+    suspend fun setRoundLimitAutoContinuations(value: Int) = store.setRoundLimitAutoContinuations(value)
+    suspend fun setAutoWorkspaceCwd(value: Boolean) = store.setAutoWorkspaceCwd(value)
+    suspend fun setBaseCommandTimeoutSeconds(value: Int) = store.setBaseCommandTimeoutSeconds(value)
+    suspend fun setContextBudgetTokens(value: Int) = store.setContextBudgetTokens(value)
+    suspend fun setContextFoldingRatioPercent(value: Int) = store.setContextFoldingRatioPercent(value)
+    suspend fun setMaxToolsPerRound(value: Int) = store.setMaxToolsPerRound(value)
+    suspend fun setMaxConsecutiveFailures(value: Int) = store.setMaxConsecutiveFailures(value)
+    suspend fun setPluginEnabled(pluginId: String, enabled: Boolean) = store.setPluginEnabled(pluginId, enabled)
 }
 
-@Singleton
-class OnboardingPreferences @Inject constructor(private val store: SettingsDataStore) {
+class OnboardingPreferences(private val store: SettingsDataStore) {
     val onboardingCompleted get() = store.onboardingCompleted
     val selectedDistribution get() = store.selectedDistribution
     val mirrorPolicy get() = store.mirrorPolicy
@@ -179,15 +228,53 @@ class OnboardingPreferences @Inject constructor(private val store: SettingsDataS
     suspend fun setOnboardingCompleted(value: Boolean) = store.setOnboardingCompleted(value)
 }
 
-@Singleton
-class ToolPreferences @Inject constructor(private val store: SettingsDataStore) {
+class ToolPreferences(private val store: SettingsDataStore) {
     fun toolAccessToken(distroId: String, toolId: String) = store.toolAccessToken(distroId, toolId)
     suspend fun setToolAccessToken(distroId: String, toolId: String, token: String?) =
         store.setToolAccessToken(distroId, toolId, token)
 }
 
-@Singleton
-class BrowserPreferences @Inject constructor(private val store: SettingsDataStore) {
+/** 首次使用引导（插件中心 / 工作坊 / 多会话终端等页面级遮罩），设置页可整体清空重看。 */
+class FirstUseGuidePreferences(private val store: SettingsDataStore) {
+    val firstUseGuidesShown get() = store.firstUseGuidesShown
+    suspend fun markFirstUseGuideShown(id: String) = store.markFirstUseGuideShown(id)
+    suspend fun clearFirstUseGuides() = store.clearFirstUseGuides()
+}
+
+/** 插件仓库（Registry）签名清单配置，开发者页与工具中心使用。 */
+class RegistryPreferences(private val store: SettingsDataStore) {
+    val manifestUrl get() = store.registryManifestUrl
+    val signatureUrl get() = store.registrySignatureUrl
+    val publicKey get() = store.registryPublicKey
+    suspend fun setRegistryConfig(manifestUrl: String, signatureUrl: String, publicKey: String) =
+        store.setRegistryConfig(manifestUrl, signatureUrl, publicKey)
+}
+
+/** 应用级启动计数（数据统计页快照 / Application onCreate 递增）。 */
+class AppStatsPreferences(private val store: SettingsDataStore) {
+    val appLaunchCount get() = store.appLaunchCount
+    suspend fun incrementLaunchCount() = store.incrementLaunchCount()
+}
+
+/** AI Provider 端点与密钥偏好（经 ProviderRepository 收口后供 Settings UI 与工具适配层使用）。 */
+class ProviderPreferences(private val store: SettingsDataStore) {
+    val provider get() = store.provider
+    val baseUrl get() = store.providerBaseUrl
+    val model get() = store.providerModel
+    val apiKeyConfigured get() = store.apiKeyConfigured
+    suspend fun setProvider(value: String) = store.setProvider(value)
+    suspend fun setBaseUrl(value: String) = store.setProviderBaseUrl(value)
+    suspend fun setModel(value: String) = store.setProviderModel(value)
+    suspend fun setApiKey(value: String) = store.setApiKey(value)
+    suspend fun readApiKey(): String? = store.readApiKey()
+    suspend fun setModelApiKey(secretRef: String, value: String) = store.setModelApiKey(secretRef, value)
+    suspend fun readModelApiKey(secretRef: String): String? = store.readModelApiKey(secretRef)
+    suspend fun setModelApiKeys(secretRef: String, values: List<String>) = store.setModelApiKeys(secretRef, values)
+    suspend fun readModelApiKeys(secretRef: String): List<String> = store.readModelApiKeys(secretRef)
+    suspend fun removeModelApiKey(secretRef: String) = store.removeModelApiKey(secretRef)
+}
+
+class BrowserPreferences(private val store: SettingsDataStore) {
     fun defaultFamily() = store.browserDefaultFamily
     fun homeUrl() = store.browserHomeUrl
     fun coBrowsingEnabled() = store.browserCoBrowsingEnabled
@@ -195,6 +282,7 @@ class BrowserPreferences @Inject constructor(private val store: SettingsDataStor
     fun allowEvalJs() = store.browserAllowEvalJs
     fun allowHooks() = store.browserAllowHooks
     fun allowCdp() = store.browserAllowCdp
+    fun allowVConsole() = store.browserAllowVConsole
     fun desktopUserAgent() = store.browserDesktopUserAgent
     fun maxCaptureBytes() = store.browserMaxCaptureBytes
     suspend fun setDefaultFamily(value: String) = store.setBrowserDefaultFamily(value)
@@ -204,17 +292,41 @@ class BrowserPreferences @Inject constructor(private val store: SettingsDataStor
     suspend fun setAllowEvalJs(value: Boolean) = store.setBrowserAllowEvalJs(value)
     suspend fun setAllowHooks(value: Boolean) = store.setBrowserAllowHooks(value)
     suspend fun setAllowCdp(value: Boolean) = store.setBrowserAllowCdp(value)
+    suspend fun setAllowVConsole(value: Boolean) = store.setBrowserAllowVConsole(value)
     suspend fun setDesktopUserAgent(value: Boolean) = store.setBrowserDesktopUserAgent(value)
     suspend fun setMaxCaptureBytes(value: Int) = store.setBrowserMaxCaptureBytes(value)
 }
 
-/** 云端配置窄门面：仅暴露缓存读取与写入，供启动拉取/更新/公告使用。 */
-@Singleton
-class TianyanCloudPreferences @Inject constructor(private val store: SettingsDataStore) {
-    /** 缓存的云端配置 JSON（Map<String,String> 序列化，离线兜底）。 */
-    val cachedConfigJson get() = store.cloudConfigJson
-    /** 最近一次拉取成功时间戳。 */
-    val cachedFetchedAt get() = store.cloudConfigFetchedAt
-    suspend fun cacheConfig(configJson: String) = store.setCloudConfig(configJson)
+/** MCP 被控端（外部 AI 客户端通过 MCP 控制本 App）的偏好键。 */
+internal object AgentServerPreferencesKeys {
+    val Enabled = booleanPreferencesKey("agent_server_enabled")
+    val Port = intPreferencesKey("agent_server_port")
+    val AllowRemote = booleanPreferencesKey("agent_server_allow_remote")
+    val Token = stringPreferencesKey("agent_server_token")
+    val AllowWriteTools = booleanPreferencesKey("agent_server_allow_write_tools")
 }
 
+/**
+ * MCP 被控端配置：设置页读写、[top.tianyan.app.harness.agent.AgentMcpBootstrap] 监听生效。
+ *
+ * - [token] 是**持久化** Bearer Token（与浏览器自环每次启动随机生成不同），外部客户端可长期复用；
+ * - [allowWriteTools] 默认关闭，写入/执行层工具需用户显式开启。
+ */
+class AgentServerPreferences(private val store: SettingsDataStore) {
+    companion object {
+        /** 被控端默认端口；首选被占用时由 server 顺延尝试相邻端口。 */
+        const val DEFAULT_PORT = 8890
+    }
+
+    val enabled: Flow<Boolean> = store.agentServerEnabled
+    val port: Flow<Int> = store.agentServerPort
+    val allowRemote: Flow<Boolean> = store.agentServerAllowRemote
+    val token: Flow<String> = store.agentServerToken
+    val allowWriteTools: Flow<Boolean> = store.agentServerAllowWriteTools
+
+    suspend fun setEnabled(value: Boolean) = store.setAgentServerEnabled(value)
+    suspend fun setPort(value: Int) = store.setAgentServerPort(value)
+    suspend fun setAllowRemote(value: Boolean) = store.setAgentServerAllowRemote(value)
+    suspend fun setToken(value: String) = store.setAgentServerToken(value)
+    suspend fun setAllowWriteTools(value: Boolean) = store.setAgentServerAllowWriteTools(value)
+}

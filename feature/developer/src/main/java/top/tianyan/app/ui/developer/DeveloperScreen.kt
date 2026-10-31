@@ -1,7 +1,8 @@
 package top.tianyan.app.ui.developer
-
+import top.tianyan.app.ui.components.previewOrNull
+import top.tianyan.app.ui.components.previewStateOf
+import org.koin.compose.viewmodel.koinViewModel
 import top.tianyan.app.ui.components.RuntimeAlertDialog
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -21,10 +22,9 @@ import androidx.compose.material3.HorizontalDivider
 import top.tianyan.app.ui.components.RuntimeLinearProgressIndicator as LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import top.tianyan.app.ui.components.RuntimeOutlinedButton as OutlinedButton
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import top.tianyan.app.ui.components.RuntimeSwitch as Switch
 import top.tianyan.app.ui.developer.LocalizedText as Text
 import top.tianyan.app.ui.components.RuntimeTextButton as TextButton
 import androidx.compose.runtime.Composable
@@ -39,9 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.tianyan.app.core.model.InstalledRuntime
 import top.tianyan.app.core.model.RuntimeState
@@ -56,39 +54,42 @@ import top.tianyan.app.ui.components.RuntimeTopBar
 import top.tianyan.app.ui.components.SectionHeader
 import top.tianyan.app.ui.components.StatusBadge
 import top.tianyan.app.runtime.bridge.adb.EmbeddedAdbManager
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.util.Log
+import android.widget.Toast
+import top.tianyan.app.runtime.RootfsUpdateInfo
 
 @Composable
-fun DeveloperScreen(
+internal fun LocalDeveloperScreen(
     onBack: () -> Unit,
-    viewModel: DeveloperViewModel = hiltViewModel(),
+    viewModel: DeveloperViewModel? = previewOrNull { koinViewModel() },
 ) {
-    val runtimeState by viewModel.runtimeState.collectAsStateWithLifecycle()
-    val busy by viewModel.busy.collectAsStateWithLifecycle()
-    val commandInput by viewModel.commandInput.collectAsStateWithLifecycle()
-    val health by viewModel.health.collectAsStateWithLifecycle()
-    val commandResult by viewModel.commandResult.collectAsStateWithLifecycle()
-    val message by viewModel.message.collectAsStateWithLifecycle()
-    val messageIsError by viewModel.messageIsError.collectAsStateWithLifecycle()
-    val registryStatusIsError by viewModel.registryStatusIsError.collectAsStateWithLifecycle()
-    val unusedRuntimes by viewModel.unusedRuntimes.collectAsStateWithLifecycle()
-    val processes by viewModel.processes.collectAsStateWithLifecycle()
-    val rootfsVersion by viewModel.rootfsVersion.collectAsStateWithLifecycle()
-    val rootfsUpdate by viewModel.rootfsUpdate.collectAsStateWithLifecycle()
-    val savedManifestUrl by viewModel.registryManifestUrl.collectAsStateWithLifecycle()
-    val savedSignatureUrl by viewModel.registrySignatureUrl.collectAsStateWithLifecycle()
-    val savedPublicKey by viewModel.registryPublicKey.collectAsStateWithLifecycle()
-    val registryStatus by viewModel.registryStatus.collectAsStateWithLifecycle()
-    val agentLoggingEnabled by viewModel.agentLoggingEnabled.collectAsStateWithLifecycle()
-    val agentLogSize by viewModel.agentLogSize.collectAsStateWithLifecycle()
-    val agentLogLocation by viewModel.agentLogLocation.collectAsStateWithLifecycle()
-    val runtimeLogSize by viewModel.logSize.collectAsStateWithLifecycle()
-    val runtimeLogLocation by viewModel.logLocation.collectAsStateWithLifecycle()
-    val crashLocation by viewModel.crashLocation.collectAsStateWithLifecycle()
-    val adbState by viewModel.adbState.collectAsStateWithLifecycle()
-    val adbDiscovery by viewModel.adbDiscovery.collectAsStateWithLifecycle()
-    val adbBusy by viewModel.adbBusy.collectAsStateWithLifecycle()
-    val adbMessage by viewModel.adbMessage.collectAsStateWithLifecycle()
-    val logcatOutput by viewModel.logcatOutput.collectAsStateWithLifecycle()
+    val runtimeState by viewModel?.runtimeState?.collectAsStateWithLifecycle() ?: previewStateOf(top.tianyan.app.core.model.RuntimeState.Ready)
+    val busy by viewModel?.busy?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val commandInput by viewModel?.commandInput?.collectAsStateWithLifecycle() ?: previewStateOf("")
+    val health by viewModel?.health?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val commandResult by viewModel?.commandResult?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val message by viewModel?.message?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val messageIsError by viewModel?.messageIsError?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val registryStatusIsError by viewModel?.registryStatusIsError?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val unusedRuntimes by viewModel?.unusedRuntimes?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val processes by viewModel?.processes?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val rootfsVersion by viewModel?.rootfsVersion?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val rootfsUpdate by viewModel?.rootfsUpdate?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val savedManifestUrl by viewModel?.registryManifestUrl?.collectAsStateWithLifecycle() ?: previewStateOf("")
+    val savedSignatureUrl by viewModel?.registrySignatureUrl?.collectAsStateWithLifecycle() ?: previewStateOf("")
+    val savedPublicKey by viewModel?.registryPublicKey?.collectAsStateWithLifecycle() ?: previewStateOf("")
+    val registryStatus by viewModel?.registryStatus?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val agentLoggingEnabled by viewModel?.agentLoggingEnabled?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val agentLogSize by viewModel?.agentLogSize?.collectAsStateWithLifecycle() ?: previewStateOf(0L)
+    val agentLogLocation by viewModel?.agentLogLocation?.collectAsStateWithLifecycle() ?: previewStateOf("")
+    val adbState by viewModel?.adbState?.collectAsStateWithLifecycle() ?: previewStateOf(top.tianyan.app.runtime.bridge.adb.EmbeddedAdbManager.ConnectionState.Disconnected)
+    val adbDiscovery by viewModel?.adbDiscovery?.collectAsStateWithLifecycle() ?: previewStateOf(top.tianyan.app.runtime.bridge.adb.EmbeddedAdbManager.DiscoveryState())
+    val adbBusy by viewModel?.adbBusy?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val adbMessage by viewModel?.adbMessage?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val logcatOutput by viewModel?.logcatOutput?.collectAsStateWithLifecycle() ?: previewStateOf("")
     var manifestUrl by remember(savedManifestUrl) { mutableStateOf(savedManifestUrl) }
     var signatureUrl by remember(savedSignatureUrl) { mutableStateOf(savedSignatureUrl) }
     var publicKey by remember(savedPublicKey) { mutableStateOf(savedPublicKey) }
@@ -97,10 +98,6 @@ fun DeveloperScreen(
     var showResetConfirmation by remember { mutableStateOf(false) }
     var showAgentLogDialog by remember { mutableStateOf(false) }
     var agentLogText by remember { mutableStateOf("") }
-    var showRuntimeLogDialog by remember { mutableStateOf(false) }
-    var runtimeLogText by remember { mutableStateOf("") }
-    var showCrashDialog by remember { mutableStateOf(false) }
-    var crashText by remember { mutableStateOf("") }
     var pairingCode by remember { mutableStateOf("") }
     var logcatPackage by remember { mutableStateOf("") }
     var logcatTag by remember { mutableStateOf("") }
@@ -113,10 +110,6 @@ fun DeveloperScreen(
         if (adbState is EmbeddedAdbManager.ConnectionState.Connected) pairingCode = ""
     }
 
-    // 进入开发者控制台时刷新运行日志尺寸/路径与崩溃报告目录，
-    // 用户刚复现完闪退进来即可看到最新现场。
-    LaunchedEffect(Unit) { viewModel.refreshRuntimeLogInfo() }
-
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = { RuntimeTopBar("开发者控制台", onBack) },
@@ -124,8 +117,8 @@ fun DeveloperScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-                .verticalScroll(rememberScrollState())
+                .then(top.tianyan.app.ui.components.runtimeScrollViewport(innerPadding))
+                .verticalScroll(rememberScrollState()).padding(bottom = innerPadding.calculateBottomPadding())
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
@@ -136,11 +129,11 @@ fun DeveloperScreen(
                 rootfsVersion = rootfsVersion,
                 rootfsUpdate = rootfsUpdate,
                 busy = busy,
-                onInitialize = viewModel::initialize,
-                onCancel = viewModel::cancelInitialization,
+                onInitialize = { viewModel?.initialize() },
+                onCancel = { viewModel?.cancelInitialization() },
                 onUpdate = { showRootfsUpdateConfirmation = true },
-                onCheckUpdate = viewModel::checkRootfsUpdate,
-                onHealthCheck = viewModel::runHealthCheck,
+                onCheckUpdate = { viewModel?.checkRootfsUpdate() },
+                onHealthCheck = { viewModel?.runHealthCheck() },
                 onReset = { showResetConfirmation = true },
             )
 
@@ -157,7 +150,7 @@ fun DeveloperScreen(
                             if (result.isHealthy) RuntimeIconName.Shield else RuntimeIconName.Alert,
                             color = if (result.isHealthy) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error,
                         )
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(if (result.isHealthy) "健康检查通过" else "健康检查异常", style = MaterialTheme.typography.titleLarge)
                             Text(result.detail ?: "Runtime 核心能力已完成检测", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
@@ -205,7 +198,7 @@ fun DeveloperScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(12.dp))
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = pairingCode,
                     onValueChange = { value -> pairingCode = value.filter(Char::isDigit).take(6) },
                     modifier = Modifier.fillMaxWidth(),
@@ -215,12 +208,12 @@ fun DeveloperScreen(
                 )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
-                        onClick = { viewModel.pairWirelessAdb(pairingCode) },
+                        onClick = { viewModel?.pairWirelessAdb(pairingCode) },
                         enabled = !adbBusy && pairingCode.length == 6 && adbDiscovery.pairingEndpoints.isNotEmpty(),
                         modifier = Modifier.weight(1f),
                     ) { Text("配对并连接") }
                     OutlinedButton(
-                        onClick = viewModel::connectWirelessAdb,
+                        onClick = { viewModel?.connectWirelessAdb() },
                         enabled = !adbBusy && adbDiscovery.connectEndpoints.isNotEmpty(),
                         modifier = Modifier.weight(1f),
                     ) { Text("重新连接") }
@@ -233,7 +226,7 @@ fun DeveloperScreen(
                 Spacer(Modifier.height(18.dp))
                 Text("应用日志抓取", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(10.dp))
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = logcatPackage,
                     onValueChange = { logcatPackage = it },
                     modifier = Modifier.fillMaxWidth(),
@@ -241,14 +234,14 @@ fun DeveloperScreen(
                     singleLine = true,
                 )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = logcatTag,
                         onValueChange = { logcatTag = it },
                         modifier = Modifier.weight(1f),
                         label = { Text("Tag（可选）") },
                         singleLine = true,
                     )
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = logcatLines,
                         onValueChange = { logcatLines = it.filter(Char::isDigit).take(4) },
                         modifier = Modifier.weight(0.55f),
@@ -256,7 +249,7 @@ fun DeveloperScreen(
                         singleLine = true,
                     )
                 }
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = logcatKeyword,
                     onValueChange = { logcatKeyword = it },
                     modifier = Modifier.fillMaxWidth(),
@@ -264,7 +257,7 @@ fun DeveloperScreen(
                     singleLine = true,
                 )
                 Spacer(Modifier.height(10.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     listOf('V', 'D', 'I', 'W', 'E', 'F').forEach { priority ->
                         if (priority == logcatPriority) {
                             Button(onClick = { logcatPriority = priority }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 2.dp, vertical = 6.dp)) { Text(priority.toString()) }
@@ -276,11 +269,11 @@ fun DeveloperScreen(
                 Spacer(Modifier.height(10.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
-                        onClick = { viewModel.captureLogcat(logcatPackage, logcatTag, logcatPriority, logcatKeyword, logcatLines.toIntOrNull() ?: 200) },
+                        onClick = { viewModel?.captureLogcat(logcatPackage, logcatTag, logcatPriority, logcatKeyword, logcatLines.toIntOrNull() ?: 200) },
                         enabled = connected != null && !adbBusy,
                         modifier = Modifier.weight(1f),
                     ) { Text("抓取日志") }
-                    OutlinedButton(onClick = viewModel::clearDeviceLogcat, enabled = connected != null && !adbBusy) { Text("清空") }
+                    OutlinedButton(onClick = { viewModel?.clearDeviceLogcat() }, enabled = connected != null && !adbBusy) { Text("清空") }
                 }
                 if (logcatOutput.isNotBlank()) {
                     Spacer(Modifier.height(12.dp))
@@ -299,9 +292,9 @@ fun DeveloperScreen(
                     Spacer(Modifier.height(8.dp))
                     OutlinedButton(
                         onClick = {
-                            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Logcat", logcatOutput))
-                            android.widget.Toast.makeText(context, "日志已复制", android.widget.Toast.LENGTH_SHORT).show()
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("Logcat", logcatOutput))
+                            Toast.makeText(context, "日志已复制", Toast.LENGTH_SHORT).show()
                         },
                         modifier = Modifier.fillMaxWidth(),
                     ) { Text("复制日志") }
@@ -315,7 +308,7 @@ fun DeveloperScreen(
                     val manifestUrlValid = manifestUrl.trim().startsWith("https://")
                     val signatureUrlValid = signatureUrl.trim().startsWith("https://")
                     val publicKeyValid = publicKey.isNotBlank()
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = manifestUrl,
                         onValueChange = { manifestUrl = it },
                         modifier = Modifier.fillMaxWidth(),
@@ -326,7 +319,7 @@ fun DeveloperScreen(
                         },
                         singleLine = true,
                     )
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = signatureUrl,
                         onValueChange = { signatureUrl = it },
                         modifier = Modifier.fillMaxWidth(),
@@ -337,7 +330,7 @@ fun DeveloperScreen(
                         },
                         singleLine = true,
                     )
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = publicKey,
                         onValueChange = { publicKey = it },
                         modifier = Modifier.fillMaxWidth(),
@@ -353,13 +346,13 @@ fun DeveloperScreen(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
-                            onClick = { viewModel.saveRegistryConfig(manifestUrl.trim(), signatureUrl.trim(), publicKey.trim()) },
+                            onClick = { viewModel?.saveRegistryConfig(manifestUrl.trim(), signatureUrl.trim(), publicKey.trim()) },
                             enabled = manifestUrlValid && signatureUrlValid && publicKeyValid,
                         ) { Text("保存配置") }
                         OutlinedButton(
-                            onClick = viewModel::updateRegistry,
+                            onClick = { viewModel?.updateRegistry() },
                             enabled = manifestUrlValid && signatureUrlValid && publicKeyValid,
                         ) { Text("检查更新") }
                     }
@@ -370,7 +363,7 @@ fun DeveloperScreen(
             SectionHeader("资源管理", "后台 Linux 进程与共享依赖")
 
             RuntimeCard(Modifier.fillMaxWidth()) {
-                ResourceHeader(RuntimeIconName.Cpu, "后台进程", "${processes.size} 个活动进程", viewModel::refreshProcesses)
+                ResourceHeader(RuntimeIconName.Cpu, "后台进程", "${processes.size} 个活动进程", { viewModel?.refreshProcesses() })
                 Spacer(Modifier.height(14.dp))
                 if (processes.isEmpty()) {
                     Text("当前没有登记中的后台进程。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -378,18 +371,18 @@ fun DeveloperScreen(
                     processes.forEachIndexed { index, process ->
                         if (index > 0) HorizontalDivider(Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outlineVariant)
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(process.toolId ?: process.id, style = MaterialTheme.typography.titleMedium)
                                 Text("${process.type} · PID ${process.pid ?: "未知"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                            TextButton(onClick = { viewModel.stopProcess(process.id) }, enabled = !busy) { Text("停止") }
+                            TextButton(onClick = { viewModel?.stopProcess(process.id) }, enabled = !busy) { Text("停止") }
                         }
                     }
                 }
             }
 
             RuntimeCard(Modifier.fillMaxWidth()) {
-                ResourceHeader(RuntimeIconName.Package, "可清理 Runtime", "引用计数为 0", viewModel::refreshUnusedRuntimes)
+                ResourceHeader(RuntimeIconName.Package, "可清理 Runtime", "引用计数为 0", { viewModel?.refreshUnusedRuntimes() })
                 Spacer(Modifier.height(8.dp))
                 Text("这里只列出未被任何工具引用的共享依赖，清理会在 Linux 沙箱内执行包管理清理。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(12.dp))
@@ -409,150 +402,23 @@ fun DeveloperScreen(
                 }
             }
 
-            SectionHeader("智能体诊断", "智能体执行流、工具调用与错误详情本地持久化")
-            RuntimeCard(Modifier.fillMaxWidth()) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    IconTile(RuntimeIconName.Shield)
-                    Column(Modifier.weight(1f)) {
-                        Text("智能体本地调试日志", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            if (agentLoggingEnabled) "已启用（文件大小：${agentLogSize.toReadableSize()}）" else "已关闭（不写入本地日志文件）",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        if (agentLogLocation.isNotBlank()) {
-                            Text(
-                                "日志文件：$agentLogLocation",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                    Switch(
-                        checked = agentLoggingEnabled,
-                        onCheckedChange = viewModel::setAgentLoggingEnabled,
-                    )
-                }
-                if (agentLoggingEnabled || agentLogSize > 0L) {
-                    Spacer(Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        OutlinedButton(
-                            onClick = {
-                                agentLogText = viewModel.readAgentLogs()
-                                showAgentLogDialog = true
-                            },
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Text("查看日志")
-                        }
-                        OutlinedButton(
-                            onClick = {
-                                val logs = viewModel.readAgentLogs()
-                                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Tianyan Agent Logs", logs))
-                                android.widget.Toast.makeText(context, "日志已复制到剪贴板", android.widget.Toast.LENGTH_SHORT).show()
-                            },
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Text("复制全部")
-                        }
-                        TextButton(
-                            onClick = viewModel::clearAgentLogs,
-                        ) {
-                            Text("清空", color = MaterialTheme.colorScheme.error)
-                        }
-                    }
-                }
-            }
-
-            SectionHeader("运行日志", "应用级运行日志与崩溃报告，用于定位闪退等现场问题")
-            RuntimeCard(Modifier.fillMaxWidth()) {
-                Column(Modifier.fillMaxWidth()) {
-                    Text(
-                        if (runtimeLogSize > 0L) "已记录（文件大小：${runtimeLogSize.toReadableSize()}）" else "暂无运行日志",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    if (runtimeLogLocation.isNotBlank()) {
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            "日志文件：$runtimeLogLocation",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    if (crashLocation.isNotBlank()) {
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            "崩溃报告：$crashLocation",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    Spacer(Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        OutlinedButton(
-                            onClick = {
-                                runtimeLogText = viewModel.readRuntimeLogs()
-                                showRuntimeLogDialog = true
-                            },
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Text("查看运行日志")
-                        }
-                        OutlinedButton(
-                            onClick = {
-                                crashText = viewModel.readLatestCrashReport()
-                                showCrashDialog = true
-                            },
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Text("查看崩溃报告")
-                        }
-                    }
-                    Spacer(Modifier.height(10.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        OutlinedButton(
-                            onClick = {
-                                val logs = viewModel.readRuntimeLogs()
-                                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Tianyan Runtime Logs", logs))
-                                android.widget.Toast.makeText(context, "运行日志已复制到剪贴板", android.widget.Toast.LENGTH_SHORT).show()
-                            },
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Text("复制运行日志")
-                        }
-                        OutlinedButton(
-                            onClick = {
-                                val report = viewModel.readLatestCrashReport()
-                                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Tianyan Crash Report", report))
-                                android.widget.Toast.makeText(context, "崩溃报告已复制到剪贴板", android.widget.Toast.LENGTH_SHORT).show()
-                            },
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Text("复制崩溃报告")
-                        }
-                    }
-                    Spacer(Modifier.height(10.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        TextButton(
-                            onClick = viewModel::clearRuntimeLogs,
-                        ) {
-                            Text("清空运行日志", color = MaterialTheme.colorScheme.error)
-                        }
-                        TextButton(
-                            onClick = viewModel::clearCrashReports,
-                        ) {
-                            Text("清空崩溃报告", color = MaterialTheme.colorScheme.error)
-                        }
-                    }
-                }
-            }
+            AgentDiagnosticsSection(
+                agentLoggingEnabled = agentLoggingEnabled,
+                agentLogSize = agentLogSize,
+                agentLogLocation = agentLogLocation,
+                onToggleLogging = { viewModel?.setAgentLoggingEnabled(it) },
+                onViewLogs = {
+                    agentLogText = viewModel?.readAgentLogs().orEmpty()
+                    showAgentLogDialog = true
+                },
+                onCopyLogs = {
+                    val logs = viewModel?.readAgentLogs().orEmpty()
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("Tianyan Agent Logs", logs))
+                    Toast.makeText(context, "日志已复制到剪贴板", Toast.LENGTH_SHORT).show()
+                },
+                onClearLogs = { viewModel?.clearAgentLogs() },
+            )
 
             SectionHeader("命令诊断", "在隔离的 Linux 环境中执行一次性 Shell 命令")
             RuntimeCard(Modifier.fillMaxWidth()) {
@@ -564,23 +430,23 @@ fun DeveloperScreen(
                     }
                 }
                 Spacer(Modifier.height(14.dp))
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = commandInput,
-                    onValueChange = viewModel::onCommandInputChanged,
+                    onValueChange = { arg0 -> viewModel?.onCommandInputChanged(arg0) },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("Shell 命令") },
                     singleLine = true,
                     textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
                 )
                 Spacer(Modifier.height(10.dp))
-                Button(onClick = viewModel::runCommand, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = { viewModel?.runCommand() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                     RuntimeIcon(RuntimeIconName.Play, Modifier.size(18.dp)); Spacer(Modifier.size(7.dp)); Text("执行命令")
                 }
                 commandResult?.let { result ->
                     Spacer(Modifier.height(14.dp))
                     Column(
                         Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).background(Color(0xFF080D16)).padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(7.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Text("exit ${result.exitCode}  •  ${result.durationMs} ms", style = MaterialTheme.typography.labelMedium, color = if (result.exitCode == 0) Color(0xFF83EDC9) else Color(0xFFFFA2AE))
                         Text(result.stdout.ifBlank { "(no stdout)" }, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, color = Color(0xFFD9E2F1))
@@ -600,7 +466,7 @@ fun DeveloperScreen(
             onDismissRequest = { cleanupTarget = null },
             title = { Text("清理 ${runtime.name.name}？") },
             text = { Text("将移除未被工具引用的共享 Runtime，此操作无法自动恢复。") },
-            confirmButton = { TextButton(onClick = { cleanupTarget = null; viewModel.cleanupRuntime(runtime.id) }) { Text("确认清理", color = MaterialTheme.colorScheme.error) } },
+            confirmButton = { TextButton(onClick = { cleanupTarget = null; viewModel?.cleanupRuntime(runtime.id) }) { Text("确认清理", color = MaterialTheme.colorScheme.error) } },
             dismissButton = { TextButton(onClick = { cleanupTarget = null }) { Text("取消") } },
         )
     }
@@ -623,7 +489,7 @@ fun DeveloperScreen(
             },
             confirmButton = {
                 TextButton(
-                    onClick = { showResetConfirmation = false; viewModel.resetLinuxEnvironment() },
+                    onClick = { showResetConfirmation = false; viewModel?.resetLinuxEnvironment() },
                     enabled = countdown == 0,
                 ) {
                     Text(
@@ -640,7 +506,7 @@ fun DeveloperScreen(
             onDismissRequest = { showRootfsUpdateConfirmation = false },
             title = { Text("更新 Linux RootFS？") },
             text = { Text("将在线下载并校验新版本，保留 /root 与 /opt/tianyan。更新期间后台 Linux 进程会停止，失败时自动恢复旧版本。") },
-            confirmButton = { TextButton(onClick = { showRootfsUpdateConfirmation = false; viewModel.updateRootfs() }) { Text("确认更新") } },
+            confirmButton = { TextButton(onClick = { showRootfsUpdateConfirmation = false; viewModel?.updateRootfs() }) { Text("确认更新") } },
             dismissButton = { TextButton(onClick = { showRootfsUpdateConfirmation = false }) { Text("取消") } },
         )
     }
@@ -662,44 +528,9 @@ fun DeveloperScreen(
             },
             dismissButton = {
                 TextButton(onClick = {
-                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Tianyan Agent Logs", agentLogText))
-                    android.widget.Toast.makeText(context, "日志已复制", android.widget.Toast.LENGTH_SHORT).show()
-                }) { Text("复制") }
-            },
-        )
-    }
-
-    // 运行日志与崩溃报告共用同一套弹窗结构：等宽字体 + 可滚动 + 一键复制，
-    // 现场排查时用户能直接把整段贴给开发者，不必进文件管理器。
-    val logDialogText = when {
-        showRuntimeLogDialog -> runtimeLogText
-        showCrashDialog -> crashText
-        else -> null
-    }
-    val logDialogVisible = showRuntimeLogDialog || showCrashDialog
-    val logDialogTitle = if (showRuntimeLogDialog) "运行日志" else "崩溃报告"
-    if (logDialogVisible && logDialogText != null) {
-        RuntimeAlertDialog(
-            onDismissRequest = { showRuntimeLogDialog = false; showCrashDialog = false },
-            title = { Text(logDialogTitle) },
-            text = {
-                Column(Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState())) {
-                    Text(
-                        logDialogText.ifBlank { "暂无记录" },
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = FontFamily.Monospace,
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showRuntimeLogDialog = false; showCrashDialog = false }) { Text("关闭") }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText(logDialogTitle, logDialogText))
-                    android.widget.Toast.makeText(context, "$logDialogTitle 已复制", android.widget.Toast.LENGTH_SHORT).show()
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("Tianyan Agent Logs", agentLogText))
+                    Toast.makeText(context, "日志已复制", Toast.LENGTH_SHORT).show()
                 }) { Text("复制") }
             },
         )
@@ -710,7 +541,7 @@ fun DeveloperScreen(
 private fun RuntimeControlCard(
     state: RuntimeState,
     rootfsVersion: String?,
-    rootfsUpdate: top.tianyan.app.runtime.RootfsUpdateInfo?,
+    rootfsUpdate: RootfsUpdateInfo?,
     busy: Boolean,
     onInitialize: () -> Unit,
     onCancel: () -> Unit,
@@ -727,7 +558,7 @@ private fun RuntimeControlCard(
     RuntimeCard(Modifier.fillMaxWidth(), containerColor = color.copy(alpha = 0.08f)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             IconTile(RuntimeIconName.Terminal, color = color)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("Linux Runtime", style = MaterialTheme.typography.titleLarge)
                 Text("RootFS ${rootfsVersion ?: "未安装"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 rootfsUpdate?.let { info ->
@@ -794,7 +625,7 @@ private fun RuntimeControlCard(
             Spacer(Modifier.height(12.dp))
             // 面向用户的提示与原始异常解耦：原始异常进日志，避免技术文本直接展示
             androidx.compose.runtime.LaunchedEffect(it.throwable) {
-                android.util.Log.w("DeveloperScreen", "Runtime error: ${it.throwable.message}")
+                Log.w("DeveloperScreen", "Runtime error: ${it.throwable.message}")
             }
             NoticeBanner("Runtime 初始化失败，请检查网络与存储空间后点击「重试初始化」", isError = true)
         }
@@ -811,15 +642,6 @@ private fun ResourceHeader(icon: RuntimeIconName, title: String, detail: String,
         }
         TextButton(onClick = onRefresh) { Text("刷新") }
     }
-}
-
-private fun Long.toReadableSize(): String {
-    if (this < 1024L) return "$this B"
-    val units = listOf("KB", "MB", "GB", "TB")
-    var value = this.toDouble()
-    var index = -1
-    while (value >= 1024 && index < units.lastIndex) { value /= 1024; index += 1 }
-    return "%.1f %s".format(value, units[index])
 }
 
 private fun describeState(state: RuntimeState): String = when (state) {

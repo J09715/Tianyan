@@ -1,7 +1,6 @@
 package top.tianyan.app.runtime
 
 import android.os.Build
-import android.os.PowerManager
 import android.app.ActivityManager
 import android.content.Context
 import java.io.File
@@ -10,9 +9,6 @@ import java.io.InputStream
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
-import javax.inject.Inject
-import javax.inject.Singleton
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,6 +27,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import top.tianyan.app.core.common.shell.ShellQuote
 import top.tianyan.app.core.network.DownloadEvent
 import top.tianyan.app.core.network.DownloadRequest
 import top.tianyan.app.core.network.FileDownloader
@@ -56,11 +53,7 @@ sealed interface LocalModelTransfer {
 sealed interface LocalLlmServiceState {
     data object Stopped : LocalLlmServiceState
     data class Starting(val fileName: String) : LocalLlmServiceState
-    /**
-     * [contextSize] 是服务端当前实际生效的 --ctx-size。
-     * 记录它是为了在用户改了配置后能判断「需要重启才生效」，而不是静默沿用旧值。
-     */
-    data class Running(val fileName: String, val endpoint: String, val contextSize: Int = 0) : LocalLlmServiceState
+    data class Running(val fileName: String, val endpoint: String) : LocalLlmServiceState
     data class Failed(val message: String) : LocalLlmServiceState
 }
 
@@ -70,9 +63,8 @@ sealed interface LocalLlmServiceState {
  * Model files live below /opt/tianyan/data inside the sandbox, so they stay isolated per distro
  * and are already covered by the existing trusted PRoot bind mount.
  */
-@Singleton
-class LocalLlmManager @Inject constructor(
-    @ApplicationContext private val context: Context,
+class LocalLlmManager(
+    private val context: Context,
     private val pathManager: RuntimePathManager,
     private val linuxRuntime: LinuxRuntime,
     private val fileDownloader: FileDownloader,
@@ -87,16 +79,11 @@ class LocalLlmManager @Inject constructor(
     private val managerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val serviceMutex = Mutex()
     private var serviceProcess: ManagedProcess? = null
-
-    /**
-     * 推理期间的 CPU 唤醒锁。
-     *
-     * 与 SSH/FTP 服务一致：本地推理是长时间 CPU 密集任务，而 llama-server 是 PRoot 子进程，
-     * 息屏后系统会冻结进程组 —— 表现就是「刚提示启动成功，回到列表已变成未启动」。
-     * 之前这里没有任何保活机制，所以模型服务必然在息屏后掉线。
-     */
-    private var wakeLock: PowerManager.WakeLock? = null
     private var serviceMonitorJob: Job? = null
+    private var serviceContextTokens: Int? = null
+
+    val defaultContextTokens: Int
+        get() = if (deviceRamBytes() < SIX_GIB) LOW_MEMORY_CONTEXT_SIZE else DEFAULT_CONTEXT_SIZE
 
     init {
         managerScope.launch {
@@ -150,26 +137,17 @@ class LocalLlmManager @Inject constructor(
         }
     }
 
-    /**
-     * 导入 GGUF 模型。
-     *
-     * [openInput] 是工厂而非现成的流：资源必须由本 Flow 自己打开和关闭。
-     * 若由调用方先打开再传进来，句柄会在 `collect` 到 `.flowOn(Dispatchers.IO)`
-     * 真正开始执行之间一直开着，这段窗口里取消就再没人关闭它。
-     */
     fun import(
         displayName: String,
-        openInput: () -> InputStream,
+        input: InputStream,
         totalBytes: Long? = null,
     ): Flow<LocalModelTransfer> = flow {
-        // use 必须包住整个流程体：emit(Started) 会挂起、resolveModelFile 可能抛异常，
-        // 只把 use 套在拷贝循环外的话，这两种情况都会漏掉关闭。
-        openInput().use { source ->
-            val destination = resolveModelFile(displayName)
-            val partial = File("${destination.absolutePath}.import.part")
-            emit(LocalModelTransfer.Started)
-            try {
-                var copied = 0L
+        val destination = resolveModelFile(displayName)
+        val partial = File("${destination.absolutePath}.import.part")
+        emit(LocalModelTransfer.Started)
+        try {
+            var copied = 0L
+            input.use { source ->
                 partial.outputStream().buffered().use { output ->
                     val buffer = ByteArray(COPY_BUFFER_BYTES)
                     while (true) {
@@ -182,18 +160,18 @@ class LocalLlmManager @Inject constructor(
                         emit(LocalModelTransfer.Progress(copied, totalBytes))
                     }
                 }
-                emit(LocalModelTransfer.Verifying)
-                validateGguf(partial)
-                commit(partial, destination)
-                refresh()
-                emit(LocalModelTransfer.Completed(requireModel(destination.name)))
-            } catch (cancellation: CancellationException) {
-                partial.delete()
-                throw cancellation
-            } catch (throwable: Throwable) {
-                partial.delete()
-                throw throwable
             }
+            emit(LocalModelTransfer.Verifying)
+            validateGguf(partial)
+            commit(partial, destination)
+            refresh()
+            emit(LocalModelTransfer.Completed(requireModel(destination.name)))
+        } catch (cancellation: CancellationException) {
+            partial.delete()
+            throw cancellation
+        } catch (throwable: Throwable) {
+            partial.delete()
+            throw throwable
         }
     }.flowOn(Dispatchers.IO)
 
@@ -201,18 +179,12 @@ class LocalLlmManager @Inject constructor(
         val source = File(path.trim()).canonicalFile
         require(source.isFile && source.canRead()) { "文件不存在或不可读取：${source.absolutePath}" }
         require(source.extension.equals(GGUF_EXTENSION, ignoreCase = true)) { "请选择 .gguf 模型文件" }
-        return import(source.name, { FileInputStream(source) }, source.length())
+        return import(source.name, FileInputStream(source), source.length())
     }
 
-    /**
-     * 启动本地推理服务。
-     *
-     * [contextTokens] 是模型档案里配置的上下文上限，会作为 `--ctx-size` 传给 llama-server。
-     * 这个参数必须透传：早先这里只按设备内存选 2048/4096，完全忽略用户配置——
-     * 用户在模型配置里把上下文调到 64000，服务端仍以 4096 启动，
-     * 于是任何稍长的对话都直接 400（request exceeds the available context size）。
-     */
     suspend fun start(fileName: String, contextTokens: Int? = null) = serviceMutex.withLock {
+        val contextSize = contextTokens ?: defaultContextTokens
+        require(contextSize > 0) { "上下文上限必须大于 0" }
         check(Build.SUPPORTED_ABIS.any { it.equals("arm64-v8a", ignoreCase = true) }) {
             "当前设备不是 ARM64，无法运行本地 llama.cpp 推理引擎"
         }
@@ -220,20 +192,15 @@ class LocalLlmManager @Inject constructor(
         require(model.isFile) { "模型文件不存在：$fileName" }
         validateGguf(model)
 
-        // 先把目标 ctx 算出来：early-return 分支也要用它判断是否需要重启。
-        // 决策逻辑放在 core/model 的 LocalLlmContext，便于单测（本类依赖 Android Context）。
-        val contextSize = top.tianyan.app.core.model.LocalLlmContext.resolve(contextTokens, deviceRamBytes())
-
         val currentState = _serviceState.value
         val currentProcess = serviceProcess
         if (currentState is LocalLlmServiceState.Running && currentProcess?.session?.isAlive == true) {
             check(currentState.fileName == model.name) {
                 "已有本地模型正在运行，请先停止后再启动其他模型"
             }
-            // 同一个模型但上下文变了：llama.cpp 的 --ctx-size 只在启动时生效，
-            // 沿用旧进程会让用户「改了配置没反应」。这里主动停掉，让本次调用按新值重启。
-            if (currentState.contextSize == contextSize) return@withLock
-            stopInternal()
+            if (serviceContextTokens == contextSize) return@withLock
+            // llama.cpp allocates its context at startup; changing the profile needs a new process.
+            serviceLauncher.stop(SERVICE_ID)
         }
 
         serviceMonitorJob?.cancel()
@@ -263,7 +230,7 @@ class LocalLlmManager @Inject constructor(
                     toolId = TOOL_ID,
                     type = ProcessType.SERVICE,
                     command = ShellCommand(
-                        commandLine = "exec llama-server -m ${shellQuote(guestModel)} --host 127.0.0.1 --port $SERVICE_PORT --ctx-size $contextSize --parallel 1 --threads $threads --threads-batch $threads",
+                        commandLine = "exec llama-server -m ${ShellQuote.of(guestModel)} --host 127.0.0.1 --port $SERVICE_PORT --ctx-size $contextSize --parallel 1 --threads $threads --threads-batch $threads",
                         environment = mapOf(
                             "LD_LIBRARY_PATH" to "/opt/tianyan/tools/llama-cpp/lib/release",
                         ),
@@ -272,8 +239,8 @@ class LocalLlmManager @Inject constructor(
                 )
             }
             serviceProcess = handle.process
-            acquireWakeLock()
-            _serviceState.value = LocalLlmServiceState.Running(model.name, handle.url, contextSize)
+            serviceContextTokens = contextSize
+            _serviceState.value = LocalLlmServiceState.Running(model.name, handle.url)
             monitorService(handle.process)
         } catch (cancellation: CancellationException) {
             serviceProcess = null
@@ -288,18 +255,9 @@ class LocalLlmManager @Inject constructor(
         }
     }
 
-    suspend fun stop() = serviceMutex.withLock { stopInternal() }
-
-    /**
-     * 停止服务但不加锁——调用方已持有 [serviceMutex]。
-     *
-     * 抽出来是为了让「同模型换上下文需要重启」这条路径能复用同一套清理逻辑：
-     * 复制一份必然漏掉某一步（例如忘了取消 monitor job，旧进程状态会继续覆盖新状态）。
-     */
-    private suspend fun stopInternal() {
+    suspend fun stop() = serviceMutex.withLock {
         serviceMonitorJob?.cancel()
         serviceMonitorJob = null
-        releaseWakeLock()
         serviceProcess = null
         serviceLauncher.stop(SERVICE_ID)
         _serviceState.value = LocalLlmServiceState.Stopped
@@ -363,8 +321,6 @@ class LocalLlmManager @Inject constructor(
         }
     }
 
-    private fun shellQuote(value: String): String = "'${value.replace("'", "'\\''")}'"
-
     private fun deviceRamBytes(): Long = ActivityManager.MemoryInfo().also { info ->
         context.getSystemService(ActivityManager::class.java)?.getMemoryInfo(info)
     }.totalMem
@@ -377,31 +333,12 @@ class LocalLlmManager @Inject constructor(
             serviceMutex.withLock {
                 if (serviceProcess === process) {
                     serviceLauncher.stop(SERVICE_ID)
-                    releaseWakeLock()
                     serviceProcess = null
                     serviceMonitorJob = null
                     _serviceState.value = LocalLlmServiceState.Stopped
                 }
             }
         }
-    }
-
-    private fun acquireWakeLock() {
-        if (wakeLock?.isHeld == true) return
-        val pm = runCatching {
-            context.getSystemService(Context.POWER_SERVICE) as? PowerManager
-        }.getOrNull() ?: return
-        val lock = wakeLock ?: pm.newWakeLock(
-            PowerManager.PARTIAL_WAKE_LOCK,
-            "Tianyan::LocalLlm",
-        ).also { it.setReferenceCounted(false) }
-        wakeLock = lock
-        runCatching { lock.acquire(WAKE_LOCK_TIMEOUT_MS) }
-    }
-
-    private fun releaseWakeLock() {
-        runCatching { wakeLock?.takeIf { it.isHeld }?.release() }
-        wakeLock = null
     }
 
     companion object {
@@ -418,12 +355,11 @@ class LocalLlmManager @Inject constructor(
         private const val ENGINE_PROBE_TIMEOUT_MS = 10_000L
         private const val SERVICE_START_TIMEOUT_MS = 5 * 60_000L
         private const val SERVICE_MONITOR_INTERVAL_MS = 1_000L
-
-        /** 与 SSH/FTP 一致的 12 小时上限：足够长，且不会永久占住唤醒锁。 */
-        private const val WAKE_LOCK_TIMEOUT_MS = 12 * 60 * 60 * 1000L
-
+        private const val LOW_MEMORY_CONTEXT_SIZE = 2048
+        private const val DEFAULT_CONTEXT_SIZE = 4096
         private const val MIN_INFERENCE_THREADS = 2
         private const val MAX_INFERENCE_THREADS = 4
+        private const val SIX_GIB = 6L * 1024L * 1024L * 1024L
         private val GGUF_MAGIC = byteArrayOf('G'.code.toByte(), 'G'.code.toByte(), 'U'.code.toByte(), 'F'.code.toByte())
         private val SAFE_FILE_NAME = Regex("[A-Za-z0-9][A-Za-z0-9._+() -]{0,239}")
     }

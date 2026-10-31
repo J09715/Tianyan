@@ -1,12 +1,8 @@
 package top.tianyan.app.runtime.browser.cdp
 
-import android.os.Handler
-import android.os.Looper
-import android.webkit.WebView
+import android.util.Log
+import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -20,11 +16,10 @@ import top.tianyan.app.runtime.browser.hook.HookRuleStore
 import top.tianyan.app.runtime.browser.hook.NetworkBodyStore
 
 /**
- * CDP 生命周期总管：attach / detach / 规则联动 / 引用计数管理 devtools socket。
+ * CDP 生命周期总管：attach / detach / 规则联动。
  *
- * - `setWebContentsDebuggingEnabled` 是 **app 级静态开关**（开启后同设备其他进程理论上
- *   可连 devtools socket），因此按需开关：首个 attach 前开（主线程 post + latch 等待），
- *   全部 detach 后关；引用计数 [debugSocketRefs] 管理；
+ * - app 级调试开关由启动偏好持有，attach 在主线程重试开启并等待完成；
+ *   detach 不关闭全局开关，避免异步关闭任务与新 attach 竞态；
  * - socket 发现：pid 直连 → /proc/net/unix 扫描；失败重试 3×300ms，错误原文透传 agent；
  * - attach 数上限 4（防泄漏）；
  * - 断点在 detach 时快照（[persistedBreakpoints]），重 attach 经 setup 重放。
@@ -53,12 +48,10 @@ class CdpManager(
     )
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val mainHandler = Handler(Looper.getMainLooper())
     private val attachMutex = Mutex()
 
     private val connections = ConcurrentHashMap<String, CdpTabConnection>()
     private val persistedBreakpoints = ConcurrentHashMap<String, List<DebugBreakpoint>>()
-    private val debugSocketRefs = AtomicInteger(0)
 
     /** tab 数上限（与 WebViewTabPool 的 8 错开：CDP 会话更重）。 */
     private val maxAttach = 4
@@ -69,7 +62,7 @@ class CdpManager(
 
     /**
      * attach tab：发现 socket → 匹配 target → 开 WS → 装配（断点重放 + auto-attach + Fetch）。
-     * 失败抛异常（原文直达 agent），并回滚引用计数。
+     * 失败抛异常（原文直达 agent），后续 attach 可重新尝试。
      */
     suspend fun attach(tabId: String): AttachResult = attachMutex.withLock {
         connections[tabId]?.let { return AttachResult.AlreadyAttached(it.target.url) }
@@ -78,7 +71,7 @@ class CdpManager(
                 "cdp attach limit reached ($maxAttach): browser.debug_detach other tabs first"
             )
         }
-        acquireDevTools()
+        WebViewDebugging.setEnabled(true)
         try {
             val transport = discoverTransport()
             val matcher = CdpTargetMatcher(transport, scope)
@@ -111,7 +104,7 @@ class CdpManager(
             }
             AttachResult.Attached(target.url)
         } catch (e: Exception) {
-            releaseDevTools()
+            Log.e("TianyanCdp", "attach failed; ${WebViewDebugging.diagnostics()}", e)
             throw e
         }
     }
@@ -138,7 +131,6 @@ class CdpManager(
         val conn = connections.remove(tabId) ?: return
         scope.launch {
             runCatching { conn.detach() }
-            releaseDevTools()
         }
     }
 
@@ -151,9 +143,6 @@ class CdpManager(
         connections.values.forEach { runCatching { it.detach() } }
         connections.clear()
         persistedBreakpoints.clear()
-        if (debugSocketRefs.getAndSet(0) > 0) {
-            mainHandler.post { runCatching { WebView.setWebContentsDebuggingEnabled(false) } }
-        }
         scope.cancel()
     }
 
@@ -167,7 +156,7 @@ class CdpManager(
                 workers = conn.workerCount,
             )
         }.sortedBy { it.tabId },
-        devToolsSocketActive = debugSocketRefs.get() > 0,
+        devToolsSocketActive = connections.isNotEmpty(),
     )
 
     // ===== 内部 =====
@@ -177,32 +166,15 @@ class CdpManager(
         val breakpoints = runCatching { conn.detach() }.getOrDefault(emptyList())
         if (breakpoints.isNotEmpty()) persistedBreakpoints[tabId] = breakpoints
         else persistedBreakpoints.remove(tabId)
-        releaseDevTools()
-    }
-
-    /** 首个引用时开启 app 级 devtools（主线程执行 + latch 等待，确保 socket 尽快创建）。 */
-    private fun acquireDevTools() {
-        if (debugSocketRefs.incrementAndGet() == 1) {
-            val latch = CountDownLatch(1)
-            mainHandler.post {
-                runCatching { WebView.setWebContentsDebuggingEnabled(true) }
-                latch.countDown()
-            }
-            latch.await(3, TimeUnit.SECONDS)
-        }
-    }
-
-    private fun releaseDevTools() {
-        if (debugSocketRefs.updateAndGet { if (it > 0) it - 1 else 0 } == 0) {
-            mainHandler.post { runCatching { WebView.setWebContentsDebuggingEnabled(false) } }
-        }
     }
 
     /** socket 发现：候选逐个试连；全部失败延迟 300ms 重试，共 3 次。 */
     private suspend fun discoverTransport(): LocalSocketCdpTransport {
         var lastError: Exception? = null
+        var discovery = DevToolsSocketResolver.discover()
         repeat(3) { attempt ->
-            for (name in DevToolsSocketResolver.candidates()) {
+            if (attempt > 0) discovery = DevToolsSocketResolver.discover()
+            for (name in discovery.candidates) {
                 val transport = LocalSocketCdpTransport(name)
                 try {
                     transport.open().close()
@@ -213,17 +185,17 @@ class CdpManager(
             }
             if (attempt < 2) delay(300)
         }
-        throw java.io.IOException(
-            "webview devtools socket 未发现（已重试 3 次；" +
-                "候选=${DevToolsSocketResolver.candidates()}）: ${lastError?.message}",
+        throw IOException(
+            "webview devtools socket 连接失败（已重试 3 次；" +
+                "候选=${discovery.candidates}; /proc/net/unix=${discovery.scanError ?: "readable"}; " +
+                "${WebViewDebugging.diagnostics()}）: ${lastError?.message}",
             lastError,
         )
     }
 
     private fun openWebSocket(transport: CdpTransport, target: CdpTargetInfo): WsConnection {
         // webSocketDebuggerUrl 形如 ws://127.0.0.1/devtools/page/<id> → 取 path 部分
-        val path = target.webSocketDebuggerUrl.substringAfter("devtools", "")
-        if (path.isEmpty()) throw java.io.IOException("target 无 webSocketDebuggerUrl: ${target.id}")
+        val path = WsHandshake.targetPath(target.webSocketDebuggerUrl)
         val conn = transport.open()
         return try {
             WsHandshake.open(conn, path)

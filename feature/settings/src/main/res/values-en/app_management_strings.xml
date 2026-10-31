@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_app_inventory_summary">Sync apps installed on this device. Shizuku / Root can also read freeze and network restriction status; PRoot provides app information only.</string>
+</resources>

@@ -4,11 +4,8 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
-import dagger.hilt.android.qualifiers.ApplicationContext
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dagger.hilt.android.lifecycle.HiltViewModel
-import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -22,6 +19,7 @@ import top.tianyan.app.core.datastore.SshPreferences
 import top.tianyan.app.runtime.LinuxRuntime
 import top.tianyan.app.runtime.SshRuntimeConfig
 import top.tianyan.app.runtime.SshServiceManager
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 
 data class SshSettingsUiState(
     val distroId: String = "ubuntu",
@@ -37,9 +35,8 @@ data class SshSettingsUiState(
         get() = "ssh -p $port root@$connectionHost"
 }
 
-@HiltViewModel
-class SshSettingsViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
+class SshSettingsViewModel(
+    private val context: Context,
     private val linuxRuntime: LinuxRuntime,
     private val preferences: SshPreferences,
     private val manager: SshServiceManager,
@@ -51,7 +48,7 @@ class SshSettingsViewModel @Inject constructor(
     val vpnActive: StateFlow<Boolean> = _vpnActive.asStateFlow()
     private var vpnCallback: ConnectivityManager.NetworkCallback? = null
 
-    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @OptIn(ExperimentalCoroutinesApi::class)
     val settings: StateFlow<SshSettingsUiState> = linuxRuntime.activeDistroId
         .flatMapLatest { distroId ->
             combine(

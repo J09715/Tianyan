@@ -1,16 +1,18 @@
 package top.tianyan.app.ui.workspace
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.Checkbox
+import top.tianyan.app.ui.components.RuntimeCheckbox as Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.IconButton
+import top.tianyan.app.ui.components.RuntimeIconButton as IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -28,6 +30,8 @@ import androidx.compose.ui.unit.dp
 import top.tianyan.app.feature.workspace.R
 import top.tianyan.app.template.ProjectTemplateInputType
 import top.tianyan.app.template.ProjectTemplateVariable
+import top.tianyan.app.ui.components.RuntimeIcon
+import top.tianyan.app.ui.components.RuntimeIconName
 
 @Composable
 private fun VariableLabel(label: String, required: Boolean) {
@@ -50,7 +54,10 @@ internal fun TemplateVariableFields(
         val error = templateVariableError(variable, value)
         when (variable.inputType) {
             ProjectTemplateInputType.BOOLEAN -> Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onValueChange(variable.name, (!value.equals("true", ignoreCase = true)).toString()) }
+                    .padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Checkbox(
@@ -68,7 +75,7 @@ internal fun TemplateVariableFields(
             ProjectTemplateInputType.SELECT -> {
                 var expanded by remember(variable.name) { mutableStateOf(false) }
                 Column {
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = variable.options.firstOrNull { it.value == value }?.label ?: value,
                         onValueChange = {},
                         readOnly = true,
@@ -77,7 +84,16 @@ internal fun TemplateVariableFields(
                             { Text(description) }
                         },
                         trailingIcon = {
-                            IconButton(onClick = { expanded = true }) { Text("▾") }
+                            IconButton(
+                                onClick = { expanded = true },
+                                contentDescription = variable.label,
+                            ) {
+                                RuntimeIcon(
+                                    RuntimeIconName.ChevronDown,
+                                    Modifier.size(18.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         },
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -95,7 +111,7 @@ internal fun TemplateVariableFields(
                 }
             }
 
-            else -> OutlinedTextField(
+            else -> RuntimeFilledTextField(
                 value = value,
                 onValueChange = { onValueChange(variable.name, it) },
                 label = { VariableLabel(variable.label, variable.required) },

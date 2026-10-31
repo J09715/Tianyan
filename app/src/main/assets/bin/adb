@@ -4,10 +4,26 @@
 set -u
 
 REAL_ADB=""
+
+# Android Bionic 二进制在 PRoot 内的解释器（如 /system/bin/linker64）常是悬空链接：
+# 此时 -x 为真，但 exec 必然 ENOENT（报 "not found"）。仅凭 -x 选候选会选中它并 break，
+# 导致后续所有 adb 命令失败且不回退到可用的候选。这里补一层 ELF 解释器存在性校验。
+elf_interp_ok() {
+    _target=$1
+    _magic=$(head -c 4 "$_target" 2>/dev/null) || return 0
+    # 非 ELF（脚本等）不归本函数判定，交回调用方原有的 -x 逻辑。
+    [ "$_magic" = "$(printf '\177ELF')" ] || return 0
+    _interp=$(LC_ALL=C grep -a -o -m1 -e '/system/bin/linker[0-9]*' "$_target" 2>/dev/null | head -n 1)
+    # 静态链接或非 Android 解释器的 ELF 无此段，视为可用。
+    [ -n "$_interp" ] || return 0
+    [ -e "$_interp" ] || return 1
+    return 0
+}
+
 for candidate in     "${TIANYAN_TOOL_DIR:-/opt/tianyan/tools}/android-suite-offline/bin/adb"     "${ANDROID_HOME:-/opt/android-sdk}/platform-tools/adb"     /usr/bin/adb     /bin/adb; do
     if [ -x "$candidate" ]; then
         real_target=$(readlink -f "$candidate" 2>/dev/null || echo "$candidate")
-        if [ "$real_target" != "/opt/tianyan/bin/adb" ] && [ "$real_target" != "/usr/local/bin/adb" ] && [ -x "$real_target" ]; then
+        if [ "$real_target" != "/opt/tianyan/bin/adb" ] && [ "$real_target" != "/usr/local/bin/adb" ] && [ -x "$real_target" ] && elf_interp_ok "$real_target"; then
             REAL_ADB="$candidate"
             break
         fi
@@ -46,9 +62,7 @@ if [ -f /opt/tianyan/.adb-port ]; then
     PORT=$(cat /opt/tianyan/.adb-port 2>/dev/null | tr -d '[:space:]')
 fi
 if [ -z "$PORT" ]; then
-    BRIDGE_KEY=""
-    [ -f /opt/tianyan/.bridge-key ] && BRIDGE_KEY=$(cat /opt/tianyan/.bridge-key 2>/dev/null | tr -d '[:space:]')
-    PORT=$(curl -s http://127.0.0.1:7980/api/health ${BRIDGE_KEY:+-H "Authorization: Bearer $BRIDGE_KEY"} 2>/dev/null | grep -o '"adbPort":[0-9]*' | cut -d':' -f2 || true)
+    PORT=$(curl -s http://127.0.0.1:7980/api/health 2>/dev/null | grep -o '"adbPort":[0-9]*' | cut -d':' -f2 || true)
 fi
 
 HOST="127.0.0.1"

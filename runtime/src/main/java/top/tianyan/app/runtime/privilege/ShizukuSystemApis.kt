@@ -3,12 +3,9 @@ package top.tianyan.app.runtime.privilege
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.IBinder
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Method
 import java.util.concurrent.ConcurrentHashMap
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.lsposed.hiddenapibypass.HiddenApiBypass
@@ -39,9 +36,8 @@ sealed interface BinderOutcome {
  *
  * 仅当特权模式为 SHIZUKU 时调用才有意义；ROOT/PRoot 请走既有 shell 通路。
  */
-@Singleton
-class ShizukuSystemApis @Inject constructor(
-    @ApplicationContext private val context: Context,
+class ShizukuSystemApis(
+    private val context: Context,
 ) {
     init {
         // API 28+ 的 hidden API 强制限制会拦截 IPackageManager$Stub / $Stub$Proxy 的

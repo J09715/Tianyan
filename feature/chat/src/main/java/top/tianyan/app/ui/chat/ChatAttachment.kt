@@ -3,6 +3,8 @@ package top.tianyan.app.ui.chat
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import top.tianyan.app.core.common.files.BoundedStreamCopy
+import top.tianyan.app.core.common.files.PayloadTooLargeException
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -34,11 +36,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.tianyan.app.feature.chat.R
 import top.tianyan.app.ui.components.RuntimeIcon
+import top.tianyan.app.ui.theme.semanticColors
 import top.tianyan.app.ui.components.RuntimeIconName
-import android.webkit.MimeTypeMap
 import java.io.File
 import java.util.Locale
 import java.util.UUID
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.util.Base64
+import android.util.Log
+import java.io.ByteArrayOutputStream
 
 /**
  * 用户选取的图片或附件元数据
@@ -52,16 +59,29 @@ data class ChatAttachment(
     val hostFilePath: String? = null,
     val guestFilePath: String? = null,
     val base64DataUrl: String? = null,
-    /** MIME type retained for opening persisted attachments in an external app. */
+    /** 源 MIME 类型，供宿主侧 ACTION_VIEW 播放（视频/音频）与模型侧区分文件类型。 */
     val mimeType: String? = null,
 ) {
     val localFilePath: String get() = guestFilePath ?: hostFilePath.orEmpty()
 }
 
+/** 附件处理结果：成功 / 超限（附实际大小与上限，用于大小范围提示）/ 其他失败 */
+sealed interface AttachmentProcessResult {
+    data class Success(val attachment: ChatAttachment) : AttachmentProcessResult
+    data class TooLarge(val name: String, val sizeBytes: Long, val maxBytes: Long) : AttachmentProcessResult
+    data class Failed(val name: String) : AttachmentProcessResult
+}
+
+/** 附件批量处理结果：成功项 + 需要 Toast 上抛的提示（含超限大小范围） */
+data class AttachmentProcessOutcome(
+    val items: List<ChatAttachment>,
+    val notice: String?,
+)
+
 object AttachmentHelper {
     private const val TAG = "AttachmentHelper"
 
-    fun processUri(context: Context, uri: Uri, isImage: Boolean): ChatAttachment? {
+    fun processUri(context: Context, uri: Uri, isImage: Boolean): AttachmentProcessResult {
         val contentResolver = context.contentResolver
         var name = if (isImage) "image_${System.currentTimeMillis()}.jpg" else "file_${System.currentTimeMillis()}"
         var size = 0L
@@ -77,6 +97,12 @@ object AttachmentHelper {
             }
         }
 
+        // 预检：cursor 能拿到真实大小时，超限直接拦截，避免先复制再中止浪费 IO。
+        val limit = BoundedStreamCopy.DEFAULT_MAX_ATTACHMENT_BYTES
+        if (exceedsLimit(size, limit)) {
+            return AttachmentProcessResult.TooLarge(name, size, limit)
+        }
+
         // 统一复制到所有发行版共用的 Runtime 目录，PRoot 固定挂载为 /attachments。
         val attachmentsDir = File(context.filesDir, "linux-runtime/attachments").apply { mkdirs() }
         val safeName = name.replace(Regex("[^a-zA-Z0-9._-]"), "_")
@@ -84,27 +110,30 @@ object AttachmentHelper {
 
         return try {
             contentResolver.openInputStream(uri)?.use { input ->
-                targetFile.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
+                BoundedStreamCopy.copyToFile(
+                    input = input,
+                    targetFile = targetFile,
+                    maxBytes = BoundedStreamCopy.DEFAULT_MAX_ATTACHMENT_BYTES,
+                    policy = BoundedStreamCopy.OverflowPolicy.ABORT,
+                )
+            } ?: return AttachmentProcessResult.Failed(name)
             if (size == 0L) size = targetFile.length()
 
             val guestPath = "/attachments/${targetFile.name}"
-            val sourceMimeType = contentResolver.getType(uri)
-                ?: MimeTypeMap.getSingleton().getMimeTypeFromExtension(
-                    name.substringAfterLast('.', "").lowercase(Locale.US),
-                )
-                ?: if (isImage) "image/jpeg" else "application/octet-stream"
+            val rawMimeType = contentResolver.getType(uri)
+            val sourceMimeType = rawMimeType
+                ?.takeIf { it.startsWith("image/", ignoreCase = true) }
+                ?: "image/jpeg"
             val base64 = if (isImage) {
                 runCatching {
-                    val boundsOptions = android.graphics.BitmapFactory.Options().apply {
+                    // 与 ImagePayloadCompressor 对齐：长边 1280、JPEG 80，避免相册原图把请求体顶到 413。
+                    val boundsOptions = BitmapFactory.Options().apply {
                         inJustDecodeBounds = true
                     }
-                    android.graphics.BitmapFactory.decodeFile(targetFile.absolutePath, boundsOptions)
+                    BitmapFactory.decodeFile(targetFile.absolutePath, boundsOptions)
 
                     var inSampleSize = 1
-                    val maxDimension = 2048
+                    val maxDimension = 1280
                     if (boundsOptions.outHeight > maxDimension || boundsOptions.outWidth > maxDimension) {
                         val halfHeight = boundsOptions.outHeight / 2
                         val halfWidth = boundsOptions.outWidth / 2
@@ -113,39 +142,93 @@ object AttachmentHelper {
                         }
                     }
 
-                    val decodeOptions = android.graphics.BitmapFactory.Options().apply {
+                    val decodeOptions = BitmapFactory.Options().apply {
                         this.inSampleSize = inSampleSize
                     }
-                    val bitmap = android.graphics.BitmapFactory.decodeFile(targetFile.absolutePath, decodeOptions)
+                    val bitmap = BitmapFactory.decodeFile(targetFile.absolutePath, decodeOptions)
                     if (bitmap != null) {
-                        val baos = java.io.ByteArrayOutputStream()
-                        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, baos)
+                        val baos = ByteArrayOutputStream()
+                        try {
+                            bitmap.compress(Bitmap.CompressFormat.JPEG, 80, baos)
+                        } finally {
+                            bitmap.recycle()
+                        }
                         val bytes = baos.toByteArray()
-                        val encoded = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                        val encoded = Base64.encodeToString(bytes, Base64.NO_WRAP)
                         "data:image/jpeg;base64,$encoded"
-                    } else {
+                    } else if (targetFile.length() <= 4L * 1024 * 1024) {
                         val bytes = targetFile.readBytes()
-                        val encoded = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                        val encoded = Base64.encodeToString(bytes, Base64.NO_WRAP)
                         "data:$sourceMimeType;base64,$encoded"
+                    } else {
+                        null
                     }
                 }.getOrNull()
             } else null
 
-            ChatAttachment(
-                name = name,
-                isImage = isImage,
-                sizeBytes = size,
-                uri = uri,
-                hostFilePath = targetFile.absolutePath,
-                guestFilePath = guestPath,
-                base64DataUrl = base64,
-                mimeType = sourceMimeType,
+            AttachmentProcessResult.Success(
+                ChatAttachment(
+                    name = name,
+                    isImage = isImage,
+                    sizeBytes = size,
+                    uri = uri,
+                    hostFilePath = targetFile.absolutePath,
+                    guestFilePath = guestPath,
+                    base64DataUrl = base64,
+                    mimeType = rawMimeType,
+                ),
             )
+        } catch (e: PayloadTooLargeException) {
+            // 流式拷贝中触发超限：以实际观测大小构造提示，保证"大小范围"信息完整
+            Log.w(TAG, "附件超限 uri=$uri size=${e.actualBytesObserved} max=${e.maxBytes}")
+            AttachmentProcessResult.TooLarge(name, e.actualBytesObserved, e.maxBytes)
         } catch (e: Exception) {
             // 失败不能静默：记录日志并由 ChatViewModel 统计后以 Toast 上抛给用户
-            android.util.Log.w(TAG, "附件处理失败 uri=$uri", e)
-            null
+            Log.w(TAG, "附件处理失败 uri=$uri", e)
+            AttachmentProcessResult.Failed(name)
         }
+    }
+
+    /** 纯判定：sizeBytes 是否超过 maxBytes（0 表示未知大小，不拦截，交给拷贝后兜底） */
+    internal fun exceedsLimit(sizeBytes: Long, maxBytes: Long = BoundedStreamCopy.DEFAULT_MAX_ATTACHMENT_BYTES): Boolean =
+        sizeBytes > maxBytes
+
+    /** 清理 host 侧已拷贝文件；移除附件时调用，避免 200MB 上限下撑满 filesDir */
+    fun deleteHostFile(path: String?) {
+        if (path == null) return
+        runCatching { File(path).delete() }
+            .onFailure { Log.w(TAG, "删除附件 host 文件失败 path=$path", it) }
+    }
+
+    /** 纯聚合：按 TooLarge/Failed 计数拼装提示；无异常时返回 null（保持单测不依赖 Context） */
+    internal fun buildAttachmentNotice(
+        tooLargeCount: Int,
+        failedCount: Int,
+        limitLabel: String,
+        tooLargeMessage: (count: Int, limitLabel: String) -> String,
+        failedMessage: (count: Int) -> String,
+    ): String? {
+        if (tooLargeCount <= 0 && failedCount <= 0) return null
+        return buildList {
+            if (tooLargeCount > 0) add(tooLargeMessage(tooLargeCount, limitLabel))
+            if (failedCount > 0) add(failedMessage(failedCount))
+        }.joinToString("；")
+    }
+
+    /** 批量处理附件并聚合超限/失败提示；通知文案在此拼装，保持 ViewModel 精简 */
+    fun processPicked(context: Context, uris: List<Uri>, isImage: Boolean): AttachmentProcessOutcome {
+        val results = uris.map { processUri(context, it, isImage) }
+        val items = results.mapNotNull { (it as? AttachmentProcessResult.Success)?.attachment }
+        val tooLargeCount = results.count { it is AttachmentProcessResult.TooLarge }
+        val failedCount = results.count { it is AttachmentProcessResult.Failed }
+        val notice = buildAttachmentNotice(
+            tooLargeCount = tooLargeCount,
+            failedCount = failedCount,
+            limitLabel = formatFileSize(results.filterIsInstance<AttachmentProcessResult.TooLarge>().firstOrNull()?.maxBytes ?: BoundedStreamCopy.DEFAULT_MAX_ATTACHMENT_BYTES),
+            tooLargeMessage = { count, label -> context.getString(R.string.chat_attachment_too_large, count, label) },
+            failedMessage = { count -> context.getString(R.string.chat_attachment_process_failed, count) },
+        )
+        return AttachmentProcessOutcome(items, notice)
     }
 
     fun formatFileSize(bytes: Long): String {
@@ -158,27 +241,12 @@ object AttachmentHelper {
 }
 
 /**
- * 附件解析状态（沙箱抽文本的进度）。key = attachment.id。
- */
-sealed interface AttachmentStatus {
-    data object Idle : AttachmentStatus
-    data object Extracting : AttachmentStatus
-    /** 抽取成功（chars = 字符数）；truncated 表示超上限被截。 */
-    data class Extracted(val chars: Int, val truncated: Boolean = false) : AttachmentStatus
-    /** 抽不出内容（扫描件 / 二进制 / 未支持格式）。 */
-    data object NoText : AttachmentStatus
-    /** 抽取失败（网络 / 依赖装不上 / 文件损坏）。 */
-    data class Failed(val reason: String) : AttachmentStatus
-}
-
-/**
  * 待发送附件预览栏
  */
 @Composable
 fun AttachmentPreviewRow(
     attachments: List<ChatAttachment>,
     onRemove: (ChatAttachment) -> Unit,
-    statuses: Map<String, AttachmentStatus> = emptyMap(),
     modifier: Modifier = Modifier,
 ) {
     if (attachments.isEmpty()) return
@@ -206,19 +274,19 @@ fun AttachmentPreviewRow(
                             .size(24.dp)
                             .clip(CircleShape)
                             .background(
-                                if (item.isImage) Color(0xFF3B82F6).copy(alpha = 0.15f)
-                                else Color(0xFF10B981).copy(alpha = 0.15f),
+                                if (item.isImage) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                else semanticColors().success.copy(alpha = 0.15f),
                             ),
                         contentAlignment = Alignment.Center,
                     ) {
                         RuntimeIcon(
                             name = if (item.isImage) RuntimeIconName.Image else RuntimeIconName.Attach,
                             modifier = Modifier.size(13.dp),
-                            tint = if (item.isImage) Color(0xFF3B82F6) else Color(0xFF10B981),
+                            tint = if (item.isImage) MaterialTheme.colorScheme.primary else semanticColors().success,
                         )
                     }
 
-                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
                             text = item.name,
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
@@ -226,44 +294,11 @@ fun AttachmentPreviewRow(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        // 解析状态徽章 or 文件大小
-                        when (val st = statuses[item.id]) {
-                            is AttachmentStatus.Extracting -> Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(3.dp),
-                            ) {
-                                androidx.compose.material3.CircularProgressIndicator(
-                                    modifier = Modifier.size(9.dp),
-                                    strokeWidth = 1.dp,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                                Text(
-                                    "解析中…",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                            is AttachmentStatus.Extracted -> Text(
-                                text = "✓ ${st.chars} 字符已抽取${if (st.truncated) "（截断）" else ""}",
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                            is AttachmentStatus.NoText -> Text(
-                                "— 无可抽文本",
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            is AttachmentStatus.Failed -> Text(
-                                text = "✗ ${st.reason.take(24)}",
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                            null, AttachmentStatus.Idle -> Text(
-                                text = AttachmentHelper.formatFileSize(item.sizeBytes),
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+                        Text(
+                            text = AttachmentHelper.formatFileSize(item.sizeBytes),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
 
                     val removeLabel = stringResource(R.string.chat_remove_attachment)

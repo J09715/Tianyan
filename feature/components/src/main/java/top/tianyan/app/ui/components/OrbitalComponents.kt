@@ -10,6 +10,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import top.tianyan.app.ui.theme.Spacing
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -182,7 +183,7 @@ fun OrbitalTabRow(
                             CountBadge(
                                 count = spec.count,
                                 highlighted = selected,
-                                modifier = Modifier.padding(start = 5.dp),
+                                modifier = Modifier.padding(start = Spacing.xs),
                             )
                         }
                     }
@@ -227,7 +228,7 @@ fun CountBadge(
             .height(16.dp)
             .animateContentSize(animationSpec = tween(160, easing = EaseOutCubic))
             .background(container, RoundedCornerShape(percent = 50))
-            .padding(horizontal = 6.dp),
+            .padding(horizontal = Spacing.sm),
         contentAlignment = Alignment.Center,
     ) {
         Text(

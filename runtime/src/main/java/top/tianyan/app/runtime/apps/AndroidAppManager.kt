@@ -4,9 +4,6 @@ import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import top.tianyan.app.core.database.AndroidAppEntity
@@ -20,9 +17,8 @@ data class AppInventorySyncResult(val total: Int, val systemApps: Int, val userA
  * Always builds the basic inventory through PackageManager. When Shizuku/Root is active, it
  * supplements it with shell-only state (suspended and netpolicy) before reconciling Room.
  */
-@Singleton
-class AndroidAppManager @Inject constructor(
-    @ApplicationContext private val context: Context,
+class AndroidAppManager(
+    private val context: Context,
     private val privilegeManager: PrivilegeManager,
     private val repository: AndroidAppRepository,
 ) {

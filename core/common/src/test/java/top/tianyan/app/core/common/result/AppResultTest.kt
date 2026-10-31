@@ -1,4 +1,4 @@
-package top.tianyan.app.core.common.result
+﻿package top.tianyan.app.core.common.result
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull

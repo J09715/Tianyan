@@ -18,6 +18,7 @@ import top.tianyan.app.harness.ChatUsage
  * - streamRetries：限流 + 网络退避重试次数
  * - circuitBreakerTripped：是否触发连续失败熔断
  * - droppedToolCalls：超出单轮上限被丢弃的调用数
+ * - budgetContinuations：轮次预算用尽后自动续跑的次数（等价于省下的人工点击）
  * - cacheHitRate：DeepSeek 等厂商 KV 前缀缓存命中率；高命中率意味着更低成本
  */
 class RunMetrics(
@@ -32,6 +33,7 @@ class RunMetrics(
     private val steeringMessages = AtomicInteger()
     private val followUpMessages = AtomicInteger()
     private val maxConsecutiveFailuresSeen = AtomicInteger()
+    private val budgetContinuations = AtomicInteger()
     @Volatile private var circuitBreakerTripped = false
     @Volatile var outcome: String = "unknown"
         private set
@@ -39,6 +41,10 @@ class RunMetrics(
     // Cache-hit tracking: accumulated across all rounds for the session run.
     private val totalInputTokens = AtomicLong()
     private val totalCacheReadTokens = AtomicLong()
+
+    // 输入估算/实际对照：估算低于实际即系统性低估，低估会把折叠线余量悄悄吃光（400/413 溢出）。
+    // 与 totalInputTokens 在同一批轮次上累计，故 summary 里的比值可直接判读。
+    private val estimatedInputTokens = AtomicLong()
 
     fun roundStarted() { rounds.incrementAndGet() }
     fun toolCallRecorded(failed: Boolean) {
@@ -53,6 +59,7 @@ class RunMetrics(
     fun consecutiveFailuresObserved(count: Int) {
         maxConsecutiveFailuresSeen.updateAndGet { current -> maxOf(current, count) }
     }
+    fun budgetContinued() { budgetContinuations.incrementAndGet() }
     fun circuitBreaker() { circuitBreakerTripped = true }
     fun finish(result: String) { outcome = result }
 
@@ -67,6 +74,14 @@ class RunMetrics(
         }
     }
 
+    /**
+     * 记录一轮请求发出前引擎自己估算的输入 token 数（含工具 schema）。
+     * 调用点必须与 [recordUsage] 落在同一批成功轮次上，否则比值会被失败轮污染。
+     */
+    fun recordEstimatedInput(tokens: Int) {
+        if (tokens > 0) estimatedInputTokens.addAndGet(tokens.toLong())
+    }
+
     fun summary(): String = buildString {
         append("Rounds=").append(rounds.get())
         append(", ToolCalls=").append(toolCalls.get())
@@ -77,6 +92,7 @@ class RunMetrics(
         append(", Steering=").append(steeringMessages.get())
         append(", FollowUps=").append(followUpMessages.get())
         append(", MaxConsecutiveFailures=").append(maxConsecutiveFailuresSeen.get())
+        append(", BudgetContinuations=").append(budgetContinuations.get())
         append(", CircuitBreaker=").append(circuitBreakerTripped)
         // Cache-hit rate: show percentage when we have meaningful data; "n/a" when no
         // provider usage was reported (e.g. all turns failed before streaming started).
@@ -88,6 +104,16 @@ class RunMetrics(
             "n/a"
         }
         append(", CacheHit=").append(cacheHitStr)
+        // EstAccuracy = 估算/实际；< 100% 即低估（越低越危险：折叠线余量被悄悄吃光后溢出）
+        val estimatedToks = estimatedInputTokens.get()
+        append(", EstInput=").append(estimatedToks)
+        append(", EstAccuracy=").append(
+            when {
+                estimatedToks <= 0 -> "n/a"
+                inputToks <= 0 -> "n/a (no usage)"
+                else -> "${estimatedToks * 100L / inputToks}%"
+            },
+        )
         append(", Outcome=").append(outcome)
     }
 }

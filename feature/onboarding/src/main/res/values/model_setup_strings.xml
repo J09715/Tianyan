@@ -1,0 +1,12 @@
+<resources>
+    <string name="model_setup_import">导入配置</string>
+    <string name="model_setup_connection">连接信息</string>
+    <string name="model_setup_url">接口地址 · Base URL</string>
+    <string name="model_setup_key">API Key</string>
+    <string name="model_setup_model">选择模型</string>
+    <string name="model_setup_discover">获取模型列表</string>
+    <string name="model_setup_show_key">显示密钥</string>
+    <string name="model_setup_hide_key">隐藏密钥</string>
+    <string name="model_setup_protocol_openai">OpenAI 兼容接口</string>
+    <string name="model_setup_protocol_anthropic">Claude Messages 接口</string>
+</resources>

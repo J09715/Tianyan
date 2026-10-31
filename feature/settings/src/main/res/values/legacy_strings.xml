@@ -14,7 +14,7 @@
     <string name="settings_legacy_0012" formatted="false">稍后再说</string>
     <string name="settings_legacy_0013" formatted="false">正在下载…</string>
     <string name="settings_legacy_0014" formatted="false">天衍 · 乾坤</string>
-    <string name="settings_legacy_0015" formatted="false">天衍 · Tianyan</string>
+    <string name="settings_legacy_0015" formatted="false">天衍</string>
     <string name="settings_legacy_0016" formatted="false">系统设置与控制中枢</string>
     <string name="settings_legacy_0017" formatted="false">系统与配置分类</string>
     <string name="settings_legacy_0018" formatted="false">智能体与 AI 模型</string>
@@ -58,7 +58,7 @@
     <string name="settings_legacy_0056" formatted="false">不注入工具和提示词</string>
     <string name="settings_legacy_0057" formatted="false">关闭系统提示词和工具定义注入，仅发送用户消息（用于排查问题）</string>
     <string name="settings_legacy_0059" formatted="false">Agent 智能体管理</string>
-    <string name="settings_legacy_0060" formatted="false">思考流呈现、上下文压缩阈值与技能插件</string>
+    <string name="settings_legacy_0060" formatted="false">思考流呈现、上下文压缩策略与技能插件</string>
     <string name="settings_legacy_0061" formatted="false">工具与插件生态</string>
     <string name="settings_legacy_0062" formatted="false">插件与工具生态中心</string>
     <string name="settings_legacy_0063" formatted="false">一键安装 Claude Code、OpenClaw 等 AI CLI 与开发环境</string>
@@ -103,7 +103,7 @@
     <string name="settings_legacy_0102" formatted="false">开发者调试与控制台</string>
     <string name="settings_legacy_0103" formatted="false">实时查看 PRoot 进程与命令追踪</string>
     <string name="settings_legacy_0104" formatted="false">关于与社区</string>
-    <string name="settings_legacy_0105" formatted="false">关于天衍 · Tianyan</string>
+    <string name="settings_legacy_0105" formatted="false">关于天衍</string>
     <string name="settings_legacy_0106" formatted="false">关于、更新与官方社区</string>
     <string name="settings_legacy_0107" formatted="false">应用版本与更新</string>
     <string name="settings_legacy_0108" formatted="false">检查新版本</string>
@@ -209,7 +209,7 @@
     <string name="settings_text_0061" formatted="false">删除子智能体</string>
     <string name="settings_text_0062" formatted="false">删除服务</string>
     <string name="settings_text_0063" formatted="false">删除模型失败</string>
-    <string name="settings_text_0064" formatted="false">加入 QQ 交流群 (905971993)</string>
+    <string name="settings_text_0064" formatted="false">加入 QQ 交流群 (964382207)</string>
     <string name="settings_text_0065" formatted="false">助手名称</string>
     <string name="settings_text_0066" formatted="false">协议: Apache-2.0 License</string>
     <string name="settings_text_0067" formatted="false">单 Key RPM 需为非负整数</string>
@@ -218,7 +218,6 @@
     <string name="settings_text_0070" formatted="false">卸载</string>
     <string name="settings_text_0071" formatted="false">卸载工具</string>
     <string name="settings_text_0072" formatted="false">压缩策略</string>
-    <string name="settings_text_0073" formatted="false">压缩触发阈值（用户轮次）</string>
     <string name="settings_text_0074" formatted="false">参数（空格分隔）</string>
     <string name="settings_text_0075" formatted="false">可呼叫天衍 Agent 在 PRoot 沙箱内自主排查与自愈</string>
     <string name="settings_text_0076" formatted="false">可更新</string>
@@ -240,7 +239,7 @@
     <string name="settings_text_0092" formatted="false">复制 JSON</string>
     <string name="settings_text_0093" formatted="false">复杂且可并行的任务将由主智能体自行决定是否派发</string>
     <string name="settings_text_0094" formatted="false">多沙箱并存与动态切换</string>
-    <string name="settings_text_0095" formatted="false">多轮工具调用超出阈值时，自动压缩历史中间工具输出日志，保留任务首尾与关键状态</string>
+    <string name="settings_text_0095" formatted="false">历史超过 Token 折叠线时自动生成结构化摘要，保留近期原文、任务状态与关键文件足迹</string>
     <string name="settings_text_0096" formatted="false">如: sqlite / github / fetch</string>
     <string name="settings_text_0097" formatted="false">安装</string>
     <string name="settings_text_0098" formatted="false">安装中</string>
@@ -284,13 +283,10 @@
     <string name="settings_text_0136" formatted="false">开始下载</string>
     <string name="settings_text_0137" formatted="false">开始安装</string>
     <string name="settings_text_0138" formatted="false">异常</string>
-    <string name="settings_text_0139" formatted="false">强制中文 (推荐)</string>
-    <string name="settings_text_0140" formatted="false">强制模型思考过程全程使用英文 (English)</string>
     <string name="settings_text_0141" formatted="false">当会话关联了工作区时，执行 base 命令默认以该目录为工作路径 (cwd)</string>
     <string name="settings_text_0142" formatted="false">当会话历史超过该轮数时，启动智能剪裁，最近 4 轮保持无损</string>
     <string name="settings_text_0143" formatted="false">当前活跃</string>
     <string name="settings_text_0144" formatted="false">必选基座</string>
-    <string name="settings_text_0145" formatted="false">思考与推理语言偏好 (Thinking Language)</string>
     <string name="settings_text_0146" formatted="false">思考呈现</string>
     <string name="settings_text_0147" formatted="false">思考流、子智能体、Skill 与插件</string>
     <string name="settings_text_0148" formatted="false">思考流与执行表现</string>
@@ -395,7 +391,6 @@
     <string name="settings_text_0247" formatted="false">版本: v0.3.0 (Material 3 Expressive)</string>
     <string name="settings_text_0248" formatted="false">生成安全 Token</string>
     <string name="settings_text_0249" formatted="false">用户名称</string>
-    <string name="settings_text_0250" formatted="false">由模型根据上下文或底层默认策略自主决定思考语言</string>
     <string name="settings_text_0251" formatted="false">申请豁免电池优化</string>
     <string name="settings_text_0252" formatted="false">电池优化与后台保活</string>
     <string name="settings_text_0253" formatted="false">电池电量</string>
@@ -417,7 +412,7 @@
     <string name="settings_text_0269" formatted="false">网关服务</string>
     <string name="settings_text_0270" formatted="false">网络下载</string>
     <string name="settings_text_0271" formatted="false">网络下载 GGUF</string>
-    <string name="settings_text_0272" formatted="false">群号: 905971993 · 点击一键加群 / 复制群号</string>
+    <string name="settings_text_0272" formatted="false">群号: 964382207 · 点击一键加群 / 复制群号</string>
     <string name="settings_text_0273" formatted="false">聊天界面中新生成的思考过程将默认展开呈现</string>
     <string name="settings_text_0274" formatted="false">职责简介</string>
     <string name="settings_text_0275" formatted="false">自动 (Auto)</string>
@@ -482,17 +477,30 @@
     <string name="settings_text_0334" formatted="false">📋 JSON 导入</string>
     <string name="settings_text_0335" formatted="false">📝 表单模式</string>
     <string name="settings_text_0336" formatted="false">🧠 AI 自愈</string>
+    <string name="settings_text_0337" formatted="false">防止复杂任务中模型陷入死循环；达到轮次后进入下方的自动续跑检查点</string>
+    <string name="settings_text_0338" formatted="false">轮次用尽后自动续跑</string>
+    <string name="settings_text_0339" formatted="false">轮次用尽即停下等待用户确认；适合希望逐段把关的场景</string>
+    <string name="settings_text_0340" formatted="false">轮次用尽时先让模型收束并记录进度，再自动续跑，无需用户点击继续；总预算上限 %1$s 轮</string>
+    <string name="settings_text_0341" formatted="false">%1$s 次</string>
+    <string name="settings_text_0342" formatted="false">称呼与人设</string>
+    <string name="settings_text_0343" formatted="false">查看默认系统提示词</string>
+    <string name="settings_text_0344" formatted="false">模型自称</string>
+    <string name="settings_text_0345" formatted="false">天衍智枢</string>
+    <string name="settings_text_0346" formatted="false">对用户的称呼</string>
+    <string name="settings_text_0347" formatted="false">用户</string>
+    <string name="settings_text_0348" formatted="false">修改后立即对所有对话生效（留空恢复默认）；自定义提示词中的 {{char}} / {{user}} 宏变量也将使用这两个值。</string>
+    <string name="settings_text_0349" formatted="false">默认系统提示词 (core.md)</string>
+    <string name="settings_text_0350" formatted="false">（默认系统提示词加载失败）</string>
     <string name="settings_long_001" formatted="false">, target.sizeBytes.toDouble() / (1024 * 1024))} MB 空间）。/workspace 工作区中的代码文件不会受到任何影响。</string>
     <string name="settings_long_002" formatted="false">1. 分析上述 PRoot 沙箱内的失败报错（如 dpkg 依赖破损、锁残留、网络下载受阻、commandLinks 软链接缺失或环境缺失）；</string>
     <string name="settings_long_003" formatted="false">2. 直接调用 base 工具执行针对性的修复命令（如清理 /var/lib/dpkg 锁、dpkg --configure -a、apt-get --fix-broken install、手动从备用源拉取或补齐软链接）；</string>
     <string name="settings_long_004" formatted="false">Android 12+ 会监控应用派生的子进程，超过系统上限后可能终止 PRoot、编译器或 Agent 任务。这里解除的是子进程限制，不是 Java/Kotlin 线程数。</string>
     <string name="settings_long_005" formatted="false">MCP 是开放的标准模型上下文协议。开启后，天衍将在 PRoot 沙箱内启动对应的 Stdio 服务或连接本地 SSE 端点，并动态向智枢 Agent 注入专业工具能力。</string>
-    <string name="settings_long_006" formatted="false">https://github.com/J09715/Tianyan · 欢迎 Star 支持</string>
+    <string name="settings_long_006" formatted="false">https://github.com/tianyan-lab/tianyan · 欢迎 Star 支持</string>
     <string name="settings_long_007" formatted="false">天衍在 Agent 执行期间会启动前台服务并持有 CPU 进程锁，但系统电池优化仍可能在息屏后</string>
     <string name="settings_long_008" formatted="false">天衍支持多套 Linux 系统并存。所有系统均自动挂载 /workspace 代码工程，/sdcard 外部存储按「存储挂载与共享」页的开关注入，各发行版软件生态与包管理器完全独立隔离。</string>
     <string name="settings_long_009" formatted="false">尚未配置任何模型档案，可前往【设置 → 模型档案管理】添加 Claude、OpenAI 或 DeepSeek 模型</string>
     <string name="settings_long_010" formatted="false">挂载仅作用于 Linux 沙箱内的进程（终端、智枢 Agent、构建任务与后台服务），不影响文件浏览器——文件浏览器始终直接访问宿主存储。挂载在会话启动时注入，修改后新建的终端 / 构建任务才会应用。完整读写还需在系统设置中授予「所有文件访问」权限。</string>
-    <string name="settings_long_011" formatted="false">强约束模型思考过程全程使用中文（解决 DeepSeek/Claude 思考总跑英文的问题）</string>
     <string name="settings_long_012" formatted="false">提示：小米/华为/OPPO 等厂商系统还需在应用详情中手动允许「自启动」与「后台运行」，</string>
     <string name="settings_long_013" formatted="false">服务尚未启动，请先在【网关服务】卡片中点击启动，启动成功后将在此展示可访问链接。Token 可提前生成，启动时自动注入。</string>
     <string name="settings_long_014" formatted="false">架构: aarch64 · chroot-less user-space virtualization</string>

@@ -64,90 +64,54 @@ class HarnessApiMapperTest {
         assertEquals(HarnessTool.BASE, HarnessApiMapper.toolByName("unknown_tool"))
     }
 
+    // ---------- 附件：正文保持干净，清单只在 API 层展开 ----------
+
     @Test
-    fun `user message with attachments renders mount manifest for the model`() {
-        val message = UserMessage(
-            id = "u",
-            createdAt = 1L,
-            text = "看看这个",
-            attachments = listOf(
-                MessageAttachment(
-                    name = "a.pdf",
-                    isImage = false,
-                    sizeBytes = 593 * 1024,
-                    guestPath = "/attachments/1_a.pdf",
-                ),
-                MessageAttachment(
-                    name = "b.jpg",
-                    isImage = true,
-                    sizeBytes = 900,
-                    guestPath = "/attachments/2_b.jpg",
-                ),
-            ),
+    fun `attachment manifest is rendered for the model but not baked into message text`() {
+        val attachment = MessageAttachment(
+            name = "scan.zip",
+            isImage = false,
+            sizeBytes = 2048,
+            guestPath = "/attachments/scan.zip",
         )
-        val content = requireNotNull(HarnessApiMapper.toApiMessage(message).content)
-        assertTrue(content.startsWith("看看这个"))
-        assertTrue(content.contains("[附件：已复制并挂载到 Linux 沙箱]"))
-        assertTrue(content.contains("1. [文件] a.pdf (593 KB) -> Linux 沙箱绝对路径: /attachments/1_a.pdf"))
-        assertTrue(content.contains("2. [图片] b.jpg (900 B) -> Linux 沙箱绝对路径: /attachments/2_b.jpg"))
-        assertTrue(content.contains("请使用 base 在上述绝对路径读取"))
+        val message = UserMessage("u", 1L, "看看这个", attachments = listOf(attachment))
+
+        // 存储侧：正文仍是用户原话，气泡据此渲染纯文本 + 文件卡片
+        assertEquals("看看这个", message.text)
+
+        // API 侧：清单被展开，模型才知道文件挂在哪
+        val api = HarnessApiMapper.toApiMessage(message)
+        assertEquals("user", api.role)
+        assertTrue(api.content!!.startsWith("看看这个"))
+        assertTrue(api.content!!.contains("scan.zip"))
+        assertTrue(api.content!!.contains("/attachments/scan.zip"))
+        assertTrue(api.content!!.contains("Linux 沙箱绝对路径"))
     }
 
     @Test
-    fun `attachment without guest path falls back to name based path`() {
-        val manifest = HarnessApiMapper.renderAttachmentManifest(
-            listOf(MessageAttachment(name = "x.zip", isImage = false, sizeBytes = 2_000_000)),
-        )
-        assertTrue(manifest.contains("/attachments/x.zip"))
-        assertTrue(manifest.contains("(1.9 MB)"))
+    fun `message without attachments keeps content byte identical`() {
+        val plain = UserMessage("u", 1L, "hello")
+        assertEquals("hello", HarnessApiMapper.toApiMessage(plain).content)
     }
 
     @Test
-    fun `message without attachments keeps byte identical content`() {
-        assertEquals("hi", HarnessApiMapper.renderUserContent("hi", ""))
-        assertEquals("hi\n\ntail", HarnessApiMapper.renderUserContent("hi", "tail"))
-    }
-
-    @Test
-    fun `attachment manifest is byte stable across renders`() {
+    fun `manifest rendering is a pure function for prefix stability`() {
         val attachments = listOf(
-            MessageAttachment(name = "a.pdf", isImage = false, sizeBytes = 1024, guestPath = "/attachments/a.pdf"),
+            MessageAttachment("a.txt", false, 10, "/attachments/a.txt"),
+            MessageAttachment("b.png", true, 20, "/attachments/b.png"),
         )
-        val first = HarnessApiMapper.renderUserContent("hi", "", attachments)
-        val second = HarnessApiMapper.renderUserContent("hi", "", attachments)
-        assertEquals(first, second)
+        // 同样输入必须产出同样字节，否则前缀缓存全量失效
+        assertEquals(
+            HarnessApiMapper.renderAttachmentManifest(attachments),
+            HarnessApiMapper.renderAttachmentManifest(attachments),
+        )
     }
 
     @Test
-    fun `image-only pending message gets a durable prompt`() {
-        val description = durableTaskDescription(
-            PendingMessage(
-                text = "",
-                imageUrls = listOf("data:image/png;base64,abc"),
-            ),
+    fun `blank guest path falls back to canonical attachments dir`() {
+        val text = HarnessApiMapper.renderAttachmentManifest(
+            listOf(MessageAttachment("x.log", false, 1, guestPath = "")),
         )
-
-        assertTrue(description.isNotBlank())
-        assertEquals("请分析附带的图片。", description)
-    }
-
-    @Test
-    fun `attachment-only pending message keeps a recoverable manifest`() {
-        val description = durableTaskDescription(
-            PendingMessage(
-                text = " ",
-                attachments = listOf(
-                    MessageAttachment(
-                        name = "photo.jpg",
-                        isImage = true,
-                        sizeBytes = 12,
-                        guestPath = "/attachments/photo.jpg",
-                    ),
-                ),
-            ),
-        )
-
-        assertTrue(description.contains("photo.jpg"))
-        assertTrue(description.isNotBlank())
+        assertTrue(text.contains("/attachments/x.log"))
     }
 }

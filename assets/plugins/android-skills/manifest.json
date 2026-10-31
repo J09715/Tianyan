@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "android-skills",
+  "name": "Android CLI 与官方技能",
+  "description": "内置 Google Android CLI（android 命令；含引导器与 85.63 MiB 的 android-cli 真身，离线可用、自带 JRE）与 33 个官方 Android Skills（google/android/skills，Apache-2.0），并把技能落到 /attachments/skills/android-skills 供 Agent 自动发现",
+  "version": "1.0.0",
+  "latestVersion": "1.0.0",
+  "enabled": true,
+  "publisher": "Tianyan",
+  "category": "DEVELOPER",
+  "launchType": "command",
+  "architectures": [
+    "ARM64"
+  ],
+  "permissions": [
+    "NETWORK",
+    "WORKSPACE_READ",
+    "WORKSPACE_WRITE"
+  ],
+  "updateStrategy": "REINSTALL",
+  "source": "LOCAL",
+  "offlineOnly": true,
+  "installMethod": "LOCAL_PACKAGE",
+  "installSteps": [
+    "/bin/sh \"$TIANYAN_PLUGIN_PAYLOAD/scripts/install-android-skills.sh\""
+  ],
+  "uninstallSteps": [
+    "/bin/sh \"$TIANYAN_PLUGIN_PAYLOAD/scripts/uninstall-android-skills.sh\""
+  ],
+  "verifyCommand": "/bin/sh \"$TIANYAN_PLUGIN_PAYLOAD/scripts/verify-android-skills.sh\"",
+  "launchCommand": "android info",
+  "commandLinks": [
+    "android"
+  ]
+}

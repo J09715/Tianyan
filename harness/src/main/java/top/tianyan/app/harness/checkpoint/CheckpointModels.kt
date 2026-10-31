@@ -5,10 +5,15 @@ package top.tianyan.app.harness.checkpoint
  *
  * @property path 工作区相对路径（与 write/edit 工具一致）
  * @property content 快照时文件内容；`null` 表示该快照时刻文件不存在（恢复时需删除文件）。
+ * @property afterContent 该路径在本轮内**最后一次成功写入后**的内容（改动后状态）；
+ *   `null` = 没有可用的改动后凭据（写入失败/超大文件跳过捕获/旧数据）。
+ *   restore 时用它检测外部改动：当前文件内容与最后凭据不一致即报冲突、跳过恢复，
+ *   避免 rewind 静默覆盖用户或外部工具在会话期间做的修改。
  */
 data class FileSnap(
     val path: String,
     val content: String?,
+    val afterContent: String? = null,
 )
 
 /**
@@ -57,4 +62,20 @@ data class RewindResult(
     val note: String? = null,
     /** CONVERSATION/BOTH 恢复派生出的新会话 id；UI 可跳转过去继续对话。 */
     val forkedSessionId: String? = null,
+    /**
+     * 因外部改动被跳过恢复的路径：当前文件内容与本 store 记录的最后改动后凭据不一致，
+     * 恢复会静默覆盖外部修改，故保守跳过并报告。空列表 = 全部按方案恢复。
+     */
+    val conflicts: List<String> = emptyList(),
+)
+
+/**
+ * 一次 rewind 的撤销记录（单层级，对齐 Reasonix 的 UndoRewind）：
+ * - [applied]：rewind 实际写入/删除的状态（冲突跳过的路径不含在内），undo 时的冲突检测基线；
+ * - [undoSnaps]：与 [applied] 按下标对齐的「rewind 前磁盘状态」，undo 据此还原。
+ * 对话侧无需 undo：CONVERSATION/BOTH 的 fork 不改动原会话，切回原会话即可。
+ */
+data class RewindUndoRecord(
+    val applied: List<FileSnap>,
+    val undoSnaps: List<FileSnap>,
 )

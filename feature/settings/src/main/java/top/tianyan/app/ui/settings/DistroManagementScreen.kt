@@ -1,7 +1,8 @@
 package top.tianyan.app.ui.settings
-
+import top.tianyan.app.ui.components.previewOrNull
+import top.tianyan.app.ui.components.previewStateOf
+import org.koin.compose.viewmodel.koinViewModel
 import top.tianyan.app.ui.components.RuntimeAlertDialog
-
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -17,7 +18,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -31,7 +31,6 @@ import top.tianyan.app.ui.components.RuntimeLinearProgressIndicator as LinearPro
 import androidx.compose.material3.MaterialTheme
 import top.tianyan.app.ui.components.RuntimeOutlinedButton as OutlinedButton
 import top.tianyan.app.ui.components.RuntimeRadioButton as RadioButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import top.tianyan.app.ui.settings.LocalizedText as Text
 import top.tianyan.app.ui.components.RuntimeTextButton as TextButton
@@ -54,7 +53,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import top.tianyan.app.core.model.InstalledDistro
@@ -64,10 +62,9 @@ import top.tianyan.app.runtime.DistributionSpec
 import top.tianyan.app.runtime.RegistryRoute
 import top.tianyan.app.runtime.RuntimeInstallRequest
 import top.tianyan.app.ui.components.NoticeBanner
-import top.tianyan.app.ui.components.RuntimeCard
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
-import top.tianyan.app.ui.components.RuntimeTopBar
+import top.tianyan.app.ui.components.RuntimeSettingsScaffold
 import top.tianyan.app.ui.components.StatusBadge
 import top.tianyan.app.ui.components.distroIconFor
 
@@ -77,16 +74,18 @@ import top.tianyan.app.ui.components.distroIconFor
 @Composable
 fun DistroManagementScreen(
     onBack: () -> Unit,
-    viewModel: SettingsViewModel = hiltViewModel(),
+    viewModel: SettingsViewModel? = previewOrNull { koinViewModel() },
 ) {
-    val installedDistros by viewModel.installedDistros.collectAsStateWithLifecycle()
-    val activeDistroId by viewModel.activeDistroId.collectAsStateWithLifecycle()
-    val runtimeState by viewModel.runtimeState.collectAsStateWithLifecycle()
-    val restoringDistroId by viewModel.restoringDistroId.collectAsStateWithLifecycle()
-    val deletingDistroId by viewModel.deletingDistroId.collectAsStateWithLifecycle()
+    val installedDistros by viewModel?.installedDistros?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val remoteViewModel = previewOrNull { koinViewModel<RemoteServerViewModel>() }
+    val activeServerId by (remoteViewModel?.activeId?.collectAsStateWithLifecycle() ?: previewStateOf<String?>(null))
+    val activeDistroId by viewModel?.activeDistroId?.collectAsStateWithLifecycle() ?: previewStateOf("ubuntu")
+    val runtimeState by viewModel?.runtimeState?.collectAsStateWithLifecycle() ?: previewStateOf(top.tianyan.app.core.model.RuntimeState.Ready)
+    val restoringDistroId by viewModel?.restoringDistroId?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val deletingDistroId by viewModel?.deletingDistroId?.collectAsStateWithLifecycle() ?: previewStateOf(null)
 
     // 安装进度保存在 VM（StateFlow），旋转后进度界面可恢复，安装在后台继续进行
-    val installState by viewModel.distroInstallState.collectAsStateWithLifecycle()
+    val installState by viewModel?.distroInstallState?.collectAsStateWithLifecycle() ?: previewStateOf(SettingsViewModel.DistroInstallUiState())
     var showInstallDialog by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     var distroToReset by remember { mutableStateOf<InstalledDistro?>(null) }
     var distroToUninstall by remember { mutableStateOf<InstalledDistro?>(null) }
@@ -103,81 +102,39 @@ fun DistroManagementScreen(
         wasInstalling = installState.isInstalling
     }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+    RuntimeSettingsScaffold(
+        title = "Linux 系统管理", onBack = onBack,
+        statusText = "多系统并存与动态切换",
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            RuntimeTopBar(
-                title = "Linux 发行版管理",
-                statusText = "多沙箱并存与动态切换",
-                onBack = onBack,
+    ) {
+        item {
+            SystemEnvironmentPicker(localCount = installedDistros.size, onInstallLocal = { showInstallDialog = true }, viewModel = remoteViewModel)
+        }
+
+        item { Text("本地 (${installedDistros.size})", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary) }
+
+        items(installedDistros, key = { it.id }) { distro ->
+            DistroItemCard(
+                distro = distro,
+                isActive = activeServerId == null && distro.id.equals(activeDistroId, ignoreCase = true),
+                isRestoring = distro.id.equals(restoringDistroId, ignoreCase = true),
+                isDeleting = distro.id.equals(deletingDistroId, ignoreCase = true),
+                canOperateMulti = installedDistros.size > 1 || activeServerId != null,
+                onSwitchActive = {
+                    remoteViewModel?.select(null)
+                    viewModel?.switchActiveDistro(distro.id)
+                },
+                onReset = {
+                    distroToReset = distro
+                },
+                onUninstall = {
+                    distroToUninstall = distro
+                },
             )
-        },
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            item {
-                NoticeBanner(
-                    text = "天衍支持多套 Linux 系统并存。所有系统均自动挂载 /workspace 代码工程，/sdcard 外部存储按「存储挂载与共享」页的开关注入，各发行版软件生态与包管理器完全独立隔离。",
-                )
-            }
+        }
 
-            // 1. 已安装系统列表
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "已安装沙箱 (${installedDistros.size})",
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-
-                    Button(
-                        onClick = { showInstallDialog = true },
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                        shape = RoundedCornerShape(8.dp),
-                    ) {
-                        RuntimeIcon(
-                            name = RuntimeIconName.Plus,
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "安装新系统", style = MaterialTheme.typography.labelMedium)
-                    }
-                }
-            }
-
-            items(installedDistros, key = { it.id }) { distro ->
-                DistroItemCard(
-                    distro = distro,
-                    isActive = distro.id.equals(activeDistroId, ignoreCase = true),
-                    isRestoring = distro.id.equals(restoringDistroId, ignoreCase = true),
-                    isDeleting = distro.id.equals(deletingDistroId, ignoreCase = true),
-                    canOperateMulti = installedDistros.size > 1,
-                    onSwitchActive = {
-                        viewModel.switchActiveDistro(distro.id)
-                    },
-                    onReset = {
-                        distroToReset = distro
-                    },
-                    onUninstall = {
-                        distroToUninstall = distro
-                    },
-                )
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(32.dp))
-            }
+        item {
+            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 
@@ -192,11 +149,11 @@ fun DistroManagementScreen(
             onDismiss = {
                 if (!installState.isInstalling) {
                     showInstallDialog = false
-                    viewModel.clearDistroInstallError()
+                    viewModel?.clearDistroInstallError()
                 }
             },
             onConfirmInstall = { spec, route ->
-                viewModel.installDistro(
+                viewModel?.installDistro(
                     request = RuntimeInstallRequest(
                         distributionId = spec.id,
                         registryRoute = route,
@@ -213,7 +170,7 @@ fun DistroManagementScreen(
             onConfirm = {
                 val toReset = target.id
                 distroToReset = null
-                viewModel.resetDistro(toReset) { success, msg ->
+                viewModel?.resetDistro(toReset) { success, msg ->
                     scope.launch {
                         snackbarHostState.showSnackbar(msg)
                     }
@@ -230,7 +187,7 @@ fun DistroManagementScreen(
             onConfirm = {
                 val toDelete = target.id
                 distroToUninstall = null
-                viewModel.uninstallDistro(toDelete) { success, msg ->
+                viewModel?.uninstallDistro(toDelete) { success, msg ->
                     scope.launch {
                         snackbarHostState.showSnackbar(msg)
                     }
@@ -261,7 +218,7 @@ private fun ResetDistroConfirmDialog(
         title = {
             Text(
                 text = "重置 ${distro.displayName} 沙箱？",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                style = MaterialTheme.typography.titleMedium,
             )
         },
         text = {
@@ -321,7 +278,7 @@ private fun DeleteDistroConfirmDialog(
         title = {
             Text(
                 text = "删除 ${distro.displayName} 系统？",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                style = MaterialTheme.typography.titleMedium,
             )
         },
         text = {
@@ -372,7 +329,7 @@ private fun DistroItemCard(
     onReset: () -> Unit,
     onUninstall: () -> Unit,
 ) {
-    RuntimeCard(
+    SettingsDetailCard(
         borderColor = if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
     ) {
         Column(
@@ -408,7 +365,7 @@ private fun DistroItemCard(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = distro.displayName,
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            style = MaterialTheme.typography.titleMedium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )

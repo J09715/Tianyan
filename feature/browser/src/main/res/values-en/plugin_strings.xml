@@ -1,0 +1,4 @@
+<resources>
+    <string name="fbrowser_plugin_title">Browser</string>
+    <string name="fbrowser_plugin_description">Browse the web alongside your agent</string>
+</resources>

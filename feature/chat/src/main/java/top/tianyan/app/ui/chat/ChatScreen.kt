@@ -1,32 +1,19 @@
 package top.tianyan.app.ui.chat
-
+import kotlinx.coroutines.flow.first
+import top.tianyan.app.ui.components.previewOrNull
+import top.tianyan.app.ui.components.previewStateOf
+import org.koin.compose.viewmodel.koinViewModel
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.text.font.FontWeight
+import top.tianyan.app.ui.components.RuntimeIconButton as IconButton
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.material3.Button
-import androidx.compose.material3.IconButton
-import androidx.compose.foundation.layout.PaddingValues
+import top.tianyan.app.harness.workflow.ProactiveWorkflowSuggestion
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
-import top.tianyan.app.harness.skill.PendingSkillCandidate
-import top.tianyan.app.harness.workflow.ProactiveWorkflowSuggestion
-
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
-import top.tianyan.app.ui.components.RuntimeAlertDialog
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -35,27 +22,21 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.add
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.activity.compose.BackHandler
 import top.tianyan.app.ui.components.RuntimeButton as Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -67,7 +48,6 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import top.tianyan.app.ui.components.RuntimeTextButton as TextButton
-import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -81,13 +61,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import top.tianyan.app.feature.chat.R
-import androidx.compose.ui.unit.dp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import top.tianyan.app.core.database.AiModelEntity
 import top.tianyan.app.core.model.ApprovalMode
+import top.tianyan.app.core.model.RunMode
 import top.tianyan.app.harness.AssistantText
 import top.tianyan.app.harness.HarnessMessage
 import top.tianyan.app.harness.ToolCall
@@ -95,171 +75,117 @@ import top.tianyan.app.harness.ToolResult
 import top.tianyan.app.harness.UserMessage
 import top.tianyan.app.runtime.WorkspaceProject
 import top.tianyan.app.ui.components.MainDestination
-import top.tianyan.app.ui.components.RuntimeBottomBar
-import top.tianyan.app.ui.components.liquidGlassContent
-import top.tianyan.app.ui.theme.LocalLiquidGlassBackdrop
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.layout.layout
-import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.lazy.LazyListState
-import top.tianyan.app.core.model.QuickPhrase
 import top.tianyan.app.core.database.AgentApprovalRequestEntity
 import top.tianyan.app.core.database.AgentPlanEntity
 import top.tianyan.app.harness.QueuedPrompt
 import top.tianyan.app.harness.compaction.CompactionSnapshot
 import top.tianyan.app.harness.mcp.McpWorkspaceRecommender
 import top.tianyan.app.runtime.ProjectType
-import top.tianyan.app.ui.chat.ChatRenderItem
-import top.tianyan.app.ui.chat.projectChatMessages
-
-// 悬浮玻璃底栏实际占高 = 上下 8dp padding + 64dp 条体 = 80dp，留 2dp 微缝防贴死
-private val AgentBottomBarHeight = 82.dp
-
-// 浏览器 URL 栏贴合版：与底栏总占位一致（8 + 64 + 8 = 80dp），零缝隙直接贴在底栏上方
-private val BrowserBottomBarHeight = 80.dp
-
-@Composable
-private fun chatBottomInsets(bottomBarHeight: Dp): WindowInsets {
-    val bottomBarInsets = WindowInsets.navigationBars.add(WindowInsets(bottom = bottomBarHeight))
-    return bottomBarInsets.union(WindowInsets.ime)
-}
-
-/**
- * 天衍 · 智枢对话界面 (Tianyan Agent)
- * 智能结对编程、工具自动化调用与代码生成
- */
-@OptIn(
-    androidx.compose.foundation.layout.ExperimentalLayoutApi::class,
-    androidx.compose.material3.ExperimentalMaterial3Api::class,
+import top.tianyan.app.feature.a2uipoc.LocalA2uiSessionId
+import top.tianyan.app.harness.HarnessTool
+import top.tianyan.app.harness.SkillSuggestion
+import top.tianyan.app.harness.checkpoint.RewindScope
+import top.tianyan.app.harness.session.ConversationBranch
+import top.tianyan.app.runtime.DistributionCatalog
+/** 会改动工作区文件的工具：这些工具执行后「仓库」入口按需高亮提示新改动 */
+private val REPOSITORY_HIGHLIGHT_TOOLS = setOf(
+    HarnessTool.WRITE,
+    HarnessTool.EDIT,
+    HarnessTool.BASE,
+    HarnessTool.PROCESS,
 )
+@Composable
+private fun chatBottomInsets(): WindowInsets = WindowInsets.navigationBars.union(WindowInsets.ime)
+
+/** 天衍 · 智枢对话界面 (Tianyan Agent)：智能结对编程、工具自动化调用与代码生成 */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
     onNavigate: (MainDestination) -> Unit,
+    onOpenNavigation: () -> Unit,
+    onInstallMcp: () -> Unit = {},
+    onCreateModelProfile: () -> Unit = {},
     onOpenFile: ((projectName: String, relativePath: String) -> Unit)? = null,
-    /** 运行日志入口；由导航层接到开发者页，聊天页不直接依赖它。 */
-    onOpenLogs: (() -> Unit)? = null,
     terminalPane: (@Composable (project: String) -> Unit)? = null,
     browserPane: (@Composable (onExit: (() -> Unit)?) -> Unit)? = null,
     browserActivityTick: Long = 0L,
     browserBackPressed: (() -> Boolean)? = null,
-    viewModel: ChatViewModel = hiltViewModel(),
+    onOpenRepository: ((projectName: String) -> Unit)? = null,
+    viewModel: ChatViewModel? = previewOrNull { koinViewModel() },
 ) {
-    val messages by viewModel.messages.collectAsStateWithLifecycle()
-    val running by viewModel.running.collectAsStateWithLifecycle()
-    val error by viewModel.error.collectAsStateWithLifecycle()
-    val input by viewModel.input.collectAsStateWithLifecycle()
-    val pendingAttachments by viewModel.pendingAttachments.collectAsStateWithLifecycle()
-    val workflowSuggestions by viewModel.workflowSuggestions.collectAsStateWithLifecycle()
-    val attachmentExtracting by viewModel.attachmentExtracting.collectAsStateWithLifecycle()
-    val attachmentExtractedTexts by viewModel.extractedTexts.collectAsStateWithLifecycle()
-    val attachmentStatuses: Map<String, top.tianyan.app.ui.chat.AttachmentStatus> = buildMap {
-        pendingAttachments.forEach { att ->
-            when {
-                attachmentExtracting[att.id] == true -> put(att.id, top.tianyan.app.ui.chat.AttachmentStatus.Extracting)
-                attachmentExtractedTexts.containsKey(att.id) -> {
-                    val text = attachmentExtractedTexts[att.id]
-                    put(
-                        att.id,
-                        if (text.isNullOrBlank()) top.tianyan.app.ui.chat.AttachmentStatus.NoText
-                        else top.tianyan.app.ui.chat.AttachmentStatus.Extracted(
-                            chars = text.length,
-                            truncated = text.contains("[文档过长"),
-                        ),
-                    )
-                }
-            }
-        }
-    }
-    val status by viewModel.status.collectAsStateWithLifecycle()
-    val thinkingLive by viewModel.thinkingLive.collectAsStateWithLifecycle()
-    val thinkingExpanded by viewModel.thinkingExpanded.collectAsStateWithLifecycle()
-    val sessions by viewModel.sessions.collectAsStateWithLifecycle()
-    val availableAgents by viewModel.availableAgents.collectAsStateWithLifecycle()
-    val availableEngines by viewModel.availableEngines.collectAsStateWithLifecycle()
-    val workspaces by viewModel.workspaces.collectAsStateWithLifecycle()
-    val models by viewModel.models.collectAsStateWithLifecycle()
-    val providerModelIds by viewModel.providerModelIds.collectAsStateWithLifecycle()
-    val discoveringProviderModels by viewModel.discoveringProviderModels.collectAsStateWithLifecycle()
-    val providerModelDiscoveryError by viewModel.providerModelDiscoveryError.collectAsStateWithLifecycle()
-    val modelPickerProfileId by viewModel.modelPickerProfileId.collectAsStateWithLifecycle()
-    val workspace by viewModel.workspace.collectAsStateWithLifecycle()
-    val mcpRecommendations by viewModel.mcpRecommendations.collectAsStateWithLifecycle()
-    val sessionProjectType by viewModel.projectType.collectAsStateWithLifecycle()
-    val matchingCommands by viewModel.matchingCommands.collectAsStateWithLifecycle()
-    val matchingMentions by viewModel.matchingMentions.collectAsStateWithLifecycle()
-    val attachedMentions by viewModel.attachedMentions.collectAsStateWithLifecycle()
-    val queuedPrompts by viewModel.queuedPrompts.collectAsStateWithLifecycle()
-    val sendMode by viewModel.sendMode.collectAsStateWithLifecycle()
-    val pendingQuestion by viewModel.pendingQuestion.collectAsStateWithLifecycle()
-    val branches by viewModel.branches.collectAsStateWithLifecycle()
-    val runtimeEvents by viewModel.runtimeEvents.collectAsStateWithLifecycle()
-    val currentSessionId by viewModel.currentSessionId.collectAsStateWithLifecycle()
-    val sessionRunStates by viewModel.sessionRunStates.collectAsStateWithLifecycle()
-    val activeDistroId by viewModel.activeDistroId.collectAsStateWithLifecycle()
-    val installedDistros by viewModel.installedDistros.collectAsStateWithLifecycle()
-    val allSkills by viewModel.allSkills.collectAsStateWithLifecycle()
-    val pendingSkillCandidates by viewModel.pendingSkillCandidates.collectAsStateWithLifecycle()
-    val distillFailure by viewModel.distillFailure.collectAsStateWithLifecycle()
-    val pinnedCapabilities by viewModel.pinnedCapabilities.collectAsStateWithLifecycle()
-    val pinnedMentionIds by viewModel.pinnedMentionIds.collectAsStateWithLifecycle()
-    val memories by viewModel.memories.collectAsStateWithLifecycle()
-    val scratchpads by viewModel.scratchpads.collectAsStateWithLifecycle()
-    val mcpServers by viewModel.mcpServers.collectAsStateWithLifecycle()
-    val mcpConnectionStates by viewModel.mcpConnectionStates.collectAsStateWithLifecycle()
-    val initializing by viewModel.initializing.collectAsStateWithLifecycle()
-    val pendingApprovals by viewModel.pendingApprovals.collectAsStateWithLifecycle()
-    val activePlan by viewModel.activePlan.collectAsStateWithLifecycle()
-    val activeCompaction by viewModel.activeCompaction.collectAsStateWithLifecycle()
-    val contextUsage by viewModel.contextUsage.collectAsStateWithLifecycle()
-    val quickPhrases by viewModel.quickPhrases.collectAsStateWithLifecycle()
-    val onboardingPrivilege by viewModel.privilegeOnboarding.collectAsStateWithLifecycle()
-    val attachmentsProcessing by viewModel.attachmentsProcessing.collectAsStateWithLifecycle()
-    val notice by viewModel.notice.collectAsStateWithLifecycle()
-    val subagentResult by viewModel.subagentResult.collectAsStateWithLifecycle()
-    val gitPanelState by viewModel.gitPanelState.collectAsStateWithLifecycle()
-    val redTeamFacts by viewModel.redTeamFacts.collectAsStateWithLifecycle(initialValue = emptyList())
-    val redTeamSkillHealth by viewModel.redTeamSkillHealth.collectAsStateWithLifecycle()
-    val redTeamConsole by viewModel.redTeamConsole.collectAsStateWithLifecycle()
-    val redTeamAutoBind by viewModel.redTeamAutoBind.collectAsStateWithLifecycle()
-    val gitCredentials by viewModel.gitCredentials.collectAsStateWithLifecycle()
-    val matchedCredId by viewModel.matchedCredentialId.collectAsStateWithLifecycle()
-    val gitUncommittedCount = gitPanelState.let { s -> s.staged.size + s.unstaged.size + s.untrackedCount }
-    val gitAiCommit by viewModel.aiCommit.collectAsStateWithLifecycle()
-    val gitCredHealth by viewModel.credHealth.collectAsStateWithLifecycle()
-    val gitRepoList by viewModel.repoList.collectAsStateWithLifecycle()
-    val gitProgress by viewModel.gitProgress.collectAsStateWithLifecycle()
-    val gitOpMsg by viewModel.gitOpMessage.collectAsStateWithLifecycle()
-    val recentCloneUrls by viewModel.recentCloneUrls.collectAsStateWithLifecycle()
-
+    val messages by viewModel?.messages?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val running by viewModel?.running?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val error by viewModel?.error?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val input by viewModel?.input?.collectAsStateWithLifecycle() ?: previewStateOf("")
+    val pendingAttachments by viewModel?.pendingAttachments?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val status by viewModel?.status?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val thinkingLive by viewModel?.thinkingLive?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val thinkingExpanded by viewModel?.thinkingExpanded?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val thinkingAutoTranslate by viewModel?.thinkingAutoTranslate?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val chatRoundCollapse by viewModel?.chatRoundCollapse?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val sessions by viewModel?.sessions?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val workspaceCatalog by viewModel?.workspaceCatalog?.collectAsStateWithLifecycle() ?: previewStateOf(top.tianyan.app.runtime.SessionWorkspaceCatalogState()); val workspaces = workspaceCatalog.projects
+    val models by viewModel?.models?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val providerModelIds by viewModel?.providerModelIds?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val discoveringProviderModels by viewModel?.discoveringProviderModels?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val providerModelDiscoveryError by viewModel?.providerModelDiscoveryError?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val modelPickerProfileId by viewModel?.modelPickerProfileId?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val workspace by viewModel?.workspace?.collectAsStateWithLifecycle() ?: previewStateOf("")
+    val mcpRecommendations by viewModel?.mcpRecommendations?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val workflowSuggestions by viewModel?.workflowSuggestions?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val btwQueries by viewModel?.btwController?.queries?.collectAsStateWithLifecycle()
+        ?: previewStateOf(emptyList<top.tianyan.app.core.model.BtwQuery>())
+    val btwStreaming by viewModel?.btwController?.streaming?.collectAsStateWithLifecycle() ?: previewStateOf("")
+    val shareActions by viewModel?.shareActions?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val hiddenSkillSuggestions by viewModel?.hiddenSkillSuggestions?.collectAsStateWithLifecycle() ?: previewStateOf(emptySet())
+    val sessionProjectType by viewModel?.projectType?.collectAsStateWithLifecycle() ?: previewStateOf("")
+    val matchingCommands by viewModel?.matchingCommands?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val matchingMentions by viewModel?.matchingMentions?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val attachedMentions by viewModel?.attachedMentions?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val queuedPrompts by viewModel?.queuedPrompts?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val sendMode by viewModel?.sendMode?.collectAsStateWithLifecycle() ?: previewStateOf(ComposerSendMode.NEXT_RUN)
+    val branches by viewModel?.branches?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val runtimeEvents by viewModel?.runtimeEvents?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val currentSessionId by viewModel?.currentSessionId?.collectAsStateWithLifecycle() ?: previewStateOf("")
+    val sessionRunStates by viewModel?.sessionRunStates?.collectAsStateWithLifecycle() ?: previewStateOf(emptyMap())
+    val activeDistroId by viewModel?.activeDistroId?.collectAsStateWithLifecycle() ?: previewStateOf("")
+    val installedDistros by viewModel?.installedDistros?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val allSkills by viewModel?.allSkills?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val pinnedCapabilities by viewModel?.pinnedCapabilities?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val pinnedMentionIds by viewModel?.pinnedMentionIds?.collectAsStateWithLifecycle() ?: previewStateOf(emptySet())
+    val memories by viewModel?.memories?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val scratchpads by viewModel?.scratchpads?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val mcpServers by viewModel?.mcpServers?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val mcpConnectionStates by viewModel?.mcpConnectionStates?.collectAsStateWithLifecycle() ?: previewStateOf(emptyMap())
+    val mcpToolCounts by viewModel?.mcpToolCounts?.collectAsStateWithLifecycle() ?: previewStateOf(emptyMap())
+    val initializing by viewModel?.initializing?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val speech = rememberChatSpeech(currentSessionId, messages, running, initializing)
+    val pendingApprovals by viewModel?.pendingApprovals?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val activePlan by viewModel?.activePlan?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val activeCompaction by viewModel?.activeCompaction?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val contextUsage by viewModel?.contextUsage?.collectAsStateWithLifecycle() ?: previewStateOf(ContextUsage())
+    val onboardingPrivilege by viewModel?.privilegeOnboarding?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val attachmentsProcessing by viewModel?.attachmentsProcessing?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val notice by viewModel?.notice?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val subagentResult by viewModel?.subagentResult?.collectAsStateWithLifecycle() ?: previewStateOf(null)
     // 弹窗开关与编辑目标：用 rememberSaveable 保存，旋转 / 进程重建后不丢失
-    var showSessions by rememberSaveable { mutableStateOf(false) }
-    var showNewSession by rememberSaveable { mutableStateOf(false) }
-    var showModels by rememberSaveable { mutableStateOf(false) }
-    var showApprovalModes by rememberSaveable { mutableStateOf(false) }
-    var showSkillsMcpSheet by rememberSaveable { mutableStateOf(false) }
-    var showBranches by rememberSaveable { mutableStateOf(false) }
-    // 稳定 setter 引用：remember 委托本身不变，lambda 只需创建一次；
-    // 避免每分片重组生成新 lambda 实例导致 ChatPane 整树 skip 失效。
-    val openBranches = remember { { showBranches = true } }
-    val openSkillsMcpSheet = remember { { showSkillsMcpSheet = true } }
-    var showRuntimeTimeline by rememberSaveable { mutableStateOf(false) }
+    var showModels by rememberSaveable { mutableStateOf(false) }; var showApprovalModes by rememberSaveable { mutableStateOf(false) }
+    var showRunModes by rememberSaveable { mutableStateOf(false) }; var showSkillsMcpSheet by rememberSaveable { mutableStateOf(false) }
+    var showBranches by rememberSaveable { mutableStateOf(false) }; var showRuntimeTimeline by rememberSaveable { mutableStateOf(false) }
     var showMemorySheet by rememberSaveable { mutableStateOf(false) }
-    var showFloatingPermissionDialog by rememberSaveable { mutableStateOf(false) }
+    val timelineFocus = rememberSaveable(currentSessionId) { mutableStateOf<String?>(null) }
+    val timelineItems = remember(currentSessionId) { mutableStateOf(ChatTimelineSnapshot()) }
+    var showReasoningSlider by rememberSaveable { mutableStateOf(false) }
     var branchFromMessageId by rememberSaveable { mutableStateOf<String?>(null) }
-    val createBranchFromMessage: (String) -> Unit = remember { { id -> branchFromMessageId = id } }
-    var showGitPanel by rememberSaveable { mutableStateOf(false) }
-    /** 红队控制台入口状态；与 Git 面板一样，点入口才整页进入。 */
-    var showRedTeamConsole by rememberSaveable { mutableStateOf(false) }
-    // 进入 chat 时异步刷一次 git 状态（顶栏徽标要显示未提交数），不阻塞首帧
-    LaunchedEffect(Unit) { viewModel.refreshGitStatus() }
     // 编辑目标消息只保存 id，避免把不可保存的实体放进状态保存器
     var editTargetMessageId by rememberSaveable { mutableStateOf<String?>(null) }
-    // 稳定引用直接对齐 (UserMessage) -> Unit 签名，消除参数位置包装层的新实例
-    val editMessageById: (UserMessage) -> Unit = remember { { m -> editTargetMessageId = m.id } }
     val editTargetMessage = remember(messages, editTargetMessageId) {
         messages.filterIsInstance<UserMessage>().firstOrNull { it.id == editTargetMessageId }
     }
-
-
     val listState = rememberLazyListState()
     val context = LocalContext.current
 
@@ -276,34 +202,47 @@ fun ChatScreen(
         )
     }
     val currentApprovalMode = remember(currentSession?.approvalMode) { ApprovalMode.fromId(currentSession?.approvalMode) }
+    val currentRunMode = remember(currentSession?.runMode) { RunMode.fromId(currentSession?.runMode) }
     val activeWorkspaceProject = remember(workspace, workspaces) {
         workspaces.firstOrNull { it.linuxPath == workspace }
     }
     val effectiveWorkspaceProject = remember(activeWorkspaceProject, sessionProjectType) {
-        val override = when (sessionProjectType.uppercase()) {
-            "ANDROID" -> ProjectType.ANDROID
-            "FLUTTER" -> ProjectType.FLUTTER
-            "REVERSE" -> ProjectType.REVERSE
-            "RED_TEAM" -> ProjectType.RED_TEAM
-            "GENERAL" -> ProjectType.GENERAL
-            else -> null
-        }
+        val override = ProjectType.entries.firstOrNull { it.name == sessionProjectType.uppercase() }
         activeWorkspaceProject?.let { project -> override?.let { project.copy(projectType = it) } ?: project }
     }
     val distroDisplayName = remember(activeDistroId) {
-        runCatching { top.tianyan.app.runtime.DistributionCatalog.require(activeDistroId).displayName }
+        runCatching { DistributionCatalog.require(activeDistroId).displayName }
             .getOrDefault(activeDistroId)
     }
 
-    val toolResults = remember(messages) {
+    // 性能：不再直接依赖 `messages` 整个 list 引用（流式输出时每个 token 块都会换新引用，
+    // 导致这几处 O(n) 派生每帧重算）。改为依赖「由消息列表推导出的、真正影响结果的稳定键」。
+    val toolResults = remember(
+        // ToolResult 的数量 + 末条内容长度：只要没有新增/更新工具结果，就不需要重算映射。
+        messages.count { it is ToolResult },
+        messages.lastOrNull { it is ToolResult }?.let { (it as ToolResult).output.length },
+    ) {
         messages.filterIsInstance<ToolResult>().associateBy { it.toolCallId }
     }
-    val lastAssistantMessageId = remember(messages) {
+    val lastAssistantMessageId = remember(
+        // 只有「新增了一条 AssistantText」才会改变结果，故依赖其数量与末条 id。
+        messages.count { it is AssistantText },
+        messages.lastOrNull { it is AssistantText }?.id,
+    ) {
         messages.filterIsInstance<AssistantText>().lastOrNull()?.id
     }
     // 两者语义不同（实时思考高亮 vs 重新生成定位），但取值一致，复用同一计算结果
     val liveThinkingMessageId = lastAssistantMessageId
     val currentBranch = remember(branches) { branches.firstOrNull { it.isCurrent } }
+
+    // Agent 联动：上次访问「仓库」页之后 agent 又写过文件（write/edit/base/process），
+    // 则工作条「仓库」入口高亮，提示有新改动可提交；进入仓库页即熄灭。
+    var lastRepositoryVisitAt by rememberSaveable { mutableStateOf(0L) }
+    val repositoryHighlight = remember(messages, lastRepositoryVisitAt) {
+        messages.filterIsInstance<ToolCall>().any { call ->
+            call.createdAt > lastRepositoryVisitAt && call.tool in REPOSITORY_HIGHLIGHT_TOOLS
+        }
+    }
 
     val isImeVisible = WindowInsets.isImeVisible
     val coroutineScope = rememberCoroutineScope()
@@ -312,7 +251,8 @@ fun ChatScreen(
     // entry so returning to 智枢 does not perform a second, redundant scrollToItem during the
     // tab transition.
     var initialPositionedSessionKey by rememberSaveable { mutableStateOf<String?>(null) }
-    val currentSessionKey = remember(messages) { messages.firstOrNull()?.id ?: "" }
+    // 会话键只需首条消息 id，依赖单值而非整个 list。
+    val currentSessionKey = remember(messages.firstOrNull()?.id) { messages.firstOrNull()?.id ?: "" }
 
     val lastMessageSignature = remember(messages) {
         val last = messages.lastOrNull()
@@ -325,116 +265,30 @@ fun ChatScreen(
         }
     }
 
+    val followLatest = rememberChatFollowLatest(listState)
     // 🌟 1. 消息发送与流式输出跟随滚动
     // 仅当用户本来就停在底部附近时才跟随输出滚动；上滑阅读历史时不打扰，
     // 重新滑回底部（或新发消息）后恢复自动跟随。
+    var lastSeenMessageCount by remember { mutableStateOf(messages.size) }
     LaunchedEffect(messages.size, lastMessageSignature) {
+        val userSent = messages.size > lastSeenMessageCount && messages.lastOrNull() is UserMessage
+        lastSeenMessageCount = messages.size
         if (messages.isNotEmpty()) {
             delay(30)
-            val totalCount = listState.layoutInfo.totalItemsCount
-            if (totalCount > 0) {
-                if (initialPositionedSessionKey != currentSessionKey) {
-                    initialPositionedSessionKey = currentSessionKey
-                    listState.scrollToItem(totalCount - 1)
-                } else {
-                    val layoutInfo = listState.layoutInfo
-                    val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull()
-                    val isNearBottom = lastVisible == null || lastVisible.index >= totalCount - 3
-                    if (isNearBottom) {
-                        listState.scrollToItem(totalCount - 1)
-                    }
-                }
-            }
+            val reposition = initialPositionedSessionKey != currentSessionKey
+            if (reposition) initialPositionedSessionKey = currentSessionKey
+            if (reposition || followLatest || userSent) listState.safeScrollToAbsoluteBottom()
         }
     }
 
-    // 🌟 2. 软键盘弹起时自动平滑滚动定位到最后一条消息
-    LaunchedEffect(isImeVisible) {
-        if (isImeVisible && listState.layoutInfo.totalItemsCount > 0) {
-            delay(80)
-            val totalCount = listState.layoutInfo.totalItemsCount
-            listState.animateScrollToItem(totalCount - 1)
-        }
-    }
+    ChatImeFollowLatest(listState, isImeVisible, followLatest)
 
     val snackbarHostState = remember { SnackbarHostState() }
     val appContext = LocalContext.current.applicationContext
-    // Git 操作结果（克隆/拉取/推送）Snackbar 反馈：Busy 不显示 snackbar（面板已显 loading），
-    // Ok/Error 显示 + 消费回 Idle 避免重播
-    val gitOp by viewModel.gitOpMessage.collectAsStateWithLifecycle()
-    LaunchedEffect(gitOp, showGitPanel) {
-        // Git 面板打开时，反馈由面板内嵌 Snackbar 呈现（用户操作页），聊天层不抢。
-        if (showGitPanel) return@LaunchedEffect
-        val snapshot = gitOp
-        when (snapshot) {
-            is top.tianyan.app.ui.chat.GitOpMessage.Ok -> {
-                val actionLabel = when (snapshot.action) {
-                    is top.tianyan.app.ui.chat.GitOpAction.SwitchWorkspaceTo -> "切过去"
-                    is top.tianyan.app.ui.chat.GitOpAction.RetryWithClean -> "清空再试"
-                    is top.tianyan.app.ui.chat.GitOpAction.UndoRename -> "撤销"
-                    is top.tianyan.app.ui.chat.GitOpAction.StashPop -> "还原 stash"
-                    is top.tianyan.app.ui.chat.GitOpAction.CopyError -> "复制"
-                    is top.tianyan.app.ui.chat.GitOpAction.RetrySame -> "重试"
-                    null -> null
-                }
-                val result = if (actionLabel != null) {
-                    snackbarHostState.showSnackbar(snapshot.message, actionLabel = actionLabel, duration = SnackbarDuration.Long)
-                } else {
-                    snackbarHostState.showSnackbar(snapshot.message, duration = SnackbarDuration.Long)
-                }
-                if (result == SnackbarResult.ActionPerformed) {
-                    when (snapshot.action) {
-                        is top.tianyan.app.ui.chat.GitOpAction.SwitchWorkspaceTo ->
-                            viewModel.switchWorkspace(snapshot.action.path)
-                        is top.tianyan.app.ui.chat.GitOpAction.RetryWithClean ->
-                            viewModel.retryCloneAfterClean(snapshot.action.url, snapshot.action.targetDir)
-                        is top.tianyan.app.ui.chat.GitOpAction.UndoRename ->
-                            viewModel.gitRenameBranch(snapshot.action.newName, snapshot.action.oldName)
-                        is top.tianyan.app.ui.chat.GitOpAction.StashPop -> viewModel.gitStashPop()
-                        else -> {}
-                    }
-                }
-                viewModel.consumeGitOpMessage()
-            }
-            is top.tianyan.app.ui.chat.GitOpMessage.Error -> {
-                val actionLabel = when (snapshot.action) {
-                    is top.tianyan.app.ui.chat.GitOpAction.RetryWithClean -> "清空再试"
-                    is top.tianyan.app.ui.chat.GitOpAction.SwitchWorkspaceTo -> "切过去"
-                    is top.tianyan.app.ui.chat.GitOpAction.UndoRename -> "撤销"
-                    is top.tianyan.app.ui.chat.GitOpAction.StashPop -> "还原 stash"
-                    is top.tianyan.app.ui.chat.GitOpAction.CopyError -> "复制错误"
-                    is top.tianyan.app.ui.chat.GitOpAction.RetrySame -> null
-                    null -> "复制错误"   // 默认给复制，用户可粘出来问
-                }
-                val result = if (actionLabel != null) {
-                    snackbarHostState.showSnackbar(snapshot.message, actionLabel = actionLabel, duration = SnackbarDuration.Long)
-                } else {
-                    snackbarHostState.showSnackbar(snapshot.message, duration = SnackbarDuration.Long)
-                }
-                if (result == SnackbarResult.ActionPerformed) {
-                    when (snapshot.action) {
-                        is top.tianyan.app.ui.chat.GitOpAction.RetryWithClean ->
-                            viewModel.retryCloneAfterClean(snapshot.action.url, snapshot.action.targetDir)
-                        is top.tianyan.app.ui.chat.GitOpAction.UndoRename ->
-                            viewModel.gitRenameBranch(snapshot.action.newName, snapshot.action.oldName)
-                        is top.tianyan.app.ui.chat.GitOpAction.StashPop -> viewModel.gitStashPop()
-                        else -> { /* CopyError 走下面 */ }
-                    }
-                    // 无 action 或 CopyError → 复制错误文本到剪贴板（用户能粘出来问）
-                    if (snapshot.action == null || snapshot.action is top.tianyan.app.ui.chat.GitOpAction.CopyError) {
-                        val cm = appContext.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                        cm.setPrimaryClip(android.content.ClipData.newPlainText("git-error", snapshot.message))
-                    }
-                }
-                viewModel.consumeGitOpMessage()
-            }
-            else -> {}
-        }
-    }
     val grantLabel = stringResource(R.string.chat_snackbar_grant)
     val gotItLabel = stringResource(R.string.chat_snackbar_got_it)
     LaunchedEffect(Unit) {
-        viewModel.permissionRequests.collect { req ->
+        viewModel?.permissionRequests?.collect { req ->
             val actionLabel = when (req.permission) {
                 "WRITE_SETTINGS" -> grantLabel
                 else -> gotItLabel
@@ -460,77 +314,87 @@ fun ChatScreen(
     LaunchedEffect(notice) {
         notice?.let {
             Toast.makeText(appContext, it, Toast.LENGTH_SHORT).show()
-            viewModel.clearNotice()
+            viewModel?.clearNotice()
+        }
+    }
+
+    // rewind 完成：Snackbar 附「撤销回滚」动作（Toast 无法承载动作）
+    val rewindUndoLabel = stringResource(R.string.chat_rewind_undo)
+    LaunchedEffect(Unit) {
+        viewModel?.rewindCompletedEvents?.collect { message ->
+            val result = snackbarHostState.showSnackbar(
+                message = message,
+                actionLabel = rewindUndoLabel,
+                duration = SnackbarDuration.Long,
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                viewModel?.undoLastRewind()
+            }
         }
     }
 
     // 切换会话后自动关闭遗留的子智能体成果抽屉，避免跨会话展示旧 lane
     LaunchedEffect(currentSessionId) {
         val opened = subagentResult
-        if (opened != null && opened.sessionId != currentSessionId) viewModel.closeSubagentResult()
+        if (opened != null && opened.sessionId != currentSessionId) viewModel?.closeSubagentResult()
     }
 
-    // 模型·权限·主线·轮次 工具条：单栏浏览器分页模式下随对话页一起滑走（浏览器页全屏），
-    // 双栏/纯对话模式固定在顶部。提出为局部 lambda 避免三处重复传参。
-    // onOpenBrowser 非空时工具条末尾追加"浏览器"入口（agent 有新动态时高亮）。
-    val chatTopBar: @Composable (onOpenBrowser: (() -> Unit)?, browserHighlight: Boolean) -> Unit =
-        { onOpenBrowser, browserHighlight ->
-            Column(Modifier.fillMaxWidth()) {
-                ChatTopBar(
-                    workspace = workspace,
-                    distroDisplayName = distroDisplayName,
-                    activeModel = activeModel,
-                    approvalMode = currentApprovalMode,
-                    currentBranch = currentBranch,
-                    runtimeEvents = runtimeEvents,
-                    running = running,
-                    onShowFloatingPermissionDialog = { showFloatingPermissionDialog = true },
-                    onOpenSessions = { showSessions = true },
-                    onOpenModels = { showModels = true },
-                    onOpenApprovalModes = { showApprovalModes = true },
-                    onOpenBranches = openBranches,
-                    onOpenRuntime = { showRuntimeTimeline = true },
-                    onOpenBrowser = onOpenBrowser,
-                    browserHighlight = browserHighlight,
-                    onOpenGit = { viewModel.refreshGitStatus(); showGitPanel = true },
-                    gitUncommittedCount = gitUncommittedCount,
-                    onOpenLogs = onOpenLogs,
-                    onOpenRedTeam = if (
-                        currentSession?.redTeamMode == top.tianyan.app.core.model.RedTeamMode.RED_TEAM.id ||
-                        currentSession?.projectType.equals("RED_TEAM", ignoreCase = true)
-                    ) {
-                        { viewModel.openRedTeamConsole(); showRedTeamConsole = true }
-                    } else {
-                        null
-                    },
-                    redTeamTarget = currentSession?.redTeamTarget,
-                )
-                // Git 流式进度横幅（clone/pull/push 时可见）
-                gitProgress?.let { p ->
-                    GitProgressBanner(progress = p, onCancel = { viewModel.cancelGitOp() })
-                }
-            }
+    // 模型·权限·主线·轮次 工具条：紧凑态浏览器整页打开时被覆盖，其余形态固定在顶部。
+    // onOpenBrowser 非空时工作台追加"浏览器"入口（agent 有新动态时高亮）；companion 非空时显示伴随面板开关。
+    val openModels = {
+        if (models.isEmpty()) onCreateModelProfile() else showModels = true
+    }
+    val noProjectHint = stringResource(R.string.chat_repository_no_project)
+    var toolchainGap by remember { mutableStateOf(false) }; var showToolchainPanel by remember { mutableStateOf(false) }
+
+    val chatTopBar: @Composable (onOpenBrowser: (() -> Unit)?, browserHighlight: Boolean, companion: ChatCompanionToggle?) -> Unit =
+        { onOpenBrowser, browserHighlight, companion ->
+            ChatTopBar(
+                runMode = currentRunMode,
+                currentBranch = currentBranch,
+                runtimeEvents = runtimeEvents,
+                running = running,
+                onOpenSessions = onOpenNavigation, onOpenBots = { onNavigate(MainDestination.Bots) }, onOpenWorkshop = { onNavigate(MainDestination.Workspace) },
+                onOpenRunModes = { showRunModes = true },
+                onOpenBranches = { showBranches = true },
+                onOpenRuntime = { showRuntimeTimeline = true }, onOpenMemory = { showMemorySheet = true },
+                onOpenBrowser = onOpenBrowser,
+                browserHighlight = browserHighlight,
+                onOpenRepository = onOpenRepository?.let { open ->
+                    {
+                        val project = activeWorkspaceProject
+                        if (project != null) {
+                            lastRepositoryVisitAt = System.currentTimeMillis()
+                            open(project.name)
+                        } else {
+                            Toast.makeText(appContext, noProjectHint, Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                },
+                repositoryHighlight = repositoryHighlight,
+                toolchainHighlight = toolchainGap, onOpenToolchain = { showToolchainPanel = true },
+                onOpenReasoning = { showReasoningSlider = true }, companion = companion, speech = speech,
+            )
         }
 
     // 模型回复里的 /workspace、/attachments 等沙箱路径在此翻译为宿主真实文件，
     // 否则 Coil 会按 Android 根文件系统路径加载而必然失败。
-    CompositionLocalProvider(LocalSandboxHostRoots provides viewModel.sandboxHostRoots) {
+    CompositionLocalProvider(LocalSandboxHostRoots provides (viewModel?.sandboxHostRoots ?: emptyMap()), LocalA2uiSessionId provides currentSessionId, LocalChatTimelineFocus provides timelineFocus, LocalChatTimelineItems provides timelineItems, LocalChatContextLimit provides contextUsage.limitTokens) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { padding ->
-        BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
-            val isDualPane = maxWidth >= 720.dp
-
+        ChatPageSurface(Modifier.fillMaxSize().padding(padding)) {
             val knownMentionNames = remember(allSkills, mcpServers) {
-                (allSkills.filter { it.isEnabled }.flatMap { listOf(it.name, it.id) } +
-                    mcpServers.filter { it.isEnabled }.flatMap { listOf(it.name, it.id) })
+                (allSkills.filter { it.isEnabled }.flatMap { skill ->
+                    listOfNotNull(skill.name, skill.id, skill.triggerCommand?.removePrefix("/"))
+                } + mcpServers.filter { it.isEnabled }.flatMap { listOf(it.name, it.id) })
                     .filter { it.isNotBlank() }
                     .distinct()
             }
 
-            val bottomInsets = chatBottomInsets(AgentBottomBarHeight)
+            val bottomInsets = chatBottomInsets()
 
             // 对话主内容：双栏左栏与单栏整页共用（仅 modifier 不同）
             val chatContent: @Composable (Modifier) -> Unit = { paneModifier ->
@@ -542,226 +406,80 @@ fun ChatScreen(
                     running = running,
                     status = status,
                     thinkingExpanded = thinkingExpanded,
+                    thinkingAutoTranslate = thinkingAutoTranslate,
+                    chatRoundCollapse = chatRoundCollapse,
                     thinkingLive = thinkingLive,
                     liveThinkingMessageId = liveThinkingMessageId,
+                    onNavigateToSettings = { viewModel?.navigateToAgentSettings() },
                     toolResults = toolResults,
                     workspace = workspace,
                     workspaceProject = effectiveWorkspaceProject,
                     onOpenFile = onOpenFile,
-                    onEditMessage = editMessageById,
-                    onDeleteMessage = viewModel::deleteMessage,
-                    onRewindMessage = viewModel::rewindToMessage,
-                    error = error,
-                    onClearError = viewModel::clearError,
-                    matchingCommands = matchingCommands,
-                    matchingMentions = matchingMentions,
-                    attachedMentions = attachedMentions,
-                    knownMentionNames = knownMentionNames,
+                    onEditMessage = { editTargetMessageId = it.id },
+                    onDeleteMessage = { arg0 -> viewModel?.deleteMessage(arg0) },
+                    onRewindMessage = { arg0, arg1 -> viewModel?.rewindToMessage(arg0, arg1) }, error = error,
+                    onClearError = { viewModel?.clearError() },
+                    matchingCommands = matchingCommands, matchingMentions = matchingMentions,
+                    attachedMentions = attachedMentions, knownMentionNames = knownMentionNames,
                     queuedPrompts = queuedPrompts,
-                    onEditQueuedPrompt = viewModel::editQueuedPrompt,
-                    onRemoveQueuedPrompt = viewModel::removeQueuedPrompt,
-                    onConvertToSteer = viewModel::convertQueuedPromptToSteer,
+                    onEditQueuedPrompt = { arg0 -> viewModel?.editQueuedPrompt(arg0) },
+                    onRemoveQueuedPrompt = { arg0 -> viewModel?.removeQueuedPrompt(arg0) }, onConvertToSteer = { arg0 -> viewModel?.convertQueuedPromptToSteer(arg0) },
                     sendMode = sendMode,
-                    onSendModeChange = viewModel::setSendMode,
-                    pendingQuestion = pendingQuestion,
-                    onAnswerQuestion = viewModel::answerQuestion,
                     input = input,
-                    onInputChanged = viewModel::onInputChanged,
-                    onApplyCommand = viewModel::applySlashCommand,
-                    onApplyMention = viewModel::applyMention,
-                    onRemoveMention = viewModel::removeMention,
+                    onInputChanged = { arg0 -> viewModel?.onInputChanged(arg0) },
+                    onApplyCommand = { arg0 -> viewModel?.applySlashCommand(arg0) },
+                    onApplyMention = { arg0 -> viewModel?.applyMention(arg0) },
+                    onRemoveMention = { arg0 -> viewModel?.removeMention(arg0) },
                     attachments = pendingAttachments,
-                    attachmentStatuses = attachmentStatuses,
                     attachmentsProcessing = attachmentsProcessing,
-                    onAttachmentsPicked = viewModel::onAttachmentsPicked,
-                    onRemoveAttachment = viewModel::removeAttachment,
-                    workflowSuggestions = workflowSuggestions,
-                    onLaunchWorkflowSuggestion = viewModel::launchWorkflowSuggestion,
-                    onDismissWorkflowSuggestion = viewModel::dismissWorkflowSuggestion,
-                    pendingSkillCandidates = pendingSkillCandidates,
-                    onAcceptSkillCandidate = viewModel::acceptSkillCandidate,
-                    onDismissSkillCandidate = viewModel::dismissSkillCandidate,
-                    distillFailure = distillFailure,
-                    onConsumeDistillFailure = viewModel::consumeDistillFailure,
-                    onSend = viewModel::sendFromComposer,
-                    onStop = viewModel::stop,
+                    onAttachmentsPicked = { arg0, arg1 -> viewModel?.onAttachmentsPicked(arg0, arg1) },
+                    onRemoveAttachment = { arg0 -> viewModel?.removeAttachment(arg0) },
+                    onSend = { viewModel?.sendFromComposer() },
+                    onStop = { viewModel?.stop() },
                     lastAssistantMessageId = lastAssistantMessageId,
-                    onRegenerate = viewModel::regenerateLast,
-                    onCreateBranch = createBranchFromMessage,
-                    onRetryTool = viewModel::retryToolCall,
+                    onRegenerate = { viewModel?.regenerateLast() },
+                    onCreateBranch = { branchFromMessageId = it },
+                    onRetryTool = { arg0 -> viewModel?.retryToolCall(arg0) },
                     initializing = initializing,
                     pinnedCapabilities = pinnedCapabilities,
-                    onOpenSkillsMcp = openSkillsMcpSheet,
-                    onUnpinMention = viewModel::unpinMention,
+                    onOpenSkillsMcp = { showSkillsMcpSheet = true },
+                    onCompactContext = { viewModel?.compactContextNow() },
+                    onUnpinMention = { arg0 -> viewModel?.unpinMention(arg0) },
                     activePlan = activePlan,
                     pendingApprovals = pendingApprovals,
-                    onResolveApproval = viewModel::resolveApproval,
+                    onResolveApproval = { arg0, arg1, arg2 -> viewModel?.resolveApproval(arg0, arg1, arg2) },
+                    onResolveQuestion = { arg0, arg1 -> viewModel?.resolveQuestion(arg0, arg1) },
                     contextUsage = contextUsage,
                     activeModel = activeModel,
-                    onUpdateReasoning = viewModel::updateActiveModelReasoning,
-                    quickPhrases = quickPhrases,
-                    onSelectPhrase = viewModel::applyQuickPhrase,
+                    onOpenModels = openModels, approvalMode = currentApprovalMode, onOpenApprovalModes = { showApprovalModes = true },
+                    onUpdateReasoning = { arg0, arg1 -> viewModel?.updateActiveModelReasoning(arg0, arg1) },
                     activeCompaction = activeCompaction,
                     mcpRecommendations = mcpRecommendations,
-                    onEnableMcpRecommendation = viewModel::enableMcpRecommendation,
-                    onDismissMcpRecommendation = viewModel::dismissMcpRecommendation,
-                    onViewSubagentLanes = openBranches,
+                    onEnableMcpRecommendation = { arg0 -> viewModel?.enableMcpRecommendation(arg0) },
+                    onInstallMcpRecommendation = onInstallMcp,
+                    onDismissMcpRecommendation = { arg0 -> viewModel?.dismissMcpRecommendation(arg0) },
+                    workflowSuggestions = workflowSuggestions,
+                    btwQueries = btwQueries,
+                    btwStreaming = btwStreaming,
+                    onCancelBtw = { viewModel?.btwController?.cancel() },
+                    onLaunchWorkflowSuggestion = { arg0 -> viewModel?.launchWorkflowSuggestion(arg0) },
+                    onDismissWorkflowSuggestion = { arg0 -> viewModel?.dismissWorkflowSuggestion(arg0) },
+                    shareActions = shareActions,
+                    hiddenSkillSuggestions = hiddenSkillSuggestions,
+                    onApplySkillSuggestion = { arg0, arg1 -> viewModel?.applySkillSuggestion(arg0, arg1) },
+                    onDismissSkillSuggestion = { arg0 -> viewModel?.dismissSkillSuggestion(arg0) },
+                    onViewSubagentLanes = { showBranches = true },
                     subagentBranches = branches,
-                    onOpenSubagentBranch = viewModel::openSubagentResult,
+                    onOpenSubagentBranch = { arg0 -> viewModel?.openSubagentResult(arg0) },
                 )
             }
 
-            if (isDualPane && terminalPane != null) {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    chatTopBar(null, false)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .liquidGlassContent()
-                            .padding(horizontal = 12.dp)
-                            .windowInsetsPadding(bottomInsets),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                    // 左栏：Agent 对话与指令区
-                    chatContent(
-                        Modifier
-                            .weight(0.48f)
-                            .fillMaxHeight()
-                    )
-
-                    VerticalDivider(
-                        modifier = Modifier.fillMaxHeight().padding(vertical = 8.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                    )
-
-                    // 右栏：实时演武终端 (Terminal) / 浏览器联动视窗（可切换）
-                    var rightPaneBrowser by rememberSaveable { mutableStateOf(false) }
-                    Box(
-                        modifier = Modifier
-                            .weight(0.52f)
-                            .fillMaxHeight()
-                            .padding(top = 4.dp, bottom = 4.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .border(
-                                1.dp,
-                                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
-                                RoundedCornerShape(14.dp),
-                            ),
-                    ) {
-                        if (browserPane != null) {
-                            Column(modifier = Modifier.fillMaxSize()) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    TextButton(onClick = { rightPaneBrowser = false }) {
-                                        Text(
-                                            "终端",
-                                            fontWeight = if (rightPaneBrowser) FontWeight.Normal else FontWeight.Bold,
-                                            color = if (rightPaneBrowser) {
-                                                MaterialTheme.colorScheme.onSurfaceVariant
-                                            } else {
-                                                MaterialTheme.colorScheme.primary
-                                            },
-                                        )
-                                    }
-                                    TextButton(onClick = { rightPaneBrowser = true }) {
-                                        Text(
-                                            "浏览器",
-                                            fontWeight = if (rightPaneBrowser) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (rightPaneBrowser) {
-                                                MaterialTheme.colorScheme.primary
-                                            } else {
-                                                MaterialTheme.colorScheme.onSurfaceVariant
-                                            },
-                                        )
-                                    }
-                                }
-                                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                                    if (rightPaneBrowser) {
-                                        browserPane(null)
-                                    } else {
-                                        terminalPane(workspace)
-                                    }
-                                }
-                            }
-                        } else {
-                            terminalPane(workspace)
-                        }
-                    }
-                    }
-                }
-            } else if (browserPane != null) {
-                // 单栏：智枢对话 ↔ 浏览器 左右滑动切换，一边看 harness 操作一边看浏览器变化
-                val pagerState = rememberPagerState(initialPage = 0) { 2 }
-                var lastSeenBrowserTick by remember { mutableStateOf(0L) }
-                LaunchedEffect(pagerState.currentPage, browserActivityTick) {
-                    if (pagerState.currentPage == 1) lastSeenBrowserTick = browserActivityTick
-                }
-                // 浏览器页系统返回：优先回退 WebView 历史，耗尽后切回对话页
-                BackHandler(enabled = pagerState.currentPage == 1) {
-                    if (browserBackPressed?.invoke() != true) {
-                        coroutineScope.launch { pagerState.animateScrollToPage(0) }
-                    }
-                }
-                Box(modifier = Modifier.fillMaxSize()) {
-                    HorizontalPager(state = pagerState) { page ->
-                        if (page == 0) {
-                            // 对话页：顶部工具条（模型·权限·主线·轮次·浏览器）属于对话的一部分，随页滑走
-                            Column(modifier = Modifier.fillMaxSize()) {
-                                chatTopBar(
-                                    {
-                                        coroutineScope.launch { pagerState.animateScrollToPage(1) }
-                                    },
-                                    browserActivityTick > lastSeenBrowserTick,
-                                )
-                                chatContent(
-                                    Modifier
-                                        .fillMaxSize()
-                                        .liquidGlassContent()
-                                        .padding(horizontal = 12.dp)
-                                        .windowInsetsPadding(bottomInsets)
-                                )
-                            }
-                        } else {
-                            // 浏览器页：全屏，仅保留自己的极薄状态栏（末尾带"返回对话"）+ URL 栏；
-                            // 底部用贴合版 insets（无呼吸空间），URL 栏直接贴在底部导航栏上方
-                            Box(
-                                Modifier
-                                    .fillMaxSize()
-                                    .statusBarsPadding()
-                                    .windowInsetsPadding(chatBottomInsets(BrowserBottomBarHeight))
-                            ) {
-                                browserPane(
-                                    {
-                                        coroutineScope.launch { pagerState.animateScrollToPage(0) }
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-            } else {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    chatTopBar(null, false)
-                    chatContent(
-                        Modifier
-                            .fillMaxSize()
-                            .liquidGlassContent()
-                            .padding(horizontal = 12.dp)
-                            .windowInsetsPadding(bottomInsets)
-                    )
-                }
-            }
-
-            if (LocalLiquidGlassBackdrop.current == null) {
-                Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
-                    RuntimeBottomBar(MainDestination.Agent, onNavigate)
-                }
-            }
+            // 三态布局：紧凑态浏览器整页、中间态右侧滑出、展开态常驻可拖拽双栏
+            ChatAdaptiveLayout(
+                workspace = workspace, terminalPane = terminalPane, browserPane = browserPane,
+                browserActivityTick = browserActivityTick, browserBackPressed = browserBackPressed,
+                bottomInsets = bottomInsets, topBar = chatTopBar, chatContent = chatContent,
+            )
         }
     }
 
@@ -771,182 +489,8 @@ fun ChatScreen(
             originalText = target.text,
             onDismiss = { editTargetMessageId = null },
             onConfirm = { newText ->
-                viewModel.editAndResend(target.id, newText)
+                viewModel?.editAndResend(target.id, newText)
                 editTargetMessageId = null
-            },
-        )
-    }
-
-    // 智枢悬浮窗权限申请提示弹窗
-    if (showFloatingPermissionDialog) {
-        RuntimeAlertDialog(
-            onDismissRequest = { showFloatingPermissionDialog = false },
-            title = {
-                Text(
-                    stringResource(R.string.chat_floating_permission_title),
-                    fontWeight = FontWeight.Bold,
-                )
-            },
-            text = {
-                Text(
-                    stringResource(R.string.chat_floating_permission_message),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showFloatingPermissionDialog = false
-                        val intent = Intent(
-                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                            Uri.parse("package:${context.packageName}"),
-                        )
-                        context.startActivity(intent)
-                    },
-                ) {
-                    Text(stringResource(R.string.chat_floating_permission_grant))
-                }
-            },
-            dismissButton = {
-                top.tianyan.app.ui.components.RuntimeTextButton(
-                    onClick = { showFloatingPermissionDialog = false },
-                ) {
-                    Text(stringResource(R.string.chat_floating_permission_cancel))
-                }
-            },
-        )
-    }
-
-    // 与 Git 面板同构：点入口才整页进入，不再作为卡片叠在对话上。
-    // 之前它无条件渲染，对话正文、快捷开始、输入框会从半透明卡片下面透出来。
-    if (showRedTeamConsole && currentSession != null) {
-        // 进面板即体检一次：技能能列出来 ≠ 能跑，缺环境变量与工具要在开工前就提示。
-        androidx.compose.runtime.LaunchedEffect(currentSession.id) {
-            viewModel.refreshRedTeamSkillHealth()
-        }
-        RedTeamConsole(
-            session = currentSession,
-            facts = redTeamFacts,
-            state = redTeamConsole,
-            onBindTarget = viewModel::bindRedTeamTarget,
-            onDismiss = { showRedTeamConsole = false },
-            onSelectTab = viewModel::setRedTeamConsoleTab,
-            onRefresh = viewModel::refreshRedTeamConsole,
-            onSelectSegment = viewModel::selectRedTeamConsoleSegment,
-            onQueryChange = viewModel::updateRedTeamConsoleQuery,
-            onServiceChange = viewModel::updateRedTeamConsoleService,
-            onPortChange = viewModel::updateRedTeamConsolePort,
-            onSubmitQuery = viewModel::submitRedTeamConsoleQuery,
-            onProvenanceChange = viewModel::setRedTeamConsoleProvenance,
-            onSortChange = viewModel::setRedTeamConsoleSort,
-            onViewChange = viewModel::setRedTeamConsoleView,
-            onToggleAsset = viewModel::toggleRedTeamConsoleAsset,
-            onSelectRole = viewModel::selectConsoleRole,
-            onRoleDraftChange = viewModel::updateConsoleRoleDraft,
-            onSaveRole = viewModel::saveConsoleRole,
-            onResetRole = viewModel::resetConsoleRole,
-            onSelectSkill = viewModel::selectConsoleSkill,
-            onNewSkill = viewModel::newConsoleSkill,
-            onSkillDraftChange = viewModel::updateConsoleSkillDraft,
-            onSaveSkill = viewModel::saveConsoleSkill,
-            onDeleteSkill = viewModel::deleteConsoleSkill,
-            onSetAgentsMax = viewModel::setConsoleAgentsMax,
-            autoBindNotice = redTeamAutoBind,
-            onConsumeAutoBind = viewModel::consumeRedTeamAutoBind,
-            skillHealth = redTeamSkillHealth,
-            onRefreshSkillHealth = viewModel::refreshRedTeamSkillHealth,
-        )
-    }
-
-    if (showGitPanel) {
-        GitPanel(
-            state = gitPanelState,
-            onRefresh = viewModel::refreshGitStatus,
-            onDismiss = { showGitPanel = false },
-            onFileDiff = viewModel::loadFileDiff,
-            onClearDiff = viewModel::clearDiff,
-            onStage = viewModel::gitStage,
-            onUnstage = viewModel::gitUnstage,
-            onStageAll = viewModel::gitStageAll,
-            onUnstageAll = viewModel::gitUnstageAll,
-            onCommit = viewModel::gitCommit,
-            onPull = viewModel::gitPull,
-            onPush = viewModel::gitPush,
-            onCheckout = viewModel::gitCheckout,
-            onCreateBranch = viewModel::gitCreateBranch,
-            onDeleteBranch = viewModel::gitDeleteBranch,
-            onRenameBranch = viewModel::gitRenameBranch,
-            onDeleteRemoteBranch = viewModel::gitDeleteRemoteBranch,
-            onInitRepo = viewModel::gitInit,
-            onClone = viewModel::gitClone,
-            credentials = gitCredentials,
-            matchedCredentialId = matchedCredId,
-            onAddCredential = viewModel::addGitCredential,
-            onDeleteCredential = viewModel::deleteGitCredential,
-            onProbeCredential = viewModel::probeCredential,
-            onPullNow = viewModel::gitPullNow,
-            onDismissPullDirty = viewModel::dismissPullDirtyConfirm,
-            onConfirmCheckoutDirty = viewModel::confirmCheckoutDirty,
-            onDismissCheckoutConfirm = viewModel::dismissCheckoutConfirm,
-            onStash = { viewModel.gitStash() },
-            onStashPop = viewModel::gitStashPop,
-            aiCommit = gitAiCommit,
-            onAiGenerate = viewModel::aiGenerateCommitMessage,
-            credentialHealth = gitCredHealth,
-            onVerifyCredential = viewModel::verifyGitCredential,
-            onVerifyAllCredentials = viewModel::verifyAllCredentials,
-            repoListState = gitRepoList,
-            onFetchRepos = viewModel::fetchUserRepos,
-            onClearRepoList = viewModel::clearRepoList,
-            progress = gitProgress,
-            onCancelProgress = viewModel::cancelGitOp,
-            recentCloneUrls = recentCloneUrls,
-            onLoadMoreCommits = viewModel::loadMoreCommits,
-            onUnshallow = viewModel::unshallowRepo,
-            onCommitFileDiff = viewModel::loadCommitFileDiff,
-            gitOp = gitOp,
-            onSwitchWorkspace = viewModel::switchWorkspace,
-            onRetryCloneClean = viewModel::retryCloneAfterClean,
-            onUndoRename = viewModel::gitRenameBranch,
-            onConsumeGitOp = viewModel::consumeGitOpMessage,
-            onConfigIdentity = viewModel::gitConfigIdentity,
-            onRevert = viewModel::gitRevert,
-            onRevertAll = viewModel::gitRevertAllUnstaged,
-            onDeleteUntracked = viewModel::gitDeleteUntracked,
-            onCreateTag = viewModel::gitCreateTag,
-            onDeleteTag = viewModel::gitDeleteTag,
-            onCommitDetail = viewModel::loadCommitDetail,
-            onClearCommitDetail = viewModel::clearCommitDetail,
-        )
-    }
-
-    if (showSessions) {
-        SessionsDialog(
-            sessions = sessions,
-            currentSessionId = currentSessionId,
-            sessionRunStates = sessionRunStates,
-            onDismiss = { showSessions = false },
-            onSwitch = { id -> viewModel.switchSession(id); showSessions = false },
-            onNew = { showSessions = false; showNewSession = true },
-            onDelete = viewModel::deleteSession,
-            onRename = viewModel::renameSession,
-        )
-    }
-
-    if (showNewSession) {
-        NewSessionDialog(
-            workspaces = workspaces,
-            agents = availableAgents,
-            engines = availableEngines,
-            onDismiss = { showNewSession = false },
-            onCreate = { title, selected, selectedType, agentId ->
-                showNewSession = false
-                viewModel.createSession(
-                    title = title,
-                    workspace = selected,
-                    projectType = selectedType.name,
-                    agentId = agentId,
-                )
             },
         )
     }
@@ -961,36 +505,37 @@ fun ChatScreen(
             providerModelDiscoveryError = providerModelDiscoveryError,
             modelPickerProfileId = modelPickerProfileId,
             onDismiss = {
-                viewModel.closeProviderModelPicker()
+                viewModel?.closeProviderModelPicker()
                 showModels = false
             },
-            onSelectProfile = { id -> viewModel.setActiveModel(id) },
-            onSelectSubModel = { id, subModel -> viewModel.selectModel(id, subModel) },
-            onOpenModelPicker = viewModel::openProviderModelPicker,
-            onCloseModelPicker = viewModel::closeProviderModelPicker,
-            onRefreshModels = viewModel::discoverProviderModels,
-            onSwitchModel = viewModel::switchModelInProfile,
-            onAdd = { name, provider, model, baseUrl -> viewModel.addModel(name, provider, model, baseUrl) },
-            onDelete = viewModel::deleteModel,
+            onSelectProfile = { id -> viewModel?.setActiveModel(id) },
+            onSelectSubModel = { id, subModel -> viewModel?.selectModel(id, subModel) },
+            onOpenModelPicker = { arg0 -> viewModel?.openProviderModelPicker(arg0) },
+            onCloseModelPicker = { viewModel?.closeProviderModelPicker() },
+            onRefreshModels = { arg0 -> viewModel?.discoverProviderModels(arg0) },
+            onSwitchModel = { arg0, arg1 -> viewModel?.switchModelInProfile(arg0, arg1) },
+            onCreate = onCreateModelProfile,
+            onDelete = { arg0 -> viewModel?.deleteModel(arg0) },
         )
     }
 
     if (showSkillsMcpSheet) {
         // 打开挂载面板时自动探测一次 MCP 连通性
-        LaunchedEffect(Unit) { viewModel.refreshMcpConnections() }
+        LaunchedEffect(Unit) { viewModel?.refreshMcpConnections() }
         SkillsAndMcpSheet(
             allSkills = allSkills,
             mcpServers = mcpServers,
             mcpConnectionStates = mcpConnectionStates,
+            mcpToolCounts = mcpToolCounts,
             pinnedMentionIds = pinnedMentionIds,
             onDismiss = { showSkillsMcpSheet = false },
             onToggleSkill = { id, enabled ->
-                viewModel.setSkillEnabled(id, enabled)
+                viewModel?.setSkillEnabled(id, enabled)
             },
             onToggleMcpServer = { id, enabled ->
-                viewModel.setMcpServerEnabled(id, enabled)
+                viewModel?.setMcpServerEnabled(id, enabled)
             },
-            onTogglePin = viewModel::togglePinMention,
+            onTogglePin = { arg0 -> viewModel?.togglePinMention(arg0) },
             onNavigateToSettings = {
                 showSkillsMcpSheet = false
                 onNavigate(MainDestination.Settings)
@@ -1004,11 +549,11 @@ fun ChatScreen(
             running = running,
             onDismiss = { showBranches = false },
             onSwitch = { branch ->
-                viewModel.switchBranch(branch)
+                viewModel?.switchBranch(branch)
                 showBranches = false
             },
             // 成果抽屉叠在分支列表之上，关闭后自然回到列表，再关闭即回主会话
-            onOpenSubagent = viewModel::openSubagentResult,
+            onOpenSubagent = { arg0 -> viewModel?.openSubagentResult(arg0) },
         )
     }
 
@@ -1016,45 +561,38 @@ fun ChatScreen(
     subagentResult?.let { state ->
         SubagentResultSheet(
             state = state,
-            onRefresh = viewModel::refreshSubagentResult,
-            onDismiss = viewModel::closeSubagentResult,
+            onRefresh = { viewModel?.refreshSubagentResult() },
+            onDismiss = { viewModel?.closeSubagentResult() },
         )
     }
 
+    ToolchainHost(showToolchainPanel, { showToolchainPanel = false }) { toolchainGap = it }
     if (showRuntimeTimeline) {
         RuntimeTimelineSheet(
             events = runtimeEvents,
             messages = messages,
             memories = memories,
             scratchpads = scratchpads,
-            onDeleteMemory = viewModel::deleteMemory,
-            onDeleteScratchpad = viewModel::deleteScratchpad,
-            onClearScratchpads = viewModel::clearScratchpads,
+            onDeleteMemory = { arg0 -> viewModel?.deleteMemory(arg0) },
+            onDeleteScratchpad = { arg0 -> viewModel?.deleteScratchpad(arg0) },
+            onClearScratchpads = { viewModel?.clearScratchpads() },
             onNavigateToMessage = { messageId ->
                 showRuntimeTimeline = false
                 coroutineScope.launch {
-                    // 关键修复：旧的 targetIndex 用 (messages.filter { ToolResult }).indexOfFirst
-                    // 计算，没有 LazyColumn 实际头部结构（init / empty / compaction）的偏移补偿，
-                    // 也没有上界保护 —— 当消息在 sheet 打开后发生变化（流式新增 / 删除）时，
-                    // 可能传入越界索引，触发 LazyListState 的 IllegalArgumentException。
-                    // 这里改用与 ChatMessageList 完全一致的 projectChatMessages 投影，
-                    // 并 clamp 到合法区间。
-                    runCatching {
-                        val renderItems = projectChatMessages(messages, toolResults)
-                        val targetIndex = renderItems.indexOfFirst { item ->
-                            item is ChatRenderItem.MessageItem && item.message.id == messageId
-                        }
-                        if (targetIndex < 0) return@launch
-                        // LazyColumn 头部偏移：(init ? 1 : empty ? 1 : 0) + (compaction ? 1 : 0)。
-                        // activePlan 不是独立头部 —— 不要再加 1。
-                        val headerOffset = (if (initializing) 1 else 0) +
-                            (if (!initializing && messages.isEmpty()) 1 else 0) +
-                            (if (activeCompaction != null) 1 else 0)
-                        val totalCount = listState.layoutInfo.totalItemsCount
-                        if (totalCount <= 0) return@launch
-                        val safeIndex = (targetIndex + headerOffset).coerceIn(0, totalCount - 1)
-                        listState.animateScrollToItem(safeIndex)
+                    // 等待同一列表的真实投影展开目标轮次，避免手动折叠改变索引后定位错位。
+                    timelineFocus.value = messageId
+                    val renderItems = kotlinx.coroutines.withTimeoutOrNull(1_000) {
+                        androidx.compose.runtime.snapshotFlow { timelineItems.value }.first { it.focusedId == messageId && it.items.any { item -> item.containsMessage(messageId) } }.items
+                    } ?: return@launch
+                    val targetIndex = renderItems.indexOfFirst { item ->
+                        item.containsMessage(messageId)
                     }
+                    if (targetIndex < 0) return@launch
+                    // 头部仅包含初始化/空态与压缩横幅，任务计划不占单独条目。
+                    val headerOffset = (if (initializing) 1 else 0) +
+                        (if (!initializing && messages.isEmpty()) 1 else 0) +
+                        (if (activeCompaction != null) 1 else 0)
+                    listState.safeScrollToItem(targetIndex + headerOffset, animated = true)
                 }
             },
             onDismiss = { showRuntimeTimeline = false },
@@ -1062,36 +600,31 @@ fun ChatScreen(
     }
 
     if (showApprovalModes) {
-        ApprovalModeSheet(
-            currentApprovalMode = currentApprovalMode,
-            onSelect = { mode ->
-                viewModel.setCurrentSessionApprovalMode(mode)
-                showApprovalModes = false
-            },
-            onDismiss = { showApprovalModes = false },
-        )
+        ApprovalModeSheet(currentApprovalMode = currentApprovalMode,
+            onSelect = { mode -> viewModel?.setCurrentSessionApprovalMode(mode); showApprovalModes = false },
+            onDismiss = { showApprovalModes = false }) }
+
+    if (showRunModes) {
+        RunModeSheet(currentRunMode = currentRunMode,
+            onSelect = { mode -> viewModel?.setCurrentSessionRunMode(mode); showRunModes = false },
+            onDismiss = { showRunModes = false }) }
+
+    if (showReasoningSlider) {
+        PlainBackdropModalBottomSheet(onDismissRequest = { showReasoningSlider = false }) { ReasoningEffortSlider(
+            currentMode = activeModel?.reasoningMode, currentEffort = activeModel?.reasoningEffort,
+            onSelect = { mode, effort -> viewModel?.updateActiveModelReasoning(mode, effort); showReasoningSlider = false },
+            onClose = { showReasoningSlider = false }) }
     }
 
     if (showMemorySheet) {
-        SessionMemorySheet(
-            memories = memories,
-            scratchpads = scratchpads,
-            onDeleteMemory = viewModel::deleteMemory,
-            onDeleteScratchpad = viewModel::deleteScratchpad,
-            onClearScratchpads = viewModel::clearScratchpads,
-            onDismiss = { showMemorySheet = false },
-        )
+        SessionMemorySheet(memories = memories, scratchpads = scratchpads, sessionId = currentSessionId, failureMemoryAccess = viewModel?.failureMemoryAccess,
+            onDeleteMemory = { arg0 -> viewModel?.deleteMemory(arg0) }, onDeleteScratchpad = { arg0 -> viewModel?.deleteScratchpad(arg0) },
+            onClearScratchpads = { viewModel?.clearScratchpads() }, onDismiss = { showMemorySheet = false })
     }
 
     branchFromMessageId?.let { messageId ->
-        CreateBranchDialog(
-            messageId = messageId,
-            onDismiss = { branchFromMessageId = null },
-            onCreate = { id, name ->
-                viewModel.createBranch(id, name)
-                branchFromMessageId = null
-            },
-        )
+        CreateBranchDialog(messageId = messageId, onDismiss = { branchFromMessageId = null },
+            onCreate = { id, name -> viewModel?.createBranch(id, name); branchFromMessageId = null })
     }
     } // CompositionLocalProvider(LocalSandboxHostRoots)
 }
@@ -1105,24 +638,18 @@ private fun ChatPaneContent(
     running: Boolean,
     status: String?,
     thinkingExpanded: Boolean,
+    thinkingAutoTranslate: Boolean = false,
+    chatRoundCollapse: Boolean = false,
     thinkingLive: Boolean,
     liveThinkingMessageId: String?,
+    onNavigateToSettings: (() -> Unit)? = null,
     toolResults: Map<String, ToolResult>,
     workspace: String,
     workspaceProject: WorkspaceProject? = null,
-    attachmentStatuses: Map<String, top.tianyan.app.ui.chat.AttachmentStatus> = emptyMap(),
-    workflowSuggestions: List<ProactiveWorkflowSuggestion> = emptyList(),
-    onLaunchWorkflowSuggestion: (ProactiveWorkflowSuggestion) -> Unit = {},
-    onDismissWorkflowSuggestion: (String) -> Unit = {},
-    pendingSkillCandidates: List<PendingSkillCandidate> = emptyList(),
-    onAcceptSkillCandidate: (PendingSkillCandidate) -> Unit = {},
-    onDismissSkillCandidate: (PendingSkillCandidate) -> Unit = {},
-    distillFailure: String? = null,
-    onConsumeDistillFailure: () -> Unit = {},
     onOpenFile: ((projectName: String, relativePath: String) -> Unit)?,
     onEditMessage: (UserMessage) -> Unit,
     onDeleteMessage: (String) -> Unit,
-    onRewindMessage: (String, top.tianyan.app.harness.checkpoint.RewindScope) -> Unit = { _, _ -> },
+    onRewindMessage: (String, RewindScope) -> Unit = { _, _ -> },
     error: String?,
     onClearError: () -> Unit,
     matchingCommands: List<SlashCommandItem>,
@@ -1134,10 +661,8 @@ private fun ChatPaneContent(
     onRemoveQueuedPrompt: (QueuedPrompt) -> Unit,
     onConvertToSteer: (QueuedPrompt) -> Unit = {},
     sendMode: ComposerSendMode,
-    onSendModeChange: (ComposerSendMode) -> Unit = {},
-    pendingQuestion: top.tianyan.app.harness.question.PendingQuestion? = null,
-    onAnswerQuestion: (List<top.tianyan.app.core.model.AgentQuestionAnswer>) -> Unit = {},
     input: String,
+    shareActions: ShareQuickActionsState? = null,
     onInputChanged: (String) -> Unit,
     onApplyCommand: (SlashCommandItem) -> Unit,
     onApplyMention: (MentionItem) -> Unit = {},
@@ -1155,43 +680,55 @@ private fun ChatPaneContent(
     initializing: Boolean = false,
     pinnedCapabilities: List<MentionItem> = emptyList(),
     onOpenSkillsMcp: () -> Unit = {},
+    onCompactContext: () -> Unit = {},
     onUnpinMention: (String) -> Unit = {},
     activeModel: AiModelEntity? = null,
+    onOpenModels: () -> Unit, approvalMode: ApprovalMode, onOpenApprovalModes: () -> Unit,
     onUpdateReasoning: (mode: String?, effort: String?) -> Unit = { _, _ -> },
     pendingApprovals: List<AgentApprovalRequestEntity> = emptyList(),
     activePlan: AgentPlanEntity? = null,
     activeCompaction: CompactionSnapshot? = null,
     mcpRecommendations: List<McpWorkspaceRecommender.Recommendation> = emptyList(),
     onEnableMcpRecommendation: (String) -> Unit = {},
+    onInstallMcpRecommendation: () -> Unit = {},
     onDismissMcpRecommendation: (String) -> Unit = {},
-    onResolveApproval: (String, Boolean) -> Unit = { _, _ -> },
+    workflowSuggestions: List<ProactiveWorkflowSuggestion> = emptyList(),
+    onLaunchWorkflowSuggestion: (ProactiveWorkflowSuggestion) -> Unit = {},
+    onDismissWorkflowSuggestion: (String) -> Unit = {},
+    btwQueries: List<top.tianyan.app.core.model.BtwQuery> = emptyList(),
+    btwStreaming: String = "",
+    onCancelBtw: () -> Unit = {},
+    onResolveApproval: (String, Boolean, Boolean) -> Unit = { _, _, _ -> },
+    onResolveQuestion: (String, String) -> Unit = { _, _ -> },
     contextUsage: ContextUsage = ContextUsage(),
-    quickPhrases: List<QuickPhrase> = emptyList(),
-    onSelectPhrase: (QuickPhrase) -> Unit = {},
     onViewSubagentLanes: () -> Unit = {},
-    subagentBranches: List<top.tianyan.app.harness.session.ConversationBranch> = emptyList(),
-    onOpenSubagentBranch: (top.tianyan.app.harness.session.ConversationBranch) -> Unit = {},
+    subagentBranches: List<ConversationBranch> = emptyList(),
+    onOpenSubagentBranch: (ConversationBranch) -> Unit = {},
+    hiddenSkillSuggestions: Set<String> = emptySet(),
+    onApplySkillSuggestion: (SkillSuggestion, Boolean) -> Unit = { _, _ -> },
+    onDismissSkillSuggestion: (String) -> Unit = {},
 ) {
-    Column(modifier = modifier) {
-        ChatMessageList(
-            modifier = Modifier.weight(1f).fillMaxWidth(),
+    Box(modifier = modifier, contentAlignment = Alignment.TopCenter) {
+    Column(modifier = Modifier.widthIn(max = 840.dp).fillMaxSize()) {
+        ChatMessageViewport(listState, Modifier.weight(1f).fillMaxWidth()) { ChatMessageList(
+            modifier = Modifier.fillMaxSize(),
             listState = listState,
             messages = messages,
             toolResults = toolResults,
             initializing = initializing,
             running = running,
-            imageGenerationModel = activeModel?.imageGenerationEnabled == true,
             status = status,
             workspace = workspace,
             workspaceProject = workspaceProject,
             onboardingPrivilege = onboardingPrivilege,
             thinkingExpanded = thinkingExpanded,
+            thinkingAutoTranslate = thinkingAutoTranslate,
+            chatRoundCollapse = chatRoundCollapse,
             thinkingLive = thinkingLive,
             liveThinkingMessageId = liveThinkingMessageId,
             lastAssistantMessageId = lastAssistantMessageId,
+            onNavigateToSettings = onNavigateToSettings,
             knownMentionNames = knownMentionNames,
-            quickPhrases = quickPhrases,
-            onSelectPhrase = onSelectPhrase,
             onSelectCommand = onApplyCommand,
             onEditMessage = onEditMessage,
             onDeleteMessage = onDeleteMessage,
@@ -1204,10 +741,14 @@ private fun ChatPaneContent(
             activePlan = activePlan,
             pendingApprovals = pendingApprovals,
             onResolveApproval = onResolveApproval,
+            onResolveQuestion = onResolveQuestion,
             onViewSubagentLanes = onViewSubagentLanes,
             subagentBranches = subagentBranches,
             onOpenSubagent = onOpenSubagentBranch,
-        )
+            hiddenSkillSuggestions = hiddenSkillSuggestions,
+            onApplySkillSuggestion = onApplySkillSuggestion,
+            onDismissSkillSuggestion = onDismissSkillSuggestion,
+        ) }
 
         activePlan?.let { plan ->
             val steps = remember(plan.stepsJson) { PlanStepParser.parse(plan.stepsJson) }
@@ -1217,39 +758,17 @@ private fun ChatPaneContent(
                     steps = steps,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                        .padding(vertical = 2.dp),
                 )
             }
         }
 
-        error?.let {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                shape = RoundedCornerShape(10.dp),
-                color = MaterialTheme.colorScheme.errorContainer,
-            ) {
-                Row(
-                    Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        it,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(onClick = onClearError) {
-                        Text(stringResource(R.string.chat_close), color = MaterialTheme.colorScheme.onErrorContainer)
-                    }
-                }
-            }
-        }
+        error?.let { ChatErrorBanner(error = it, onClear = onClearError) }
 
         McpRecommendationBanner(
             recommendations = mcpRecommendations,
             onEnable = onEnableMcpRecommendation,
+            onInstall = onInstallMcpRecommendation,
             onDismiss = onDismissMcpRecommendation,
         )
 
@@ -1259,22 +778,15 @@ private fun ChatPaneContent(
             onDismiss = onDismissWorkflowSuggestion,
         )
 
-        // 技能提炼失败必须可见：此前静默吞掉，用户以为功能从未工作过
-        DistillFailureBanner(
-            message = distillFailure,
-            onConsume = onConsumeDistillFailure,
+        BtwPanel(
+            queries = btwQueries,
+            streaming = btwStreaming,
+            onCancel = onCancelBtw,
         )
 
-        // 候选确认弹窗：一次弹一个，采纳/忽略后自动弹下一个
-        pendingSkillCandidates.firstOrNull()?.let { candidate ->
-            SkillCandidateConfirmDialog(
-                candidate = candidate,
-                onAccept = onAcceptSkillCandidate,
-                onDismiss = onDismissSkillCandidate,
-            )
-        }
+        shareActions?.let { share -> ShareQuickActionsRow(state = share, modifier = Modifier.padding(vertical = 4.dp)) }
 
-        ChatComposer(
+        Column(Modifier.chatInputScrim().windowInsetsPadding(chatBottomInsets())) { ChatComposer(
             listState = listState,
             running = running,
             initializing = initializing,
@@ -1287,9 +799,6 @@ private fun ChatPaneContent(
             onSend = onSend,
             onStop = onStop,
             sendMode = sendMode,
-            onSendModeChange = onSendModeChange,
-            pendingQuestion = pendingQuestion,
-            onAnswerQuestion = onAnswerQuestion,
             matchingCommands = matchingCommands,
             onApplyCommand = onApplyCommand,
             matchingMentions = matchingMentions,
@@ -1308,212 +817,15 @@ private fun ChatPaneContent(
             pinnedCapabilities = pinnedCapabilities,
             onUnpinMention = onUnpinMention,
             onOpenSkillsMcp = onOpenSkillsMcp,
+            onCompactContext = onCompactContext,
             activeModel = activeModel,
+            onOpenModels = onOpenModels, approvalMode = approvalMode, onOpenApprovalModes = onOpenApprovalModes,
             onUpdateReasoning = onUpdateReasoning,
             contextUsage = contextUsage,
-        )
+        ) }
+    }
     }
 }
-
-/** 工作区感知的 MCP 预设推荐横幅：每条推荐展示启用理由，可一键启用或忽略。 */
-@Composable
-private fun McpRecommendationBanner(
-    recommendations: List<McpWorkspaceRecommender.Recommendation>,
-    onEnable: (String) -> Unit,
-    onDismiss: (String) -> Unit,
-) {
-    if (recommendations.isEmpty()) return
-    recommendations.forEach { recommendation ->
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp),
-            shape = RoundedCornerShape(10.dp),
-            color = MaterialTheme.colorScheme.secondaryContainer,
-        ) {
-            Row(
-                Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        recommendation.presetName,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        style = MaterialTheme.typography.labelLarge,
-                    )
-                    Text(
-                        recommendation.reason,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-                TextButton(onClick = { onEnable(recommendation.presetId) }) {
-                    Text(stringResource(R.string.chat_enable), color = MaterialTheme.colorScheme.onSecondaryContainer)
-                }
-                TextButton(onClick = { onDismiss(recommendation.presetId) }) {
-                    Text(stringResource(R.string.chat_ignore), color = MaterialTheme.colorScheme.onSecondaryContainer)
-                }
-            }
-        }
-    }
-}
-
-/**
- * 技能候选确认弹窗：提炼器产出候选后弹出，展示技能名、描述与提示词全文预览，
- * 用户「采纳入库」或「忽略」。一次弹一个，处理完自动弹下一个。
- */
-@Composable
-private fun SkillCandidateConfirmDialog(
-    candidate: PendingSkillCandidate,
-    onAccept: (PendingSkillCandidate) -> Unit,
-    onDismiss: (PendingSkillCandidate) -> Unit,
-) {
-    RuntimeAlertDialog(
-        onDismissRequest = { onDismiss(candidate) },
-        confirmButton = {
-            Button(onClick = { onAccept(candidate) }) {
-                RuntimeIcon(RuntimeIconName.Brain, Modifier.size(16.dp), MaterialTheme.colorScheme.onPrimary)
-                Spacer(Modifier.width(6.dp))
-                Text("采纳入库", color = MaterialTheme.colorScheme.onPrimary)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = { onDismiss(candidate) }) {
-                Text(stringResource(R.string.chat_ignore), color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        },
-        icon = {
-            Box(
-                modifier = Modifier
-                    .size(52.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                RuntimeIcon(RuntimeIconName.Brain, Modifier.size(26.dp), MaterialTheme.colorScheme.primary)
-            }
-        },
-        title = {
-            Column {
-                Text(
-                    "发现可沉淀的技能",
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    "本次会话中有值得复用的经验，确认后加入技能库",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        },
-        text = {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 320.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Column(
-                        Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Text(
-                            candidate.name,
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        )
-                        Text(
-                            candidate.description,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.85f),
-                        )
-                        if (candidate.triggerCommand.isNotBlank()) {
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                            ) {
-                                Text(
-                                    candidate.triggerCommand,
-                                    Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                        }
-                    }
-                }
-                Text(
-                    "技能提示词预览",
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    candidate.systemPrompt,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                )
-            }
-        },
-    )
-}
-
-/** 技能提炼失败横幅：让静默失败可见（可手动关闭）。 */
-@Composable
-private fun DistillFailureBanner(
-    message: String?,
-    onConsume: () -> Unit,
-) {
-    AnimatedVisibility(
-        visible = !message.isNullOrBlank(),
-        enter = fadeIn() + expandVertically(),
-        exit = fadeOut() + shrinkVertically(),
-    ) {
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            color = MaterialTheme.colorScheme.errorContainer,
-        ) {
-            Row(
-                Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(30.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.error.copy(alpha = 0.12f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    RuntimeIcon(
-                        RuntimeIconName.Alert,
-                        Modifier.size(16.dp),
-                        MaterialTheme.colorScheme.error,
-                    )
-                }
-                Text(
-                    message.orEmpty(),
-                    Modifier.weight(1f),
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                TextButton(onClick = onConsume) {
-                    Text("知道了", color = MaterialTheme.colorScheme.onErrorContainer)
-                }
-            }
-        }
-    }
-}
-
 /** Event-driven workflow actions shown directly above the composer as interactive pills. */
 @Composable
 private fun ProactiveWorkflowBanner(
@@ -1568,7 +880,7 @@ private fun ProactiveWorkflowBanner(
                     }
                     Button(
                         onClick = { onLaunch(suggestion) },
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                         modifier = Modifier.height(28.dp),
                     ) {
                         Text("运行", style = MaterialTheme.typography.labelSmall)

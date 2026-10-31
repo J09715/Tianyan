@@ -2,17 +2,15 @@ package top.tianyan.app.runtime
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.R
 import android.content.Context
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.util.concurrent.ConcurrentLinkedDeque
 import java.util.concurrent.atomic.AtomicBoolean
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -47,9 +45,8 @@ sealed interface FtpServiceState {
 }
 
 /** Owns the built-in FTP server exposing the active Linux distribution's rootfs. */
-@Singleton
-class FtpServiceManager @Inject constructor(
-    @ApplicationContext private val context: Context,
+class FtpServiceManager(
+    private val context: Context,
     private val linuxRuntime: LinuxRuntime,
     private val preferences: FtpPreferences,
     private val sshPreferences: SshPreferences,
@@ -306,7 +303,7 @@ class FtpServiceManager @Inject constructor(
         }
         val url = if (anonymous) "ftp://$host:$port/" else "ftp://$username@$host:$port/"
         val notification = NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_notify_sync)
+            .setSmallIcon(R.drawable.stat_notify_sync)
             .setContentTitle("Linux FTP 远程文件服务运行中")
             .setContentText("连接地址: $url")
             .setOngoing(true)

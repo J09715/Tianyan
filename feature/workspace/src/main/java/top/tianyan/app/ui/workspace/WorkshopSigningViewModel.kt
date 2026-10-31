@@ -2,8 +2,6 @@ package top.tianyan.app.ui.workspace
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dagger.hilt.android.lifecycle.HiltViewModel
-import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -12,6 +10,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import top.tianyan.app.core.datastore.WorkshopKeystore
 import top.tianyan.app.runtime.build.WorkshopSigningManager
+import kotlinx.coroutines.Dispatchers
 
 data class WorkshopSigningCreationDraft(
     val name: String = "",
@@ -31,8 +30,7 @@ data class WorkshopSigningImportDraft(
     val keyPassword: String = "",
 )
 
-@HiltViewModel
-class WorkshopSigningViewModel @Inject constructor(
+class WorkshopSigningViewModel(
     private val signingManager: WorkshopSigningManager,
 ) : ViewModel() {
 
@@ -55,7 +53,7 @@ class WorkshopSigningViewModel @Inject constructor(
         onSuccess: () -> Unit = {},
     ) {
         if (_busy.value) return
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
             _busy.value = true
             val result = signingManager.createKeystore(
                 name = draft.name,
@@ -82,7 +80,7 @@ class WorkshopSigningViewModel @Inject constructor(
         onSuccess: () -> Unit = {},
     ) {
         if (_busy.value) return
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
             _busy.value = true
             val result = signingManager.importKeystore(
                 uri = draft.uri,
@@ -104,7 +102,7 @@ class WorkshopSigningViewModel @Inject constructor(
 
     fun deleteKeystore(keystore: WorkshopKeystore) {
         if (_busy.value) return
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
             _busy.value = true
             val result = signingManager.deleteKeystore(keystore.id)
             _message.value = result.errorOrNull()?.message ?: "已删除签名：${keystore.name}"

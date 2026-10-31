@@ -4,9 +4,9 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
@@ -16,30 +16,9 @@ import kotlinx.coroutines.delay
 import top.tianyan.app.core.database.AiModelEntity
 import top.tianyan.app.core.model.workflow.*
 import top.tianyan.app.ui.components.*
-
-@Composable
-internal fun WorkflowNodeDetails(run: WorkflowNodeRunState?) {
-    var expanded by remember { mutableStateOf(false) }
-    val output = run?.output
-    if (run?.status in setOf(NodeRunStatus.RUNNING, NodeRunStatus.STREAMING)) {
-        LinearProgressIndicator(Modifier.fillMaxWidth())
-    }
-    output?.let {
-        Text("耗时 ${it.durationMs / 1000.0} 秒 · 退出码 ${it.exitCode}", style = MaterialTheme.typography.labelSmall)
-        it.error?.let { error -> SelectionContainer { Text(error, color = MaterialTheme.colorScheme.error) } }
-        if (it.artifacts.isNotEmpty()) {
-            Text("产物路径", style = MaterialTheme.typography.labelLarge)
-            SelectionContainer { Text(it.artifacts.joinToString("\n"), fontFamily = FontFamily.Monospace) }
-        }
-    }
-    val log = output?.textOutput?.takeIf { it.isNotBlank() } ?: run?.progressMessage.orEmpty()
-    if (log.isNotBlank()) {
-        RuntimeOutlinedButton(onClick = { expanded = !expanded }) { Text(if (expanded) "收起日志" else "展开日志 / Diff") }
-        if (expanded) SelectionContainer {
-            Text(log, Modifier.fillMaxWidth().heightIn(max = 480.dp).verticalScroll(rememberScrollState()), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
-        }
-    }
-}
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 internal fun WorkflowElapsed(state: WorkflowRuntimeState) {
@@ -224,7 +203,7 @@ internal fun WorkflowStartDialog(
                     )
                 }
                 required.filterNot { it == "APK_PATH" }.forEach { key ->
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = values[key].orEmpty(),
                         onValueChange = { values[key] = it },
                         label = { Text("$key（必填）") },
@@ -232,7 +211,7 @@ internal fun WorkflowStartDialog(
                     )
                 }
                 editableDefaults.forEach { key ->
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = values[key].orEmpty(),
                         onValueChange = { values[key] = it },
                         label = { Text(key) },
@@ -299,18 +278,12 @@ private fun ApkSelectorSection(
                 Surface(
                     onClick = { onSelectApk(apk.sandboxPath) },
                     shape = RoundedCornerShape(10.dp),
-                    color = if (isSelected) {
-                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
-                    } else {
-                        MaterialTheme.colorScheme.surfaceContainerHigh
-                    },
+                    color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                        else MaterialTheme.colorScheme.surfaceContainerHigh,
                     border = BorderStroke(
                         width = if (isSelected) 1.5.dp else 1.dp,
-                        color = if (isSelected) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.outlineVariant
-                        },
+                        color = if (isSelected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.outlineVariant,
                     ),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
@@ -407,7 +380,7 @@ private fun ApkSelectorSection(
         }
 
         if (availableApks.isEmpty() || showManualInput) {
-            OutlinedTextField(
+            RuntimeFilledTextField(
                 value = selectedPath,
                 onValueChange = onSelectApk,
                 label = { Text("APK 路径 (绝对路径或相对路径)") },
@@ -427,6 +400,6 @@ private fun formatApkSize(bytes: Long): String = when {
 
 private fun formatApkTime(timestamp: Long): String {
     if (timestamp <= 0L) return ""
-    val sdf = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
-    return sdf.format(java.util.Date(timestamp))
+    val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+    return sdf.format(Date(timestamp))
 }

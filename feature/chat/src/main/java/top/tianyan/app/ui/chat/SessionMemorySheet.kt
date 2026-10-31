@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -21,7 +20,8 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import top.tianyan.app.ui.components.RuntimeButton as Button
+import top.tianyan.app.ui.components.RuntimeTextButton as TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,6 +35,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import top.tianyan.app.core.database.AgentMemoryEntity
@@ -43,6 +44,7 @@ import top.tianyan.app.feature.chat.R
 import top.tianyan.app.ui.components.RuntimeAlertDialog
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
+import top.tianyan.app.ui.components.TianyanMemoryEmptyIllustration
 
 /**
  * 会话工作记忆抽屉：长期记忆（memory 工具写入的 AgentMemoryEntity，全量观察流）
@@ -54,6 +56,8 @@ import top.tianyan.app.ui.components.RuntimeIconName
 internal fun SessionMemorySheet(
     memories: List<AgentMemoryEntity>,
     scratchpads: List<AgentScratchpadEntity>,
+    sessionId: String,
+    failureMemoryAccess: top.tianyan.app.harness.operation.FailureMemoryAccess?,
     onDeleteMemory: (String) -> Unit,
     onDeleteScratchpad: (String) -> Unit,
     onClearScratchpads: () -> Unit,
@@ -76,7 +80,7 @@ internal fun SessionMemorySheet(
                 RuntimeIcon(RuntimeIconName.Brain, Modifier.size(20.dp), MaterialTheme.colorScheme.primary)
                 Text(
                     stringResource(R.string.chat_memory_sheet_title),
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.titleMedium,
                 )
             }
 
@@ -84,6 +88,9 @@ internal fun SessionMemorySheet(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                if (failureMemoryAccess != null) {
+                    item(key = "failure_memories:$sessionId") { FailureMemoryPanel(sessionId, failureMemoryAccess) }
+                }
                 // —— 长期记忆 ——
                 item(key = "header_memories") {
                     SectionHeader(
@@ -93,7 +100,7 @@ internal fun SessionMemorySheet(
                 }
                 if (memories.isEmpty()) {
                     item(key = "memories_empty") {
-                        EmptyHint(stringResource(R.string.chat_memory_empty))
+                        EmptyHint(stringResource(R.string.chat_memory_empty), illustration = true)
                     }
                 } else {
                     items(memories.size, key = { memories[it].id }) { index ->
@@ -174,7 +181,7 @@ internal fun SessionMemorySheet(
                     text = stringResource(
                         if (isClear) R.string.chat_clear_scratchpad_title else R.string.chat_delete_memory_title,
                     ),
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.titleMedium,
                 )
             },
             text = {
@@ -229,19 +236,28 @@ private fun SectionHeader(
         RuntimeIcon(icon, Modifier.size(15.dp), MaterialTheme.colorScheme.primary)
         Text(
             title,
-            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+            style = MaterialTheme.typography.titleSmall,
         )
     }
 }
 
 @Composable
-private fun EmptyHint(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-    )
+private fun EmptyHint(text: String, illustration: Boolean = false) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        if (illustration) {
+            TianyanMemoryEmptyIllustration()
+        }
+        Text(
+            text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+    }
 }
 
 @Composable

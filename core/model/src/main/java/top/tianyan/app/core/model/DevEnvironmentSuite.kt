@@ -15,6 +15,15 @@ data class PluginComponent(
     val aptPackages: List<String> = emptyList(),
     val postInstallSteps: List<String> = emptyList(),
     val checkCommand: String, // 状态探针命令，返回 0 表示已就绪
+    /** 其他仍处于装配状态时，禁止卸载本组件。 */
+    val dependsOn: List<String> = emptyList(),
+    /** 卸载时整目录删除。路径必须落在脚本构建器的白名单内。 */
+    val purgePaths: List<String> = emptyList(),
+    /** 卸载时删除的单个文件（环境脚本、离线包里的组件文件）。 */
+    val purgeFiles: List<String> = emptyList(),
+    /** 卸载时删除的命令软链接。 */
+    val purgeLinks: List<String> = emptyList(),
+    val postUninstallSteps: List<String> = emptyList(),
 )
 
 /**
@@ -30,12 +39,19 @@ data class PluginBundle(
     val iconName: String = "Code",
     val category: String = "开发套件",
     val components: List<PluginComponent> = emptyList(),
+    /**
+     * 引导流程是否默认勾选本套件。
+     *
+     * 需要联网下载、且属于"按需能力"而非"开箱可用基座"的套件（如 MCP 能力仓库）设为 false：
+     * 引导期静默安装会在新用户第一次进入 App 时引入 npm 下载与镜像可用性依赖。
+     */
+    val defaultSelected: Boolean = true,
 )
 
 object BuiltinPluginBundles {
     /** 基础核心包：始终隐式自动预装，保证 Linux 基础终端与工具可用 */
     val baseRequiredPackages: List<String> = listOf(
-        "curl", "wget", "git", "python3", "ca-certificates", "ripgrep", "fd-find", "fzf", "bat", "jq", "tmux", "tar", "gzip", "xz-utils",
+        "curl", "wget", "git", "python3", "ca-certificates", "util-linux", "jq", "tmux", "tar", "gzip", "xz-utils", "file",
     )
 
     /** 核心聚合大插件清单 */
@@ -62,12 +78,38 @@ object BuiltinPluginBundles {
                         "/bin/sh /opt/tianyan/scripts/setup_android_core.sh",
                     ),
                     checkCommand = ". /etc/profile.d/tianyan-android.sh 2>/dev/null || true; JAVA_BIN=\"\${JAVA_HOME:-/opt/tianyan/toolchains/android/jdk}/bin/java\"; (test -x \"\$JAVA_BIN\" || test -x /opt/tianyan/bin/java || command -v java >/dev/null 2>&1) && test -f /opt/android-sdk/platforms/android-34/android.jar && test -f /opt/android-sdk/build-tools/35.0.0/lib/d8.jar && (test -f /opt/gradle-8.14.2/lib/gradle-launcher-8.14.2.jar || test -x /opt/tianyan/bin/gradle || command -v gradle >/dev/null 2>&1) && (test -x \"\${TIANYAN_AAPT2_PATH:-/opt/android-sdk/build-tools/35.0.0/aapt2}\" || test -x /opt/android-sdk/build-tools/35.0.0/aapt2 || test -x /opt/tianyan/bin/aapt2) && (test -f \"\${TIANYAN_NDK_PATH:-/opt/tianyan/toolchains/android/ndk}/source.properties\" || test -f /opt/tianyan/toolchains/android/ndk/source.properties)",
+                    purgePaths = listOf(
+                        "/opt/android-sdk",
+                        "/opt/gradle-8.14.2",
+                        "/opt/tianyan/android-sdk-tools",
+                        "/opt/tianyan/toolchains/android/sdk-tools",
+                        "/opt/tianyan/toolchains/android/jdk",
+                        "/opt/tianyan/toolchains/android/ndk",
+                    ),
+                    purgeFiles = listOf(
+                        "/etc/profile.d/tianyan-android.sh",
+                        "/root/.gradle/init.gradle",
+                        "/root/.gradle/init.d/tianyan-android-ndk.gradle",
+                    ),
+                    purgeLinks = listOf(
+                        "/opt/tianyan/bin/gradle",
+                        "/opt/tianyan/bin/aapt2",
+                        "/opt/tianyan/bin/java",
+                        "/opt/tianyan/bin/javac",
+                        "/opt/tianyan/bin/keytool",
+                        "/opt/tianyan/bin/jarsigner",
+                        "/usr/local/bin/gradle",
+                        "/usr/bin/gradle",
+                        "/usr/local/bin/aapt2",
+                        "/usr/bin/aapt2",
+                    ),
                 ),
                 PluginComponent(
                     id = "flutter",
                     name = "Flutter 跨平台开发环境",
                     description = "Flutter ARM64 SDK、Dart 运行时与 Android APK 构建依赖（需要 Android 核心基础环境）",
                     isRequired = false,
+                    dependsOn = listOf("android-core"),
                     // Archives are extracted by the setup script (Python/BusyBox);
                     // Ubuntu's unzip package is unreliable in PRoot during dpkg
                     // ownership updates (zipinfo.dpkg-new).
@@ -76,6 +118,17 @@ object BuiltinPluginBundles {
                         "/bin/sh /opt/tianyan/scripts/setup_flutter.sh",
                     ),
                     checkCommand = ". /etc/profile.d/tianyan-android.sh 2>/dev/null || true; (test -x /opt/flutter/bin/flutter || test -x /opt/tianyan/bin/flutter || command -v flutter >/dev/null 2>&1) && test -f /opt/android-sdk/platforms/android-34/android.jar && test -f /opt/android-sdk/build-tools/35.0.0/lib/d8.jar",
+                    purgePaths = listOf("/opt/flutter"),
+                    purgeLinks = listOf(
+                        "/opt/tianyan/bin/flutter",
+                        "/opt/tianyan/bin/dart",
+                        "/usr/local/bin/flutter",
+                        "/usr/bin/flutter",
+                        "/usr/local/bin/dart",
+                        "/usr/bin/dart",
+                        "/opt/tianyan/tools/android-suite-offline/bin/flutter",
+                        "/opt/tianyan/tools/android-suite-offline/bin/dart",
+                    ),
                 ),
                 PluginComponent(
                     id = "android-ndk",
@@ -87,6 +140,16 @@ object BuiltinPluginBundles {
                         "/bin/sh /opt/tianyan/scripts/setup_termux_ndk.sh",
                     ),
                     checkCommand = ". /etc/profile.d/tianyan-android.sh 2>/dev/null || . /opt/tianyan/toolchains/android/ndk/tianyan-ndk.env 2>/dev/null || true; (command -v cmake >/dev/null 2>&1 || test -x /opt/tianyan/bin/cmake || test -x /opt/tianyan/tools/android-suite-offline/cmake/bin/cmake || test -x /usr/bin/cmake) && (test -f \"\${TIANYAN_NDK_PATH:-/opt/tianyan/toolchains/android/ndk}/source.properties\" || test -f /opt/tianyan/toolchains/android/ndk/source.properties)",
+                    purgePaths = listOf(
+                        "/opt/tianyan/toolchains/android/ndk",
+                        "/opt/tianyan/tools/android-suite-offline/cmake",
+                    ),
+                    purgeLinks = listOf(
+                        "/opt/tianyan/bin/cmake",
+                        "/opt/tianyan/bin/ninja",
+                        "/usr/local/bin/cmake",
+                        "/usr/local/bin/ninja",
+                    ),
                 ),
                 PluginComponent(
                     id = "android-re",
@@ -98,6 +161,21 @@ object BuiltinPluginBundles {
                         "/bin/sh /opt/tianyan/scripts/setup_jadx.sh",
                     ),
                     checkCommand = ". /etc/profile.d/tianyan-android.sh 2>/dev/null || true; (command -v apktool >/dev/null 2>&1 || test -x /opt/tianyan/bin/apktool || test -f /opt/tianyan/tools/android-suite-offline/lib/apktool.jar || command -v jadx >/dev/null 2>&1 || test -x /opt/tianyan/bin/jadx || test -x /opt/jadx/bin/jadx || test -x /opt/tianyan/tools/android-suite-offline/jadx/bin/jadx)",
+                    purgePaths = listOf(
+                        "/opt/jadx",
+                        "/opt/tianyan/tools/android-suite-offline/jadx",
+                    ),
+                    purgeFiles = listOf("/opt/tianyan/tools/android-suite-offline/lib/apktool.jar"),
+                    purgeLinks = listOf(
+                        "/opt/tianyan/bin/jadx",
+                        "/opt/tianyan/bin/apktool",
+                        "/usr/local/bin/jadx",
+                        "/usr/bin/jadx",
+                        "/usr/local/bin/apktool",
+                        "/usr/bin/apktool",
+                        "/opt/tianyan/tools/android-suite-offline/bin/jadx",
+                        "/opt/tianyan/tools/android-suite-offline/bin/apktool",
+                    ),
                 ),
                 PluginComponent(
                     id = "rust-dev",
@@ -109,6 +187,19 @@ object BuiltinPluginBundles {
                         "/bin/sh /opt/tianyan/scripts/setup_rust.sh",
                     ),
                     checkCommand = ". /etc/profile.d/tianyan-android.sh 2>/dev/null || true; (command -v rustc >/dev/null 2>&1 || test -x /opt/tianyan/bin/rustc || test -x /opt/tianyan/toolchains/rust/bin/rustc) && (command -v cargo >/dev/null 2>&1 || test -x /opt/tianyan/bin/cargo || test -x /opt/tianyan/toolchains/rust/bin/cargo)",
+                    purgePaths = listOf("/opt/tianyan/toolchains/rust"),
+                    purgeFiles = listOf("/etc/profile.d/tianyan-rust.sh"),
+                    purgeLinks = listOf(
+                        "/opt/tianyan/bin/rustc",
+                        "/opt/tianyan/bin/cargo",
+                        "/opt/tianyan/bin/rustdoc",
+                        "/usr/local/bin/rustc",
+                        "/usr/local/bin/cargo",
+                        "/usr/local/bin/rustdoc",
+                        "/usr/bin/rustc",
+                        "/usr/bin/cargo",
+                        "/usr/bin/rustdoc",
+                    ),
                 ),
             ),
         ),
@@ -127,6 +218,15 @@ object BuiltinPluginBundles {
                     isRequired = true,
                     aptPackages = listOf("ripgrep", "fd-find", "fzf", "bat"),
                     checkCommand = "(command -v rg >/dev/null 2>&1 || test -x /opt/tianyan/bin/rg) && (command -v fd >/dev/null 2>&1 || command -v fdfind >/dev/null 2>&1 || test -x /usr/local/bin/fd) && (command -v fzf >/dev/null 2>&1 || test -x /usr/bin/fzf) && (command -v bat >/dev/null 2>&1 || command -v batcat >/dev/null 2>&1 || test -x /usr/local/bin/bat)",
+                    purgeFiles = listOf(
+                        "/opt/tianyan/bin/rg",
+                        "/opt/tianyan/bin/fd",
+                        "/opt/tianyan/bin/fzf",
+                        "/opt/tianyan/bin/bat",
+                        "/usr/local/bin/fd",
+                        "/usr/local/bin/bat",
+                        "/opt/tianyan/tools/android-suite-offline/bin/rg",
+                    ),
                 ),
             ),
         ),
@@ -177,74 +277,66 @@ object BuiltinPluginBundles {
                     name = "现代包管理器与编译加速 (pnpm / yarn)",
                     description = "pnpm 与 yarn 高性能本地包缓存管理器",
                     isRequired = false,
+                    dependsOn = listOf("nodejs-core"),
                     postInstallSteps = listOf(
                         "/bin/sh /opt/tianyan/scripts/setup_pnpm.sh",
                     ),
                     checkCommand = "command -v pnpm || command -v yarn",
+                    purgeLinks = listOf(
+                        "/usr/local/bin/pnpm",
+                        "/usr/local/bin/yarn",
+                        "/usr/bin/pnpm",
+                        "/usr/bin/yarn",
+                        "/opt/tianyan/bin/pnpm",
+                        "/opt/tianyan/bin/yarn",
+                    ),
+                    postUninstallSteps = listOf("npm uninstall -g pnpm yarn >/dev/null 2>&1 || true"),
                 ),
             ),
+        ),
+        PluginBundle(
+            id = McpCatalog.BUNDLE_ID,
+            name = "MCP 能力仓库",
+            summary = "按需安装的上游 MCP 服务（Node 通道，固定版本 + 校验和）",
+            description = "把可外置的 MCP 能力从 APK 里搬出来，改为按需安装：每条能力固定上游版本号，" +
+                "装配期与 npm 镜像比对 sha512 摘要，落位后写标记文件作为唯一状态探针。" +
+                "安装即代表能力就绪；未安装的能力不会进入 Agent 的工具发现，也不会在启动期造成超时等待。",
+            iconName = "Extension",
+            category = "MCP 能力",
+            // 引导流程不默认勾选：MCP 属于按需能力，首次进入 App 不应强制走一次 npm 下载。
+            defaultSelected = false,
+            components = McpCatalog.installable.map { McpCatalog.component(it) },
         ),
     )
 
     /**
-     * 批量聚合生成单条安全、极速的安装脚本流水线
+     * 批量聚合安装脚本。[reinstall] 为 true 时先删掉该组件自己的程序文件，
+     * 再执行安装，避免脚本看见残留文件后直接跳过。
      */
-    fun buildBatchInstallScript(selectedComponentIds: Set<String>): List<String> {
-        val allComponents = bundles.flatMap { it.components }.filter { it.id in selectedComponentIds }
-        val allAptPackages = (baseRequiredPackages + allComponents.flatMap { it.aptPackages }).distinct()
+    fun buildBatchInstallScript(selectedComponentIds: Set<String>, reinstall: Boolean = false): List<String> =
+        PluginBundleScripts.installScript(selectedComponentIds, reinstall)
 
-        // Runtime configures domestic mirrors (aliyun default). Keep apt
-        // retries bounded so a slow mirror does not stall the whole suite.
-        // ForceIPv4：手机 IPv6 半残时 apt 静默干等的头号元凶；Languages=en 跳过翻译文件。
-        // 提到最前面：依赖自愈步与批量安装步共用同一份选项，避免两处漂移。
-        val aptOpts = "-o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::ForceIPv4=true -o Acquire::Languages=en"
+    /**
+     * 卸载选中组件。[retainedComponentIds] 中的组件仍要可用，共享目录和软件包会留下。
+     */
+    fun buildBatchUninstallScript(selectedComponentIds: Set<String>, retainedComponentIds: Set<String>): List<String> =
+        PluginBundleScripts.uninstallScript(selectedComponentIds, retainedComponentIds)
 
-        val steps = mutableListOf<String>()
-        // 1. dpkg 锁与环境自愈
-        steps.add("mkdir -p /etc/dpkg/dpkg.cfg.d /usr/bin /usr/sbin /usr/lib 2>/dev/null || true")
-        steps.add("printf 'force-unsafe-io\\nforce-overwrite\\n' > /etc/dpkg/dpkg.cfg.d/tianyan-proot 2>/dev/null || true")
-        steps.add("rm -rf /var/lib/dpkg/updates/* /var/lib/dpkg/lock* /var/lib/apt/lists/lock /var/cache/apt/archives/lock /usr/bin/*.dpkg-new /usr/sbin/*.dpkg-new /usr/lib/*.dpkg-new 2>/dev/null || true")
-        // 清理被中断的 unzip 事务：PRoot 下 dpkg 无法 chown zipinfo.dpkg-new，
-        // 这个半装状态会让后续 apt 事务永远无法完成。unzip 本身不需要——
-        // APK 自带 JAR 实现的 unzip，setup_android_core.sh 会把它链进 PATH。
-        //
-        // 但 java-wrappers 不能一起删：安装列表里的 apktool 依赖 default-jre，
-        // 后者经 java-common 拉入 java-wrappers。用 --force-depends 强删它，
-        // dpkg 会留下「apktool 已装、但它依赖的 java-wrappers 没了」这种状态，
-        // 紧接着的 apt-get install 要么被迫重装 java-wrappers（等于白删），
-        // 要么直接以 Unmet dependencies 失败——这正是「开发套件装不上」的典型表现。
-        // 半装的 java-wrappers 由下面的 --configure -a 修复，而不是删掉。
-        steps.add("DEBIAN_FRONTEND=noninteractive dpkg --remove --force-remove-reinstreq --force-depends unzip 2>/dev/null || true")
-        steps.add("DEBIAN_FRONTEND=noninteractive dpkg --configure -a 2>/dev/null || true")
-        // 修复残留的不满足依赖：上一步的 --configure 可能只修好一部分，
-        // 这里显式收敛一次，避免后面的 install 直接撞上 Unmet dependencies。
-        steps.add("DEBIAN_FRONTEND=noninteractive apt-get $aptOpts -f install -y --no-install-recommends 2>/dev/null || true")
+    /** PRoot 下 apt/dpkg 准备步骤（force-unsafe-io、dpkg 状态修复）。供沙箱工具链补齐复用。 */
+    fun bundlePreparationSteps(): List<String> = PluginBundleScripts.preparationSteps()
 
-        // 2. 批量聚合 APT 安装（仅执行 1 次 update 和 1 次 install；
-        //    整批失败时降级为 --ignore-missing，避免个别发行版缺包导致全部装不上）
-        if (allAptPackages.isNotEmpty()) {
-            val packageArg = allAptPackages.joinToString(" ")
-            steps.add("DEBIAN_FRONTEND=noninteractive apt-get $aptOpts update -y || true")
-            // 回落链必须显式分组：`A || B && C` 在 sh 里解析成 `A || (B && C)`，
-            // B（-f install 修依赖）一失败 C（重试主安装）就永远不会执行 ——
-            // 也就是说「修完依赖再重试」这条恢复路径，恰好在该用的时候是死的。
-            // 改成 `A || { B && C; }`：修依赖成功才重试，且整组退出码正确冒泡。
-            steps.add(
-                "DEBIAN_FRONTEND=noninteractive apt-get $aptOpts install -y --no-install-recommends $packageArg || " +
-                    "{ DEBIAN_FRONTEND=noninteractive apt-get $aptOpts -f install -y --no-install-recommends && " +
-                    "DEBIAN_FRONTEND=noninteractive apt-get $aptOpts install -y --no-install-recommends $packageArg; }",
-            )
-        }
+    /** 统一的 apt 选项（重试/超时/IPv4）。供沙箱工具链补齐复用，保证与套件安装行为一致。 */
+    fun bundleAptOptions(): String = PluginBundleScripts.aptOptions()
 
-        // 3. Debian/Ubuntu 将 fd、bat 分别命名为 fdfind、batcat；统一暴露常用命令名。
-        steps.add("mkdir -p /usr/local/bin; if ! command -v fd >/dev/null 2>&1 && command -v fdfind >/dev/null 2>&1; then ln -sf \"${'$'}(command -v fdfind)\" /usr/local/bin/fd; fi")
-        steps.add("mkdir -p /usr/local/bin; if ! command -v bat >/dev/null 2>&1 && command -v batcat >/dev/null 2>&1; then ln -sf \"${'$'}(command -v batcat)\" /usr/local/bin/bat; fi")
-
-        // 4. 各子组件后置处理
-        allComponents.forEach { comp ->
-            steps.addAll(comp.postInstallSteps)
-        }
-
-        return steps
+    /** 仍装配着、且声明依赖 [componentId] 的组件。这些组件不在 [alsoRemoving] 里时，不能先卸依赖基座。 */
+    fun blockingDependents(
+        componentId: String,
+        installedIds: Set<String>,
+        alsoRemoving: Set<String> = emptySet(),
+    ): List<PluginComponent> = bundles.flatMap { it.components }.filter { component ->
+        componentId in component.dependsOn &&
+            component.id in installedIds &&
+            component.id !in alsoRemoving &&
+            component.id != componentId
     }
 }

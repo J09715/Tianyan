@@ -1,8 +1,6 @@
 package top.tianyan.app.harness.checkpoint
 
 import java.util.UUID
-import javax.inject.Inject
-import javax.inject.Singleton
 import top.tianyan.app.core.database.HarnessEntryEntity
 import top.tianyan.app.core.database.HarnessRuntimeRepository
 import top.tianyan.app.core.database.HarnessSessionRepository
@@ -15,8 +13,7 @@ import top.tianyan.app.core.database.HarnessSessionRepository
  *   即"撤回该轮及之后对话"——原会话保持不动（会话树本就不可变，丢弃的分支仍留存）；
  * - 新会话继承原会话的模型/工作区/工程类型/审批模式，用户可直接续聊。
  */
-@Singleton
-class SessionForkConversationRewinder @Inject constructor(
+class SessionForkConversationRewinder(
     private val sessionDao: HarnessSessionRepository,
     private val runtimeRepo: HarnessRuntimeRepository,
     private val checkpointStore: CheckpointStore,

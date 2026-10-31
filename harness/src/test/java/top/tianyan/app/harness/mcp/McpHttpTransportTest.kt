@@ -81,4 +81,37 @@ class McpHttpTransportTest {
         assertTrue(failure?.message.orEmpty().contains("未自动重试"))
         assertEquals(1, toolsCalls.get())
     }
+    @Test
+    fun `custom headers cover handshake discovery calls and credential rotation`() = runBlocking {
+        val received = mutableListOf<Pair<String, String?>>()
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val payload = Json.parseToJsonElement(request.body.readUtf8()).jsonObject
+                val method = payload.getValue("method").jsonPrimitive.content
+                synchronized(received) { received += method to request.getHeader("Authorization") }
+                assertEquals("test-key", request.getHeader("X-Api-Key"))
+                if (method == "notifications/initialized") return MockResponse().setResponseCode(202)
+                val result = when (method) {
+                    "initialize" -> """{"protocolVersion":"$MCP_PROTOCOL_VERSION"}"""
+                    "tools/list" -> """{"tools":[]}"""
+                    else -> """{"content":[{"type":"text","text":"ok"}]}"""
+                }
+                return MockResponse().setBody("""{"jsonrpc":"2.0","id":"${payload.getValue("id").jsonPrimitive.content}","result":$result}""")
+            }
+        }
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val transport = McpHttpTransport(OkHttpClient(), Json { ignoreUnknownKeys = true }, AppLogger(context) { it })
+        val config = McpServerConfig("headers", "Headers", transportType = McpTransportType.SSE,
+            serverUrl = server.url("/mcp").toString(),
+            headers = mapOf("Authorization" to "Bearer fake-one", "X-Api-Key" to "test-key"))
+        try {
+            transport.discover(config)
+            assertTrue(transport.execute(config, "sample", buildJsonObject {}).first)
+            transport.discover(config.copy(headers = config.headers + ("Authorization" to "Bearer fake-two")))
+            assertEquals(listOf("initialize", "notifications/initialized", "tools/list", "tools/call",
+                "initialize", "notifications/initialized", "tools/list"), received.map { it.first })
+            assertEquals(List(4) { "Bearer fake-one" } + List(3) { "Bearer fake-two" }, received.map { it.second })
+        } finally { transport.closeSession(config.id) }
+    }
+
 }

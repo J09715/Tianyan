@@ -1,10 +1,8 @@
-package top.tianyan.app.runtime.pty
+﻿package top.tianyan.app.runtime.pty
 
 import top.tianyan.app.runtime.shell.LinuxSession
 import top.tianyan.app.runtime.shell.ProcessLinuxSession
 import top.tianyan.app.runtime.shell.SessionConfig
-import javax.inject.Inject
-import javax.inject.Singleton
 
 interface PtyManager {
     /** True when the JNI forkpty backend is loadable on this device. */
@@ -33,8 +31,7 @@ interface PtyManager {
  * It records the PTY slave path so resize can be applied with `stty -F`.
  * Used only when the JNI forkpty library cannot be loaded.
  */
-@Singleton
-class ScriptPtyManager @Inject constructor() : PtyManager {
+class ScriptPtyManager() : PtyManager {
     override val nativeAvailable: Boolean get() = false
 
     override suspend fun open(
@@ -60,8 +57,7 @@ class ScriptPtyManager @Inject constructor() : PtyManager {
 }
 
 /** 主后端：优先 JNI forkpty，库缺失时回退到 script 后端。 */
-@Singleton
-class NativePtyManager @Inject constructor(
+class NativePtyManager(
     private val scriptFallback: ScriptPtyManager,
 ) : PtyManager {
     override val nativeAvailable: Boolean get() = NativePty.tryLoad()

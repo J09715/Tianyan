@@ -1,0 +1,11 @@
+<resources>
+    <string name="plugin_center_title">Plugin center</string>
+    <string name="plugin_center_summary">Download, import, update and manage installed plugins</string>
+    <string name="plugin_center_intro">Download from the library or import a plugin package from your phone. Manage installed plugins below.</string>
+    <string name="plugin_center_download">Download plugins</string>
+    <string name="plugin_center_import">Import file</string>
+    <string name="plugin_center_builtin">Built-in features</string>
+    <string name="plugin_center_web">Web plugins</string>
+    <string name="plugin_center_empty_title">No plugins installed yet</string>
+    <string name="plugin_center_empty_summary">Choose Download plugins to browse the library, or Import file to install a .txplugin package.</string>
+</resources>

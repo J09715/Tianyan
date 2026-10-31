@@ -6,10 +6,13 @@ enum class DoctorStatus {
     HEALTHY,
     WARNING,
     ERROR,
-    CHECKING,
-
-    /** 探测拿不到结果（沙箱繁忙/超时）：如实标注，绝不按"异常"误报吓用户。 */
+    /**
+     * 沙箱探测不可达（超时/异常/沙箱正忙）。
+     * 探测不到结果 ≠ 配置异常：显示灰牌「暂时无法确认」，不计入待修复项，
+     * 避免把「沙箱正忙导致的探测超时」误报成 WARNING/ERROR。
+     */
     UNKNOWN,
+    CHECKING,
 }
 
 enum class DoctorCategory(val displayName: String) {
@@ -38,6 +41,8 @@ data class DoctorReport(
     val healthyCount: Int = 0,
     val warningCount: Int = 0,
     val errorCount: Int = 0,
+    /** 探测不可达（沙箱正忙）的条目数；不参与 needsFix 判定。 */
+    val unknownCount: Int = 0,
 ) {
     val isAllHealthy: Boolean get() = overallStatus == DoctorStatus.HEALTHY && items.isNotEmpty()
     val needsFix: Boolean get() = warningCount > 0 || errorCount > 0

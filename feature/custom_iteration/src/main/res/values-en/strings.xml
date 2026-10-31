@@ -1,4 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="iteration_error_bootstrap">Failed to prepare the iteration workspace. Check your network and storage, then try again.</string>
+    <string name="iteration_build_section_title">Cloud-build 天衍Dev</string>
+    <string name="iteration_build_section_subtitle">Trigger GitHub Actions to compile a standalone APK</string>
+    <string name="iteration_build_branch_label">Feature branch</string>
+    <string name="iteration_build_idle">No cloud build yet. The artifact stays side by side with the release app (top.tianyan.app.dev).</string>
+    <string name="iteration_build_dispatching">Triggering tianyandev-build.yml (branch %1$s)…</string>
+    <string name="iteration_build_running">Build running (run #%1$s · %2$s). The phone can sleep while it finishes.</string>
+    <string name="iteration_build_downloading">Build succeeded. Downloading 天衍Dev-arm64-debug.apk…</string>
+    <string name="iteration_build_success">Build finished: %1$s\nSHA-256 verified: %2$s…</string>
+    <string name="iteration_build_failed">Build failed: %1$s</string>
+    <string name="iteration_build_in_progress">Build pipeline running…</string>
+    <string name="iteration_build_trigger">Trigger cloud build</string>
+    <string name="iteration_title">Custom Iteration (Experimental)</string>
+    <string name="iteration_hero_title">Make 天衍Dev entirely yours</string>
+    <string name="iteration_hero_body">天衍 is an open-source infrastructure project building an on-device Linux runtime and autonomous agents. With Custom Iteration you can ask the 天衍 AI on your phone to modify 天衍 itself, compile a standalone 天衍Dev APK automatically through GitHub Actions in the cloud, and contribute back to the community.</string>
+    <string name="iteration_features_title">Core capabilities</string>
+    <string name="iteration_features_subtitle">Prepare once, build together</string>
+    <string name="iteration_feature_workspace_title">Isolated iteration workspace</string>
+    <string name="iteration_feature_workspace_desc">A dedicated path ~/custom_tianyan keeps every change physically isolated from the host environment.</string>
+    <string name="iteration_feature_skill_title">Dedicated agent Skill</string>
+    <string name="iteration_feature_skill_desc">Ships the tianyan-custom-iteration Skill so the agent follows the multi-module, Compose and safety rules.</string>
+    <string name="iteration_feature_ci_title">GitHub Actions cloud CI build</string>
+    <string name="iteration_feature_ci_desc">Skip heavy on-phone compilation and get a standalone 天衍Dev (top.tianyan.app.dev) APK automatically.</string>
+    <string name="iteration_feature_dual_title">Dual-flavor coexistence and open-source PR loop</string>
+    <string name="iteration_feature_dual_desc">The dev build coexists with the release app, and once verified you can open a standard PR in one step.</string>
+    <string name="iteration_preparing_workspace">Preparing the iteration workspace…</string>
+    <string name="iteration_start">Start custom iteration</string>
 </resources>

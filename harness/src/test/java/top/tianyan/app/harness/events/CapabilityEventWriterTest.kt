@@ -21,6 +21,9 @@ import top.tianyan.app.core.security.SecretManager
 import top.tianyan.app.harness.CapabilityEvent
 import top.tianyan.app.harness.ModelConfig
 import top.tianyan.app.harness.projection.LiveMessagePort
+import top.tianyan.app.core.database.AgentSkillRepository
+import top.tianyan.app.core.database.McpServerRepository
+import top.tianyan.app.harness.HarnessMessage
 
 /**
  * @提及 能力事件写入器测试：真实 Room 的技能仓储 + 内存端口，
@@ -31,19 +34,19 @@ import top.tianyan.app.harness.projection.LiveMessagePort
 class CapabilityEventWriterTest {
 
     private class RecordingPort : LiveMessagePort {
-        val appended = mutableListOf<Pair<String, top.tianyan.app.harness.HarnessMessage>>()
-        val snapshots = mutableMapOf<String, MutableList<top.tianyan.app.harness.HarnessMessage>>()
+        val appended = mutableListOf<Pair<String, HarnessMessage>>()
+        val snapshots = mutableMapOf<String, MutableList<HarnessMessage>>()
 
-        override suspend fun append(sessionId: String, message: top.tianyan.app.harness.HarnessMessage) {
+        override suspend fun append(sessionId: String, message: HarnessMessage) {
             appended += sessionId to message
             snapshots.getOrPut(sessionId) { mutableListOf() }.add(message)
         }
 
-        override suspend fun publishPersisted(sessionId: String, message: top.tianyan.app.harness.HarnessMessage) {
+        override suspend fun publishPersisted(sessionId: String, message: HarnessMessage) {
             append(sessionId, message)
         }
 
-        override fun snapshot(sessionId: String): List<top.tianyan.app.harness.HarnessMessage> =
+        override fun snapshot(sessionId: String): List<HarnessMessage> =
             snapshots[sessionId]?.toList().orEmpty()
     }
 
@@ -60,8 +63,8 @@ class CapabilityEventWriterTest {
         port = RecordingPort()
         writer = CapabilityEventWriter(
             port = port,
-            skillRepository = top.tianyan.app.core.database.AgentSkillRepository(database.agentSkillDao()),
-            mcpServerRepository = top.tianyan.app.core.database.McpServerRepository(
+            skillRepository = AgentSkillRepository(database.agentSkillDao()),
+            mcpServerRepository = McpServerRepository(
                 database.mcpServerDao(),
                 SecretManager(),
             ),

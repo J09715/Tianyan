@@ -1,0 +1,32 @@
+<resources>
+    <string name="harness_plugins_counts">工具 %1$d · 背景资料 %2$d · Provider %3$d · 工作流 %4$d</string>
+    <string name="harness_plugins_title">内置扩展</string>
+    <string name="harness_plugins_core_title">智能体核心</string>
+    <string name="harness_plugins_scope">随应用提供的智能体、模型与工作流能力</string>
+    <string name="package_confirm_title">确认安装本地插件</string>
+    <string name="package_dependencies">插件依赖（必须已安装）</string>
+    <string name="package_resources">资源归属声明</string>
+    <string name="package_new_capabilities">相比已安装版本新增的能力请求</string>
+    <string name="package_none">无</string>
+    <string name="package_install">安装</string>
+    <string name="package_confirm_scope">确认后解压并执行安装脚本。这些能力与资源是声明，不构成进程沙箱；脚本沿用 PRoot 环境权限。共享资源卸载时保留。</string>
+    <string name="packaged_plugins_title">插件与工具</string>
+    <string name="packaged_plugins_scope">当前系统的本地工具；点击进入详情，长按查看诊断信息</string>
+    <string name="packaged_plugins_diagnostics_title">插件诊断</string>
+    <string name="packaged_plugins_diagnostics_copy">复制诊断</string>
+    <string name="packaged_plugins_diagnostics_copied">诊断信息已复制</string>
+    <string name="packaged_plugins_close">关闭</string>
+    <string name="packaged_plugins_filter_installed">已安装</string>
+    <string name="packaged_plugins_filter_all">全部</string>
+    <string name="packaged_plugins_empty">暂无符合条件的插件，可在工具中心安装。</string>
+    <string name="packaged_plugins_display_version">版本 %1$s</string>
+    <string name="packaged_plugins_installed">已安装</string>
+    <string name="packaged_plugins_update">可更新</string>
+    <string name="packaged_plugins_installing">安装中</string>
+    <string name="packaged_plugins_check">需检查</string>
+    <string name="packaged_plugins_disabled">已停用</string>
+    <string name="packaged_plugins_failed">插件目录读取失败，请返回后重试。</string>
+    <string name="packaged_plugins_version">目录版本 %1$s · 安装版本 %2$s</string>
+    <string name="packaged_plugins_uninstalled">未安装</string>
+    <string name="packaged_plugins_details">打开工具详情</string>
+</resources>

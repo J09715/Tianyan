@@ -20,6 +20,8 @@ data class TerminalSessionEntity(
     val createdAt: Long,
     val sortOrder: Int,
     val distributionId: String = "ubuntu",
+    /** Immutable host identity; old remote terminals require recreation instead of guessing. */
+    @androidx.room.ColumnInfo(defaultValue = "NULL") val executionTargetJson: String? = null,
 )
 
 @Dao

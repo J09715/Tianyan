@@ -5,18 +5,10 @@ package top.tianyan.app.harness
  */
 internal object HarnessApiMapper {
     fun toApiMessage(message: HarnessMessage): ApiMessage = when (message) {
-        is CapabilityEvent -> ApiMessage(role = "system", content = null)
+        is CapabilityEvent, is ModelSwitchEvent, is SkillSuggestion, is TaskDelivery, is TurnChangesEvent -> ApiMessage(role = "system", content = null)
         is UserMessage -> ApiMessage(
             role = "user",
-            // 动态上下文尾部取自消息自身的**持久化字段**，不是渲染期现算。
-            //
-            // 这是前缀缓存的硬前提：provider 按精确前缀匹配计费，第 N+1 轮请求的
-            // 前 |请求 N| 字节必须与请求 N 完全一致。若尾部在渲染期临时拼接，
-            // 下一轮这条消息成为历史消息时尾部消失、字节改变 —— 断裂点只是从
-            // system 位置 0 搬到这条消息，其后整段历史照样全量 prefill。
-            //
-            // 持久化字段让渲染成为「已存状态的纯函数」：字段不变则字节不变。
-            content = renderUserContent(message.text, message.contextTail, message.attachments),
+            content = renderUserContent(message.text, message.attachments),
             imageUrls = message.imageUrls,
         )
         is AssistantText -> ApiMessage(
@@ -40,89 +32,33 @@ internal object HarnessApiMapper {
         )
         is ToolResult -> ApiMessage(
             role = "tool",
-            content = message.output,
+            content = message.modelOutput(),
             tool_call_id = message.toolCallId,
         )
     }
 
-    /** LLM 返回的函数名 → HarnessTool。未知工具统一归入 base 由执行层报错。 */
-    fun toolByName(name: String): HarnessTool {
-        val trimmed = name.trim()
-        val lower = trimmed.lowercase()
-        return when {
-            lower == "read" -> HarnessTool.READ
-            lower == "write" -> HarnessTool.WRITE
-            lower == "edit" -> HarnessTool.EDIT
-            lower == "verify" -> HarnessTool.VERIFY
-            lower == "process" -> HarnessTool.PROCESS
-            lower == "host" -> HarnessTool.HOST
-            lower == "download" -> HarnessTool.DOWNLOAD
-            lower == "memory" -> HarnessTool.MEMORY
-            lower == "plan" -> HarnessTool.PLAN
-            lower == "scratchpad" -> HarnessTool.SCRATCHPAD
-            lower == "history.search" || lower == "history_search" -> HarnessTool.HISTORY_SEARCH
-            lower == "history.read" || lower == "history_read" -> HarnessTool.HISTORY_READ
-            lower == "build_script" -> HarnessTool.BUILD_SCRIPT
-            lower == "invoke_subagent" || lower == "subagent" || lower == "invoke_dual_agent" -> HarnessTool.SUBAGENT
-            lower == "load_rule" -> HarnessTool.LOAD_RULE
-            lower == "redteam" -> HarnessTool.REDTEAM
-            lower == "ask_user_question" -> HarnessTool.ASK_USER
-            trimmed.startsWith("mcp__") -> HarnessTool.MCP
-            else -> HarnessTool.BASE
-        }
-    }
-
-    fun apiName(tool: HarnessTool): String = when (tool) {
-        HarnessTool.READ -> "read"
-        HarnessTool.WRITE -> "write"
-        HarnessTool.EDIT -> "edit"
-        HarnessTool.VERIFY -> "verify"
-        HarnessTool.BASE -> "base"
-        HarnessTool.PROCESS -> "process"
-        HarnessTool.HOST -> "host"
-        HarnessTool.DOWNLOAD -> "download"
-        HarnessTool.MEMORY -> "memory"
-        HarnessTool.PLAN -> "plan"
-        HarnessTool.SCRATCHPAD -> "scratchpad"
-        HarnessTool.HISTORY_SEARCH -> "history_search"
-        HarnessTool.HISTORY_READ -> "history_read"
-        HarnessTool.BUILD_SCRIPT -> "build_script"
-        HarnessTool.SUBAGENT -> "invoke_subagent"
-        HarnessTool.MCP -> "mcp"
-        HarnessTool.LOAD_RULE -> "load_rule"
-        HarnessTool.REDTEAM -> "redteam"
-        HarnessTool.ASK_USER -> "ask_user_question"
-    }
-
     /**
-     * 用户消息正文 + 持久化的动态上下文尾部 + 附件挂载说明 → 最终 content。
+     * 用户消息正文 + 附件挂载说明 → 最终 content。
      *
-     * 纯函数：给定同样的 [text]、[tail] 与 [attachments]，永远产出同样的字节。
-     * 这是前缀不变式的落点 —— 请求字节只由已持久化的状态决定，
-     * 不受当前轮的语气、内存状态或渲染时机影响。
-     *
-     * [tail] 为空时不追加任何内容（包括分隔符），
-     * 否则历史消息会因为多出两个换行而与上一轮不同。
+     * 纯函数：给定同样的 [text] 与 [attachments]，永远产出同样的字节 —— 这是前缀缓存
+     * 不变式的落点，请求字节只由已持久化的状态决定。
      *
      * 附件说明只在**这一层**（发给模型）展开，不写回 [UserMessage.text]：
      * 气泡层据此渲染纯正文 + 文件卡片，模型仍能拿到沙箱绝对路径去读文件。
      */
     internal fun renderUserContent(
         text: String,
-        tail: String,
         attachments: List<MessageAttachment> = emptyList(),
     ): String {
-        val withTail = if (tail.isBlank()) text else text.trimEnd() + "\n\n" + tail
-        if (attachments.isEmpty()) return withTail
-        return withTail.trimEnd() + "\n\n" + renderAttachmentManifest(attachments)
+        if (attachments.isEmpty()) return text
+        return text.trimEnd() + "\n\n" + renderAttachmentManifest(attachments)
     }
 
     /**
      * 附件挂载说明（模型可见文本）。
      *
-     * 与 UI 的 [AttachmentFileCard] 职责互补：卡片给人看，这段给模型看。
-     * 没有这段，模型不知道附件存在（v0.18.18 把拼装整段删掉后就是这个后果：
-     * UI 干净了，但模型侧完全看不到文件，只能瞎猜）。
+     * 与 UI 的文件卡片职责互补：卡片给人看，这段给模型看。
+     * 没有这段，模型不知道附件存在 —— 只能瞎猜文件名或干脆忽略。
      */
     internal fun renderAttachmentManifest(attachments: List<MessageAttachment>): String = buildString {
         append("[附件：已复制并挂载到 Linux 沙箱]\n")
@@ -143,10 +79,64 @@ internal object HarnessApiMapper {
         append("需要通过工具访问时，请使用 base 在上述绝对路径读取；不要使用 Android content:// URI 或宿主机路径。")
     }
 
-    /** 纯 JVM 的大小格式化（harness 层不依赖 Android 资源，测试可直接断言）。 */
+    /** 附件体积的人读写法（B / KB / MB），与 UI 侧 formatFileSize 保持一致的口径。 */
     internal fun formatAttachmentSize(bytes: Long): String = when {
-        bytes < 1024 -> "$bytes B"
-        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
-        else -> String.format(java.util.Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
+        bytes < 1024 -> "${bytes}B"
+        bytes < 1024 * 1024 -> String.format(java.util.Locale.US, "%.1fKB", bytes / 1024.0)
+        else -> String.format(java.util.Locale.US, "%.1fMB", bytes / (1024.0 * 1024.0))
+    }
+
+    /** LLM 返回的函数名 → HarnessTool。未知工具统一归入 base 由执行层报错。 */
+    fun toolByName(name: String): HarnessTool {
+        val trimmed = name.trim()
+        val lower = trimmed.lowercase()
+        return when {
+            lower == "read" -> HarnessTool.READ
+            lower == "write" -> HarnessTool.WRITE
+            lower == "edit" -> HarnessTool.EDIT
+            lower == "process" -> HarnessTool.PROCESS
+            lower == "host" -> HarnessTool.HOST
+            lower == "download" -> HarnessTool.DOWNLOAD
+            lower == "memory" -> HarnessTool.MEMORY
+            lower == "plan" -> HarnessTool.PLAN
+            lower == "scratchpad" -> HarnessTool.SCRATCHPAD
+            lower == "history.search" || lower == "history_search" -> HarnessTool.HISTORY_SEARCH
+            lower == "history.read" || lower == "history_read" -> HarnessTool.HISTORY_READ
+            lower == "build_script" -> HarnessTool.BUILD_SCRIPT
+            lower == "invoke_subagent" || lower == "subagent" || lower == "invoke_dual_agent" -> HarnessTool.SUBAGENT
+            lower == "load_rule" -> HarnessTool.LOAD_RULE
+            lower == "load_skill" -> HarnessTool.LOAD_SKILL
+            lower == "compress" -> HarnessTool.COMPRESS
+            lower == "ask_user" -> HarnessTool.ASK_USER
+            lower == "render_surface" -> HarnessTool.RENDER_SURFACE
+            lower == "red_team" -> HarnessTool.RED_TEAM
+            lower == "use_capability" -> HarnessTool.MCP
+            trimmed.startsWith("mcp__") -> HarnessTool.MCP
+            else -> HarnessTool.BASE
+        }
+    }
+
+    fun apiName(tool: HarnessTool): String = when (tool) {
+        HarnessTool.READ -> "read"
+        HarnessTool.WRITE -> "write"
+        HarnessTool.EDIT -> "edit"
+        HarnessTool.BASE -> "base"
+        HarnessTool.PROCESS -> "process"
+        HarnessTool.HOST -> "host"
+        HarnessTool.DOWNLOAD -> "download"
+        HarnessTool.MEMORY -> "memory"
+        HarnessTool.PLAN -> "plan"
+        HarnessTool.SCRATCHPAD -> "scratchpad"
+        HarnessTool.HISTORY_SEARCH -> "history_search"
+        HarnessTool.HISTORY_READ -> "history_read"
+        HarnessTool.BUILD_SCRIPT -> "build_script"
+        HarnessTool.SUBAGENT -> "invoke_subagent"
+        HarnessTool.MCP -> "mcp"
+        HarnessTool.LOAD_RULE -> "load_rule"
+        HarnessTool.LOAD_SKILL -> "load_skill"
+        HarnessTool.COMPRESS -> "compress"
+        HarnessTool.ASK_USER -> "ask_user"
+        HarnessTool.RENDER_SURFACE -> "render_surface"
+        HarnessTool.RED_TEAM -> "red_team"
     }
 }

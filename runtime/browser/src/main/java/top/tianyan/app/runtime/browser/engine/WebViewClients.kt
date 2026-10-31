@@ -1,5 +1,6 @@
 package top.tianyan.app.runtime.browser.engine
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
 import android.webkit.ConsoleMessage
@@ -10,12 +11,14 @@ import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import top.tianyan.app.runtime.browser.BrowserEvent
 import top.tianyan.app.runtime.browser.BrowserEventBus
 import top.tianyan.app.runtime.browser.BrowserSessionToken
-import top.tianyan.app.runtime.browser.hook.HookInstaller
+import top.tianyan.app.runtime.browser.inject.PageScriptInstaller
 import top.tianyan.app.runtime.browser.network.NetworkInterceptor
 import top.tianyan.app.runtime.browser.snapshot.SnapshotBuilder
 
@@ -34,20 +37,21 @@ object WebViewClients {
     private val WEB_SCHEMES = setOf("http", "https", "about", "data", "blob", "javascript")
 
     fun attach(
+        context: Context,
         view: WebView,
         eventBus: BrowserEventBus,
         token: BrowserSessionToken,
         pool: WebViewTabPool,
         snapshotBuilder: SnapshotBuilder,
         scope: CoroutineScope,
-        hookInstaller: HookInstaller? = null,
+        scriptInstallers: List<PageScriptInstaller> = emptyList(),
     ): WebView {
         val networkInterceptor = NetworkInterceptor(token, eventBus, scope)
 
         view.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(
                 view: WebView,
-                request: android.webkit.WebResourceRequest,
+                request: WebResourceRequest,
             ): Boolean = handleUrlLoading(view, request.url)
 
             @Deprecated("Deprecated in Java")
@@ -97,8 +101,10 @@ object WebViewClients {
 
             override fun shouldInterceptRequest(
                 view: WebView,
-                request: android.webkit.WebResourceRequest,
-            ): android.webkit.WebResourceResponse? {
+                request: WebResourceRequest,
+            ): WebResourceResponse? {
+                // 品牌起始页：本地 assets 拦截（不出网），也不计入网络时间线
+                NewTabPage.intercept(context, request.url)?.let { return it }
                 networkInterceptor.onRequestStart(request)
                 return null
             }
@@ -108,7 +114,7 @@ object WebViewClients {
                 // 导航开始：清空该 tab 的 ref→selector 映射，旧 ref 不得解析到上一页元素
                 snapshotBuilder.clear(token.tabId)
                 // hook 降级路径：无 document-start 支持的古董 WebView 在此补种（幂等）
-                hookInstaller?.injectFallback(view)
+                scriptInstallers.forEach { it.injectFallback(view) }
                 scope.launch {
                     eventBus.publish(BrowserEvent.PageChanged(token.tabId, url ?: "", view.title ?: ""))
                 }
@@ -118,8 +124,8 @@ object WebViewClients {
                 super.onPageFinished(view, url)
                 // tab 已被关闭 / 崩溃销毁（移出池）则不再触发刷新
                 if (pool.viewOf(token) !== view) return
-                // hook runtime 验证：缺失则补种（IIFE 幂等守卫使双注无害）
-                hookInstaller?.verifyInstalled(view)
+                // hook runtime / vConsole 验证：缺失则补种（各实现幂等守卫使双注无害）
+                scriptInstallers.forEach { it.verifyInstalled(view) }
                 scope.launch {
                     eventBus.publish(BrowserEvent.PageChanged(token.tabId, url ?: "", view.title ?: ""))
                     // refresh 内部还有 isAlive 守卫

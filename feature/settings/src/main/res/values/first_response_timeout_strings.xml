@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_first_response_timeout_title">等待模型首个响应</string>
+    <string name="settings_first_response_timeout_summary">默认 90 秒。可调高或关闭。超时只说明本机停止等待，不代表上游报错。</string>
+    <string name="settings_first_response_timeout_value">%1$d 秒</string>
+    <string name="settings_first_response_timeout_off">已关闭</string>
+</resources>

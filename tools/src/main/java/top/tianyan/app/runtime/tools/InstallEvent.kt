@@ -1,4 +1,4 @@
-package top.tianyan.app.runtime.tools
+﻿package top.tianyan.app.runtime.tools
 
 sealed interface InstallEvent {
     enum class Phase {

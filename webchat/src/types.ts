@@ -1,5 +1,5 @@
 export type ConnectionStatus = "connecting" | "online" | "offline";
-export type MobileSection = "chat" | "workspace";
+export type MobileSection = "chat" | "workspace" | "terminal";
 export type ConversationMode = "normal";
 
 export interface ConversationCreateTarget {
@@ -116,4 +116,15 @@ export interface ApprovalResult {
 
 export interface WorkspaceFilePayload {
   content?: string;
+}
+
+export interface WebTerminalInfo {
+  id: string;
+  label: string;
+  workingDirectory: string;
+  distroId: string;
+  columns: number;
+  rows: number;
+  createdAt: number;
+  alive: boolean;
 }

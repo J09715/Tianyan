@@ -1,15 +1,11 @@
 package top.tianyan.app.harness.prompt
 
 import android.content.Context
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.ConcurrentHashMap
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /** Loads packaged prompt assets and renders their required {{VARIABLES}} strictly. */
-@Singleton
-class PromptAssetLoader @Inject constructor(
-    @ApplicationContext private val context: Context,
+class PromptAssetLoader(
+    private val context: Context,
 ) {
     private val assetCache = ConcurrentHashMap<String, String>()
 

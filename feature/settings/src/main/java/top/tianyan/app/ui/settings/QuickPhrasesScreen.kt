@@ -1,6 +1,7 @@
 package top.tianyan.app.ui.settings
-
-import androidx.compose.foundation.BorderStroke
+import top.tianyan.app.ui.components.previewOrNull
+import top.tianyan.app.ui.components.previewStateOf
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -22,22 +23,18 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenu
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,6 +42,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.ui.graphics.Color
@@ -53,24 +51,26 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.tianyan.app.core.model.QuickPhrase
 import top.tianyan.app.ui.components.RuntimeAlertDialog
 import top.tianyan.app.ui.components.RuntimeButton as Button
 import top.tianyan.app.ui.components.RuntimeCard
+import top.tianyan.app.ui.components.RuntimeFilterChip
+import top.tianyan.app.ui.components.RuntimeFloatingActionButton
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconButton as IconButton
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeSwitch as Switch
+import top.tianyan.app.ui.components.RuntimeTextButton as TextButton
 import top.tianyan.app.ui.components.RuntimeTopBar
-
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun QuickPhrasesScreen(
     onBack: () -> Unit,
-    viewModel: SettingsViewModel = hiltViewModel(),
+    viewModel: SettingsViewModel? = previewOrNull { koinViewModel() },
 ) {
-    val phrases by viewModel.quickPhrases.collectAsStateWithLifecycle()
+    val phrases by viewModel?.quickPhrases?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
     // QuickPhrase 非 Parcelable：仅保存 id，旋转后从列表按 id 恢复编辑对象
     var editingPhraseId by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
     val editingPhrase = editingPhraseId?.let { id -> phrases.firstOrNull { it.id == id } }
@@ -87,7 +87,6 @@ fun QuickPhrasesScreen(
         "ANDROID" to "Android",
         "FLUTTER" to "Flutter",
         "REVERSE" to "逆向分析",
-        "RED_TEAM" to "红队演练",
     )
 
     val filteredPhrases = remember(phrases, selectedFilter) {
@@ -97,7 +96,6 @@ fun QuickPhrasesScreen(
             "ANDROID" -> phrases.filter { it.targetProjectType == "ANDROID" }
             "FLUTTER" -> phrases.filter { it.targetProjectType == "FLUTTER" }
             "REVERSE" -> phrases.filter { it.targetProjectType == "REVERSE" }
-            "RED_TEAM" -> phrases.filter { it.targetProjectType == "RED_TEAM" }
             else -> phrases
         }
     }
@@ -110,7 +108,7 @@ fun QuickPhrasesScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        viewModel.resetQuickPhrasesToDefault()
+                        viewModel?.resetQuickPhrasesToDefault()
                         showResetDialog = false
                     },
                 ) {
@@ -133,7 +131,7 @@ fun QuickPhrasesScreen(
                 editingPhraseId = null
             },
             onSave = { id, title, content, description, iconName, targetProjectType, isEnabled ->
-                viewModel.saveQuickPhrase(
+                viewModel?.saveQuickPhrase(
                     id = id,
                     title = title,
                     content = content,
@@ -156,7 +154,7 @@ fun QuickPhrasesScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        viewModel.deleteQuickPhrase(phrase.id)
+                        viewModel?.deleteQuickPhrase(phrase.id)
                         pendingDeletePhraseId = null
                     },
                 ) {
@@ -171,12 +169,15 @@ fun QuickPhrasesScreen(
         )
     }
 
+    val scrollBehavior = androidx.compose.material3.TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             RuntimeTopBar(
                 title = "快捷短语与常用指令",
                 onBack = onBack,
+                scrollBehavior = scrollBehavior,
                 actions = {
                     IconButton(
                         onClick = { showResetDialog = true },
@@ -202,11 +203,8 @@ fun QuickPhrasesScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
+            RuntimeFloatingActionButton(
                 onClick = { isCreating = true },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                shape = CircleShape,
             ) {
                 RuntimeIcon(RuntimeIconName.Plus, Modifier.size(24.dp))
             }
@@ -215,7 +213,7 @@ fun QuickPhrasesScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
+                .then(top.tianyan.app.ui.components.runtimeScrollViewport(padding)),
         ) {
             // 分类筛选胶囊
             Row(
@@ -227,7 +225,7 @@ fun QuickPhrasesScreen(
             ) {
                 filterOptions.forEach { (key, label) ->
                     val isSelected = selectedFilter == key
-                    FilterChip(
+                    RuntimeFilterChip(
                         selected = isSelected,
                         onClick = { selectedFilter = key },
                         label = {
@@ -239,10 +237,6 @@ fun QuickPhrasesScreen(
                                 ),
                             )
                         },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        ),
                     )
                 }
             }
@@ -256,7 +250,7 @@ fun QuickPhrasesScreen(
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
                         RuntimeIcon(
                             name = RuntimeIconName.Chat,
@@ -276,180 +270,15 @@ fun QuickPhrasesScreen(
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 88.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = top.tianyan.app.ui.components.runtimeScrollContentPadding(padding, top.tianyan.app.ui.components.runtimeContentPadding(horizontal = 16.dp, top = 16.dp, bottom = 96.dp)),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     items(filteredPhrases, key = { it.id }) { phrase ->
                         QuickPhraseCard(
                             phrase = phrase,
-                            onToggle = { enabled -> viewModel.toggleQuickPhrase(phrase.id, enabled) },
+                            onToggle = { enabled -> viewModel?.toggleQuickPhrase(phrase.id, enabled) },
                             onEdit = { editingPhraseId = phrase.id },
                             onDelete = { pendingDeletePhraseId = phrase.id },
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun QuickPhraseCard(
-    phrase: QuickPhrase,
-    onToggle: (Boolean) -> Unit,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
-) {
-    RuntimeCard(
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
-        onClick = onEdit,
-        modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(14.dp),
-    ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                // 图标胶囊
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    RuntimeIcon(
-                        name = parseIconName(phrase.iconName),
-                        modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                }
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Text(
-                            text = phrase.title,
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-
-                        // 标签：项目类型
-                        val typeLabel = when (phrase.targetProjectType) {
-                            "ANDROID" -> "Android"
-                            "FLUTTER" -> "Flutter"
-                            "REVERSE" -> "逆向分析"
-                            "RED_TEAM" -> "红队演练"
-                            else -> "通用"
-                        }
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        ) {
-                            Text(
-                                text = typeLabel,
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-
-                    if (phrase.description.isNotBlank()) {
-                        Text(
-                            text = phrase.description,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-            }
-
-            // 提示词/指令内容预览
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    text = phrase.content,
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 12.sp,
-                    ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                )
-            }
-
-            // 底部三等分等宽操作栏 (状态切换 + 编辑 + 删除)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // 1. 状态切换开关 (1/3 宽，与 MCP/插件/Agent 设置页一致使用 Switch)
-                Row(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Switch(
-                        checked = phrase.isEnabled,
-                        onCheckedChange = onToggle,
-                    )
-                }
-
-                // 2. 编辑按钮 (1/3 宽)
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.4f),
-                    modifier = Modifier
-                        .weight(1f)
-                        .minimumInteractiveComponentSize()
-                        .clickable { onEdit() },
-                ) {
-                    Row(
-                        modifier = Modifier.padding(vertical = 7.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = "编辑",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                }
-
-                // 3. 删除按钮 (1/3 宽)
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f),
-                    modifier = Modifier
-                        .weight(1f)
-                        .minimumInteractiveComponentSize()
-                        .clickable { onDelete() },
-                ) {
-                    Row(
-                        modifier = Modifier.padding(vertical = 7.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = "删除",
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                            color = MaterialTheme.colorScheme.error,
                         )
                     }
                 }
@@ -473,12 +302,12 @@ private fun QuickPhraseEditorDialog(
         isEnabled: Boolean,
     ) -> Unit,
 ) {
-    var title by remember { mutableStateOf(phrase?.title.orEmpty()) }
-    var description by remember { mutableStateOf(phrase?.description.orEmpty()) }
-    var content by remember { mutableStateOf(phrase?.content.orEmpty()) }
-    var iconName by remember { mutableStateOf(phrase?.iconName ?: "Play") }
-    var targetProjectType by remember { mutableStateOf(phrase?.targetProjectType) }
-    var isEnabled by remember { mutableStateOf(phrase?.isEnabled ?: true) }
+    var title by androidx.compose.runtime.saveable.rememberSaveable(phrase?.id) { mutableStateOf(phrase?.title.orEmpty()) }
+    var description by androidx.compose.runtime.saveable.rememberSaveable(phrase?.id) { mutableStateOf(phrase?.description.orEmpty()) }
+    var content by androidx.compose.runtime.saveable.rememberSaveable(phrase?.id) { mutableStateOf(phrase?.content.orEmpty()) }
+    var iconName by androidx.compose.runtime.saveable.rememberSaveable(phrase?.id) { mutableStateOf(phrase?.iconName ?: "Play") }
+    var targetProjectType by androidx.compose.runtime.saveable.rememberSaveable(phrase?.id) { mutableStateOf(phrase?.targetProjectType) }
+    var isEnabled by androidx.compose.runtime.saveable.rememberSaveable(phrase?.id) { mutableStateOf(phrase?.isEnabled ?: true) }
     var projectTypeDropdownExpanded by remember { mutableStateOf(false) }
 
     val iconOptions = listOf(
@@ -495,10 +324,6 @@ private fun QuickPhraseEditorDialog(
         "Refresh" to RuntimeIconName.Refresh,
         "Terminal" to RuntimeIconName.Terminal,
         "Tool" to RuntimeIconName.Wrench,
-        // 红队演练预设用到的三个图标，不在列表里的话用户改完就选不回来。
-        "Shield" to RuntimeIconName.Shield,
-        "Document" to RuntimeIconName.Document,
-        "Sponsor" to RuntimeIconName.Sponsor,
     )
 
     val projectTypeOptions = listOf(
@@ -506,7 +331,6 @@ private fun QuickPhraseEditorDialog(
         "ANDROID" to "Android 工程专属",
         "FLUTTER" to "Flutter 工程专属",
         "REVERSE" to "逆向分析专属",
-        "RED_TEAM" to "红队演练专属",
     )
 
     RuntimeAlertDialog(
@@ -523,9 +347,9 @@ private fun QuickPhraseEditorDialog(
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
                     .padding(vertical = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = title,
                     onValueChange = { title = it },
                     label = { Text("短语标题") },
@@ -534,7 +358,7 @@ private fun QuickPhraseEditorDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
 
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = description,
                     onValueChange = { description = it },
                     label = { Text("简短说明（可选）") },
@@ -543,7 +367,7 @@ private fun QuickPhraseEditorDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
 
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = content,
                     onValueChange = { content = it },
                     label = { Text("提示词 / 命令模板") },
@@ -558,7 +382,7 @@ private fun QuickPhraseEditorDialog(
                     expanded = projectTypeDropdownExpanded,
                     onExpandedChange = { projectTypeDropdownExpanded = !projectTypeDropdownExpanded },
                 ) {
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = projectTypeOptions.firstOrNull { it.first == targetProjectType }?.second ?: "通用",
                         onValueChange = {},
                         readOnly = true,
@@ -642,23 +466,4 @@ private fun QuickPhraseEditorDialog(
             }
         },
     )
-}
-
-private fun parseIconName(name: String): RuntimeIconName {
-    return when (name.lowercase()) {
-        "play" -> RuntimeIconName.Play
-        "check" -> RuntimeIconName.Check
-        "alert" -> RuntimeIconName.Alert
-        "code" -> RuntimeIconName.Code
-        "plus" -> RuntimeIconName.Plus
-        "package" -> RuntimeIconName.Package
-        "search" -> RuntimeIconName.Search
-        "brain" -> RuntimeIconName.Brain
-        "bot" -> RuntimeIconName.Bot
-        "chat" -> RuntimeIconName.Chat
-        "refresh" -> RuntimeIconName.Refresh
-        "terminal" -> RuntimeIconName.Terminal
-        "tool", "wrench" -> RuntimeIconName.Wrench
-        else -> RuntimeIconName.Play
-    }
 }

@@ -1,5 +1,6 @@
 package top.tianyan.app.harness
 
+import top.tianyan.app.core.model.AgentSkill
 import top.tianyan.app.ui.chat.SlashCommands
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -24,7 +25,7 @@ class SlashCommandsTest {
 
     @Test
     fun filtersActiveSkillsCommands() {
-        val skill = top.tianyan.app.core.model.AgentSkill(
+        val skill = AgentSkill(
             id = "custom_test",
             name = "Rust测试专家",
             description = "测试描述",
@@ -33,6 +34,13 @@ class SlashCommandsTest {
         )
         val results = SlashCommands.filterCommands("rust", listOf(skill))
         assertTrue(results.any { it.command == "/rust" && it.label == "Rust测试专家" })
+    }
+
+    @Test
+    fun exposesWorkflowCommand() {
+        val results = SlashCommands.filterCommands("wf")
+        assertEquals("/wf", results.single().command)
+        assertEquals("/wf ", results.single().template)
     }
 }
 

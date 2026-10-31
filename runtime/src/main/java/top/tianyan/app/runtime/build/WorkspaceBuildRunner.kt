@@ -5,18 +5,23 @@ import android.content.ClipData
 import android.content.Intent
 import android.os.Environment
 import androidx.core.content.FileProvider
-import dagger.hilt.android.qualifiers.ApplicationContext
 import top.tianyan.app.core.common.logging.AppLogger
 import top.tianyan.app.runtime.LinuxRuntime
 import top.tianyan.app.runtime.ProjectType
 import top.tianyan.app.runtime.WorkspaceProject
 import top.tianyan.app.runtime.bridge.adb.EmbeddedAdbManager
 import top.tianyan.app.runtime.shell.ShellCommand
+import top.tianyan.app.runtime.shell.CommandResult
+import top.tianyan.app.runtime.scripts.RuntimeAssetSynchronizer
 import top.tianyan.app.core.datastore.RuntimePreferences
+import top.tianyan.app.core.datastore.WorkshopPreferences
+import top.tianyan.app.core.datastore.WorkshopKeystore
 import top.tianyan.app.core.database.BuildScriptRepository
 import java.io.File
-import javax.inject.Inject
-import javax.inject.Singleton
+import java.io.BufferedWriter
+import java.io.FileWriter
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
@@ -26,10 +31,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-data class StepDuration(
-    val step: String,
-    val durationMs: Long,
-)
+data class StepDuration(val step: String, val durationMs: Long)
 
 data class BuildRunProgress(
     val step: String,
@@ -61,17 +63,14 @@ private val ANSI_ESCAPE_REGEX = Regex("\u001B\\[[0-9;?]*[ -/]*[@-~]")
 private val ANSI_OSC_REGEX = Regex("\u001B\\][^\u0007]*\u0007")
 
 private fun sanitizeBuildLog(raw: String): String {
-    var s = ANSI_ESCAPE_REGEX.replace(raw, "")
-    s = ANSI_OSC_REGEX.replace(s, "")
+    val s = ANSI_OSC_REGEX.replace(ANSI_ESCAPE_REGEX.replace(raw, ""), "")
     // TTY 行规则会把 \n 转成 \r\n，进度条用 \r 覆盖同一行；统一归一化为换行。
     return s.replace("\r\n", "\n").replace("\r", "\n")
 }
 
 private data class DependencyObservation(
-    val current: String? = null,
-    val seenItems: Set<String> = emptySet(),
-    val total: Int? = null,
-    val percent: Int? = null,
+    val current: String? = null, val seenItems: Set<String> = emptySet(),
+    val total: Int? = null, val percent: Int? = null,
 )
 
 /**
@@ -125,14 +124,13 @@ private fun observeDependencyOutput(raw: String, previous: DependencyObservation
 /**
  * 工作区项目一键构建并安装运行到手机服务。
  */
-@Singleton
-class WorkspaceBuildRunner @Inject constructor(
-    @ApplicationContext private val context: Context,
+class WorkspaceBuildRunner(
+    private val context: Context,
     private val linuxRuntime: LinuxRuntime,
     private val embeddedAdbManager: EmbeddedAdbManager,
-    private val assetSynchronizer: top.tianyan.app.runtime.scripts.RuntimeAssetSynchronizer,
+    private val assetSynchronizer: RuntimeAssetSynchronizer,
     private val runtimePreferences: RuntimePreferences,
-    private val workshopPreferences: top.tianyan.app.core.datastore.WorkshopPreferences,
+    private val workshopPreferences: WorkshopPreferences,
     private val buildScriptRepository: BuildScriptRepository,
     private val signingManager: WorkshopSigningManager,
     private val logger: AppLogger,
@@ -172,14 +170,14 @@ class WorkspaceBuildRunner @Inject constructor(
     fun runProject(
         project: WorkspaceProject,
         buildType: WorkshopBuildType = WorkshopBuildType.DEBUG,
-        keystore: top.tianyan.app.core.datastore.WorkshopKeystore? = null,
+        keystore: WorkshopKeystore? = null,
     ): Flow<BuildRunProgress> = channelFlow {
         // 确保每次构建前，沙箱内部的 Shell 资产脚本永远最新且无 BOM 污染
         runCatching {
             assetSynchronizer.syncAssetsToDistro(linuxRuntime.activeDistroId.value)
         }
         val boundScript = buildScriptRepository.resolvedScript(project.name)
-            ?.takeIf { it.projectType == project.projectType.name }
+            ?.takeIf { it.projectType == project.projectType.name && !it.isBuiltin }
         val workshopAndroidScript = boundScript?.content
             ?: workshopPreferences.androidScript.first()
         val workshopFlutterScript = boundScript?.content
@@ -270,7 +268,7 @@ class WorkspaceBuildRunner @Inject constructor(
         buildLogDir.listFiles()?.filter { it.isFile }?.sortedBy { it.lastModified() }
             ?.dropLast(KEEP_BUILD_LOG_FILES)?.forEach { runCatching { it.delete() } }
         val buildLogFile = File(buildLogDir, "build-$buildStartedAt.log")
-        val buildLogWriter = java.io.BufferedWriter(java.io.FileWriter(buildLogFile))
+        val buildLogWriter = BufferedWriter(FileWriter(buildLogFile))
 
         fun flushLogBuffer() {
             synchronized(logLock) {
@@ -408,9 +406,7 @@ class WorkspaceBuildRunner @Inject constructor(
                 fun recordStepDuration(newStep: String) {
                     val now = System.currentTimeMillis()
                     val duration = now - lastStepTime
-                    if (duration > 100) {
-                        stepHistory.add(StepDuration(previousStep, duration))
-                    }
+                    if (duration > 100) stepHistory.add(StepDuration(previousStep, duration))
                     previousStep = newStep
                     lastStepTime = now
                 }
@@ -421,8 +417,7 @@ class WorkspaceBuildRunner @Inject constructor(
                     "/bin/sh $androidScriptPath android \"${project.linuxPath}\" $androidTask"
                 } else {
                     "/bin/sh $androidScriptPath \"${project.linuxPath}\" $androidTask"
-                } +
-                    if (useQemuBuild) " --qemu" else ""
+                } + if (useQemuBuild) " --qemu" else ""
                 var lastEmitTime = System.currentTimeMillis()
                 var currentStep = "正在执行 Gradle 构建任务..."
                 var currentProgress = 0.35f
@@ -430,7 +425,7 @@ class WorkspaceBuildRunner @Inject constructor(
                 var outcome = linuxRuntime.execute(
                     ShellCommand(
                         commandLine = buildCmd,
-                        forcePty = true,
+                        forcePty = true, memoryHeavy = true,
                         timeoutMs = 1800_000L, // 30 分钟充足超时，适配移动端首次下载海量依赖
                         useQemuCompatibility = useQemuBuild,
                         environment = workshopEnvironment,
@@ -497,7 +492,7 @@ class WorkspaceBuildRunner @Inject constructor(
                         linuxRuntime.execute(ShellCommand(
                             commandLine = if (androidScriptPath.endsWith("tianyan-build.sh")) "/bin/sh $androidScriptPath android \"${project.linuxPath}\" $androidTask --qemu" else "/bin/sh $androidScriptPath \"${project.linuxPath}\" $androidTask --qemu",
                             environment = workshopEnvironment,
-                            forcePty = true,
+                            forcePty = true, memoryHeavy = true,
                             timeoutMs = 1800_000L,
                             useQemuCompatibility = true,
                             onOutput = { chunk ->
@@ -514,7 +509,7 @@ class WorkspaceBuildRunner @Inject constructor(
                             },
                         ))
                     }.getOrElse { error ->
-                        top.tianyan.app.runtime.shell.CommandResult(-1, "", error.message ?: "QEMU 兼容环境启动失败", 0L)
+                        CommandResult(-1, "", error.message ?: "QEMU 兼容环境启动失败", 0L)
                     }
                 }
 
@@ -706,14 +701,13 @@ class WorkspaceBuildRunner @Inject constructor(
                     "/bin/sh $flutterScriptPath flutter \"${project.linuxPath}\" $flutterTarget"
                 } else {
                     "/bin/sh $flutterScriptPath \"${project.linuxPath}\" \"$flutterTarget\""
-                } +
-                    if (useQemuBuild) " --qemu" else ""
+                } + if (useQemuBuild) " --qemu" else ""
                 var lastEmitTime = System.currentTimeMillis()
 
                 var outcome = linuxRuntime.execute(
                     ShellCommand(
                         commandLine = buildCmd,
-                        forcePty = true,
+                        forcePty = true, memoryHeavy = true,
                         timeoutMs = 1800_000L,
                         useQemuCompatibility = useQemuBuild,
                         environment = workshopEnvironment,
@@ -739,7 +733,7 @@ class WorkspaceBuildRunner @Inject constructor(
                         linuxRuntime.execute(ShellCommand(
                             commandLine = if (flutterScriptPath.endsWith("tianyan-build.sh")) "/bin/sh $flutterScriptPath flutter \"${project.linuxPath}\" --qemu" else "/bin/sh $flutterScriptPath \"${project.linuxPath}\" --qemu",
                             environment = workshopEnvironment,
-                            forcePty = true,
+                            forcePty = true, memoryHeavy = true,
                             timeoutMs = 1800_000L,
                             useQemuCompatibility = true,
                             onOutput = { chunk ->
@@ -756,7 +750,7 @@ class WorkspaceBuildRunner @Inject constructor(
                             },
                         ))
                     }.getOrElse { error ->
-                        top.tianyan.app.runtime.shell.CommandResult(-1, "", error.message ?: "QEMU 兼容环境启动失败", 0L)
+                        CommandResult(-1, "", error.message ?: "QEMU 兼容环境启动失败", 0L)
                     }
                 }
 
@@ -890,29 +884,11 @@ class WorkspaceBuildRunner @Inject constructor(
                     )
                 )
             }
-            ProjectType.RED_TEAM -> {
-                log("[Tianyan Build] 红队演练工程，无编译流程；目标绑定与作战状态在会话内维护")
-                send(
-                    BuildRunProgress(
-                        step = "红队演练工程",
-                        isRunning = false,
-                        isSuccess = true,
-                        message = "红队演练工程无需编译。打开会话内的红队控制台绑定目标与范围，主动探测通过终端与对话 Agent 完成",
-                        logOutput = snapshotLogs(),
-                    )
-                )
-            }
-            ProjectType.GENERAL -> {
-                log("[Tianyan Build] 通用工程，无默认 APK 打包流程")
-                send(
-                    BuildRunProgress(
-                        step = "通用工程",
-                        isRunning = false,
-                        isSuccess = true,
-                        message = "通用工程请在天衍终端中执行自定义命令或自定义构建脚本",
-                        logOutput = snapshotLogs(),
-                    )
-                )
+            ProjectType.GENERAL, ProjectType.TIANYAN_PLUGIN, ProjectType.RED_TEAM -> {
+                val guidance = nonApkBuildGuidance(project.projectType)
+                log("[Tianyan Build] $guidance")
+                send(BuildRunProgress(step = project.projectType.displayName, isRunning = false,
+                    isSuccess = true, message = guidance, logOutput = snapshotLogs()))
             }
         }
         } finally {
@@ -927,7 +903,7 @@ class WorkspaceBuildRunner @Inject constructor(
         }
     }.flowOn(Dispatchers.IO)
 
-    private fun shouldRetryWithQemu(outcome: top.tianyan.app.runtime.shell.CommandResult): Boolean {
+    private fun shouldRetryWithQemu(outcome: CommandResult): Boolean {
         val text = (outcome.stdout + "\n" + outcome.stderr).lowercase()
         // not_elf / 包装脚本回环 = 工具链文件本身被损坏（典型：exec 回环把
         // JDK 启动器覆盖成脚本）。这是中毒信号，不是架构兼容问题——
@@ -997,10 +973,10 @@ class WorkspaceBuildRunner @Inject constructor(
 
     /** 用临时文件替换目标；覆盖失败（例如旧文件不可删除）返回 false。 */
     private fun replaceTarget(source: File, target: File): Boolean = try {
-        java.nio.file.Files.move(
+        Files.move(
             source.toPath(),
             target.toPath(),
-            java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+            StandardCopyOption.REPLACE_EXISTING,
         )
         true
     } catch (_: Throwable) {

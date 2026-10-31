@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import top.tianyan.app.harness.ChatUsage
 
 class RunMetricsTest {
 
@@ -24,6 +25,8 @@ class RunMetricsTest {
         metrics.consecutiveFailuresObserved(3)
         metrics.consecutiveFailuresObserved(5)
         metrics.consecutiveFailuresObserved(2)
+        metrics.budgetContinued()
+        metrics.budgetContinued()
         metrics.circuitBreaker()
         metrics.finish("failed")
 
@@ -38,6 +41,7 @@ class RunMetricsTest {
         assertTrue(summary.contains("Steering=1"))
         assertTrue(summary.contains("FollowUps=3"))
         assertTrue(summary.contains("MaxConsecutiveFailures=5"))
+        assertTrue(summary.contains("BudgetContinuations=2"))
         assertTrue(summary.contains("CircuitBreaker=true"))
         assertTrue(summary.contains("Outcome=failed"))
     }
@@ -69,9 +73,9 @@ class RunMetricsTest {
     fun `cache hit rate is tracked and formatted in summary`() {
         val metrics = RunMetrics(startedAt = 0L)
         // Record round 1: 1000 input, 800 cache read (80% hit)
-        metrics.recordUsage(top.tianyan.app.harness.ChatUsage(inputTokens = 1000, cacheReadTokens = 800))
+        metrics.recordUsage(ChatUsage(inputTokens = 1000, cacheReadTokens = 800))
         // Record round 2: 1000 input, 600 cache read (cumulative: 2000 input, 1400 cache read -> 70%)
-        metrics.recordUsage(top.tianyan.app.harness.ChatUsage(inputTokens = 1000, cacheReadTokens = 600))
+        metrics.recordUsage(ChatUsage(inputTokens = 1000, cacheReadTokens = 600))
         metrics.finish("completed")
 
         val summary = metrics.summary()

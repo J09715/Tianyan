@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="fa2ui_poc_title">A2UI 界面</string>
+    <string name="fa2ui_inject_sample">注入示例</string>
+    <string name="fa2ui_clear">清空</string>
+    <string name="fa2ui_empty_hint">暂无 A2UI 界面。在聊天里让智能体画出界面，或点右上角「注入示例」。</string>
+    <string name="fa2ui_media_blocked">仅支持 http 或 https 链接</string>
+    <string name="fa2ui_image_failed">图片加载失败</string>
+    <string name="fa2ui_video_failed">视频无法播放</string>
+    <string name="fa2ui_audio_failed">音频无法播放</string>
+    <string name="fa2ui_play">播放</string>
+    <string name="fa2ui_pause">暂停</string>
+</resources>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_tool_status_style">工具状态样式</string>
+    <string name="settings_tool_status_icons">工具图标</string>
+    <string name="settings_tool_status_icons_description">以工具图标区分类型，颜色表示执行状态</string>
+    <string name="settings_tool_status_dots">经典状态点</string>
+    <string name="settings_tool_status_dots_description">绿色成功、黄色执行中、红色失败</string>
+</resources>

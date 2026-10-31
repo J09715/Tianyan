@@ -1,0 +1,4 @@
+<resources>
+    <string name="ui_plugin_page_unavailable">此功能暂不可用</string>
+    <string name="ui_plugin_page_back">返回</string>
+</resources>

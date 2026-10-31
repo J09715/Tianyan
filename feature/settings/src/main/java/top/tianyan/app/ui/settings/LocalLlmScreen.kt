@@ -1,5 +1,7 @@
 package top.tianyan.app.ui.settings
-
+import top.tianyan.app.ui.components.previewOrNull
+import top.tianyan.app.ui.components.previewStateOf
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -12,14 +14,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Surface
 import top.tianyan.app.ui.settings.LocalizedText as Text
 import androidx.compose.runtime.Composable
@@ -34,35 +34,34 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.tianyan.app.runtime.LocalGgufModel
 import top.tianyan.app.runtime.LocalLlmServiceState
 import top.tianyan.app.ui.components.RuntimeAlertDialog
 import top.tianyan.app.ui.components.RuntimeButton
-import top.tianyan.app.ui.components.RuntimeCard
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconButton
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeLinearProgressIndicator
 import top.tianyan.app.ui.components.RuntimeOutlinedButton
 import top.tianyan.app.ui.components.RuntimeTextButton
-import top.tianyan.app.ui.components.RuntimeTopBar
-
+import top.tianyan.app.ui.components.RuntimeSettingsScaffold
+import java.util.Locale
+import kotlinx.coroutines.delay
 @Composable
-fun LocalLlmScreen(
+internal fun LocalLlmContent(
     onBack: () -> Unit,
     onOpenEngine: () -> Unit,
-    viewModel: LocalLlmViewModel = hiltViewModel(),
+    viewModel: LocalLlmViewModel? = previewOrNull { koinViewModel() },
 ) {
-    val models by viewModel.models.collectAsStateWithLifecycle()
-    val serviceState by viewModel.serviceState.collectAsStateWithLifecycle()
-    val transfer by viewModel.transfer.collectAsStateWithLifecycle()
-    val message by viewModel.message.collectAsStateWithLifecycle()
-    val messageIsError by viewModel.messageIsError.collectAsStateWithLifecycle()
-    val engineInstalled by viewModel.engineInstalled.collectAsStateWithLifecycle()
-    val deviceRamBytes = viewModel.deviceRamBytes
-    val mobileModelPresets = viewModel.mobileModelPresets
+    val models by viewModel?.models?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val serviceState by viewModel?.serviceState?.collectAsStateWithLifecycle() ?: previewStateOf(top.tianyan.app.runtime.LocalLlmServiceState.Stopped)
+    val transfer by viewModel?.transfer?.collectAsStateWithLifecycle() ?: previewStateOf(LocalModelTransferUiState())
+    val message by viewModel?.message?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val messageIsError by viewModel?.messageIsError?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val engineInstalled by viewModel?.engineInstalled?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val deviceRamBytes = viewModel?.deviceRamBytes ?: 0L
+    val mobileModelPresets = viewModel?.mobileModelPresets.orEmpty()
     val topBarStatus = when (val state = serviceState) {
         LocalLlmServiceState.Stopped -> "服务未启动"
         is LocalLlmServiceState.Starting -> "正在启动 · ${state.fileName}"
@@ -76,16 +75,16 @@ fun LocalLlmScreen(
     var pendingDeleteModel by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri?.let(viewModel::importUri)
+        uri?.let({ arg0 -> viewModel?.importUri(arg0) })
     }
 
     message?.let { currentMessage ->
         RuntimeAlertDialog(
-            onDismissRequest = viewModel::consumeMessage,
+            onDismissRequest = { viewModel?.consumeMessage() },
             title = { Text(if (messageIsError) "操作未完成" else "本地 LLM") },
             text = { Text(currentMessage) },
             confirmButton = {
-                RuntimeTextButton(onClick = viewModel::consumeMessage) { Text("知道了") }
+                RuntimeTextButton(onClick = { viewModel?.consumeMessage() }) { Text("知道了") }
             },
         )
     }
@@ -95,7 +94,7 @@ fun LocalLlmScreen(
             onDismiss = { showDownloadDialog = false },
             onDownload = { url, checksum ->
                 showDownloadDialog = false
-                viewModel.download(url, checksum)
+                viewModel?.download(url, checksum)
             },
         )
     }
@@ -105,7 +104,7 @@ fun LocalLlmScreen(
             onDismiss = { showPathDialog = false },
             onImport = { path ->
                 showPathDialog = false
-                viewModel.importPath(path)
+                viewModel?.importPath(path)
             },
         )
     }
@@ -115,209 +114,197 @@ fun LocalLlmScreen(
             fileName = fileName,
             onConfirm = {
                 pendingDeleteModel = null
-                viewModel.delete(fileName)
+                viewModel?.delete(fileName)
             },
             onDismiss = { pendingDeleteModel = null },
         )
     }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            RuntimeTopBar(
-                title = "本地 LLM",
-                onBack = onBack,
-                statusText = topBarStatus,
-                actions = {
-                    if (serviceState is LocalLlmServiceState.Running) {
-                        RuntimeOutlinedButton(
-                            onClick = viewModel::stop,
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp),
-                        ) {
-                            RuntimeIcon(RuntimeIconName.Stop, Modifier.size(16.dp))
-                            Spacer(Modifier.size(4.dp))
-                            Text("停止")
-                        }
-                    }
-                },
-            )
+    RuntimeSettingsScaffold(
+        title = "本地 LLM", onBack = onBack,
+        statusText = topBarStatus,
+        actions = {
+            if (serviceState is LocalLlmServiceState.Running) {
+                RuntimeOutlinedButton(
+                    onClick = { viewModel?.stop() },
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp),
+                ) {
+                    RuntimeIcon(RuntimeIconName.Stop, Modifier.size(16.dp))
+                    Spacer(Modifier.size(4.dp))
+                    Text("停止")
+                }
+            }
         },
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                RuntimeOutlinedButton(
+                    onClick = { showDownloadDialog = true },
+                    enabled = !transfer.running,
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 11.dp),
                 ) {
-                    RuntimeOutlinedButton(
-                        onClick = { showDownloadDialog = true },
-                        enabled = !transfer.running,
-                        modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 11.dp),
-                    ) {
-                        RuntimeIcon(RuntimeIconName.Download, Modifier.size(18.dp))
-                        Spacer(Modifier.size(6.dp))
-                        Text("网络下载", maxLines = 1)
-                    }
-                    RuntimeOutlinedButton(
-                        onClick = { showPathDialog = true },
-                        enabled = !transfer.running,
-                        modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 11.dp),
-                    ) {
-                        RuntimeIcon(RuntimeIconName.Folder, Modifier.size(18.dp))
-                        Spacer(Modifier.size(6.dp))
-                        Text("从路径导入", maxLines = 1)
-                    }
-                    RuntimeOutlinedButton(
-                        onClick = { filePicker.launch(arrayOf("application/octet-stream", "application/*", "*/*")) },
-                        enabled = !transfer.running,
-                        modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 11.dp),
-                    ) {
-                        RuntimeIcon(RuntimeIconName.File, Modifier.size(18.dp))
-                        Spacer(Modifier.size(6.dp))
-                        Text("选择文件", maxLines = 1)
-                    }
+                    RuntimeIcon(RuntimeIconName.Download, Modifier.size(18.dp))
+                    Spacer(Modifier.size(6.dp))
+                    Text("网络下载", maxLines = 1)
+                }
+                RuntimeOutlinedButton(
+                    onClick = { showPathDialog = true },
+                    enabled = !transfer.running,
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 11.dp),
+                ) {
+                    RuntimeIcon(RuntimeIconName.Folder, Modifier.size(18.dp))
+                    Spacer(Modifier.size(6.dp))
+                    Text("从路径导入", maxLines = 1)
+                }
+                RuntimeOutlinedButton(
+                    onClick = { filePicker.launch(arrayOf("application/octet-stream", "application/*", "*/*")) },
+                    enabled = !transfer.running,
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 11.dp),
+                ) {
+                    RuntimeIcon(RuntimeIconName.File, Modifier.size(18.dp))
+                    Spacer(Modifier.size(6.dp))
+                    Text("选择文件", maxLines = 1)
                 }
             }
+        }
 
-            if (transfer.running) {
-                item {
-                    RuntimeCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
-                        borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    transfer.label,
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                                    modifier = Modifier.weight(1f),
-                                )
-                                Text(
-                                    transfer.totalBytes?.let { "${formatBytes(transfer.copiedBytes)} / ${formatBytes(it)}" }
-                                        ?: formatBytes(transfer.copiedBytes),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            RuntimeLinearProgressIndicator(
-                                progress = transfer.fraction?.let { fraction -> { fraction } },
-                                modifier = Modifier.fillMaxWidth(),
+        if (transfer.running) {
+            item {
+                SettingsDetailCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                    borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                transfer.label,
+                                style = MaterialTheme.typography.titleSmall,
+                                modifier = Modifier.weight(1f),
                             )
-                            RuntimeTextButton(onClick = viewModel::cancelTransfer, modifier = Modifier.align(Alignment.End)) {
-                                Text("取消")
-                            }
+                            Text(
+                                transfer.totalBytes?.let { "${formatBytes(transfer.copiedBytes)} / ${formatBytes(it)}" }
+                                    ?: formatBytes(transfer.copiedBytes),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        RuntimeLinearProgressIndicator(
+                            progress = transfer.fraction?.let { fraction -> { fraction } },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        RuntimeTextButton(onClick = { viewModel?.cancelTransfer() }, modifier = Modifier.align(Alignment.End)) {
+                            Text("取消")
                         }
                     }
                 }
             }
+        }
 
-            item {
-                RuntimeCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                    borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        item {
+            SettingsDetailCard(
+                modifier = Modifier.fillMaxWidth(),
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        RuntimeIcon(RuntimeIconName.Info, Modifier.size(23.dp), MaterialTheme.colorScheme.primary)
+                        Text("本地 LLM 推理", style = MaterialTheme.typography.titleMedium)
+                    }
+                    Text(
+                        "通过 llama.cpp 在 Linux 沙箱内运行 GGUF 模型，推理数据不离开设备。支持 HTTPS / Hugging Face 直链断点下载，也可从手机文件选择器导入。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (!engineInstalled) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f),
                         ) {
-                            RuntimeIcon(RuntimeIconName.Info, Modifier.size(23.dp), MaterialTheme.colorScheme.primary)
-                            Text("本地 LLM 推理", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                        }
-                        Text(
-                            "通过 llama.cpp 在 Linux 沙箱内运行 GGUF 模型，推理数据不离开设备。支持 HTTPS / Hugging Face 直链断点下载，也可从手机文件选择器导入。",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        if (!engineInstalled) {
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f),
-                            ) {
-                                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text("需要先安装 llama.cpp 推理引擎", fontWeight = FontWeight.SemiBold)
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        RuntimeButton(onClick = viewModel::installEngine) { Text("一键安装") }
-                                        RuntimeOutlinedButton(onClick = onOpenEngine) { Text("查看详情") }
-                                    }
+                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("需要先安装 llama.cpp 推理引擎", fontWeight = FontWeight.SemiBold)
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    RuntimeButton(onClick = { viewModel?.installEngine() }) { Text("一键安装") }
+                                    RuntimeOutlinedButton(onClick = onOpenEngine) { Text("查看详情") }
                                 }
                             }
                         }
                     }
                 }
             }
+        }
 
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("手机小模型推荐", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                    Text(
-                        "本机内存 ${formatBytes(deviceRamBytes)} · 默认推荐 Q4_K_M，兼顾体积、速度和效果",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            items(mobileModelPresets, key = MobileModelPreset::id) { preset ->
-                val suitable = viewModel.isDeviceSuitable(preset)
-                val alreadyDownloaded = models.any { model ->
-                    preset.url.substringBefore('?').substringAfterLast('/').equals(model.fileName, ignoreCase = true)
-                }
-                MobileModelPresetCard(
-                    preset = preset,
-                    suitable = suitable,
-                    alreadyDownloaded = alreadyDownloaded,
-                    transferRunning = transfer.running,
-                    download = { viewModel.downloadPreset(preset) },
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("手机小模型推荐", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "本机内存 ${formatBytes(deviceRamBytes)} · 默认推荐 Q4_K_M，兼顾体积、速度和效果",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
 
-            item {
-                ServiceStatusCard(serviceState = serviceState, stop = viewModel::stop)
+        items(mobileModelPresets, key = MobileModelPreset::id) { preset ->
+            val suitable = viewModel?.isDeviceSuitable(preset) == true
+            val alreadyDownloaded = models.any { model ->
+                preset.url.substringBefore('?').substringAfterLast('/').equals(model.fileName, ignoreCase = true)
             }
+            MobileModelPresetCard(
+                preset = preset,
+                suitable = suitable,
+                alreadyDownloaded = alreadyDownloaded,
+                transferRunning = transfer.running,
+                download = { viewModel?.downloadPreset(preset) },
+            )
+        }
 
+        item {
+            ServiceStatusCard(serviceState = serviceState, stop = { viewModel?.stop() })
+        }
+
+        item {
+            Text("已导入模型", style = MaterialTheme.typography.titleMedium)
+        }
+
+        if (models.isEmpty()) {
             item {
-                Text("已导入模型", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-            }
-
-            if (models.isEmpty()) {
-                item {
-                    RuntimeCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                        borderColor = Color.Transparent,
+                SettingsDetailCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                    borderColor = Color.Transparent,
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 28.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 28.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            RuntimeIcon(RuntimeIconName.Model, Modifier.size(44.dp), MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f))
-                            Text("暂无模型", style = MaterialTheme.typography.titleSmall)
-                            Text("使用上方按钮下载或导入 GGUF 模型", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
+                        RuntimeIcon(RuntimeIconName.Model, Modifier.size(44.dp), MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f))
+                        Text("暂无模型", style = MaterialTheme.typography.titleSmall)
+                        Text("使用上方按钮下载或导入 GGUF 模型", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-            } else {
-                items(models, key = LocalGgufModel::fileName) { model ->
-                    ModelCard(
-                        model = model,
-                        serviceState = serviceState,
-                        engineInstalled = engineInstalled,
-                        start = { viewModel.start(model.fileName) },
-                        stop = viewModel::stop,
-                        delete = { pendingDeleteModel = model.fileName },
-                    )
-                }
+            }
+        } else {
+            items(models, key = LocalGgufModel::fileName) { model ->
+                ModelCard(
+                    model = model,
+                    serviceState = serviceState,
+                    engineInstalled = engineInstalled,
+                    start = { viewModel?.start(model.fileName) },
+                    stop = { viewModel?.stop() },
+                    delete = { pendingDeleteModel = model.fileName },
+                )
             }
         }
     }
@@ -331,7 +318,7 @@ private fun MobileModelPresetCard(
     transferRunning: Boolean,
     download: () -> Unit,
 ) {
-    RuntimeCard(
+    SettingsDetailCard(
         modifier = Modifier.fillMaxWidth(),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         borderColor = if (suitable) {
@@ -340,7 +327,7 @@ private fun MobileModelPresetCard(
             MaterialTheme.colorScheme.outlineVariant
         },
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 RuntimeIcon(RuntimeIconName.Cpu, Modifier.size(22.dp), MaterialTheme.colorScheme.primary)
                 Text(
@@ -349,7 +336,7 @@ private fun MobileModelPresetCard(
                     modifier = Modifier.weight(1f),
                 )
                 Surface(
-                    shape = RoundedCornerShape(7.dp),
+                    shape = RoundedCornerShape(8.dp),
                     color = if (suitable) {
                         MaterialTheme.colorScheme.primaryContainer
                     } else {
@@ -372,7 +359,7 @@ private fun MobileModelPresetCard(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -406,7 +393,7 @@ private fun MobileModelPresetCard(
 @Composable
 private fun ModelSpecChip(text: String) {
     Surface(
-        shape = RoundedCornerShape(7.dp),
+        shape = RoundedCornerShape(8.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
     ) {
         Text(
@@ -430,13 +417,13 @@ private fun ServiceStatusCard(
         is LocalLlmServiceState.Running -> successStatusColor()
         is LocalLlmServiceState.Failed -> MaterialTheme.colorScheme.error
     }
-    RuntimeCard(
+    SettingsDetailCard(
         modifier = Modifier.fillMaxWidth(),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         borderColor = color.copy(alpha = 0.25f),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Surface(modifier = Modifier.size(10.dp), shape = RoundedCornerShape(50), color = color) {}
                 Text(
                     when (serviceState) {
@@ -445,7 +432,7 @@ private fun ServiceStatusCard(
                         is LocalLlmServiceState.Running -> "运行中 · ${serviceState.fileName}"
                         is LocalLlmServiceState.Failed -> "启动失败"
                     },
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.titleMedium,
                 )
                 Spacer(Modifier.weight(1f))
                 if (running != null) {
@@ -479,14 +466,14 @@ private fun ModelCard(
 ) {
     val isRunning = (serviceState as? LocalLlmServiceState.Running)?.fileName == model.fileName
     val isStarting = (serviceState as? LocalLlmServiceState.Starting)?.fileName == model.fileName
-    RuntimeCard(
+    SettingsDetailCard(
         modifier = Modifier.fillMaxWidth(),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         borderColor = if (isRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             RuntimeIcon(RuntimeIconName.Model, Modifier.size(28.dp), MaterialTheme.colorScheme.primary)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     model.fileName,
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -543,7 +530,7 @@ private fun DownloadModelDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text("粘贴以 .gguf 结尾的 HTTPS 直链。Hugging Face 文件页请复制 Download 链接。")
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = url,
                     onValueChange = { url = it },
                     label = { Text("GGUF 下载地址") },
@@ -557,7 +544,7 @@ private fun DownloadModelDialog(
                     singleLine = false,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = sha256,
                     onValueChange = { sha256 = it },
                     label = { Text("SHA-256（可选）") },
@@ -591,7 +578,7 @@ private fun ImportPathDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text("输入应用可读取的绝对路径，例如 /storage/emulated/0/Download/model.gguf。受 Android 存储权限限制时请改用“选择文件”。")
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = path,
                     onValueChange = { path = it },
                     label = { Text("GGUF 文件路径") },
@@ -624,7 +611,7 @@ private fun DeleteModelConfirmDialog(
 
     LaunchedEffect(fileName) {
         while (countdown > 0) {
-            kotlinx.coroutines.delay(1000)
+            delay(1000)
             countdown--
         }
     }
@@ -634,7 +621,7 @@ private fun DeleteModelConfirmDialog(
         title = {
             Text(
                 text = "删除模型 $fileName？",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                style = MaterialTheme.typography.titleMedium,
             )
         },
         text = {
@@ -671,9 +658,9 @@ private fun DeleteModelConfirmDialog(
 }
 
 private fun formatBytes(bytes: Long): String = when {
-    bytes >= 1024L * 1024L * 1024L -> String.format(java.util.Locale.US, "%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0))
-    bytes >= 1024L * 1024L -> String.format(java.util.Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
-    bytes >= 1024L -> String.format(java.util.Locale.US, "%.1f KB", bytes / 1024.0)
+    bytes >= 1024L * 1024L * 1024L -> String.format(Locale.US, "%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0))
+    bytes >= 1024L * 1024L -> String.format(Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
+    bytes >= 1024L -> String.format(Locale.US, "%.1f KB", bytes / 1024.0)
     else -> "$bytes B"
 }
 

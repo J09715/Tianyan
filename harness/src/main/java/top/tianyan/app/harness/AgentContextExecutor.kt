@@ -5,8 +5,6 @@ import top.tianyan.app.core.database.AgentMemoryEntity
 import top.tianyan.app.core.database.AgentPlanEntity
 import top.tianyan.app.core.database.AgentScratchpadEntity
 import java.util.UUID
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -20,8 +18,7 @@ import kotlinx.serialization.json.jsonPrimitive
  * - plan: 多步骤任务执行计划管理
  * - scratchpad: 任务局部工作草稿与排查便签
  */
-@Singleton
-class AgentContextExecutor @Inject constructor(
+class AgentContextExecutor(
     private val agentContextDao: AgentContextRepository,
     private val json: Json,
 ) {
@@ -249,7 +246,13 @@ class AgentContextExecutor @Inject constructor(
                     ?: return false to "当前会话没有可推进的活跃计划，请先用 replace_active 创建"
                 val stepsElement = args["steps"]
                 val newStepsJson = stepsElement?.toString() ?: plan.stepsJson
-                val newStatus = args["status"]?.jsonPrimitive?.contentOrNull?.lowercase() ?: plan.status
+                // status 是计划生命周期枚举（active/completed/cancelled），不是自然语言进度描述。
+                // 模型常把阶段说明塞进 status，直接写入会导致 getActivePlan 永久找不到记录。
+                val requestedStatus = args["status"]?.jsonPrimitive?.contentOrNull?.lowercase()
+                val newStatus = when (requestedStatus) {
+                    "completed", "cancelled", "active" -> requestedStatus
+                    else -> plan.status
+                }
                 agentContextDao.savePlan(
                     plan.copy(
                         stepsJson = newStepsJson,

@@ -56,8 +56,9 @@ class AgentSkillPluginSerializationTest {
 
     @Test
     fun testDepartmentAwareSubagentIsSerializable() {
-        assertEquals(9, AgentDepartments.agency.size)
-        assertEquals(9, AgentDepartments.agency.map { it.id }.distinct().size)
+        assertTrue(AgentDepartments.agency.isNotEmpty())
+        assertEquals(AgentDepartments.agency.size, AgentDepartments.agency.map { it.id }.distinct().size)
+        assertTrue(AgentDepartments.agency.any { it.id == "sanshengliubu" })
         val profile = AgentSubagent(
             id = "agency_engineering_frontend_developer",
             name = "Frontend Developer",
@@ -71,5 +72,10 @@ class AgentSkillPluginSerializationTest {
         val decoded = json.decodeFromString<AgentSubagent>(encoded)
         assertEquals(profile, decoded)
         assertEquals("Engineering", AgentDepartments.find(decoded.departmentId).name)
+        AgentDepartments.agency.forEach { department ->
+            val local = profile.copy(departmentId = department.id)
+            assertEquals(local, json.decodeFromString<AgentSubagent>(json.encodeToString(local)))
+            assertEquals(department.id, AgentDepartments.find(department.id).id)
+        }
     }
 }

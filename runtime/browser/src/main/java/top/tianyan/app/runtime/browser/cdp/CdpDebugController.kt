@@ -4,6 +4,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.int
@@ -164,7 +165,7 @@ class CdpDebugController(
     // ===== 事件入口（CdpTabConnection 转发） =====
 
     suspend fun onPaused(params: JsonObject) {
-        val frames = (params["callFrames"] as? kotlinx.serialization.json.JsonArray ?: return).map { el ->
+        val frames = (params["callFrames"] as? JsonArray ?: return).map { el ->
             val f = el.jsonObject
             DebugCallFrame(
                 callFrameId = f["callFrameId"]?.jsonPrimitive?.contentOrNull ?: "",
@@ -172,7 +173,7 @@ class CdpDebugController(
                 url = f["url"]?.jsonPrimitive?.contentOrNull ?: "",
                 lineNumber = f["lineNumber"]?.jsonPrimitive?.int ?: 0,
                 columnNumber = f["columnNumber"]?.jsonPrimitive?.int ?: 0,
-                scopes = (f["scopeChain"] as? kotlinx.serialization.json.JsonArray)?.map { sc ->
+                scopes = (f["scopeChain"] as? JsonArray)?.map { sc ->
                     val s = sc.jsonObject
                     DebugScope(
                         type = s["type"]?.jsonPrimitive?.contentOrNull ?: "unknown",
@@ -185,7 +186,7 @@ class CdpDebugController(
         val state = DebugPausedState(
             tabId = tabId,
             reason = params["reason"]?.jsonPrimitive?.contentOrNull ?: "unknown",
-            hitBreakpoints = (params["hitBreakpoints"] as? kotlinx.serialization.json.JsonArray)
+            hitBreakpoints = (params["hitBreakpoints"] as? JsonArray)
                 ?.mapNotNull { it.jsonPrimitive.contentOrNull } ?: emptyList(),
             callFrames = frames,
         )
@@ -220,7 +221,7 @@ class CdpDebugController(
                 put("ownProperties", true)
             },
         )
-        return (result["result"] as? kotlinx.serialization.json.JsonArray)
+        return (result["result"] as? JsonArray)
             ?.mapNotNull { it.jsonObject["name"]?.jsonPrimitive?.contentOrNull }
             ?: emptyList()
     }
@@ -233,7 +234,7 @@ class CdpDebugController(
                 put("ownProperties", true)
             },
         )
-        val props = (result["result"] as? kotlinx.serialization.json.JsonArray) ?: return "<empty>"
+        val props = (result["result"] as? JsonArray) ?: return "<empty>"
         return props.joinToString("\n") { el ->
             val p = el.jsonObject
             val name = p["name"]?.jsonPrimitive?.contentOrNull ?: "?"

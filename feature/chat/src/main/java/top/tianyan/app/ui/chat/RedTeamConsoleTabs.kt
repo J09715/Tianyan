@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -27,6 +26,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.tianyan.app.core.model.RedTeamConsoleModel
 import top.tianyan.app.ui.components.RuntimeCard
+import top.tianyan.app.ui.theme.Radius
+import top.tianyan.app.ui.theme.Spacing
 import top.tianyan.app.ui.components.RuntimeTextButton
 import top.tianyan.app.ui.components.tabular
 
@@ -45,10 +46,10 @@ internal fun RedTeamPromptsTab(
     onReset: () -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
-        RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(10.dp)) {
+        RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(Spacing.sm)) {
             Text(
                 "角色提示词 · ${state.roles.size} 个角色",
                 // 计数行套 tabular：角色条数变化（同步新角色）时位宽稳定，标题不抖。
@@ -57,7 +58,7 @@ internal fun RedTeamPromptsTab(
             )
             Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
             ) {
                 state.roles.forEach { role ->
                     val selected = role.id == state.roleId
@@ -70,7 +71,7 @@ internal fun RedTeamPromptsTab(
                                 MaterialTheme.colorScheme.surfaceContainerHigh
                             },
                         ),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                        contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.sm),
                     ) {
                         Column {
                             Text(
@@ -104,11 +105,11 @@ internal fun RedTeamPromptsTab(
 
         val role = state.selectedRole
         if (role != null) {
-            RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(10.dp)) {
+            RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(Spacing.sm)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(
@@ -177,14 +178,14 @@ internal fun RedTeamSkillsTab(
     onDelete: () -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
-        RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(10.dp)) {
+        RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(Spacing.sm)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 Text(
                     "技能库 · ${state.skills.size} 个技能",
@@ -199,7 +200,7 @@ internal fun RedTeamSkillsTab(
             }
             Column(
                 modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(Spacing.xs),
             ) {
                 if (state.skills.isEmpty()) {
                     Text(
@@ -217,12 +218,12 @@ internal fun RedTeamSkillsTab(
                         } else {
                             MaterialTheme.colorScheme.surfaceContainerHigh
                         },
-                        shape = RoundedCornerShape(8.dp),
+                        shape = Radius.xsShape,
                     ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.sm, vertical = Spacing.sm),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     ) {
                         Column(Modifier.weight(1f)) {
                             Text(
@@ -257,19 +258,19 @@ internal fun RedTeamSkillsTab(
 
         val draft = state.skillDraft
         if (draft == null) {
-            RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(10.dp)) {
+            RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(Spacing.sm)) {
                 Text(
-                    "左侧选择一个技能，或新建",
+                    "上方选择一个技能，或新建",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         } else {
-            RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(10.dp)) {
+            RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(Spacing.sm)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     Text(
                         if (draft.id.isBlank()) "新建技能" else draft.name.ifBlank { "技能库" },
@@ -304,7 +305,7 @@ internal fun RedTeamSkillsTab(
 
                 Column(
                     modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     OutlinedTextField(
                         value = draft.name,
@@ -324,7 +325,7 @@ internal fun RedTeamSkillsTab(
                         enabled = state.skillEditable,
                         textStyle = MaterialTheme.typography.bodySmall,
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         top.tianyan.app.ui.components.RuntimeSwitch(
                             checked = draft.enabled,
                             onCheckedChange = { value -> onDraftChange { it.copy(enabled = value) } },

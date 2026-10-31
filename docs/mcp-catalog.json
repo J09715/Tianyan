@@ -1,0 +1,614 @@
+{
+  "schemaVersion": 1,
+  "kind": "tianyan-mcp-catalog-seed",
+  "generatedAt": "2026-10-13",
+  "note": "种子清单。每条都经过实机核实（registry 可达 + 版本存在 + 校验和存在）。未核实条目一律不得入库。",
+  "implementation": {
+    "implementedAt": "2026-10-13",
+    "implementationDoc": "MCP_CATALOG.md#10-已接入实现本期落地记录",
+    "codeOfRecord": "core/model/src/main/java/top/tianyan/app/core/model/McpCatalog.kt",
+    "installableEntryIds": [
+      "mcp_websearch",
+      "mcp_codegraph",
+      "mcp_memory",
+      "mcp_sequential_thinking",
+      "mcp_context7"
+    ],
+    "deferredEntryIds": [
+      "mcp_github",
+      "mcp_fetch",
+      "mcp_time",
+      "mcp_pandoc"
+    ],
+    "droppedEntryIds": [
+      "mcp_markitdown",
+      "mcp_duckdb"
+    ],
+    "droppedReason": "pip 通道裁决为不开（每包需独立 venv），且 duckdb 原生扩展 ARM64 可得性未实测",
+    "keptBuiltinInstead": [
+      "mcp_git",
+      "mcp_apktool"
+    ],
+    "decisionCodegraphIndex": "装配期与会话期都不建索引；条目带 requiresWorkspaceIndex，索引由 base 显式执行 CLI 初始化",
+    "decisionMemoryBoundary": "与 Room agent_memories 职责分离，不做同步（本能力是模型自管知识图谱）",
+    "outstanding": [
+      "升级后已运行的 MCP 子进程仍是旧版本：需用户重新开启服务或重启会话才生效，未做自动重拉",
+      "未实现 .txplugin 离线侧载兜底：首次初始化必须有网",
+      "pip 通道未启用，mcp_fetch / mcp_time / mcp_pandoc 仍以 available=false 可见但不可安装"
+    ],
+    "verifiedAt": "2026-10-13",
+    "verification": [
+      ":core:model:test 通过（McpCatalogTest 10 条 + PluginBundleScriptsTest 全绿）",
+      ":tools / :harness / :feature:settings compileDebugKotlin 通过",
+      ":harness:testDebugUnitTest --tests *LocalMcpProtocolTest* 通过",
+      "architectureCheck 通过：33 个模块 · 依赖白名单/无环/import 黑名单/尺寸棘轮全部通过（含顺带收敛的 6 个存量超基线文件，未放宽任何基线数值）",
+      "setup_mcp_catalog.sh 通过 sh -n；scripts/tests/test_mcp_catalog_runtime.py 12 例全绿（真实 Node + stub npm，全程不触网）：探针/启动 4 例、install 固定版本守卫与校验和门槛与标记写回 3 例、check 已装×上游与镜像不可达 2 例、upgrade 标记重写与升级后 run 拉到新版本与已最新跳过与镜像不可达 4 例"
+    ],
+    "updateMechanism": {
+      "doc": "MCP_CATALOG.md#104-检查更新--一键升级本轮补齐",
+      "rule": "版本从落位标记读，绝不写进启动参数；否则升级只会改全局安装，进程仍按代码里的旧 pin 拉起",
+      "launch": "launchCommand=/bin/sh, launchArgs=[setup_mcp_catalog.sh, run, <id>, <pkgName>] + serverArgs（参数不含版本号）",
+      "check": "checkUpdateCommand → 脚本输出 INSTALLED=<标记版本> 与 LATEST=<镜像 dist-tags.latest>，失败输出 ERROR= 并 exit 1",
+      "upgrade": "upgradeCommand → 取镜像最新版 dist.integrity → 校验 → 全局安装 → 原子重写标记 → 当场再跑 resolve_entry 复核入口",
+      "executor": "tools/src/main/java/top/tianyan/app/core/tools/McpCatalogUpdater.kt（只拼命令/解析 KEY=VALUE/翻译错误，不重复 registry 语义）",
+      "uiEntry": "feature/settings/.../BundleUpdateUi.kt 的 BundleSetupDialogWithUpdates：装配弹窗打开即自查，分区标题右侧「检查更新」，逐能力版本行 + 「升级到 vX.Y.Z」",
+      "statePolicy": "updateStatuses 只在 ViewModel 内存活，组件卸载即清理；版本是可外部变化的事实，落库会变成第二真相"
+    }
+  },
+  "discoverySources": [
+    {
+      "id": "awesome-mcp-servers",
+      "url": "https://github.com/punkpeye/awesome-mcp-servers",
+      "role": "discovery-only",
+      "measured": {
+        "readmeBytes": 1433054,
+        "readmeLines": 4686,
+        "entries": 4230,
+        "machineReadableDataFiles": 0,
+        "hasVersionField": false,
+        "hasInstallField": false,
+        "hasChecksumField": false
+      },
+      "verdict": "仅作人工发现层。条目只含 仓库URL + 语言/scope/OS 标记 + 一句话描述，没有包名、安装命令、版本或校验和，无法作为安装层或更新层。"
+    },
+    {
+      "id": "npm-registry",
+      "url": "https://registry.npmmirror.com",
+      "role": "install-and-update",
+      "provides": [
+        "version",
+        "dist.integrity(sha512)",
+        "dist.tarball",
+        "dist.unpackedSize"
+      ]
+    },
+    {
+      "id": "pypi",
+      "url": "https://pypi.org",
+      "role": "install-and-update",
+      "provides": [
+        "info.version",
+        "urls[].digests.sha256",
+        "info.requires_python"
+      ]
+    }
+  ],
+  "criteria": {
+    "mustPass": [
+      "本地运行 🏠（纯云条目不入库）",
+      "语言为 TS/JS(npx) 或 Python(pip)，Go/Rust/C#/Java 源码型不入库（ARM64 无预编译产物）",
+      "不排除 Linux（无 🍎/🪟 独占标记）",
+      "不依赖 Docker daemon（PRoot 沙箱无）",
+      "不依赖真实桌面浏览器（Chromium/Chrome）",
+      "不强制境外付费 API Key",
+      "填补 harness 原生工具缺口（base/process/read/write/edit + 内置 browser 已覆盖的不收）"
+    ],
+    "measuredYield": {
+      "totalEntries": 4230,
+      "passLooseFilter": 1945,
+      "note": "宽松筛子就能过 46%，说明必须叠加人工精选，不能自动全量导入。"
+    }
+  },
+  "entries": [
+    {
+      "id": "mcp_websearch",
+      "name": "Web 搜索（Open-WebSearch）",
+      "summary": "免 API Key 多引擎搜索 + 网页正文抓取",
+      "replaces": "自研 websearch_mcp_server.py",
+      "recommendation": "follow-upstream",
+      "upstream": "Aas-ee/open-webSearch",
+      "license": "Apache-2.0",
+      "install": {
+        "channel": "npm",
+        "package": "open-websearch",
+        "pinned": "2.2.0",
+        "registry": "https://registry.npmmirror.com",
+        "integrity": "sha512-Wv2iZqknbNGNMqD9YQ7+gfgc0FFIFg303HfbysRDDbbob9vamCp/99ltP3EIMO/kskWERU9cFpDV3tO1sdnPTw==",
+        "unpackedSize": 720655
+      },
+      "runtime": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "open-websearch@2.2.0"
+        ],
+        "env": {
+          "MODE": "stdio",
+          "DEFAULT_SEARCH_ENGINE": "baidu"
+        }
+      },
+      "dependsOn": [
+        "nodejs-core"
+      ],
+      "transport": "STDIO",
+      "risk": "medium",
+      "arch": [
+        "arm64"
+      ],
+      "gaps": "新版不再内置 Playwright，fetchWebContent 只能走 request 模式；需浏览器渲染/带 Cookie 的页面会失败。",
+      "verified": {
+        "at": "2026-10-13",
+        "evidence": "npmmirror 2.2.0 存在，integrity 与 tarball 均存在"
+      }
+    },
+    {
+      "id": "mcp_codegraph",
+      "name": "CodeGraph 代码知识图谱",
+      "summary": "tree-sitter 解析 + SQLite 索引，提供符号检索/调用链/影响面",
+      "replaces": "自研 codegraph_mcp_server.py",
+      "recommendation": "follow-upstream",
+      "upstream": "colbymchenry/codegraph",
+      "license": "MIT",
+      "install": {
+        "channel": "npm",
+        "package": "@colbymchenry/codegraph",
+        "pinned": "1.6.2",
+        "registry": "https://registry.npmmirror.com",
+        "integrity": "sha512-hODH/mGnCf3IUMs6rzktv/zbecJIKJfdZAYHZ9mqecb0G7ZkHaA8CZafDVnswANFEL1YFcG+lfAwc5SIXzUH6Q==",
+        "unpackedSize": 1208076
+      },
+      "runtime": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "@colbymchenry/codegraph@1.6.2",
+          "serve",
+          "--mcp"
+        ]
+      },
+      "dependsOn": [
+        "nodejs-core"
+      ],
+      "transport": "STDIO",
+      "risk": "medium",
+      "arch": [
+        "arm64"
+      ],
+      "postInstall": {
+        "perWorkspace": "codegraph init -i（每个工作区建 .codegraph/codegraph.db 索引）",
+        "verify": "codegraph status 的 Backend: 行；native 为佳，wasm 为降级可接受"
+      },
+      "gaps": "better-sqlite3 为原生 addon，ARM64 未命中预编译时回落 WASM（较慢）。auto-sync 依赖 inotify，PRoot 下可能不稳，建议改为显式同步。",
+      "migrationCost": [
+        "上游无 codegraph_explore 工具，对应 codegraph_context",
+        "上游 MCP 未暴露 codegraph_sync（仅 CLI codegraph sync）",
+        "需同步修改 core/model/AgentSkill.kt 与 harness/src/main/assets/prompts/system/code-navigation.md"
+      ],
+      "verified": {
+        "at": "2026-10-13",
+        "evidence": "npmmirror 1.6.2 存在，integrity 与 tarball 均存在"
+      }
+    },
+    {
+      "id": "mcp_memory",
+      "name": "Knowledge Graph Memory",
+      "summary": "官方参考实现：跨会话持久化实体/关系记忆，本地 JSON 存储",
+      "recommendation": "new-gap-fill",
+      "upstream": "modelcontextprotocol/servers",
+      "license": "MIT",
+      "install": {
+        "channel": "npm",
+        "package": "@modelcontextprotocol/server-memory",
+        "pinned": "1.0.0",
+        "registry": "https://registry.npmmirror.com",
+        "integrity": "sha512-UDMtMrw2xeI16mcn7O4fesp9Pf3hYh91thuU5KSz0BxKqwnTwEytZKjHfkrqxxmKp0r4QHoiEkMV99UmadmODw==",
+        "unpackedSize": 55293
+      },
+      "runtime": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-memory@1.0.0"
+        ],
+        "env": {
+          "MEMORY_FILE_PATH": "/opt/tianyan/data/mcp-memory/memory.json"
+        }
+      },
+      "dependsOn": [
+        "nodejs-core"
+      ],
+      "transport": "STDIO",
+      "risk": "low",
+      "arch": [
+        "arm64"
+      ],
+      "gaps": "与项目既有 agent_memories(Room) 存在职责重叠，需明确边界：Room 为工程记忆，本 MCP 为模型自管知识图谱。若不划清会导致双写不一致。",
+      "verified": {
+        "at": "2026-10-13",
+        "evidence": "npmmirror 1.0.0 存在，integrity 与 tarball 均存在"
+      }
+    },
+    {
+      "id": "mcp_sequential_thinking",
+      "name": "Sequential Thinking",
+      "summary": "官方参考实现：显式多步推理链，只读无副作用",
+      "recommendation": "new-gap-fill",
+      "upstream": "modelcontextprotocol/servers",
+      "license": "MIT",
+      "install": {
+        "channel": "npm",
+        "package": "@modelcontextprotocol/server-sequential-thinking",
+        "pinned": "1.0.0",
+        "registry": "https://registry.npmmirror.com",
+        "integrity": "sha512-ykTmeS4Eejs+FESDrD73mDBNYCkb+cCZJ1MWuv7/vwucbVgGfEbBL5HVt2nVw0/vNF8jz+o9sO/WmxxfXt0J6w==",
+        "unpackedSize": 22424
+      },
+      "runtime": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-sequential-thinking@1.0.0"
+        ]
+      },
+      "dependsOn": [
+        "nodejs-core"
+      ],
+      "transport": "STDIO",
+      "risk": "low",
+      "arch": [
+        "arm64"
+      ],
+      "gaps": "纯计算，无 IO。审批策略可直接归为免审批。",
+      "verified": {
+        "at": "2026-10-13",
+        "evidence": "npmmirror 1.0.0 存在，integrity 与 tarball 均存在"
+      }
+    },
+    {
+      "id": "mcp_context7",
+      "name": "Context7 库文档检索",
+      "summary": "按库名拉取最新官方文档片段，降低 SDK 用法幻觉",
+      "recommendation": "new-gap-fill",
+      "upstream": "upstash/context7",
+      "install": {
+        "channel": "npm",
+        "package": "@upstash/context7-mcp",
+        "pinned": "4.3.0",
+        "registry": "https://registry.npmmirror.com",
+        "integrity": "sha512-fuDt5nWjE5JkAPLjU0m+m0LlJphxyegAvAmcwHoA5jrzAhKo/rVV0RFA8TOwODGdDVdt/nPxNslkxeDIDp/rPA==",
+        "unpackedSize": 202409
+      },
+      "runtime": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "@upstash/context7-mcp@4.3.0"
+        ]
+      },
+      "dependsOn": [
+        "nodejs-core"
+      ],
+      "transport": "STDIO",
+      "risk": "medium",
+      "arch": [
+        "arm64"
+      ],
+      "gaps": "依赖境外 SaaS 端点，国内网络可靠性待实测；失败应降级为不可用而非阻塞启动。",
+      "verified": {
+        "at": "2026-10-13",
+        "evidence": "npmmirror 4.3.0 存在，integrity 与 tarball 均存在"
+      }
+    },
+    {
+      "id": "mcp_github",
+      "name": "GitHub 平台集成",
+      "summary": "官方参考实现：Issues/PR/搜索/文件操作",
+      "recommendation": "optional-needs-credential",
+      "upstream": "modelcontextprotocol/servers",
+      "install": {
+        "channel": "npm",
+        "package": "@modelcontextprotocol/server-github",
+        "pinned": "2025.4.8",
+        "registry": "https://registry.npmmirror.com",
+        "integrity": "sha512-8N43bQw9MlUB0piTZHK2JMh8kYPKxH57d4Z7Wb8PS4by2MkZ0FzI5xPImg3xumpev82VZw2VWHQJJJYp+WkwEw==",
+        "unpackedSize": 73424
+      },
+      "runtime": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-github@2025.4.8"
+        ],
+        "env": {
+          "GITHUB_PERSONAL_ACCESS_TOKEN": "<vault-ref>"
+        }
+      },
+      "dependsOn": [
+        "nodejs-core"
+      ],
+      "transport": "STDIO",
+      "risk": "high",
+      "arch": [
+        "arm64"
+      ],
+      "gaps": "需要用户凭证。按 docs/SECURITY_SURFACE.md 走加密仓库注入，禁止落 Room、禁止进模型上下文。未配置凭证时该条目保持未启用。",
+      "verified": {
+        "at": "2026-10-13",
+        "evidence": "npmmirror 2025.4.8 存在，integrity 与 tarball 均存在"
+      }
+    },
+    {
+      "id": "mcp_git",
+      "name": "Git 仓库操作（官方）",
+      "summary": "官方参考实现：status/diff/log/commit 等 Git 操作",
+      "replaces": "自研 git_mcp_server.py（可选）",
+      "recommendation": "optional",
+      "upstream": "modelcontextprotocol/servers",
+      "install": {
+        "channel": "pypi",
+        "package": "mcp-server-git",
+        "pinned": "2026.10.10",
+        "requiresPython": ">=3.10",
+        "integritySource": "pypi:urls[].digests.sha256（安装时按实际分发件解析并落库比对）"
+      },
+      "runtime": {
+        "command": "python3",
+        "args": [
+          "-m",
+          "mcp_server_git",
+          "--repository",
+          "/workspace"
+        ],
+        "pythonEnv": "dedicated-venv"
+      },
+      "dependsOn": [
+        "python3-pip"
+      ],
+      "transport": "STDIO",
+      "risk": "medium",
+      "arch": [
+        "arm64"
+      ],
+      "gaps": "需为每个 pip 型 MCP 建独立 venv，否则依赖互相污染。自研 4.2KB 脚本零依赖且已集成，迁移收益有限。",
+      "verified": {
+        "at": "2026-10-13",
+        "evidence": "pypi 2026.10.10 存在，sha256 存在，requires_python >=3.10"
+      }
+    },
+    {
+      "id": "mcp_fetch",
+      "name": "Fetch 网页抓取（官方）",
+      "summary": "官方参考实现：HTML 转 Markdown 并返回正文",
+      "recommendation": "new-gap-fill",
+      "upstream": "modelcontextprotocol/servers",
+      "install": {
+        "channel": "pypi",
+        "package": "mcp-server-fetch",
+        "pinned": "2026.10.10",
+        "requiresPython": ">=3.10",
+        "integritySource": "pypi:urls[].digests.sha256"
+      },
+      "runtime": {
+        "command": "python3",
+        "args": [
+          "-m",
+          "mcp_server_fetch"
+        ],
+        "pythonEnv": "dedicated-venv"
+      },
+      "dependsOn": [
+        "python3-pip"
+      ],
+      "transport": "STDIO",
+      "risk": "low",
+      "arch": [
+        "arm64"
+      ],
+      "gaps": "与 mcp_websearch 的抓取能力重叠，但只抓给定 URL、更可控，可替代 websearch 的 fetch 路径。",
+      "verified": {
+        "at": "2026-10-13",
+        "evidence": "pypi 2026.10.10 存在，sha256 存在"
+      }
+    },
+    {
+      "id": "mcp_time",
+      "name": "Time 时区工具（官方）",
+      "summary": "官方参考实现：时区换算与当前时间",
+      "recommendation": "new-gap-fill",
+      "upstream": "modelcontextprotocol/servers",
+      "install": {
+        "channel": "pypi",
+        "package": "mcp-server-time",
+        "pinned": "2026.10.10",
+        "requiresPython": ">=3.10",
+        "integritySource": "pypi:urls[].digests.sha256"
+      },
+      "runtime": {
+        "command": "python3",
+        "args": [
+          "-m",
+          "mcp_server_time"
+        ],
+        "pythonEnv": "dedicated-venv"
+      },
+      "dependsOn": [
+        "python3-pip"
+      ],
+      "transport": "STDIO",
+      "risk": "low",
+      "arch": [
+        "arm64"
+      ],
+      "gaps": "零风险纯计算。可选，优先级低。",
+      "verified": {
+        "at": "2026-10-13",
+        "evidence": "pypi 2026.10.10 存在，sha256 存在"
+      }
+    },
+    {
+      "id": "mcp_pandoc",
+      "name": "Pandoc 文档格式转换",
+      "summary": "Office/Markdown/HTML/PDF 等格式互转",
+      "recommendation": "new-gap-fill",
+      "upstream": "vivekVells/mcp-pandoc",
+      "install": {
+        "channel": "pypi",
+        "package": "mcp-pandoc",
+        "pinned": "0.11.1",
+        "requiresPython": ">=3.11",
+        "integritySource": "pypi:urls[].digests.sha256"
+      },
+      "runtime": {
+        "command": "python3",
+        "args": [
+          "-m",
+          "mcp_pandoc"
+        ],
+        "pythonEnv": "dedicated-venv"
+      },
+      "dependsOn": [
+        "python3-pip",
+        "pandoc-binary"
+      ],
+      "transport": "STDIO",
+      "risk": "low",
+      "arch": [
+        "arm64"
+      ],
+      "gaps": "需要沙箱内有 pandoc 二进制（apt 可得），是新增的系统依赖；若 pandoc 不可用则该条目不可启用。",
+      "verified": {
+        "at": "2026-10-13",
+        "evidence": "pypi 0.11.1 存在，sha256 存在，requires_python >=3.11"
+      }
+    },
+    {
+      "id": "mcp_markitdown",
+      "name": "MarkItDown 文档转 Markdown",
+      "summary": "微软出品：把 PDF/Office/图片等转为 Markdown 供模型消费",
+      "recommendation": "new-gap-fill",
+      "upstream": "microsoft/markitdown",
+      "install": {
+        "channel": "pypi",
+        "package": "markitdown-mcp",
+        "pinned": "0.0.1a7",
+        "requiresPython": ">=3.10",
+        "integritySource": "pypi:urls[].digests.sha256"
+      },
+      "runtime": {
+        "command": "python3",
+        "args": [
+          "-m",
+          "markitdown_mcp"
+        ],
+        "pythonEnv": "dedicated-venv"
+      },
+      "dependsOn": [
+        "python3-pip"
+      ],
+      "transport": "STDIO",
+      "risk": "medium",
+      "arch": [
+        "arm64"
+      ],
+      "gaps": "仅发布预发布版（0.0.1a7），稳定性未验证。建议标记为实验性，不默认推荐。",
+      "verified": {
+        "at": "2026-10-13",
+        "evidence": "pypi 0.0.1a7 存在，sha256 存在"
+      }
+    },
+    {
+      "id": "mcp_duckdb",
+      "name": "DuckDB 数据分析",
+      "summary": "在沙箱内对 CSV/Parquet 做 SQL 分析",
+      "recommendation": "new-gap-fill",
+      "upstream": "motherduckdb/mcp-server-motherduck",
+      "install": {
+        "channel": "pypi",
+        "package": "mcp-server-duckdb",
+        "pinned": "1.1.0",
+        "requiresPython": ">=3.10",
+        "integritySource": "pypi:urls[].digests.sha256"
+      },
+      "runtime": {
+        "command": "python3",
+        "args": [
+          "-m",
+          "mcp_server_duckdb"
+        ],
+        "pythonEnv": "dedicated-venv"
+      },
+      "dependsOn": [
+        "python3-pip"
+      ],
+      "transport": "STDIO",
+      "risk": "low",
+      "arch": [
+        "arm64"
+      ],
+      "gaps": "duckdb 为原生扩展，ARM64 wheel 可得性需在装配期实测；缺失时回落源码编译会显著拖慢安装。",
+      "verified": {
+        "at": "2026-10-13",
+        "evidence": "pypi 1.1.0 存在，sha256 存在"
+      }
+    }
+  ],
+  "rejected": [
+    {
+      "candidate": "@executeautomation/playwright-mcp-server",
+      "version": "1.0.12",
+      "reason": "需要 Chromium 二进制。PRoot ARM64 沙箱无法承载，且体积远超收益。"
+    },
+    {
+      "candidate": "chrome-devtools-mcp",
+      "version": "1.10.1",
+      "reason": "需要真实 Chrome 实例。沙箱内无桌面浏览器；内置 in-app WebView MCP 已覆盖浏览器场景。"
+    },
+    {
+      "candidate": "@modelcontextprotocol/server-puppeteer",
+      "version": "2025.5.12",
+      "reason": "同 Playwright，需下载 Chromium。"
+    },
+    {
+      "candidate": "mcp-server-docker",
+      "version": "1.0.0",
+      "reason": "需要 Docker daemon。PRoot 为用户态，无容器运行时。"
+    },
+    {
+      "candidate": "server-github（无 scope 同名包）",
+      "version": "0.0.1-security",
+      "reason": "npm 安全占位包，表明该名称曾发生抢注/投毒。必须坚持白名单 + 固定版本 + 校验和，禁止裸包名安装。"
+    },
+    {
+      "candidate": "mcp-server-memory（PyPI 同名包）",
+      "version": "0.0.1",
+      "reason": "与官方 memory 实现同名但版本异常（0.0.1），疑似第三方抢注。官方 memory 走 npm 通道，PyPI 同名包不得入库。"
+    },
+    {
+      "candidate": "mcp-server-sqlite",
+      "version": "2025.4.25",
+      "reason": "官方实现已长期未更新，能力弱于项目自研 sqlite_mcp_server.py（4.3KB 零依赖）。保留自研，不迁移。"
+    },
+    {
+      "candidate": "全部云平台/境外 SaaS 类条目（Cloud Platforms 等）",
+      "reason": "需境外 API Key、且失败会阻塞或降级体验，与「离线开箱即用」定位冲突。"
+    },
+    {
+      "candidate": "全部 Go/Rust/C#/Java 源码型条目",
+      "reason": "ARM64 无预编译产物，需在设备上编译，安装成本不可接受。"
+    },
+    {
+      "candidate": "全部地图/地理类条目",
+      "reason": "涉及中国地图数据合规，境内地图服务须符合国家测绘规范。现有 geo-map-compliance-guard 约束下不引入第三方地图 MCP。"
+    }
+  ]
+}

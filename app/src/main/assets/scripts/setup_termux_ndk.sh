@@ -14,7 +14,13 @@ NDK_RELEASE="r29"
 NDK_ARCHIVE_NAME="android-ndk-r29-aarch64.tar.xz"
 NDK_SHA256="02e10e4ddfe8deaeb0bd0cf29d04c981ed5bc8a5d6b560ebb9e7661f472d684b"
 NDK_UPSTREAM_URL="https://github.com/lzhiyong/termux-ndk/releases/download/android-ndk/${NDK_ARCHIVE_NAME}"
-# 镜像节点与测速函数统一来自 tianyan-mirror-lib.sh（github.akams.cn 全量节点）
+NDK_URLS="
+https://ghfast.top/${NDK_UPSTREAM_URL}
+https://ghproxy.net/${NDK_UPSTREAM_URL}
+https://gh.llkk.cc/${NDK_UPSTREAM_URL}
+https://gh-proxy.com/${NDK_UPSTREAM_URL}
+${NDK_UPSTREAM_URL}
+"
 
 TOOLCHAIN_ROOT="/opt/tianyan/toolchains/android"
 NDK_ARTIFACT_DIR="$TOOLCHAIN_ROOT/ndk/artifacts/$NDK_SHA256"
@@ -36,9 +42,6 @@ if [ "${TIANYAN_TOOLCHAIN_LOCK_HELD:-0}" != "1" ]; then
         exit 1
     }
 fi
-
-# 引入共享镜像库（全量节点 + 并行测速函数）
-. /opt/tianyan/scripts/tianyan-mirror-lib.sh
 
 elf_machine_is_aarch64() {
     target="$1"
@@ -74,23 +77,8 @@ if ! validate_ndk "$NDK_PATH"; then
     rm -f "$archive"
     rm -rf "$staging" "$pending"
 
-    # 自动测速选最快镜像，最快失败则按序回退其余全量节点，官方直连兜底。
-    echo "==> [Tianyan] 正在并行测速选择最快镜像 (github.akams.cn 全量节点)..."
-    NDK_FAST_BASE=$(pick_fastest_mirror "$NDK_UPSTREAM_URL")
-    ORDERED_URLS=""
-    if [ -n "$NDK_FAST_BASE" ]; then
-        ORDERED_URLS="${NDK_FAST_BASE}${NDK_UPSTREAM_URL}"
-        echo "==> [Tianyan] 已选择最快镜像: $NDK_FAST_BASE"
-    else
-        echo "==> [Tianyan] 镜像全部不可用，直接官方直连"
-    fi
-    for base in $TIANYAN_MIRROR_NODES; do
-        [ -n "$base" ] || continue
-        ORDERED_URLS="$ORDERED_URLS ${base}${NDK_UPSTREAM_URL}"
-    done
-    ORDERED_URLS="$ORDERED_URLS $NDK_UPSTREAM_URL"
     downloaded=0
-    for url in $ORDERED_URLS; do
+    for url in $NDK_URLS; do
         echo "==> [Tianyan] 尝试下载 ARM64 NDK: $url"
         if curl -fL --retry 4 --retry-all-errors --connect-timeout 20 --max-time 1800 \
             "$url" -o "$archive" 2>/dev/null && [ -s "$archive" ]; then

@@ -1,5 +1,6 @@
 package top.tianyan.app.runtime.shell
 
+import top.tianyan.app.runtime.GuestProcessEnvironment
 import top.tianyan.app.runtime.RuntimePathManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -8,16 +9,35 @@ import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.CancellationException
 import java.io.File
 import java.io.ByteArrayOutputStream
-import java.util.concurrent.TimeUnit
-import javax.inject.Inject
-import javax.inject.Singleton
+import java.io.InputStream
+import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
+import top.tianyan.app.runtime.closeRuntimeResources
+import top.tianyan.app.runtime.environment.ExecutionEnvironmentContext
+import kotlinx.coroutines.currentCoroutineContext
 
-@Singleton
-class ProcessShellExecutor @Inject constructor(
-    private val pathManager: RuntimePathManager,
+class ProcessShellExecutor internal constructor(
+    private val baseEnvironment: () -> Map<String, String>,
+    private val captureDirectory: () -> File = { File(System.getProperty("java.io.tmpdir"), "tianyan-command-output") },
+    private val reaper: ProcessTreeReaper = SystemProcessTreeReaper,
+    private val startProcess: (List<String>, File?, Map<String, String>) -> Process,
 ) : ShellExecutor {
+    constructor(pathManager: RuntimePathManager) : this({ pathManager.hostProcessEnvironment() }, { pathManager.commandOutputCacheDir }, startProcess = { command, cwd, env ->
+        ProcessBuilder(command).apply {
+            cwd?.let { directory(it) }
+            environment().clear()
+            environment().putAll(env)
+        }.redirectErrorStream(false).start()
+    })
+    private val pending = ConcurrentHashMap<ShellProcessOwner, Boolean>()
+    override fun hasPending() = pending.isNotEmpty()
+    override fun hasUnsettled() = pending.values.any { it }
+    override fun pendingRootPids(): Set<Long> = pending.keys.mapNotNull { it.rootPid }.toSet()
+    override suspend fun closePending() = closeRuntimeResources(pending.keys.toList().map { owner -> suspend { owner.close() } })
 
     override suspend fun execute(
         command: List<String>,
@@ -27,82 +47,120 @@ class ProcessShellExecutor @Inject constructor(
         onOutput: ((String) -> Unit)?,
     ): CommandResult = withContext(Dispatchers.IO) {
         val startedAt = System.currentTimeMillis()
-        val process = ProcessBuilder(command)
-            .apply {
-                workingDirectory?.let { directory(it) }
-                // Keep the PRoot host environment deterministic. In particular,
-                // never inherit Termux's LD_PRELOAD or a stale PROOT_LOADER.
-                environment().clear()
-                environment().putAll(pathManager.hostProcessEnvironment())
-                environment().putAll(environment)
-            }
-            .redirectErrorStream(false)
-            .start()
+        var acquired: ShellProcessOwner? = null
+        val capture = currentCoroutineContext()[CommandOutputCapture]?.start(captureDirectory())
+        val registration = currentCoroutineContext()[ExecutionEnvironmentContext]?.own { acquired?.close() }
+        val launchEnvironment = GuestProcessEnvironment.commandLaunchEnvironment(
+            baseEnvironment() + environment,
+            command.firstOrNull().orEmpty(),
+            System.getenv("PATH"),
+        )
+        // forkTid 必须取样于 startProcess 之前，且两者之间不得有挂起点：/proc 以线程粒度记录
+        // children，一旦期间线程被调度走，解析出的 pid 就不再是本次 fork 的子进程。
+        val forkTid = reaper.forkTid()
+        val process = try { startProcess(command, workingDirectory, launchEnvironment) }
+        catch (failure: Throwable) { registration?.close(); throw failure }
+        val childPid = forkTid?.let(reaper::childOfThread)
+        val owned = ShellProcessOwner(process = process, reaper = reaper, childPid = childPid) { pending.remove(it) }
+        acquired = owned
+        owned.ownership = registration
+        pending[owned] = false
 
         // 🌟 关键修复：主动关闭子进程的标准输入（stdin），防止任何交互式脚本/命令无限阻塞在等待键盘输入上
         runCatching { process.outputStream.close() }
 
         val stdoutDeferred = async(Dispatchers.IO) {
-            readFully(process.inputStream, onOutput)
-        }
+            runInterruptible { readFully(process.inputStream, onOutput, capture?.first) }
+        }.also { owned.readers += it }
         val stderrDeferred = async(Dispatchers.IO) {
-            readFully(process.errorStream, onOutput)
-        }
+            runInterruptible { readFully(process.errorStream, onOutput, capture?.second) }
+        }.also { owned.readers += it }
 
+        var primaryFailure: Throwable? = null
         try {
             val exitCode = withTimeout(timeoutMs) {
                 runInterruptible(Dispatchers.IO) { process.waitFor() }
             }
-            val (stdout, stderr) = listOf(stdoutDeferred, stderrDeferred).awaitAll().let { values ->
-                values[0] to values[1]
+            // 成功路径同样必须给排水加超时：`sh -c 'server &'` 这类命令会让孙进程
+            // 继承 stdout/stderr 管道写端，主进程退出后 EOF 永不到来，awaitAll 无限
+            // 挂起、Agent 卡死。宽限期内 EOF 正常到达则返回完整输出；超时则取消读取
+            // 协程（runInterruptible 将取消映射为线程中断，阻塞 read 抛
+            // InterruptedIOException 被 readFully 兜底为 EOF），保留已读输出。
+            // 不取消的话 withContext 退出前 join 阻塞中的 reader 仍会永久挂起。
+            val drained = withTimeoutOrNull(OUTPUT_DRAIN_TIMEOUT_MS) {
+                listOf(stdoutDeferred, stderrDeferred).awaitAll()
+            }
+            if (drained == null) {
+                stdoutDeferred.cancel()
+                stderrDeferred.cancel()
             }
             CommandResult(
                 exitCode = exitCode,
-                stdout = stdout,
-                stderr = stderr,
+                stdout = drained?.get(0).orEmpty(),
+                stderr = drained?.get(1).orEmpty(),
                 durationMs = System.currentTimeMillis() - startedAt,
             )
-        } catch (timeout: kotlinx.coroutines.TimeoutCancellationException) {
-            process.destroyForcibly()
-            // 等进程树真正消亡：PRoot 被强杀后，被 ptrace 的 npm/node 由内核
-            // 异步清除，若立刻开始回滚删除目录，可能撞上仍在写入的残留进程。
-            runInterruptible(Dispatchers.IO) {
-                process.waitFor(PROCESS_TEARDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        } catch (timeout: TimeoutCancellationException) {
+            try {
+                owned.stopProcess()
+                // 等进程树真正消亡：PRoot 被强杀后，被 ptrace 的 npm/node 由内核
+                // 异步清除，若立刻开始回滚删除目录，可能撞上仍在写入的残留进程。
+                // Preserve output produced before the timeout. Cancelling the
+                // readers here discarded the only useful diagnostic from long
+                // setup scripts (APT/Gradle/Flutter), leaving just the timeout
+                // sentence in the installation dialog.
+                val partialStdout = runCatching {
+                    withTimeoutOrNull(PROCESS_TEARDOWN_TIMEOUT_MS) { stdoutDeferred.await() }.orEmpty()
+                }.getOrDefault("")
+                val partialStderr = runCatching {
+                    withTimeoutOrNull(PROCESS_TEARDOWN_TIMEOUT_MS) { stderrDeferred.await() }.orEmpty()
+                }.getOrDefault("")
+                // 读取协程可能仍阻塞在孙进程持有的管道上：中断并放弃，否则 withContext
+                // 退出前 join 它们会无限挂起。
+                stdoutDeferred.cancel()
+                stderrDeferred.cancel()
+                CommandResult(
+                    exitCode = TIMEOUT_EXIT_CODE,
+                    stdout = partialStdout,
+                    stderr = buildString {
+                        if (partialStderr.isNotBlank()) {
+                            append(partialStderr.trimEnd())
+                            append('\n')
+                        }
+                        append("Command timed out after ${timeoutMs}ms")
+                    },
+                    durationMs = System.currentTimeMillis() - startedAt,
+                    outputDiagnostic = "Command timed out after ${timeoutMs}ms",
+                )
+            } catch (failure: Throwable) {
+                primaryFailure = failure
+                throw failure
             }
-            // Preserve output produced before the timeout. Cancelling the
-            // readers here discarded the only useful diagnostic from long
-            // setup scripts (APT/Gradle/Flutter), leaving just the timeout
-            // sentence in the installation dialog.
-            val partialStdout = runCatching {
-                withTimeoutOrNull(PROCESS_TEARDOWN_TIMEOUT_MS) { stdoutDeferred.await() }.orEmpty()
-            }.getOrDefault("")
-            val partialStderr = runCatching {
-                withTimeoutOrNull(PROCESS_TEARDOWN_TIMEOUT_MS) { stderrDeferred.await() }.orEmpty()
-            }.getOrDefault("")
-            CommandResult(
-                exitCode = TIMEOUT_EXIT_CODE,
-                stdout = partialStdout,
-                stderr = buildString {
-                    if (partialStderr.isNotBlank()) {
-                        append(partialStderr.trimEnd())
-                        append('\n')
-                    }
-                    append("Command timed out after ${timeoutMs}ms")
-                },
-                durationMs = System.currentTimeMillis() - startedAt,
-            )
-        } catch (cancellation: kotlinx.coroutines.CancellationException) {
+        } catch (cancellation: CancellationException) {
             // 用户主动取消编译：强杀 PRoot 进程树，避免 Gradle 后台继续跑
-            process.destroyForcibly()
+            primaryFailure = cancellation
             throw cancellation
+        } catch (failure: Throwable) {
+            primaryFailure = failure
+            throw failure
         } finally {
-            process.destroy()
+            try { owned.close() } catch (cleanup: Throwable) {
+                pending.computeIfPresent(owned) { _, _ -> true }
+                val primary = primaryFailure
+                if (primary == null) throw cleanup else primary.addSuppressed(cleanup)
+            }
         }
     }
 
-    private suspend fun readFully(
-        stream: java.io.InputStream,
+    /**
+     * 排水读取整个流。必须保持非 suspend 且运行在 [runInterruptible] 内：
+     * 管道可能被未退出的孙进程持有导致 EOF 永不到来，只有线程中断才能
+     * 打破阻塞中的 `read()`（InterruptedIOException，视为 EOF 兜底）。
+     */
+    private fun readFully(
+        stream: InputStream,
         onOutput: ((String) -> Unit)? = null,
+        capture: CommandStreamCapture? = null,
     ): String = try {
         stream.use { input ->
             val kept = ByteArrayOutputStream(MAX_CAPTURE_BYTES)
@@ -117,7 +175,8 @@ class ProcessShellExecutor @Inject constructor(
             var consecutiveCallbackFailures = 0
             while (true) {
                 val read = input.read(buffer)
-                if (read < 0) break
+                if (read < 0) { capture?.finished(); break }
+                capture?.add(buffer, read)
                 totalBytes += read
                 val remaining = MAX_CAPTURE_BYTES - kept.size()
                 if (remaining > 0) kept.write(buffer, 0, minOf(read, remaining))
@@ -126,7 +185,7 @@ class ProcessShellExecutor @Inject constructor(
                     try {
                         callback(chunk)
                         consecutiveCallbackFailures = 0
-                    } catch (cancellation: kotlinx.coroutines.CancellationException) {
+                    } catch (cancellation: CancellationException) {
                         throw cancellation
                     } catch (t: Throwable) {
                         consecutiveCallbackFailures++
@@ -139,7 +198,7 @@ class ProcessShellExecutor @Inject constructor(
                 }
             }
             buildString {
-                append(kept.toByteArray().toString(Charsets.UTF_8))
+                append(kept.toString(Charsets.UTF_8.name()))
                 if (totalBytes > kept.size()) {
                     append("\n\n[进程输出已截断：共 ")
                     append(totalBytes)
@@ -149,9 +208,9 @@ class ProcessShellExecutor @Inject constructor(
                 }
             }
         }
-    } catch (cancellation: kotlinx.coroutines.CancellationException) {
+    } catch (cancellation: CancellationException) {
         throw cancellation
-    } catch (io: java.io.IOException) {
+    } catch (io: IOException) {
         // Timeout teardown closes the process streams from this thread while a
         // reader is blocked in read(); Android surfaces that as
         // InterruptedIOException. Treat it as EOF: the timeout already produced
@@ -163,7 +222,10 @@ class ProcessShellExecutor @Inject constructor(
     private companion object {
         const val TIMEOUT_EXIT_CODE = 124
         const val PROCESS_TEARDOWN_TIMEOUT_MS = 1_000L
-        const val MAX_CAPTURE_BYTES = 4 * 1024 * 1024
+
+        /** 成功退出后等待输出管道 EOF 的排水宽限期：正常毫秒级，超时即放弃（孙进程持管道场景）。 */
+        const val OUTPUT_DRAIN_TIMEOUT_MS = 5_000L
+        const val MAX_CAPTURE_BYTES = 2 * 1024 * 1024
         const val READ_BUFFER_BYTES = 16 * 1024
 
         /** onOutput 连续抛异常达到该次数后停用流式回调，仅保留排水与完整输出捕获。 */

@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlinx.serialization.json.Json
 
 class HookRuleStoreTest {
 
@@ -105,7 +106,7 @@ class HookRuleStoreTest {
         s.addScript(InjectedScript(id = "sc_1", name = "n", code = "void 0"))
         val payload = s.payloadFor("t")
         // 反序列化回 payload 模型（验证 JSON 合法且结构无损）
-        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+        val json = Json { ignoreUnknownKeys = true }
         val decoded = json.decodeFromString(HookRulesPayload.serializer(), payload)
         assertEquals(1, decoded.rules.size)
         assertEquals("hr_1", decoded.rules[0].id)

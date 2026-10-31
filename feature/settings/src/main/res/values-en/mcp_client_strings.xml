@@ -1,0 +1,9 @@
+<resources>
+    <string name="mcp_client_intro">MCP provides external tools for the agent. STDIO services run in the bound Linux environment; HTTP services use their configured endpoints.</string>
+    <string name="mcp_client_idle_title">STDIO idle timeout</string>
+    <string name="mcp_client_minutes">%1$d min</string>
+    <string name="mcp_client_idle_hint">Reclaim idle processes while keeping the tool catalog. The next call reconnects automatically. Active requests are protected. Checked once a minute; applies only to STDIO services.</string>
+    <string name="mcp_client_save_failed">Could not save. Please select again.</string>
+    <string name="mcp_client_sleeping">Ready (sleeping), reconnects on the next call</string>
+    <string name="mcp_client_waking">Waking process…</string>
+</resources>

@@ -68,8 +68,6 @@ import top.tianyan.app.ui.components.RuntimeIconButton
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeOutlinedButton
 import top.tianyan.app.ui.components.SyntaxHighlighter
-import top.tianyan.app.ui.components.TianyanGlassPanel
-
 enum class ArtifactViewMode {
     PREVIEW,
     CODE,
@@ -169,9 +167,10 @@ fun ArtifactPreviewSheet(
                 .heightIn(min = 420.dp, max = 680.dp),
         ) {
             // 1. 顶栏标题与模式切换
-            TianyanGlassPanel(
+            Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
             ) {
                 Row(
                     modifier = Modifier
@@ -208,7 +207,7 @@ fun ArtifactPreviewSheet(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
                                     text = title.ifEmpty { relativePath.substringAfterLast('/') },
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    style = MaterialTheme.typography.titleMedium,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
@@ -451,7 +450,7 @@ fun ArtifactPreviewSheet(
                                     .clickable { zoomScale = (zoomScale - 0.15f).coerceIn(0.7f, 2.5f) },
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Text("-", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                                Text("-", style = MaterialTheme.typography.titleMedium)
                             }
 
                             Text(
@@ -475,7 +474,7 @@ fun ArtifactPreviewSheet(
                                     .clickable { zoomScale = (zoomScale + 0.15f).coerceIn(0.7f, 2.5f) },
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Text("+", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                                Text("+", style = MaterialTheme.typography.titleMedium)
                             }
                         }
                     }

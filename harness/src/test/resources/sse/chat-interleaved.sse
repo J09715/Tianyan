@@ -1,0 +1,16 @@
+: synthetic chat / DeepSeek-style reasoning fixture
+
+data: {"choices":[{"delta":{"reasoning_content":"思考"}}]}
+
+data: {"choices":[{"delta":{"content":"你"}}]}
+
+data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","function":{"name":"read","arguments":"{\"path\":\""}}]}}]}
+
+data: {"choices":[{"delta":{"tool_calls":[{"index":1,"id":"c2","function":{"name":"base","arguments":"{\"command\":\""}}]}}]}
+
+data: {"choices":[{"delta":{"tool_calls":[{"index":1,"function":{"arguments":"pwd\"}"}},{"index":0,"function":{"arguments":"你好.txt\"}"}}]}}]}
+
+data: {"choices":[{"delta":{"content":"好"}}]}
+
+data: [DONE]
+

@@ -1,0 +1,11 @@
+<resources>
+    <string name="plugin_library_title">Plugin library</string>
+    <string name="plugin_library_summary">Download plugins, check updates and switch GitHub / Gitee sources</string>
+    <string name="plugin_library_stop_download">Stop download</string>
+    <string name="plugin_library_download_percent">%1$d%%</string>
+    <string name="plugin_library_installed">Installed</string>
+    <string name="plugin_library_installed_version">Installed · %1$s</string>
+    <string name="plugin_library_not_installed">Not installed</string>
+    <string name="plugin_library_installing">Installing…</string>
+    <string name="plugin_library_update_available">Update available: %1$s</string>
+</resources>

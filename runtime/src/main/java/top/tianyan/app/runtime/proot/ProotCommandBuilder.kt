@@ -1,19 +1,21 @@
 package top.tianyan.app.runtime.proot
 
 import top.tianyan.app.core.common.logging.AppLogger
+import top.tianyan.app.core.common.shell.ShellQuote
+import top.tianyan.app.core.model.StorageMountBinding
 import top.tianyan.app.runtime.EnvironmentResolver
+import top.tianyan.app.runtime.backend.GuestCommandBuilder
+import top.tianyan.app.runtime.shell.SessionConfig
 import top.tianyan.app.runtime.shell.ShellCommand
 import java.io.File
-import javax.inject.Inject
-import javax.inject.Singleton
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
-@Singleton
 class ProotCommandBuilder private constructor(
     private val environmentResolver: EnvironmentResolver,
     private val logWarning: (String) -> Unit,
-) {
+) : GuestCommandBuilder {
 
-    @Inject
     constructor(
         environmentResolver: EnvironmentResolver,
         logger: AppLogger,
@@ -22,18 +24,18 @@ class ProotCommandBuilder private constructor(
     /** JVM tests do not need Android logging while validating pure argument construction. */
     internal constructor(environmentResolver: EnvironmentResolver) : this(environmentResolver, {})
 
-    fun build(
+    override fun build(
         prootBinary: File,
         rootfsDir: File,
         workspaceDir: File,
-        homeDir: File = File(rootfsDir.parentFile, "home"),
-        optDir: File = File(rootfsDir.parentFile, "opt/tianyan"),
-        tmpDir: File = File(rootfsDir.parentFile, "tmp"),
-        attachmentsDir: File = File(rootfsDir.parentFile, "attachments"),
-        ipcDir: File = File(workspaceDir.parentFile ?: rootfsDir.parentFile!!, "git-ipc"),
+        homeDir: File,
+        optDir: File,
+        tmpDir: File,
+        attachmentsDir: File,
         command: ShellCommand,
-        mounts: List<top.tianyan.app.core.model.StorageMountBinding> = emptyList(),
-        emulatorBinary: File? = null,
+        mounts: List<StorageMountBinding>,
+        emulatorBinary: File?,
+        hostCredential: Map<String, String>,
     ): List<String> = buildList {
         add(prootBinary.absolutePath)
         addEmulator(emulatorBinary)
@@ -63,10 +65,6 @@ class ProotCommandBuilder private constructor(
         attachmentsDir.mkdirs()
         add("-b")
         add("${attachmentsDir.absolutePath}:/attachments")
-        // Git 凭证 IPC 桥接目录：跨发行版共享；沙箱内 credential.helper 与 app 通过这里做文件 IPC。
-        ipcDir.mkdirs()
-        add("-b")
-        add("${ipcDir.absolutePath}:/tianyan-ipc")
         addHostSystemBindings()
         addStorageMountBindings(mounts)
         add("-w")
@@ -75,25 +73,26 @@ class ProotCommandBuilder private constructor(
         add("-lc")
         val resolvedCommand = shellCommand(
             commandLine = command.commandLine,
-            environment = environmentResolver.merge(provider = command.environment),
+            // 宿主注入的凭据最后叠加：可撤销、由原生代码签发，且优先级高于 Provider 环境。
+            environment = environmentResolver.merge(provider = command.environment) + hostCredential,
         )
         add(if (command.forcePty) wrapInPty(resolvedCommand) else resolvedCommand)
     }
 
-    fun buildInteractive(
+    override fun buildInteractive(
         prootBinary: File,
         rootfsDir: File,
         workspaceDir: File,
-        homeDir: File = File(rootfsDir.parentFile, "home"),
-        optDir: File = File(rootfsDir.parentFile, "opt/tianyan"),
-        tmpDir: File = File(rootfsDir.parentFile, "tmp"),
-        attachmentsDir: File = File(rootfsDir.parentFile, "attachments"),
-        ipcDir: File = File(workspaceDir.parentFile ?: rootfsDir.parentFile!!, "git-ipc"),
-        config: top.tianyan.app.runtime.shell.SessionConfig,
-        ptyMarker: String? = null,
-        nativePty: Boolean = false,
-        mounts: List<top.tianyan.app.core.model.StorageMountBinding> = emptyList(),
-        emulatorBinary: File? = null,
+        homeDir: File,
+        optDir: File,
+        tmpDir: File,
+        attachmentsDir: File,
+        config: SessionConfig,
+        ptyMarker: String?,
+        nativePty: Boolean,
+        mounts: List<StorageMountBinding>,
+        emulatorBinary: File?,
+        hostCredential: Map<String, String>,
     ): List<String> = buildList {
         val columns = config.columns.coerceIn(20, 400)
         val rows = config.rows.coerceIn(5, 200)
@@ -125,10 +124,6 @@ class ProotCommandBuilder private constructor(
         attachmentsDir.mkdirs()
         add("-b")
         add("${attachmentsDir.absolutePath}:/attachments")
-        // Git 凭证 IPC 桥（跟 build 同一份，交互终端 git 缺凭据也走全局弹窗）
-        ipcDir.mkdirs()
-        add("-b")
-        add("${ipcDir.absolutePath}:/tianyan-ipc")
         addHostSystemBindings()
         addStorageMountBindings(mounts)
         add("-w")
@@ -138,7 +133,7 @@ class ProotCommandBuilder private constructor(
         val environment = environmentResolver.merge(
             provider = config.environment,
             interactive = true,
-        )
+        ) + hostCredential
         val bannerPrelude = if (config.showBanner) "cat $GUEST_MOTD 2>/dev/null; " else ""
         if (nativePty) {
             // 真 PTY：命令串直接交给 bash 解析。commandLine 已由调用方完成 shell 引用
@@ -150,9 +145,6 @@ class ProotCommandBuilder private constructor(
                 require(PTY_MARKER.matches(it)) { "PTY marker path is invalid" }
             }
             val markerPrelude = marker?.let { "tty > $it; " }.orEmpty()
-            // raw 协议会话：script 创建的 PTY 同样默认开 ECHO，不关掉就会回显
-            // 宿主写出的 JSON 帧，读循环把回显当成引擎反向请求（握手 -32601）。
-            val echoPrelude = if (config.rawTerminal) "stty -echo -icanon -opost; " else ""
             // fallback：整条命令会被塞进 script -qfec '...' 的单引号里，再由 script 内层
             // shell 解析，需要 '\'' 双层转义。
             val scriptEmbed = config.commandLine.replace("'", "'\\''")
@@ -161,8 +153,7 @@ class ProotCommandBuilder private constructor(
                     commandLine =
                         bannerPrelude +
                             "if command -v script >/dev/null 2>&1; then " +
-                            "exec script -qfec '$markerPrelude $echoPrelude" +
-                            "stty cols $columns rows $rows; " +
+                            "exec script -qfec '$markerPrelude stty cols $columns rows $rows; " +
                             "$scriptEmbed' /dev/null; " +
                             "else ${config.commandLine}; fi",
                     environment = environment,
@@ -178,7 +169,7 @@ class ProotCommandBuilder private constructor(
      */
     private fun wrapInPty(commandLine: String): String =
         "if command -v script >/dev/null 2>&1; then " +
-            "exec script -qfec " + shellQuote(commandLine) + " /dev/null; " +
+            "exec script -qfec " + ShellQuote.of(commandLine) + " /dev/null; " +
             "else $commandLine; fi"
 
     private fun shellCommand(
@@ -187,13 +178,10 @@ class ProotCommandBuilder private constructor(
     ): String {
         val exports = environment.entries.joinToString("; ") { (key, value) ->
             require(ENVIRONMENT_KEY.matches(key)) { "Invalid environment variable name: $key" }
-            "export $key=${shellQuote(value)}"
+            "export $key=${ShellQuote.of(value)}"
         }
         return if (exports.isBlank()) commandLine else "$exports; $commandLine"
     }
-
-    private fun shellQuote(value: String): String =
-        "'${value.replace("'", "'\\\''")}'"
 
     /** Add PRoot QEMU user-mode emulation for a dedicated x86_64 guest only. */
     private fun MutableList<String>.addEmulator(emulatorBinary: File?) {
@@ -220,21 +208,7 @@ class ProotCommandBuilder private constructor(
     /** Android host paths used by the PRoot tracer and Android linker. */
     private fun MutableList<String>.addHostSystemBindings() {
         val skipped = mutableListOf<String>()
-        listOf(
-            "/apex",
-            "/data/app",
-            "/data/dalvik-cache",
-            "/data/misc/apexdata/com.android.art/dalvik-cache",
-            "/system",
-            "/system_ext",
-            "/vendor",
-            "/product",
-            "/odm",
-            "/linkerconfig/com.android.art/ld.config.txt",
-            "/linkerconfig/ld.config.txt",
-            "/plat_property_contexts",
-            "/property_contexts",
-        ).forEach { path ->
+        ProotMountLayout.hostSystemPaths.forEach { path ->
             val hostPath = File(path)
             if (hostPath.exists() && hostPath.canRead()) {
                 add("-b")
@@ -243,39 +217,19 @@ class ProotCommandBuilder private constructor(
                 skipped.add(path)
             }
         }
-        // 记录被跳过的绑定——这些缺失会导致沙箱内 Android 二进制无法执行（"无 linker"问题）。
-        //
-        // 但要区分「本就不该存在」与「本该有却读不到」：
-        // 应用进程在 Android 10+ 上永远读不到 /apex、/data/app、/data/dalvik-cache
-        // 以及 SELinux 的 property_contexts（这是平台限制，不是环境损坏）。
-        // 每次都按警告打日志会把运行日志刷满（实测同一秒能刷十几条），
-        // 真正需要注意的缺失反而被淹没。所以只对「预期可用」的路径告警。
-        val expectedMissing = setOf(
-            "/apex",
-            "/data/app",
-            "/data/dalvik-cache",
-            "/data/misc/apexdata/com.android.art/dalvik-cache",
-            "/plat_property_contexts",
-            "/property_contexts",
-        )
-        val unexpected = skipped.filterNot { it in expectedMissing }
-        if (unexpected.isNotEmpty()) {
-            logWarning("HostSystemBindings: ${unexpected.size} path(s) skipped (not exist/unreadable): $unexpected")
+        // 缺失绑定会导致沙箱内 Android 二进制无法执行；同一进程只告警一次，避免刷屏。
+        if (skipped.isNotEmpty() && hostBindingsWarningLogged.compareAndSet(false, true)) {
+            logWarning("HostSystemBindings: ${skipped.size} path(s) skipped (not exist/unreadable): $skipped")
         }
     }
 
     /** 宿主外部存储映射绑定 (如 /storage/emulated/0/Download -> /sdcard/Download) */
     private fun MutableList<String>.addStorageMountBindings(
-        mounts: List<top.tianyan.app.core.model.StorageMountBinding>,
+        mounts: List<StorageMountBinding>,
     ) {
-        // 单个绑定非法（路径不存在/越界/含非法字符）绝不抛异常：require() 抛出会沿
-        // build() 冒到运行时初始化，导致 App 启动即闪退且无法进设置删绑定（崩溃循环，
-        // 用户实测）。逐条校验，失败的记日志并跳过，其余绑定照常生效。
-        mounts.filter { it.enabled }.forEach { binding ->
-            val argument = runCatching { validateStorageMount(binding) }
-                .onFailure { logWarning("StorageMountBinding skipped: ${binding.hostPath} → ${binding.guestPath} (${it.message})") }
-                .getOrNull()
-            if (argument != null) {
+        if (mounts.isNotEmpty()) {
+            mounts.filter { it.enabled }.forEach { binding ->
+                val argument = validateStorageMount(binding) ?: return@forEach
                 add("-b")
                 add(argument)
             }
@@ -283,35 +237,25 @@ class ProotCommandBuilder private constructor(
     }
 
     private fun validateStorageMount(
-        binding: top.tianyan.app.core.model.StorageMountBinding,
-    ): String {
-        require(':' !in binding.hostPath && '\u0000' !in binding.hostPath) { "宿主挂载路径包含非法字符" }
-        require(':' !in binding.guestPath && '\u0000' !in binding.guestPath) { "容器挂载路径包含非法字符" }
+        binding: StorageMountBinding,
+    ): String? {
+        // 规则统一收敛在 StorageMountBinding.validationError，与运行时过滤、设置页校验共用。
+        // 此处 require 是防挂载逃逸的最后安全防线：即使 DB 被篡改也不允许越界绑定进入 PRoot。
+        val error = StorageMountBinding.validationError(binding)
+        require(error == null) { error ?: "存储挂载绑定不合法" }
 
-        val guest = normalizeGuestPath(binding.guestPath)
-        require(ALLOWED_GUEST_MOUNT_ROOTS.any { guest == it || guest.startsWith("$it/") }) {
-            "容器挂载仅允许位于 /mnt 或 /sdcard 内"
-        }
-
-        val sharedRoot = File(SHARED_STORAGE_ROOT).canonicalFile
+        val guest = checkNotNull(StorageMountBinding.normalizeGuestPath(binding.guestPath))
         val host = File(binding.hostPath).canonicalFile
-        // 安全边界先行：越界路径直接拒绝，绝不 mkdir
-        require(isInside(sharedRoot, host)) { "宿主挂载仅允许位于 $SHARED_STORAGE_ROOT 内" }
-        // 用户填了尚未创建的目录是正常用法：装配期自动补建（此前 require 直接抛 → 启动闪退）
-        if (!host.isDirectory) host.mkdirs()
-        require(host.isDirectory && host.canRead()) { "宿主挂载目录不可访问且无法自动创建：${binding.hostPath}" }
+        if (!host.isDirectory || !host.canRead()) {
+            // 同一进程内同一路径只告警一次：无效挂载会在每次构建 proot 命令时被重复校验，
+            // 不去重会把 runtime.log 刷成一片噪声、淹没真正的内存/崩溃线索。
+            if (storageMountWarningsLogged.add(binding.hostPath)) {
+                logWarning("宿主挂载目录不可访问（不存在/非目录/不可读），已跳过绑定：${binding.hostPath}")
+            }
+            return null
+        }
         return "${host.absolutePath}:$guest"
     }
-
-    private fun normalizeGuestPath(path: String): String {
-        require(path.startsWith('/')) { "容器挂载路径必须是绝对路径" }
-        val segments = path.split('/').filter { it.isNotBlank() && it != "." }
-        require(segments.none { it == ".." }) { "容器挂载路径不允许包含 .." }
-        return "/${segments.joinToString("/")}".trimEnd('/').ifBlank { "/" }
-    }
-
-    private fun isInside(root: File, candidate: File): Boolean =
-        candidate == root || candidate.absolutePath.startsWith(root.absolutePath + File.separator)
 
     private companion object {
         const val GUEST_SHELL = "/bin/sh"
@@ -320,7 +264,9 @@ class ProotCommandBuilder private constructor(
         const val LINK2SYMLINK_DIRECTORY = ".l2s"
         val PTY_MARKER = Regex("/opt/tianyan/\\.pty-[A-Za-z0-9-]{8,64}")
         val ENVIRONMENT_KEY = Regex("[A-Za-z_][A-Za-z0-9_]*")
-        const val SHARED_STORAGE_ROOT = "/storage/emulated/0"
-        val ALLOWED_GUEST_MOUNT_ROOTS = setOf("/mnt", "/sdcard")
+        private val hostBindingsWarningLogged = AtomicBoolean(false)
+
+        /** 同一进程内已告警过的无效存储挂载路径，避免每次构建命令都刷屏。 */
+        private val storageMountWarningsLogged = ConcurrentHashMap.newKeySet<String>()
     }
 }

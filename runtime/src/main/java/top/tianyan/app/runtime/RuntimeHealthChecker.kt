@@ -1,16 +1,14 @@
 package top.tianyan.app.runtime
 
-import top.tianyan.app.runtime.proot.ProotCommandBuilder
+import top.tianyan.app.runtime.backend.BackendSelector
+import top.tianyan.app.runtime.shell.CommandResult
 import top.tianyan.app.runtime.shell.ShellCommand
 import top.tianyan.app.runtime.shell.ShellExecutor
 import java.io.File
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class RuntimeHealthChecker @Inject constructor(
+class RuntimeHealthChecker(
     private val pathManager: RuntimePathManager,
-    private val prootCommandBuilder: ProotCommandBuilder,
+    private val backendSelector: BackendSelector,
     private val shellExecutor: ShellExecutor,
 ) {
     suspend fun check(): RuntimeHealth {
@@ -60,7 +58,7 @@ class RuntimeHealthChecker @Inject constructor(
     }
 
     private fun buildFailureDetail(
-        probe: top.tianyan.app.runtime.shell.CommandResult,
+        probe: CommandResult,
         workspaceWritable: Boolean,
     ): String {
         val details = buildList {
@@ -70,10 +68,10 @@ class RuntimeHealthChecker @Inject constructor(
         return details.ifEmpty { listOf("Health probe returned empty output") }.joinToString("; ")
     }
 
-    private fun top.tianyan.app.runtime.shell.CommandResult.isBlankOrFailed(): Boolean =
+    private fun CommandResult.isBlankOrFailed(): Boolean =
         !isSuccess || stdout.isBlank()
 
-    private fun top.tianyan.app.runtime.shell.CommandResult.describeFailure(
+    private fun CommandResult.describeFailure(
         label: String,
     ): String {
         val output = (stderr.ifBlank { stdout }).trim().replace(Regex("\\s+"), " ")
@@ -88,7 +86,7 @@ class RuntimeHealthChecker @Inject constructor(
     }
 
     private suspend fun runCommand(command: ShellCommand) = shellExecutor.execute(
-        command = prootCommandBuilder.build(
+        command = backendSelector.active().build(
             prootBinary = pathManager.activeProotFile(),
             rootfsDir = pathManager.rootfsDir,
             workspaceDir = pathManager.workspaceDir,
@@ -100,7 +98,7 @@ class RuntimeHealthChecker @Inject constructor(
     )
 
     private fun failedCommandResult(throwable: Throwable) =
-        top.tianyan.app.runtime.shell.CommandResult(
+        CommandResult(
             exitCode = 126,
             stdout = "",
             stderr = throwable.message ?: throwable.javaClass.simpleName,

@@ -4,77 +4,124 @@ import android.content.Context
 import android.provider.Settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
+import kotlinx.serialization.json.Json
 import top.tianyan.app.core.database.AiModelRepository
+import top.tianyan.app.core.database.WorkflowExecutionLogEntity
 import top.tianyan.app.core.database.WorkflowRepository
+import top.tianyan.app.core.database.WorkflowScheduleEntity
 import top.tianyan.app.core.model.workflow.BuiltinWorkflows
 import top.tianyan.app.core.model.workflow.FailurePolicy
-import top.tianyan.app.core.model.workflow.NodeRunStatus
 import top.tianyan.app.core.model.workflow.WorkflowApprovalRequest
 import top.tianyan.app.core.model.workflow.WorkflowDefinition
+import top.tianyan.app.core.model.workflow.WorkflowDefinitionImport
 import top.tianyan.app.core.model.workflow.WorkflowEdge
 import top.tianyan.app.core.model.workflow.WorkflowNode
 import top.tianyan.app.core.model.workflow.WorkflowNodeType
-import top.tianyan.app.core.model.workflow.WorkflowRunStatus
 import top.tianyan.app.core.model.workflow.WorkflowRuntimeState
 import top.tianyan.app.core.model.workflow.WorkflowTrigger
-import top.tianyan.app.harness.workflow.WorkflowRunHandle
-import top.tianyan.app.harness.workflow.WorkflowScheduler
+import top.tianyan.app.harness.workflow.WorkflowRunManager
+import top.tianyan.app.harness.workflow.WorkflowScheduleRepository
 import top.tianyan.app.runtime.RuntimePathManager
 import top.tianyan.app.runtime.gui.WorkflowGuiHudBridge
 import top.tianyan.app.ui.workflow.hud.WorkflowHudService
 import java.io.File
+import top.tianyan.app.core.model.workflow.WorkflowLayout
 
-data class DiscoveredApk(
-    val file: File,
-    val name: String,
-    val relativePath: String,
-    val sandboxPath: String,
-    val sizeBytes: Long,
-    val lastModified: Long,
-)
-
-@HiltViewModel
-class WorkflowViewModel @Inject constructor(
+class WorkflowViewModel(
     private val repository: WorkflowRepository,
-    private val scheduler: WorkflowScheduler,
+    private val runManager: WorkflowRunManager,
+    private val scheduleRepository: WorkflowScheduleRepository,
     private val hud: WorkflowGuiHudBridge,
-    @ApplicationContext private val appContext: Context,
+    private val appContext: Context,
     aiModelRepository: AiModelRepository,
     private val pathManager: RuntimePathManager,
+    private val json: Json,
 ) : ViewModel() {
     val definitions: StateFlow<List<WorkflowDefinition>> = repository.observeDefinitions()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BuiltinWorkflows.all)
-    val history = repository.observeHistory()
+    val history: StateFlow<List<WorkflowHistoryEntry>> = repository.observeRecentExecutions()
+        .map { logs -> logs.mapNotNull(::decodeHistory) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val models = aiModelRepository.observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-    private val _error = MutableStateFlow<String?>(null)
-    val error = _error.asStateFlow()
-    fun clearError() { _error.value = null }
 
-    private val _activeState = MutableStateFlow<WorkflowRuntimeState?>(null)
-    val activeState = _activeState.asStateFlow()
-    private val _approvalRequest = MutableStateFlow<WorkflowApprovalRequest?>(null)
-    val approvalRequest = _approvalRequest.asStateFlow()
+    /** 定时计划列表（含禁用项），按启用与下次触发时间排序。 */
+    val schedules: StateFlow<List<WorkflowScheduleEntity>> = scheduleRepository.observeSchedules()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun saveSchedule(entity: WorkflowScheduleEntity) {
+        viewModelScope.launch { runCatching { scheduleRepository.upsert(entity) } }
+    }
+
+    fun deleteSchedule(id: String) {
+        viewModelScope.launch { runCatching { scheduleRepository.delete(id) } }
+    }
+
+    fun toggleSchedule(id: String, enabled: Boolean) {
+        viewModelScope.launch { runCatching { scheduleRepository.setEnabled(id, enabled) } }
+    }
+    private val _error = MutableStateFlow<String?>(null)
+    val error = combine(_error, runManager.historyErrors, ::workflowHistoryError)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    fun clearError() { _error.value = null }
+    /** 进程级注册表中的全部活跃/近期运行（含后台运行），供「后台运行中」指示与切换。 */
+    val allRuns: StateFlow<Map<String, WorkflowRuntimeState>> = runManager.activeRuns
+    val running: StateFlow<Boolean> = runManager.running
+
+    /** 仍在推进（非终态）的运行，最新在前：目录页横幅与一键切换。 */
+    val backgroundActiveRuns: StateFlow<List<WorkflowRuntimeState>> = runManager.activeRuns
+        .map { runs ->
+            runs.values
+                .filter { it.status !in WorkflowRunManager.TERMINAL }
+                .sortedByDescending { it.startedAt ?: 0L }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private val _viewingRunId = MutableStateFlow<String?>(null)
+    val viewingRunId = _viewingRunId.asStateFlow()
+
+    /** 历史回看的快照：该执行已不在进程注册表时，activeState 退回此值。 */
+    private val _historySnapshot = MutableStateFlow<WorkflowRuntimeState?>(null)
+
+    /** 当前页面展示的运行状态（活跃运行或历史回看）。 */
+    val activeState: StateFlow<WorkflowRuntimeState?> = combine(
+        runManager.activeRuns,
+        _viewingRunId,
+        _historySnapshot,
+    ) { runs, id, snapshot ->
+        when {
+            id == null -> null
+            runs[id] != null -> runs[id]
+            snapshot?.executionId == id -> snapshot
+            else -> null
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val approvalRequest: StateFlow<WorkflowApprovalRequest?> = combine(_viewingRunId, runManager.activeRuns) { id, runs ->
+        id to runs[id]?.resumeCount
+    }.distinctUntilChanged().flatMapLatest { (id, _) ->
+        id?.let { runManager.approvalRequestFor(it) } ?: flowOf(null)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     private val _editorState = MutableStateFlow<WorkflowEditorUiState?>(null)
     val editorState = _editorState.asStateFlow()
 
-    private var activeHandle: WorkflowRunHandle? = null
-    private var observerJob: Job? = null
     private var editHistory: WorkflowEditHistory? = null
 
     init {
@@ -83,116 +130,84 @@ class WorkflowViewModel @Inject constructor(
 
     /**
      * 自动扫描工程目录或工作区下的 APK 构建产物，按最后修改时间倒序排列（最新在前）。
+     * 全盘 walkTopDown 开销不可控，必须挂起并切到 IO 执行，禁止在组合/主线程同步调用。
      */
-    fun scanWorkspaceApks(projectName: String): List<DiscoveredApk> =
-        scanApksInWorkspace(pathManager.workspaceDir, projectName)
+    suspend fun scanWorkspaceApks(projectName: String): List<DiscoveredApk> =
+        withContext(Dispatchers.IO) {
+            scanApksInWorkspace(pathManager.workspaceDir, projectName)
+        }
 
     fun start(definition: WorkflowDefinition, projectName: String, variables: Map<String, String> = emptyMap()) {
-        activeHandle?.cancel()
-        observerJob?.cancel()
         val safeProject = projectName.trim().trim('/').takeIf { it.isNotEmpty() }
         val workspace = variables["TARGET_WORKSPACE"]?.takeIf { it.startsWith('/') }
             ?: safeProject?.let { "/workspace/$it" } ?: "/workspace"
-        val handle = scheduler.execute(definition, variables, workspace, viewModelScope)
-        activeHandle = handle
-        val executionId = handle.state.value.executionId
-        hud.start(executionId, definition.name)
-        hud.bindCancel(executionId) { handle.cancel() }
-        if (Settings.canDrawOverlays(appContext)) {
-            WorkflowHudService.start(appContext)
-        } else {
-            _error.value = "未授予悬浮窗权限，工作流进度仅在应用内显示。可在系统设置中开启「显示在其他应用上层」。"
-        }
-        // Persistence must outlive the UI observer when the user closes a run.
+        launchAndShow(definition, variables, workspace)
+    }
+
+    /** 历史重跑使用扩图前定义及保存的变量/工作区，动态提案重新规划并审批。 */
+    fun rerun(entry: WorkflowHistoryEntry) {
+        val snapshot = entry.state
+        val workspace = snapshot.context?.workspacePath?.takeIf { it.startsWith('/') } ?: "/workspace"
+        launchAndShow(snapshot.baseDefinition ?: snapshot.definition, snapshot.context?.globalVariables ?: emptyMap(), workspace)
+    }
+
+    private fun launchAndShow(definition: WorkflowDefinition, variables: Map<String, String>, workspace: String) {
+        launchAndShow { runManager.start(definition, variables, workspace) }
+    }
+
+    fun resume(state: WorkflowRuntimeState, retryNodeIds: Set<String>) {
+        launchAndShow { runManager.resume(state.executionId, retryNodeIds, state.resumeCount, state.journal.size) }
+    }
+
+    private fun launchAndShow(action: suspend () -> WorkflowRunManager.WorkflowStartResult) {
+        // 运行所有权在 WorkflowRunManager（进程级），离开页面/销毁 ViewModel 不再取消运行
         viewModelScope.launch {
-            var completed: WorkflowRuntimeState? = null
-            try {
-                completed = handle.state.first { it.status in TERMINAL }
-            } finally {
-                withContext(NonCancellable) {
-                    val snapshot = completed ?: handle.state.value.let {
-                        if (it.status in TERMINAL) it else it.copy(
-                            status = WorkflowRunStatus.CANCELLED,
-                            finishedAt = System.currentTimeMillis(),
-                            error = "执行页面已关闭，工作流已取消",
-                        )
-                    }
-                    runCatching { repository.saveExecution(snapshot) }.onFailure {
-                        _error.value = "运行历史保存失败：${it.message ?: "存储不可用"}"
-                    }
-                }
+            val result = action()
+            if (!result.accepted) {
+                _error.value = result.failureReason
+                return@launch
             }
-        }
-        observerJob = viewModelScope.launch {
-            launch { handle.approvalRequest.collect { _approvalRequest.value = it?.takeIf { request -> request.executionId == handle.state.value.executionId } } }
-            handle.state.collect { state ->
-                _activeState.value = state
-                publishHud(definition, state)
+            _viewingRunId.value = result.executionId
+            _historySnapshot.value = null
+            if (!Settings.canDrawOverlays(appContext)) {
+                _error.value = "未授予悬浮窗权限，工作流进度仅在应用内显示。可在系统设置中开启「显示在其他应用上层」。"
             }
         }
     }
 
-    private fun publishHud(definition: WorkflowDefinition, state: WorkflowRuntimeState) {
-        when (state.status) {
-            WorkflowRunStatus.SUCCESS -> hud.finish(true, "全部节点完成")
-            WorkflowRunStatus.FAILED -> hud.finish(false, state.error ?: "工作流失败")
-            WorkflowRunStatus.CANCELLED -> {
-                if (!hud.isStopRequested(state.executionId)) {
-                    hud.cancelled(state.error ?: "已取消")
-                }
-            }
-            else -> {
-                val active = state.nodeStates.entries.firstOrNull { (_, node) ->
-                    node.status in HUD_ACTIVE_NODE
-                }
-                val title = active?.let { (id, _) ->
-                    definition.nodes.firstOrNull { it.id == id }?.title ?: id
-                }.orEmpty()
-                val message = active?.value?.progressMessage?.takeIf { it.isNotBlank() } ?: "运行中"
-                hud.updateNode(title, message)
-            }
-        }
+    /** 切换当前页面展示的运行（活跃或终态回看）。 */
+    fun viewRun(executionId: String) {
+        _viewingRunId.value = executionId
     }
 
-    fun decide(nodeId: String, approved: Boolean, variables: Map<String, String> = emptyMap()) {
-        activeHandle?.decide(nodeId, approved, variables)
+    fun decide(nodeId: String, approved: Boolean, variables: Map<String, String> = emptyMap(), reviewToken: String? = null) {
+        val executionId = _viewingRunId.value ?: return
+        runManager.decide(executionId, nodeId, approved, variables, reviewToken)
     }
 
-    fun cancel() = activeHandle?.cancel()
+    fun cancel() {
+        val executionId = _viewingRunId.value ?: return
+        runManager.cancel(executionId)
+    }
+
     fun showHistory(state: WorkflowRuntimeState) {
-        closeRun()
-        _activeState.value = state
+        // 该执行可能已被注册表回收，快照兜底展示
+        _historySnapshot.value = state
+        _viewingRunId.value = state.executionId
     }
+
     fun closeRun() {
-        if (_activeState.value?.status !in TERMINAL) activeHandle?.cancel()
-        observerJob?.cancel()
-        activeHandle = null
-        _activeState.value = null
-        _approvalRequest.value = null
-        // Keep HUD until user dismisses or auto-timeout; only stop service if no session
+        // 仅解除页面与运行的绑定；运行继续在后台推进，由 WorkflowRunManager 负责
+        _viewingRunId.value = null
+        _historySnapshot.value = null
         if (hud.session.value == null) {
             WorkflowHudService.stop(appContext)
         }
     }
 
-    fun createWorkflow() {
-        val suffix = UUID.randomUUID().toString().take(8)
-        openEditor(
-            WorkflowDefinition(
-                id = "workflow_$suffix",
-                name = "新工作流",
-                description = "在画布中添加并连接节点",
-                category = "自定义",
-                trigger = WorkflowTrigger.Manual(),
-                nodes = listOf(
-                    WorkflowNode("start", WorkflowNodeType.TRIGGER, "手动触发", canvasX = 80f, canvasY = 160f),
-                    WorkflowNode("done", WorkflowNodeType.TERMINAL_OUTPUT, "完成", canvasX = 420f, canvasY = 160f),
-                ),
-                edges = listOf(WorkflowEdge("edge_start_done", "start", "output", "done")),
-            ),
-            initiallySaved = false,
-        )
-    }
+    fun createWorkflow() = openEditor(blankWorkflowDefinition(), initiallySaved = false)
+
+    fun importWorkflow(definition: WorkflowDefinition) = openEditor(WorkflowDefinitionImport.fresh(definition), initiallySaved = false)
 
     fun edit(definition: WorkflowDefinition) {
         if (definition.isBuiltin) {
@@ -266,13 +281,13 @@ class WorkflowViewModel @Inject constructor(
         mutate(selectedNodeId = node.id) { WorkflowGraphEditor.addNode(it, node) }
     }
 
-    fun updateMetadata(name: String, description: String, category: String) = mutate {
-        it.copy(name = name, description = description, category = category, updatedAt = System.currentTimeMillis())
+    fun updateMetadata(name: String, description: String, category: String, maxParallelNodes: Int) = mutate {
+        updatedWorkflowMetadata(it, name, description, category, maxParallelNodes)
     }
 
     fun updateNode(node: WorkflowNode) = mutate(selectedNodeId = node.id) { WorkflowGraphEditor.updateNode(it, node) }
 
-    fun autoLayout() = mutate { top.tianyan.app.core.model.workflow.WorkflowLayout.arrange(it) }
+    fun autoLayout() = mutate { WorkflowLayout.arrange(it) }
 
     fun moveNode(nodeId: String, x: Float, y: Float) = mutate(selectedNodeId = nodeId) { definition ->
         val node = definition.nodes.firstOrNull { it.id == nodeId } ?: return@mutate definition
@@ -375,46 +390,11 @@ class WorkflowViewModel @Inject constructor(
         )
     }
 
-    private companion object {
-        val TERMINAL = setOf(WorkflowRunStatus.SUCCESS, WorkflowRunStatus.FAILED, WorkflowRunStatus.CANCELLED)
-        val HUD_ACTIVE_NODE = setOf(
-            NodeRunStatus.RUNNING,
-            NodeRunStatus.STREAMING,
-            NodeRunStatus.WAITING_APPROVAL,
-        )
+    private fun decodeHistory(log: WorkflowExecutionLogEntity): WorkflowHistoryEntry? {
+        val state = runCatching { json.decodeFromString<WorkflowRuntimeState>(log.finalContextJson) }.getOrNull()
+            ?: return null
+        return WorkflowHistoryEntry(state = state, triggerSource = log.triggerSource, scheduleId = log.scheduleId)
     }
-}
-
-private fun WorkflowNodeType.defaultTitle(): String = when (this) {
-    WorkflowNodeType.TRIGGER -> "触发器"
-    WorkflowNodeType.BASH_COMMAND -> "执行命令"
-    WorkflowNodeType.PROCESS_SERVICE -> "启动服务"
-    WorkflowNodeType.AGENT_INFERENCE -> "智能体推理"
-    WorkflowNodeType.SUBAGENT_DELEGATE -> "委派子智能体"
-    WorkflowNodeType.TAIXU_BUILD -> "天衍构建"
-    WorkflowNodeType.CONDITION_BRANCH -> "条件分支"
-    WorkflowNodeType.HUMAN_APPROVAL -> "人工审批"
-    WorkflowNodeType.HOST_ACTION -> "宿主动作"
-    WorkflowNodeType.DELAY -> "延时等待"
-    WorkflowNodeType.SET_VARIABLE -> "设置变量"
-    WorkflowNodeType.TERMINAL_OUTPUT -> "输出结果"
-}
-
-private fun WorkflowNodeType.defaultConfig(): Map<String, String> = when (this) {
-    WorkflowNodeType.AGENT_INFERENCE -> mapOf(
-        "prompt" to "请分析以下上游结果并给出明确结论：\n\${previous.output}",
-    )
-    WorkflowNodeType.SUBAGENT_DELEGATE -> mapOf(
-        "taskName" to "工作流子任务",
-        "prompt" to "请完成以下任务并返回结果：\n\${previous.output}",
-        "role" to "",
-        "writePaths" to "",
-    )
-    WorkflowNodeType.HOST_ACTION -> mapOf("action" to "status")
-    WorkflowNodeType.CONDITION_BRANCH -> mapOf("expression" to "exitCode == 0")
-    WorkflowNodeType.DELAY -> mapOf("seconds" to "1")
-    WorkflowNodeType.SET_VARIABLE -> mapOf("variables" to "EXAMPLE_KEY=example_value")
-    else -> emptyMap()
 }
 
 internal fun scanApksInWorkspace(workspaceDir: File, projectName: String): List<DiscoveredApk> {

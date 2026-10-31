@@ -2,7 +2,6 @@ package top.tianyan.app.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -12,22 +11,29 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import top.tianyan.app.core.common.logging.AppLogger
-import top.tianyan.app.core.datastore.SettingsDataStore
+import top.tianyan.app.core.datastore.FirstUseGuidePreferences
+import top.tianyan.app.core.datastore.RemoteServerRepository
 import top.tianyan.app.core.database.InstallLogEntity
+import top.tianyan.app.core.database.McpServerRepository
 import top.tianyan.app.core.database.ToolEntity
 import top.tianyan.app.core.tools.ToolInstallProgress
 import top.tianyan.app.core.tools.ToolManager
 import top.tianyan.app.core.tools.ToolVerification
 import top.tianyan.app.runtime.LinuxRuntime
-import javax.inject.Inject
 import android.net.Uri
+import kotlinx.coroutines.Dispatchers
+import top.tianyan.app.core.model.BuiltinPluginBundles
+import top.tianyan.app.core.model.PluginBundle
+import top.tianyan.app.core.model.PluginComponent
+import top.tianyan.app.core.tools.LocalPluginImportState
 
-@HiltViewModel
-class ToolCenterViewModel @Inject constructor(
+class ToolCenterViewModel(
     private val toolManager: ToolManager,
     private val linuxRuntime: LinuxRuntime,
-    private val settingsDataStore: SettingsDataStore,
+    private val firstUseGuidePreferences: FirstUseGuidePreferences,
     private val logger: AppLogger,
+    private val remoteServers: RemoteServerRepository,
+    private val mcpServerRepository: McpServerRepository,
 ) : ViewModel() {
 
     val tools: StateFlow<List<ToolEntity>> = toolManager.observeTools()
@@ -36,7 +42,7 @@ class ToolCenterViewModel @Inject constructor(
     val installProgress: StateFlow<Map<String, ToolInstallProgress>> = toolManager.installProgress
     val verifications: StateFlow<Map<String, ToolVerification>> = toolManager.verifications
 
-    private val _selectedCategory = MutableStateFlow("ALL")
+    private val _selectedCategory = MutableStateFlow("INSTALLED")
     val selectedCategory: StateFlow<String> = _selectedCategory.asStateFlow()
 
     private val _viewingLogsToolId = MutableStateFlow<String?>(null)
@@ -57,16 +63,16 @@ class ToolCenterViewModel @Inject constructor(
         _operationError.value = null
     }
 
-    val localPluginImport: StateFlow<top.tianyan.app.core.tools.LocalPluginImportState> = toolManager.localPluginImportState
+    val localPluginImport: StateFlow<LocalPluginImportState> = toolManager.localPluginImportState
 
     /** 首次进入插件中心的离线包导入引导：false 表示尚未看过，需要展示遮罩引导。 */
-    val importGuideShown: StateFlow<Boolean> = settingsDataStore.firstUseGuidesShown
+    val importGuideShown: StateFlow<Boolean> = firstUseGuidePreferences.firstUseGuidesShown
         .map { it.contains(GUIDE_IMPORT_OFFLINE) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     fun markImportGuideShown() {
         viewModelScope.launch {
-            settingsDataStore.markFirstUseGuideShown(GUIDE_IMPORT_OFFLINE)
+            firstUseGuidePreferences.markFirstUseGuideShown(GUIDE_IMPORT_OFFLINE)
         }
     }
 
@@ -86,6 +92,7 @@ class ToolCenterViewModel @Inject constructor(
     }
 
     fun importLocalPlugin(uri: Uri) {
+        if (blockedByRemote()) return
         val fileName = uri.lastPathSegment
             ?.substringAfterLast('/')
             ?.substringAfterLast(':')
@@ -99,6 +106,7 @@ class ToolCenterViewModel @Inject constructor(
     }
 
     fun confirmLocalPluginImport() {
+        if (blockedByRemote()) return
         toolManager.confirmLocalPluginImport()
     }
 
@@ -112,15 +120,28 @@ class ToolCenterViewModel @Inject constructor(
 
     fun toolSource(toolId: String): String = toolManager.manifest(toolId)?.source ?: "REMOTE"
 
+    /**
+     * 插件与底层工具只安装在本机 PRoot：远程主系统下拦截安装类操作并给出明确原因，
+     * 不静默失败。这些组件依赖 artifacts / downloads / buildBindings 与本地运行时，远程环境没有对应适配。
+     */
+    private fun blockedByRemote(): Boolean {
+        if (remoteServers.activeId.value == null) return false
+        _operationError.value = "当前主系统为 SSH 远程服务器，插件与底层工具仅安装在本机 PRoot，不会同步到服务器；请先在「Linux 系统管理」切回本地系统。"
+        return true
+    }
+
     fun installTool(toolId: String) {
+        if (blockedByRemote()) return
         toolManager.startInstall(toolId)
     }
 
     fun updateTool(toolId: String) {
+        if (blockedByRemote()) return
         toolManager.startUpdate(toolId)
     }
 
     fun uninstallTool(toolId: String) {
+        if (blockedByRemote()) return
         viewModelScope.launch {
             try {
                 toolManager.uninstall(toolId)
@@ -182,13 +203,13 @@ class ToolCenterViewModel @Inject constructor(
     }
 
     // ==================== 聚合大插件套件与子组件状态管理 ====================
-    val pluginBundles: List<top.tianyan.app.core.model.PluginBundle> = top.tianyan.app.core.model.BuiltinPluginBundles.bundles
+    val pluginBundles: List<PluginBundle> = BuiltinPluginBundles.bundles
 
     private val _installedComponentIds = MutableStateFlow<Set<String>>(emptySet())
     val installedComponentIds: StateFlow<Set<String>> = _installedComponentIds.asStateFlow()
 
-    private val _activeBundle = MutableStateFlow<top.tianyan.app.core.model.PluginBundle?>(null)
-    val activeBundle: StateFlow<top.tianyan.app.core.model.PluginBundle?> = _activeBundle.asStateFlow()
+    private val _activeBundle = MutableStateFlow<PluginBundle?>(null)
+    val activeBundle: StateFlow<PluginBundle?> = _activeBundle.asStateFlow()
 
     private val _selectedComponents = MutableStateFlow<Set<String>>(emptySet())
     val selectedComponents: StateFlow<Set<String>> = _selectedComponents.asStateFlow()
@@ -198,17 +219,21 @@ class ToolCenterViewModel @Inject constructor(
     val componentInstallLog: StateFlow<List<String>> = toolManager.bundleInstallLog
 
     fun refreshInstalledStatus() {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
                 val installed = toolManager.probeInstalledComponents()
                 _installedComponentIds.value = installed
+                // 安装状态以组件探针为唯一真相：能力组件就绪后把对应 MCP 服务自动开启一次，
+                // 卸载后回到关闭态（用户显式切换过的行不会被覆盖）。
+                runCatching { mcpServerRepository.syncInstalledCapabilities(installed) }
+                    .onFailure { logger.w("同步 MCP 能力安装状态失败: ${it.message}", it) }
             } catch (e: Exception) {
                 logger.w("Failed to probe installed components: ${e.message}", e)
             }
         }
     }
 
-    fun openBundleSetup(bundle: top.tianyan.app.core.model.PluginBundle) {
+    fun openBundleSetup(bundle: PluginBundle) {
         val installed = _installedComponentIds.value
         // 只默认勾选尚未安装的必选基座；已安装的组件不再勾选
         val uninstalledRequired = bundle.components.filter { it.id !in installed && it.isRequired }.map { it.id }.toSet()
@@ -220,7 +245,7 @@ class ToolCenterViewModel @Inject constructor(
         _activeBundle.value = null
     }
 
-    fun toggleComponent(component: top.tianyan.app.core.model.PluginComponent) {
+    fun toggleComponent(component: PluginComponent) {
         val installed = _installedComponentIds.value
         if (component.id in installed) return // 已安装组件无需重复勾选
         val isUninstalledRequired = component.isRequired && component.id !in installed
@@ -230,8 +255,9 @@ class ToolCenterViewModel @Inject constructor(
     }
 
     fun installActiveBundleComponents() {
+        if (blockedByRemote()) return
         val selected = _selectedComponents.value
-        if (selected.isEmpty()) return
+        if (selected.isEmpty() || toolManager.isBatchInstalling.value) return
 
         // 立即关闭装配弹窗，后台静默装配并发送系统通知栏进度
         _activeBundle.value = null
@@ -242,8 +268,40 @@ class ToolCenterViewModel @Inject constructor(
         }
     }
 
+    fun reinstallComponent(component: PluginComponent) {
+        if (blockedByRemote()) return
+        if (toolManager.isBatchInstalling.value) return
+        _operationError.value = null
+        _activeBundle.value = null
+        toolManager.startBackgroundBatchInstall(setOf(component.id), reinstall = true) {
+            refreshInstalledStatus()
+        }
+    }
+
+    /** 仍有其他已装配组件依赖它时返回原因，并写到操作错误横幅。 */
+    fun uninstallBlockedReason(component: PluginComponent): String? {
+        val blockers = BuiltinPluginBundles.blockingDependents(
+            component.id,
+            _installedComponentIds.value,
+        )
+        if (blockers.isEmpty()) return null
+        val message = "请先卸载依赖「${component.name}」的组件：${blockers.joinToString("、") { it.name }}"
+        _operationError.value = message
+        return message
+    }
+
+    fun uninstallComponent(component: PluginComponent) {
+        if (blockedByRemote()) return
+        if (toolManager.isBatchInstalling.value) return
+        if (uninstallBlockedReason(component) != null) return
+        _activeBundle.value = null
+        toolManager.startBackgroundBatchUninstall(setOf(component.id)) {
+            refreshInstalledStatus()
+        }
+    }
+
     // 兼容原 devSuites 接口
-    val devSuites: List<top.tianyan.app.core.model.PluginBundle> get() = pluginBundles
+    val devSuites: List<PluginBundle> get() = pluginBundles
     val showSuiteDialog: StateFlow<Boolean> = MutableStateFlow(false).asStateFlow()
     val selectedSuites: StateFlow<Set<String>> = MutableStateFlow(emptySet<String>()).asStateFlow()
     val isInstallingSuites: StateFlow<Boolean> get() = isInstallingComponents

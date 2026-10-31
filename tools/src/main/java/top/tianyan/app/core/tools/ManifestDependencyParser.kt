@@ -1,4 +1,4 @@
-package top.tianyan.app.core.tools
+﻿package top.tianyan.app.core.tools
 
 data class ParsedManifestDependency(
     val name: String,

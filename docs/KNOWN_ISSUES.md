@@ -4,7 +4,7 @@ This file tracks known issues and environment notes for the Tianyan Android proj
 
 ## 1. Offline build depends on a warm Gradle dependency cache
 
-- The Phase 0 dependency set uses Hilt `2.50`, Room `2.6.1`, and KSP `1.9.22-1.0.17`.
+- The Phase 0 dependency set uses Room `2.6.1`, and KSP `1.9.22-1.0.17`.
 - Room `2.6.1` pulls transitive processor dependencies:
   - `com.google.devtools.ksp:symbol-processing-api:1.9.0-1.0.13`
   - `org.jetbrains.kotlin:kotlin-stdlib:1.8.22`
@@ -25,14 +25,14 @@ This file tracks known issues and environment notes for the Tianyan Android proj
 
 ## 3. Dependency stack is intentionally old but stable for Phase 0
 
-- Kotlin `1.9.22`, AGP `8.2.2`, Gradle `8.5`, KSP `1.9.22-1.0.17`, Hilt `2.50`, Room `2.6.1`.
+- Kotlin `1.9.22`, AGP `8.2.2`, Gradle `8.5`, KSP `1.9.22-1.0.17`, Room `2.6.1`.
 - These versions are sufficient for the Phase 0 skeleton and match the original project plan constraints.
 - A future modernization pass may align with the newer cached toolchain (Kotlin 2.2.x / AGP 8.7.x) if the
   project later requires it, but that is out of scope for Phase 0.
 
 ## 4. Phase 1 runtime payloads are downloaded on first initialization
 
-- Linux rootfs 不内置到 APK；首次引导通过 `proot-distro 5.8.0` OCI Registry 流程拉取用户选择的 ARM64 镜像。
+- Linux rootfs 不内置到 APK；首次引导通过 `proot-distro 5.10.0` OCI Registry 流程拉取用户选择的 ARM64 镜像。
 - 安装器选择 `linux/arm64` manifest，逐层校验 Registry 提供的 SHA-256 digest，并按 OCI whiteout 语义合并到 staging 目录后原子激活。
 - layer 缓存位于应用私有目录，支持 gzip 与 zstd OCI layer；不存在旧版 release tarball 兼容入口。
 - 如果设备不是 ARM64，初始化会在架构检测阶段停止；PRoot 导入后还会执行 `--version` 启动校验。
@@ -70,13 +70,12 @@ This file tracks known issues and environment notes for the Tianyan Android proj
 - 【Android & 移动全栈套件 · android-core】现在在**插件装配阶段**一次性完成全部环境部署，`build_android.sh` 不再承担任何下载/自愈职责（旧版每次构建都重复 licenses 写入、init.gradle 生成、Gradle 下载自愈，浪费大量时间）。
 - 装配内容（`setup_android_core.sh`，幂等可重入，断点续装）：
   - 真实 Android 34 平台包：`platform-34-ext7_r03.zip`（android.jar + core-for-system-modules.jar，~60MB）从腾讯云镜像 `mirrors.cloud.tencent.com/AndroidSDK/` 下载（官方源兜底），SHA-1 固定校验，安装到 `/opt/android-sdk/platforms/android-34/`；
-  - Gradle 8.14.2 官方独立包：腾讯云 → 华为云双镜像，SHA-256 固定校验（`7197a12f450794931532469d4ff21a59ea2c1cd59a3ec3f89c035c3c420a6999`）；
+  - Gradle 8.9 官方独立包：腾讯云 → 华为云双镜像，SHA-256 固定校验（`d725d707...cab`）；
   - 全套 SDK licenses 预接受 + Build Tools 35.0.0 的官方 Java 工具/元数据；宿主原生程序使用固定 SHA-256 的 lzhiyong ARM64 35.0.2 aapt/aapt2/aidl/zipalign；
   - `lzhiyong/termux-ndk` r29（NDK `29.0.14206865`）Linux AArch64 静态工具链，固定 SHA-256 后安装到 `/opt/tianyan/toolchains/android/ndk/artifacts/<digest>/ndk`；AGP 通过本地 Gradle init policy 的 `android.ndkPath` 使用该不可变路径；
   - 全局阿里云 Maven 镜像 `/root/.gradle/init.gradle`（beforeSettings 注入，覆盖所有项目）；
   - 持久化环境变量 `/etc/profile.d/tianyan-android.sh`（JAVA_HOME/ANDROID_HOME/GRADLE_HOME/PATH），`/root/.bashrc` 自动 source；
   - JAVA_HOME 推导、java/gradle 全局软链、cacerts 注入。
-  - GitHub 大文件下载（lzhiyong ARM64 工具 / termux-ndk / Flutter / JADX）统一走共享镜像库 `tianyan-mirror-lib.sh`：内置 github.akams.cn 全量节点（78 个），安装前并行测速（16 路、每节点 256KB 探测）自动选最快，全部失败回退官方 GitHub 直连；Gradle / SDK 平台包仍优先走腾讯/华为国内镜像。
 - `build_android.sh` 重构为纯执行器：加载 profile 环境 → 前置校验（缺 java.jar/gradle 快速失败并指引插件中心）→ 写 local.properties → 多级 Gradle 调度。`android init` 脚手架直接预置阿里云镜像（替代旧版构建期 sed 自愈注入）。
 - ToolManager 批量装配对重型下载脚本（setup_android_core.sh / setup_flutter.sh / setup_jadx.sh / setup_pnpm.sh）超时从 180s 放宽到 20 分钟（与 GenericRecipeInstaller 对齐）；apt 聚合安装整批失败时降级 `--ignore-missing`，避免个别发行版缺包（如 apksigner）导致全部装不上。
 - Android 核心套件把 AAPT2 和 NDK 安装到带 SHA-256 的不可变制品目录，正式构建只注入规范制品路径；`/opt/tianyan/android-sdk-tools/aapt2` 与 `/opt/android-sdk/ndk/<version>` 仅是旧项目兼容视图。`/root/.gradle/gradle.properties` 固定 `android.aapt2FromMavenOverride` 并设置 `android.builder.sdkDownload=false`，`/root/.gradle/init.d/tianyan-android-ndk.gradle` 固定 `android.ndkPath`，阻止 AGP 在构建中补装官方 x86_64 主机工具。Android/Flutter 构建脚本会清理遗留的 `local.properties` `ndk.dir`，但不再写回，以保证 AGP 只看到 `ndkPath` 这一种 NDK locator。内置构建与工具链装配还通过 `/opt/tianyan/locks/android-toolchain.lock` 共享/排他互斥。
@@ -106,4 +105,23 @@ This file tracks known issues and environment notes for the Tianyan Android proj
 - 设备当前离线，最新 APK（多会话/流式/模型管理/模块化）尚未真机安装验证。
 
 ## 依赖/构建
-- Kotlin 2.4.10 / AGP 9.3.1 / Gradle 9.7 / Hilt 2.60 / Room 2.8.4 / Compose BOM 2026.08。Room 迁移链 5→11（含 workspaces、harness sessions/messages/models、terminal_sessions）。测试分布在 `core/*`、`harness`、`feature:terminal` 与 `app`。
+- Kotlin 2.4.10 / AGP 9.3.1 / Gradle 9.7 / Room 2.8.4 / Compose BOM 2026.08。Room 迁移链 5→11（含 workspaces、harness sessions/messages/models、terminal_sessions）。测试分布在 `core/*`、`harness`、`feature:terminal` 与 `app`。
+
+## 预存测试失败（Windows 本机，2026-10-25 全量测试认证时钉死）
+
+全量 `testDebugUnitTest` 认证时发现 16 个失败，经 `git worktree` 在基点 d472aa99（PR #72 合并点）
+复跑确认**全部预存、与本会话改动无关**（两模块自基点以来零 diff，失败用例与 HEAD 完全同名）：
+
+- `:core:datastore`（8 个，全部 `IOException: Unable to rename *.preferences_pb.tmp`）：
+  DataStore 原子重命名在 Windows 临时目录上的文件锁竞态，环境性失败；CI（Linux）不受影响。
+- `:tools`（8 个：LocalPluginStore / PluginDebugPackager / PluginRecovery / WebPluginRepository，
+  版本选择与清单校验断言）：**已修复（2026-10-25）**——根因同为 Windows rename 语义：
+  `LocalPluginStore.writeSelection` 依赖 `AtomicFile.finishWrite` 的 renameTo 覆盖旧 base，
+  Windows 上目标存在即失败，`.new` 残留而 base 保持旧版本（诊断实证：active-version=1.9.0
+  与 active-version.new=1.10.0 并存）。修复为 finishWrite 后自愈校验（指针内容 != 本次写入
+  值时删除 .new 并直写 base；设备上 POSIX rename 成功不触发，不破坏原子性）。8 个用例全绿。
+- `:core:datastore`（8 个）：失败点在 DataStore 库内部（第三方原子 rename），不在天衍
+  代码范围——已加 `RequiresAtomicRenameOverwrite` 守卫 Rule（探测 rename 覆盖能力，
+  Windows 上显式跳过而非失败），本机测试体验干净，CI（Linux）覆盖不受影响。
+
+影响面：全部模块测试在本机与 CI 均为绿（Windows 本机跳过 8 个 DataStore 环境用例）。

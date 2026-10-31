@@ -201,7 +201,7 @@ private fun HeatCell(
     Box(
         modifier = Modifier
             .size(size)
-            .clip(RoundedCornerShape(2.5.dp))
+            .clip(RoundedCornerShape(2.dp))
             .background(color),
     )
 }

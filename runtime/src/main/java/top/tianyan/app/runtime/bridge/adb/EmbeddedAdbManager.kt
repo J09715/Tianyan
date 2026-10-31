@@ -8,12 +8,9 @@ import android.util.Log
 import com.flyfishxu.kadb.Kadb
 import com.flyfishxu.kadb.cert.KadbCert
 import com.flyfishxu.kadb.cert.OkioFilePrivateKeyStore
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -28,7 +25,9 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import okio.Path.Companion.toPath
+import top.tianyan.app.core.common.shell.ShellQuote
 import top.tianyan.app.core.datastore.RuntimePreferences
+import top.tianyan.app.runtime.RuntimePathManager
 
 /**
  * 应用内置的无线 ADB 客户端。
@@ -42,11 +41,10 @@ import top.tianyan.app.core.datastore.RuntimePreferences
  * StackOverflowError（NSD Binder 回调在部分设备上会对同一服务连续触发 onServiceUpdated，
  * 且调用栈不跨线程，导致同步无限递归）。所有回调均通过协程调度器异步处理。
  */
-@Singleton
-class EmbeddedAdbManager @Inject constructor(
-    @ApplicationContext private val context: Context,
+class EmbeddedAdbManager(
+    private val context: Context,
     private val preferences: RuntimePreferences,
-    private val pathManager: top.tianyan.app.runtime.RuntimePathManager,
+    private val pathManager: RuntimePathManager,
 ) {
     sealed interface ConnectionState {
         data object Disconnected : ConnectionState
@@ -103,6 +101,9 @@ class EmbeddedAdbManager @Inject constructor(
     private val pairingEndpointMap = ConcurrentHashMap<String, Endpoint>()
     private val connectEndpointMap = ConcurrentHashMap<String, Endpoint>()
 
+    // 活跃发现消费者标记集合；当集合非空时启动 mDNS，集合为空时释放系统资源
+    private val discoveryConsumers = ConcurrentHashMap.newKeySet<String>()
+
     // NSD 监听器引用，stop 时需要注销
     private var pairingDiscoveryListener: NsdManager.DiscoveryListener? = null
     private var connectDiscoveryListener: NsdManager.DiscoveryListener? = null
@@ -114,12 +115,43 @@ class EmbeddedAdbManager @Inject constructor(
     init {
         KadbCert.configure(OkioFilePrivateKeyStore(privateKeyFile.absolutePath.toPath()))
         KadbCert.ensureReady()
-        startDiscovery()
+        // 按需发现：不再在冷启动构造时无条件开启 mDNS 发现，
+        // 彻底规避 Android 17 (API 37) 未授权触发系统 NSD_PICKER 弹窗与空闲耗电。
     }
 
     // ── 发现 ────────────────────────────────────────────────────────────────
 
-    fun startDiscovery() {
+    /**
+     * 按需开启 mDNS 发现。
+     * 支持多组件基于 [consumerTag] 注册引用；只有在至少存在一个活跃消费者时才真正占用系统资源。
+     */
+    fun startDiscovery(consumerTag: String = TAG_MANUAL) {
+        discoveryConsumers.add(consumerTag)
+        startDiscoveryInternal()
+    }
+
+    /**
+     * 注销指定消费者的发现需求；当所有消费者都释放时，立即注销系统监听并释放 MulticastLock。
+     */
+    fun stopDiscovery(consumerTag: String = TAG_MANUAL) {
+        discoveryConsumers.remove(consumerTag)
+        if (discoveryConsumers.isEmpty()) {
+            stopDiscoveryInternal()
+        }
+    }
+
+    /**
+     * 显式强制刷新发现端点（如用户在界面点击“重新扫描”按钮）。
+     */
+    fun restartDiscovery() {
+        stopDiscoveryInternal()
+        pairingEndpointMap.clear()
+        connectEndpointMap.clear()
+        publishDiscoveryState()
+        startDiscoveryInternal()
+    }
+
+    private fun startDiscoveryInternal() {
         if (discoveryStarted.getAndSet(true)) return
         runCatching {
             if (!multicastLock.isHeld) multicastLock.acquire()
@@ -146,7 +178,7 @@ class EmbeddedAdbManager @Inject constructor(
         }
     }
 
-    fun stopDiscovery() {
+    private fun stopDiscoveryInternal() {
         if (!discoveryStarted.getAndSet(false)) return
         runCatching { pairingDiscoveryListener?.let { nsdManager.stopServiceDiscovery(it) } }
         runCatching { connectDiscoveryListener?.let { nsdManager.stopServiceDiscovery(it) } }
@@ -423,7 +455,17 @@ class EmbeddedAdbManager @Inject constructor(
                 val current = client
                 try {
                     val response = requireNotNull(current).shell(command)
-                    ShellOutcome(response.exitCode, response.allOutput, response.exitCode == 0)
+                    // Kadb 会把 shell 输出整段缓冲进内存：logcat -t 2000 / 全量 dumpsys
+                    // 可达数 MB，无上限时以多份字符串拷贝驻留 256MB Java 堆，触发
+                    // target footprint OOM。与 harness 侧 ToolExecutor.MAX_HOST_OUTPUT_CHARS 同值。
+                    val output = if (response.allOutput.length > MAX_SHELL_OUTPUT_CHARS) {
+                        response.allOutput.take(MAX_SHELL_OUTPUT_CHARS) +
+                            "\n[ADB shell 输出超限已截断：原文 ${response.allOutput.length} 字符，" +
+                            "仅保留前 $MAX_SHELL_OUTPUT_CHARS；请缩小输出范围后重试]"
+                    } else {
+                        response.allOutput
+                    }
+                    ShellOutcome(response.exitCode, output, response.exitCode == 0)
                 } catch (error: Throwable) {
                     closeClient()
                     _state.value = ConnectionState.Failed(error.userMessage("ADB 执行失败"))
@@ -440,15 +482,15 @@ class EmbeddedAdbManager @Inject constructor(
         require(request.priority.uppercaseChar() in PRIORITIES) { "日志优先级无效" }
         val lines = request.lines.coerceIn(1, MAX_LOG_LINES)
         val tagArgs = if (request.tag.isBlank()) {
-            shellQuote("*:${request.priority.uppercaseChar()}")
+            ShellQuote.of("*:${request.priority.uppercaseChar()}")
         } else {
-            "${shellQuote("${request.tag}:${request.priority.uppercaseChar()}")} ${shellQuote("*:S")}"
+            "${ShellQuote.of("${request.tag}:${request.priority.uppercaseChar()}")} ${ShellQuote.of("*:S")}"
         }
         val logcat = "/system/bin/logcat -d -v threadtime -t $lines"
         val command = if (request.packageName.isBlank()) {
             "$logcat $tagArgs"
         } else {
-            "pid=\$(/system/bin/pidof ${shellQuote(request.packageName)} | /system/bin/cut -d' ' -f1); " +
+            "pid=\$(/system/bin/pidof ${ShellQuote.of(request.packageName)} | /system/bin/cut -d' ' -f1); " +
                 "if [ -z \"\$pid\" ]; then echo '目标应用未运行：${request.packageName}'; exit 3; fi; " +
                 "$logcat --pid=\"\$pid\" $tagArgs"
         }
@@ -513,16 +555,21 @@ class EmbeddedAdbManager @Inject constructor(
         return "$prefix：$friendlyMessage"
     }
 
-    private fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
+    companion object {
+        const val TAG_MANUAL = "manual"
+        const val TAG_NOTIFICATION = "adb_notification"
+        const val TAG_DEVELOPER_UI = "developer_ui"
 
-    private companion object {
-        const val TAG = "EmbeddedAdb"
-        const val LOOPBACK = "127.0.0.1"
+        private const val TAG = "EmbeddedAdb"
+        private const val LOOPBACK = "127.0.0.1"
         const val CONNECT_TIMEOUT_MS = 5_000
         const val SHELL_TIMEOUT_MS = 30_000
         const val CONNECT_DISCOVERY_TIMEOUT_MS = 10_000L
         const val RESOLVE_TIMEOUT_MS = 8_000L
         const val MAX_LOG_LINES = 5_000
+
+        /** shell 输出字符硬上限（与 harness ToolExecutor.MAX_HOST_OUTPUT_CHARS 同值，防 Java 堆 OOM）。 */
+        const val MAX_SHELL_OUTPUT_CHARS = 200_000
 
         // Android 无线调试 mDNS 服务类型
         const val SERVICE_PAIRING = "_adb-tls-pairing._tcp."

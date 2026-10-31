@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_workbench_floating_window">Floating window</string>
+    <string name="chat_workbench_floating_description">Keep chatting from your home screen</string>
+    <string name="chat_floating_launch_failed">Could not open the floating window. Check the display-over-other-apps permission and try again.</string>
+</resources>

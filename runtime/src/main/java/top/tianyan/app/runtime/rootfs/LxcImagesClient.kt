@@ -2,10 +2,9 @@ package top.tianyan.app.runtime.rootfs
 
 import java.io.File
 import java.io.FileOutputStream
+import java.io.InputStream
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -22,11 +21,12 @@ import top.tianyan.app.runtime.DownloadProgress
  * 仅作为 OCI 线路（DaoCloud / Docker Hub）全部失败后的兜底，且只支持映射到
  * lxc-images 的发行版。
  */
-@Singleton
-class LxcImagesClient @Inject constructor(
-    private val http: OkHttpClient,
+class LxcImagesClient(
+    http: OkHttpClient,
     private val logger: AppLogger,
 ) {
+    private val http = http.forRootfsDownloads()
+
     /** 该发行版是否提供 lxc-images 兜底镜像。 */
     fun supports(distributionId: String): Boolean = lxcPathFor(distributionId) != null
 
@@ -46,7 +46,7 @@ class LxcImagesClient @Inject constructor(
                 val expectedSha = fetchExpectedSha256(base, lxcPath, buildDir)
                 val blob = downloadRootfs(base, lxcPath, buildDir, expectedSha, cacheDir, onProgress)
                 applyLayer(blob, MEDIA_TYPE_ROOTFS_TAR_XZ)
-                return@withContext "lxc-5.8.0-${distribution.id}-$buildDir"
+                return@withContext "lxc-5.10.0-${distribution.id}-$buildDir"
             } catch (failure: Throwable) {
                 lastFailure = failure
                 logger.w("lxc-images 镜像源 $base 不可用（${distribution.id}）", failure)
@@ -138,7 +138,7 @@ class LxcImagesClient @Inject constructor(
         return target
     }
 
-    private fun hashInto(md: MessageDigest, input: java.io.InputStream) {
+    private fun hashInto(md: MessageDigest, input: InputStream) {
         val buffer = ByteArray(64 * 1024)
         while (true) {
             val n = input.read(buffer)
@@ -185,7 +185,7 @@ class LxcImagesClient @Inject constructor(
             "https://mirrors.tuna.tsinghua.edu.cn/lxc-images/images",
             "https://images.linuxcontainers.org/images",
         )
-        const val USER_AGENT = "Tianyan/proot-distro-5.8.0"
+        const val USER_AGENT = "Tianyan/proot-distro-5.10.0"
         const val MEDIA_TYPE_ROOTFS_TAR_XZ = "application/x-tar.xz"
 
         /**

@@ -1,32 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Lucide Icons (ISC License) via Iconify, converted to Android vector drawable -->
+<!-- Material Symbols Rounded, weight 300, optical size 24; Apache-2.0. Glyph: memory.
+     Source: google/material-design-icons@49d4db35df873165d6bd6ba09b063c7dafbac2f4; converted from SVG. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp"
-    android:height="24dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
-    <path
-        android:pathData="M12 20v2m0-20v2m5 16v2m0-20v2M2 12h2m-2 5h2M2 7h2m16 5h2m-2 5h2M20 7h2M7 20v2M7 2v2"
-        android:fillColor="#00000000"
-        android:strokeColor="#FF000000"
-        android:strokeWidth="2"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        />
-    <path
-        android:pathData="M6.0,4.0 h12.0 a2.0,2.0 0 0 1 2.0,2.0 v12.0 a2.0,2.0 0 0 1 -2.0,2.0 h-12.0 a2.0,2.0 0 0 1 -2.0,-2.0 v-12.0 a2.0,2.0 0 0 1 2.0,-2.0 Z"
-        android:fillColor="#00000000"
-        android:strokeColor="#FF000000"
-        android:strokeWidth="2"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        />
-    <path
-        android:pathData="M9.0,8.0 h6.0 a1.0,1.0 0 0 1 1.0,1.0 v6.0 a1.0,1.0 0 0 1 -1.0,1.0 h-6.0 a1.0,1.0 0 0 1 -1.0,-1.0 v-6.0 a1.0,1.0 0 0 1 1.0,-1.0 Z"
-        android:fillColor="#00000000"
-        android:strokeColor="#FF000000"
-        android:strokeWidth="2"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        />
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="960" android:viewportHeight="960">
+    <group android:translateX="-0" android:translateY="960">
+        <path android:fillColor="#FF000000" android:pathData="M380-416.16v-127.68q0-15.37 10.4-25.76 10.39-10.4 25.76-10.4h127.68q15.37 0 25.76 10.4 10.4 10.39 10.4 25.76v127.68q0 15.37-10.4 25.76-10.39 10.4-25.76 10.4H416.16q-15.37 0-25.76-10.4-10.4-10.39-10.4-25.76ZM440-440h80v-80h-80v80Zm-70 260.77V-220h-77.69Q262-220 241-241q-21-21-21-51.31V-370h-40.77q-12.75 0-21.37-8.63-8.63-8.63-8.63-21.38 0-12.76 8.63-21.37 8.62-8.62 21.37-8.62H220v-100h-40.77q-12.75 0-21.37-8.63-8.63-8.63-8.63-21.38 0-12.76 8.63-21.37 8.62-8.62 21.37-8.62H220v-77.69Q220-698 241-719q21-21 51.31-21H370v-40.77q0-12.75 8.63-21.37 8.63-8.63 21.38-8.63 12.76 0 21.37 8.63 8.62 8.62 8.62 21.37V-740h100v-40.77q0-12.75 8.63-21.37 8.63-8.63 21.38-8.63 12.76 0 21.37 8.63 8.62 8.62 8.62 21.37V-740h77.69Q698-740 719-719q21 21 21 51.31V-590h40.77q12.75 0 21.37 8.63 8.63 8.63 8.63 21.38 0 12.76-8.63 21.37-8.62 8.62-21.37 8.62H740v100h40.77q12.75 0 21.37 8.63 8.63 8.63 8.63 21.38 0 12.76-8.63 21.37-8.62 8.62-21.37 8.62H740v77.69Q740-262 719-241q-21 21-51.31 21H590v40.77q0 12.75-8.63 21.37-8.63 8.63-21.38 8.63-12.76 0-21.37-8.63-8.62-8.62-8.62-21.37V-220H430v40.77q0 12.75-8.63 21.37-8.63 8.63-21.38 8.63-12.76 0-21.37-8.63-8.62-8.62-8.62-21.37ZM667.69-280q4.62 0 8.46-3.85 3.85-3.84 3.85-8.46v-375.38q0-4.62-3.85-8.46-3.84-3.85-8.46-3.85H292.31q-4.62 0-8.46 3.85-3.85 3.84-3.85 8.46v375.38q0 4.62 3.85 8.46 3.84 3.85 8.46 3.85h375.38ZM480-480Z" />
+    </group>
 </vector>

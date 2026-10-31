@@ -37,6 +37,23 @@ class HarnessMessageSerializationTest {
     }
 
     @Test
+    fun `model switch event round trip`() {
+        val message = ModelSwitchEvent(
+            id = "model-switch:1",
+            createdAt = 5000L,
+            fromLabel = "Pro · big-model",
+            toLabel = "Flash · small-model",
+            fromContextTokens = 1_000_000,
+            toContextTokens = 128_000,
+            compacted = true,
+            foldedMessageCount = 12,
+        )
+        val encoded = json.encodeToString(HarnessMessage.serializer(), message)
+        assertTrue(encoded.contains("\"type\":\"model_switch\""))
+        assertEquals(message, json.decodeFromString(HarnessMessage.serializer(), encoded))
+    }
+
+    @Test
     fun `tool result round trip`() {
         val message = ToolResult("r1", 2000L, "c1", success = false, output = "找不到文件")
         val decoded = json.decodeFromString(HarnessMessage.serializer(), json.encodeToString(HarnessMessage.serializer(), message))

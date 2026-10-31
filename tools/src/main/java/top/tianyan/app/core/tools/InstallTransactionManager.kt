@@ -4,8 +4,6 @@ import top.tianyan.app.core.common.files.SafeFileTree
 import top.tianyan.app.core.common.logging.AppLogger
 import top.tianyan.app.runtime.RuntimePathManager
 import java.io.File
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -16,8 +14,7 @@ import kotlinx.coroutines.withContext
  * 目录清理属于尽力而为：残留文件由下次 begin / recover / cleanupOrphans 兜底，
  * 任何清理失败都只记录日志，绝不允许让安装/回滚流程崩溃。
  */
-@Singleton
-class InstallTransactionManager @Inject constructor(
+class InstallTransactionManager(
     private val pathManager: RuntimePathManager,
     private val logger: AppLogger,
 ) {

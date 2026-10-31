@@ -6,9 +6,6 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -23,6 +20,7 @@ import top.tianyan.app.core.datastore.SshPreferences
 import top.tianyan.app.runtime.FtpServiceManager
 import top.tianyan.app.runtime.LinuxRuntime
 import top.tianyan.app.runtime.SshServiceManager
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 
 data class FtpSettingsUiState(
     val distroId: String = "ubuntu",
@@ -52,9 +50,8 @@ data class FtpSettingsUiState(
         }
 }
 
-@HiltViewModel
-class FtpSettingsViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
+class FtpSettingsViewModel(
+    private val context: Context,
     private val linuxRuntime: LinuxRuntime,
     private val preferences: FtpPreferences,
     private val sshPreferences: SshPreferences,
@@ -67,7 +64,7 @@ class FtpSettingsViewModel @Inject constructor(
     val vpnActive: StateFlow<Boolean> = _vpnActive.asStateFlow()
     private var vpnCallback: ConnectivityManager.NetworkCallback? = null
 
-    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @OptIn(ExperimentalCoroutinesApi::class)
     val settings: StateFlow<FtpSettingsUiState> = linuxRuntime.activeDistroId
         .flatMapLatest { distroId ->
             combine(

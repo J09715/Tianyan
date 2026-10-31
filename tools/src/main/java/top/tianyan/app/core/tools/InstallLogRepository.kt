@@ -2,13 +2,10 @@ package top.tianyan.app.core.tools
 
 import top.tianyan.app.core.database.InstallLogDao
 import top.tianyan.app.core.database.InstallLogEntity
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
 
 /** Persistence boundary for redacted installation and verification logs. */
-@Singleton
-class InstallLogRepository @Inject constructor(
+class InstallLogRepository(
     private val dao: InstallLogDao,
 ) {
     suspend fun insert(log: InstallLogEntity) = dao.insert(log)

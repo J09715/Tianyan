@@ -1,10 +1,9 @@
 package top.tianyan.app.harness.approval
 
-import javax.inject.Inject
-import javax.inject.Singleton
 import top.tianyan.app.core.database.AgentApprovalRequestEntity
 import top.tianyan.app.core.database.HarnessSessionRepository
 import top.tianyan.app.harness.ApprovalPolicyEngine
+import top.tianyan.app.harness.AskUserQuestions
 import top.tianyan.app.harness.operation.OperationCoordinator
 
 /**
@@ -26,8 +25,7 @@ data class ApprovalVerdict(
     val isInvalid: Boolean get() = invalidationReason != null
 }
 
-@Singleton
-class ApprovalResumePolicy @Inject constructor(
+class ApprovalResumePolicy(
     private val sessionDao: HarnessSessionRepository,
     private val operationCoordinator: OperationCoordinator,
 ) {
@@ -49,8 +47,9 @@ class ApprovalResumePolicy @Inject constructor(
     suspend fun invalidationOf(
         request: AgentApprovalRequestEntity,
         nowMs: Long = System.currentTimeMillis(),
+        automaticQuestionTimeout: Boolean = false,
     ): String? {
-        if (request.expiresAt <= nowMs) {
+        if (request.expiresAt <= nowMs && !(automaticQuestionTimeout && request.toolName == AskUserQuestions.TOOL_NAME)) {
             val ttlMinutes = ApprovalPolicyEngine.APPROVAL_TTL_MS / 60_000L
             return "该审批已过期（等待超过 $ttlMinutes 分钟）"
         }

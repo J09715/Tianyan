@@ -1,0 +1,11 @@
+:root { color-scheme: light dark; font: 16px/1.6 system-ui, sans-serif; }
+body { margin: 0; background: var(--surface); color: var(--on-surface); }
+main { max-width: 40rem; margin: auto; padding: 24px; }
+.label { font-size: 12px; letter-spacing: .12em; color: var(--primary); }
+h1 { font-size: 28px; font-weight: 600; }
+label { display: block; margin-top: 24px; }
+textarea { display: block; box-sizing: border-box; width: 100%; margin: 8px 0 20px; padding: 12px; font: inherit; color: var(--on-surface); background: var(--container); border: 1px solid var(--primary); border-radius: 12px; resize: vertical; }
+button { font: inherit; border: 0; border-radius: 24px; padding: 12px 24px; color: var(--on-primary); background: var(--primary); cursor: pointer; }
+button:disabled { opacity: .5; cursor: wait; }
+button:focus-visible, textarea:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
+pre { margin-top: 24px; padding: 20px; border-radius: 20px; background: var(--container); white-space: pre-wrap; overflow-wrap: anywhere; }

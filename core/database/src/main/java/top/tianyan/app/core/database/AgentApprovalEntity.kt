@@ -1,5 +1,6 @@
 package top.tianyan.app.core.database
 
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Entity
 import androidx.room.Insert
@@ -9,8 +10,7 @@ import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import top.tianyan.app.core.model.ApprovalMode
-import javax.inject.Inject
-import javax.inject.Singleton
+import top.tianyan.app.core.model.RunMode
 
 @Entity(tableName = "agent_approval_requests")
 data class AgentApprovalRequestEntity(
@@ -46,7 +46,9 @@ data class AgentApprovalRequestEntity(
 @Entity(tableName = "agent_approval_settings")
 data class AgentApprovalSettingsEntity(
     @PrimaryKey val id: Int = SINGLETON_ID,
-    val mode: String = ApprovalMode.ASSISTED.id,
+    val mode: String = ApprovalMode.FULL_ACCESS.id,
+    /** 全局默认运行意图（BUILD / PLAN）：新会话创建时的初始值。 */
+    @ColumnInfo(defaultValue = "build") val runMode: String = RunMode.BUILD.id,
 ) {
     companion object {
         const val SINGLETON_ID = 1
@@ -80,6 +82,14 @@ interface AgentApprovalDao {
 
 
 
+    /** 查询指定会话中有效的未过期 pending 请求。 */
+    @Query("SELECT * FROM agent_approval_requests WHERE sessionId = :sessionId AND status = 'pending' AND expiresAt > :now ORDER BY createdAt ASC")
+    suspend fun listUnexpiredPendingForSession(sessionId: String, now: Long): List<AgentApprovalRequestEntity>
+
+    /** 查询指定会话中到期未决的 pending 请求。 */
+    @Query("SELECT * FROM agent_approval_requests WHERE sessionId = :sessionId AND status = 'pending' AND expiresAt <= :now ORDER BY createdAt ASC")
+    suspend fun listExpiredPendingForSession(sessionId: String, now: Long): List<AgentApprovalRequestEntity>
+
     @Query("DELETE FROM agent_approval_requests WHERE sessionId = :sessionId")
     suspend fun deleteForSession(sessionId: String)
 
@@ -93,11 +103,11 @@ interface AgentApprovalDao {
     suspend fun upsertSettings(settings: AgentApprovalSettingsEntity)
 }
 
-@Singleton
-class AgentApprovalRepository @Inject constructor(
+class AgentApprovalRepository(
     private val dao: AgentApprovalDao,
 ) {
     val mode: Flow<ApprovalMode> = dao.observeSettings().map { ApprovalMode.fromId(it?.mode) }
+    val runMode: Flow<RunMode> = dao.observeSettings().map { RunMode.fromId(it?.runMode) }
 
     fun pendingForSession(sessionId: String): Flow<List<AgentApprovalRequestEntity>> =
         dao.observePendingForSession(sessionId).map { requests ->
@@ -106,16 +116,42 @@ class AgentApprovalRepository @Inject constructor(
             requests.filter { it.expiresAt > now }
         }
 
-    /** 读取前先清扫到期请求，保证 pending 视图与过期语义一致。 */
-    suspend fun pendingNow(sessionId: String): List<AgentApprovalRequestEntity> {
-        dao.expirePendingApprovals(System.currentTimeMillis())
-        return dao.listPendingForSession(sessionId)
+    /** 读取当前有效的未过期 pending 请求；终态写入由 sweepExpired / resolveApproval 完成。 */
+    suspend fun pendingNow(sessionId: String, now: Long = System.currentTimeMillis()): List<AgentApprovalRequestEntity> =
+        dao.listUnexpiredPendingForSession(sessionId, now)
+
+    /**
+     * 清扫指定会话中所有到期未决的请求，将其原子性置为 STATUS_EXPIRED，并返回被过期的请求列表。
+     */
+    suspend fun sweepExpiredForSession(
+        sessionId: String,
+        now: Long = System.currentTimeMillis(),
+    ): List<AgentApprovalRequestEntity> {
+        val expired = dao.listExpiredPendingForSession(sessionId, now)
+        if (expired.isEmpty()) return emptyList()
+        val claimed = mutableListOf<AgentApprovalRequestEntity>()
+        for (request in expired) {
+            if (dao.claimPendingRequest(request.id, AgentApprovalRequestEntity.STATUS_EXPIRED, now) > 0) {
+                claimed.add(request.copy(status = AgentApprovalRequestEntity.STATUS_EXPIRED, resolvedAt = now))
+            }
+        }
+        return claimed
     }
 
     suspend fun currentMode(): ApprovalMode = ApprovalMode.fromId(dao.getSettings()?.mode)
 
+    suspend fun currentRunMode(): RunMode = RunMode.fromId(dao.getSettings()?.runMode)
+
+    /** 只改审批模式，保留既有运行意图（upsert 是 REPLACE 语义，必须显式回读另一列）。 */
     suspend fun setMode(mode: ApprovalMode) {
-        dao.upsertSettings(AgentApprovalSettingsEntity(mode = mode.id))
+        val existing = dao.getSettings()
+        dao.upsertSettings(AgentApprovalSettingsEntity(mode = mode.id, runMode = existing?.runMode ?: RunMode.BUILD.id))
+    }
+
+    /** 只改运行意图，保留既有审批模式。 */
+    suspend fun setRunMode(mode: RunMode) {
+        val existing = dao.getSettings()
+        dao.upsertSettings(AgentApprovalSettingsEntity(mode = existing?.mode ?: ApprovalMode.FULL_ACCESS.id, runMode = mode.id))
     }
 
     suspend fun create(request: AgentApprovalRequestEntity) = dao.upsertRequest(request)
@@ -127,8 +163,6 @@ class AgentApprovalRepository @Inject constructor(
 
     suspend fun claimPending(id: String, status: String): Boolean =
         dao.claimPendingRequest(id, status, System.currentTimeMillis()) > 0
-
-
 
     suspend fun deleteForSession(sessionId: String) = dao.deleteForSession(sessionId)
 }

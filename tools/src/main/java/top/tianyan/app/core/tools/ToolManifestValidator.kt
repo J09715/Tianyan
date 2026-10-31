@@ -1,11 +1,11 @@
-package top.tianyan.app.core.tools
+﻿package top.tianyan.app.core.tools
 
 import top.tianyan.app.core.model.ToolManifest
+import top.tianyan.app.plugin.packages.PluginPackageProtocol
 
 /**
- * Validates the data-only part of a registry before it can affect the app.
- * Manifests never carry executable shell commands; adapters remain allow-listed
- * in the app and are selected by tool id.
+ * Validates registry/package metadata. Recipe scripts remain executable PRoot code;
+ * permissions describe requests and do not sandbox arbitrary scripts.
  */
 object ToolManifestValidator {
     private val idPattern = Regex("[a-z0-9][a-z0-9-]{1,63}")
@@ -18,7 +18,7 @@ object ToolManifestValidator {
     fun validateAll(manifests: List<ToolManifest>): List<ToolManifest> {
         require(manifests.isNotEmpty()) { "工具清单不能为空" }
         manifests.forEach { manifest ->
-            require(manifest.schemaVersion == 1) { "不支持的工具清单 Schema：${manifest.schemaVersion}" }
+            PluginPackageProtocol.validate(manifest)
             require(idPattern.matches(manifest.id)) { "非法工具 ID：${manifest.id}" }
             require(manifest.name.isNotBlank()) { "工具名称不能为空：${manifest.id}" }
             require(manifest.description.isNotBlank()) { "工具描述不能为空：${manifest.id}" }
@@ -70,6 +70,7 @@ object ToolManifestValidator {
             }
         }
         require(manifests.map { it.id }.toSet().size == manifests.size) { "工具 ID 重复" }
+        require(manifests.map(PluginPackageProtocol::identity).distinct().size == manifests.size) { "插件身份重复" }
         return manifests
     }
 }

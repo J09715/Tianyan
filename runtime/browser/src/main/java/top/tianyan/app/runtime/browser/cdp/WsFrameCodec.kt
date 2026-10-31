@@ -2,6 +2,7 @@ package top.tianyan.app.runtime.browser.cdp
 
 import java.io.ByteArrayOutputStream
 import java.security.MessageDigest
+import java.security.SecureRandom
 import java.util.Base64
 import java.util.UUID
 
@@ -30,7 +31,7 @@ object WsFrameCodec {
 
     /** 客户端发送帧：FIN=1 + 掩码（随机 4 字节 key，逐字节异或）。 */
     fun encodeClientFrame(opcode: Int, payload: ByteArray): ByteArray {
-        val mask = ByteArray(4).also { java.security.SecureRandom().nextBytes(it) }
+        val mask = ByteArray(4).also { SecureRandom().nextBytes(it) }
         val masked = ByteArray(payload.size) { i -> (payload[i].toInt() xor mask[i and 3].toInt()).toByte() }
         val header = ByteArrayOutputStream()
         header.write(0x80 or opcode)
@@ -70,7 +71,7 @@ object WsFrameCodec {
             "\r\n"
 
     fun newWebSocketKey(): String {
-        val bytes = ByteArray(16).also { java.security.SecureRandom().nextBytes(it) }
+        val bytes = ByteArray(16).also { SecureRandom().nextBytes(it) }
         return Base64.getEncoder().encodeToString(bytes)
     }
 
@@ -100,27 +101,11 @@ object WsFrameCodec {
  * 不完整帧留在内部缓冲等待后续字节（跨 TCP/LocalSocket 分包）。
  * 线程安全由调用方保证（单读协程喂入）。
  */
-class WsFrameDecoder(
-    private val maxFrameBytes: Int = 16 * 1024 * 1024,
-) {
+class WsFrameDecoder {
     private var buffer = ByteArray(0)
-    private var fragmentedOpcode: Int? = null
-    private var fragmentedBytes = 0L
-
-    init {
-        require(maxFrameBytes in 0..(64 * 1024 * 1024)) {
-            "maxFrameBytes must be between 0 and 64 MiB"
-        }
-    }
 
     fun feed(bytes: ByteArray, offset: Int = 0, length: Int = bytes.size - offset): List<WsFrameCodec.Frame> {
-        require(offset >= 0 && length >= 0 && offset <= bytes.size - length) {
-            "invalid byte range: offset=$offset length=$length size=${bytes.size}"
-        }
         if (length > 0) {
-            if (buffer.size.toLong() + length > maxFrameBytes.toLong() + 14L) {
-                throw IllegalStateException("websocket buffered data exceeds limit: $maxFrameBytes bytes")
-            }
             buffer += bytes.copyOfRange(offset, offset + length)
         }
         val frames = ArrayList<WsFrameCodec.Frame>(2)
@@ -137,17 +122,6 @@ class WsFrameDecoder(
         val b1 = buffer[1].toInt() and 0xFF
         val fin = (b0 and 0x80) != 0
         val opcode = b0 and 0x0F
-        if ((b0 and 0x70) != 0) throw IllegalStateException("websocket RSV bits must be zero")
-        val supportedOpcode = when (opcode) {
-            WsFrameCodec.OP_CONTINUATION,
-            WsFrameCodec.OP_TEXT,
-            WsFrameCodec.OP_BINARY,
-            WsFrameCodec.OP_CLOSE,
-            WsFrameCodec.OP_PING,
-            WsFrameCodec.OP_PONG -> true
-            else -> false
-        }
-        if (!supportedOpcode) throw IllegalStateException("unsupported websocket opcode: $opcode")
         val masked = (b1 and 0x80) != 0
         val len7 = b1 and 0x7F
 
@@ -161,9 +135,6 @@ class WsFrameDecoder(
             }
             127 -> {
                 if (buffer.size < pos + 8) return null
-                if ((buffer[pos].toInt() and 0x80) != 0) {
-                    throw IllegalStateException("websocket payload length uses reserved high bit")
-                }
                 var v = 0L
                 repeat(8) { i -> v = (v shl 8) or (buffer[pos + i].toLong() and 0xFF) }
                 pos += 8
@@ -171,27 +142,8 @@ class WsFrameDecoder(
             }
             else -> len7.toLong()
         }
-        if (len7 == 126 && payloadLen < 126L || len7 == 127 && payloadLen < 65536L) {
-            throw IllegalStateException("non-canonical websocket payload length")
-        }
-        if (opcode >= WsFrameCodec.OP_CLOSE && (!fin || payloadLen > 125L || opcode == WsFrameCodec.OP_CLOSE && payloadLen == 1L)) {
-            throw IllegalStateException("invalid websocket control frame")
-        }
-        if (opcode < WsFrameCodec.OP_CLOSE) {
-            val activeOpcode = fragmentedOpcode
-            when {
-                opcode == WsFrameCodec.OP_CONTINUATION && activeOpcode == null ->
-                    throw IllegalStateException("unexpected websocket continuation frame")
-                opcode != WsFrameCodec.OP_CONTINUATION && activeOpcode != null ->
-                    throw IllegalStateException("new websocket data frame before fragmented message completed")
-            }
-            val messageBytes = if (opcode == WsFrameCodec.OP_CONTINUATION) fragmentedBytes + payloadLen else payloadLen
-            if (messageBytes > maxFrameBytes.toLong()) {
-                throw IllegalStateException("websocket message exceeds limit: $messageBytes bytes (limit $maxFrameBytes)")
-            }
-        }
-        if (payloadLen > maxFrameBytes.toLong()) {
-            throw IllegalStateException("websocket frame too large: $payloadLen bytes (limit $maxFrameBytes)")
+        if (payloadLen > Int.MAX_VALUE) {
+            throw IllegalStateException("websocket frame too large: $payloadLen bytes")
         }
 
         // 掩码 key（客户端实现按协议不收掩码帧，但健壮性起见仍按规范解）
@@ -209,19 +161,6 @@ class WsFrameDecoder(
             payload = ByteArray(payload.size) { i -> (payload[i].toInt() xor mask[i and 3].toInt()).toByte() }
         }
         buffer = buffer.copyOfRange(total, buffer.size)
-        if (opcode < WsFrameCodec.OP_CLOSE) {
-            when {
-                opcode == WsFrameCodec.OP_CONTINUATION && fin -> {
-                    fragmentedOpcode = null
-                    fragmentedBytes = 0
-                }
-                opcode == WsFrameCodec.OP_CONTINUATION -> fragmentedBytes += payloadLen
-                !fin -> {
-                    fragmentedOpcode = opcode
-                    fragmentedBytes = payloadLen
-                }
-            }
-        }
         return WsFrameCodec.Frame(fin, opcode, payload)
     }
 

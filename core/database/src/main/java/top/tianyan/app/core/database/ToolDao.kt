@@ -38,4 +38,8 @@ interface ToolDao {
     /** 卸载发行版时清理该系统的全部工具状态。 */
     @Query("DELETE FROM tools WHERE distroId = :distroId")
     suspend fun deleteByDistro(distroId: String)
+
+    /** 批量清理已废弃或移除的工具条目。 */
+    @Query("DELETE FROM tools WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: Collection<String>)
 }

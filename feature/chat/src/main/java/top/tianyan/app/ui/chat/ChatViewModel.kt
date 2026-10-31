@@ -6,9 +6,8 @@ import top.tianyan.app.core.tools.AiProfileWriter
 import top.tianyan.app.core.model.ExecutionMode
 import top.tianyan.app.core.model.McpConnectionState
 import top.tianyan.app.core.model.ApprovalMode
-import top.tianyan.app.core.model.RedTeamConsoleModel
-import top.tianyan.app.core.model.RedTeamMode
-import top.tianyan.app.core.model.RedTeamPhase
+import top.tianyan.app.core.model.RunMode
+import top.tianyan.app.core.model.RunningSendMode
 import top.tianyan.app.core.database.AiModelRepository
 import top.tianyan.app.core.database.AiModelEntity
 import top.tianyan.app.core.database.HarnessSessionRepository
@@ -18,10 +17,9 @@ import top.tianyan.app.core.database.McpServerRepository
 import top.tianyan.app.core.database.AgentApprovalRepository
 import top.tianyan.app.core.database.AgentApprovalRequestEntity
 import top.tianyan.app.core.datastore.AgentPreferences
-import top.tianyan.app.core.datastore.GitCredential
-import top.tianyan.app.core.datastore.GitPreferences
-import top.tianyan.app.harness.HarnessLoop
+import top.tianyan.app.harness.session.InteractiveSessionControl
 import top.tianyan.app.harness.HarnessMessage
+import top.tianyan.app.harness.SkillSuggestion
 import top.tianyan.app.harness.UserMessage
 import top.tianyan.app.harness.AssistantText
 import top.tianyan.app.harness.ToolCall
@@ -29,23 +27,23 @@ import top.tianyan.app.harness.ToolResult
 import top.tianyan.app.harness.PendingMessage
 import top.tianyan.app.harness.QueuedPrompt
 import top.tianyan.app.harness.ContextWindowPolicy
+import top.tianyan.app.harness.compaction.CompactedContext
+import top.tianyan.app.harness.ToolCallMode
 import top.tianyan.app.harness.prompt.SystemPromptBuilder
 import top.tianyan.app.harness.events.HarnessEvent
 import top.tianyan.app.harness.events.HarnessEventBus
+import top.tianyan.app.harness.workflow.ProactiveWorkflowAdvisor
+import top.tianyan.app.harness.workflow.ProactiveWorkflowSuggestion
 import top.tianyan.app.harness.mcp.McpManager
-import top.tianyan.app.harness.queue.PromptQueue
 import top.tianyan.app.harness.session.ConversationBranch
 import top.tianyan.app.harness.session.ConversationBranchKind
 import top.tianyan.app.harness.session.LaneManager
 import top.tianyan.app.runtime.WorkspaceManager
 import top.tianyan.app.runtime.WorkspaceProject
-import top.tianyan.app.runtime.shell.ShellCommand
 import top.tianyan.app.core.tools.AgentModelDiscovery
 import top.tianyan.app.core.tools.AgentProviderCatalog
 import top.tianyan.app.core.tools.ProviderEndpointPolicy
 import top.tianyan.app.core.tools.ProviderRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import android.content.Context
 import android.net.Uri
 import android.util.Log
@@ -54,7 +52,6 @@ import androidx.lifecycle.SavedStateHandle
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import top.tianyan.app.feature.chat.R
-import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -63,18 +60,47 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 import top.tianyan.app.runtime.terminal.TerminalSessionManager
+import java.io.File
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import top.tianyan.app.core.common.navigation.AppNavigationTarget
+import top.tianyan.app.core.common.navigation.GlobalNavigationBus
+import top.tianyan.app.core.common.translation.TranslationManager
+import top.tianyan.app.core.database.AgentContextRepository
+import top.tianyan.app.core.database.AgentMemoryEntity
+import top.tianyan.app.core.database.AgentPlanEntity
+import top.tianyan.app.core.database.AgentScratchpadEntity
+import top.tianyan.app.core.database.QuickPhraseRepository
+import top.tianyan.app.core.database.WorkflowRepository
+import top.tianyan.app.core.model.AgentSkill
+import top.tianyan.app.core.model.InstalledDistro
+import top.tianyan.app.core.model.McpServerConfig
+import top.tianyan.app.core.model.QuickPhrase
+import top.tianyan.app.core.model.SessionRunState
+import top.tianyan.app.harness.MentionExtractor
+import top.tianyan.app.harness.checkpoint.RewindScope
+import top.tianyan.app.harness.compaction.CompactionManager
+import top.tianyan.app.harness.compaction.CompactionSnapshot
+import top.tianyan.app.harness.diagnostics.RequestDiagnosticsStore
+import top.tianyan.app.harness.mcp.McpWorkspaceRecommender
+import top.tianyan.app.harness.session.SessionModelSwitcher
+import top.tianyan.app.runtime.LinuxRuntime
+import top.tianyan.app.runtime.RuntimePathManager
+import top.tianyan.app.runtime.privilege.PrivilegeManager
+import top.tianyan.app.ui.components.RuntimeIconName
 
 private const val MAX_RUNTIME_EVENTS = 160
 private const val TAG = "ChatViewModel"
@@ -88,55 +114,66 @@ data class SubagentResultUiState(
     val error: String? = null,
 )
 
+data class WorkflowLaunchRequest(
+    val workflowId: String?,
+    val projectName: String,
+    val initialVariables: Map<String, String> = emptyMap(),
+)
+
 /** 空会话首屏的权限感知引导档位；决定开场提示卡的文案与色调。 */
 enum class OnboardingPrivilege { SANDBOX, SANDBOX_UNLOCKABLE, SHIZUKU_READY, ROOT_READY }
 
-@HiltViewModel
-class ChatViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
+class ChatViewModel(
+    private val context: Context,
     private val savedStateHandle: SavedStateHandle,
-    private val harnessLoop: HarnessLoop,
+    private val harnessLoop: InteractiveSessionControl,
+    private val requestDiagnostics: RequestDiagnosticsStore,
+    private val systemPromptBuilder: SystemPromptBuilder,
     private val sessionDao: HarnessSessionRepository,
-    private val redTeamFactRepository: top.tianyan.app.core.database.RedTeamFactRepository,
-    private val redTeamCoordinator: top.tianyan.app.harness.redteam.RedTeamCoordinator,
     private val aiModelDao: AiModelRepository,
     private val workspaceManager: WorkspaceManager,
-    private val proactiveWorkflowAdvisor: top.tianyan.app.harness.workflow.ProactiveWorkflowAdvisor,
-    private val workflowRepository: top.tianyan.app.core.database.WorkflowRepository,
     private val settingsDataStore: AgentPreferences,
-    private val gitPreferences: GitPreferences,
-    private val linuxRuntime: top.tianyan.app.runtime.LinuxRuntime,
+    private val linuxRuntime: LinuxRuntime,
     private val terminalSessionManager: TerminalSessionManager,
     private val mcpManager: McpManager,
     private val agentSkillRepository: AgentSkillRepository,
     private val mcpServerRepository: McpServerRepository,
     private val approvalRepository: AgentApprovalRepository,
-    private val agentContextDao: top.tianyan.app.core.database.AgentContextRepository,
-    private val compactionManager: top.tianyan.app.harness.compaction.CompactionManager,
-    private val quickPhraseRepository: top.tianyan.app.core.database.QuickPhraseRepository,
+    private val agentContextDao: AgentContextRepository,
+    private val compactionManager: CompactionManager,
+    private val contextMemoryBackend: top.tianyan.app.harness.ContextMemoryToolBackend,
+    private val sessionModelSwitcher: SessionModelSwitcher,
+    private val quickPhraseRepository: QuickPhraseRepository,
     private val laneManager: LaneManager,
+    private val operationCoordinator: top.tianyan.app.harness.operation.OperationCoordinator,
     private val eventBus: HarnessEventBus,
+    private val proactiveWorkflowAdvisor: ProactiveWorkflowAdvisor,
     private val modelDiscovery: AgentModelDiscovery,
     private val providerCatalog: AgentProviderCatalog,
     private val providerRepository: ProviderRepository,
-    private val profileWriter: top.tianyan.app.core.tools.AiProfileWriter,
-    private val privilegeManager: top.tianyan.app.runtime.privilege.PrivilegeManager,
-    private val pathManager: top.tianyan.app.runtime.RuntimePathManager,
-    private val providerClient: top.tianyan.app.harness.ProviderClient,
-    private val debugActionBus: top.tianyan.app.runtime.debug.DebugActionBus,
-    private val textExtractor: top.tianyan.app.runtime.sandbox.SandboxTextExtractor,
-    private val fullSettingsStore: top.tianyan.app.core.datastore.SettingsDataStore,
-    private val skillDistillationManager: top.tianyan.app.harness.skill.SkillDistillationManager,
-    private val questionBroker: top.tianyan.app.harness.question.AgentQuestionBroker,
-    private val subagentRepository: top.tianyan.app.core.database.AgentSubagentRepository,
-    private val agentEngineCatalog: top.tianyan.app.harness.acp.AgentEngineCatalog,
+    private val profileWriter: AiProfileWriter,
+    private val privilegeManager: PrivilegeManager,
+    private val pathManager: RuntimePathManager,
+    private val workflowRepository: WorkflowRepository,
+    val translationManager: TranslationManager? = null,
+    val globalNavigationBus: GlobalNavigationBus? = null,
+    private val workspaceCatalogSource: top.tianyan.app.runtime.SessionWorkspaceCatalog,
+    val btwController: BtwChatController? = null,
+    /** 红队事实仓库：红队控制台与红队面板的数据源。 */
+    internal val redTeamFactsSource: top.tianyan.app.core.database.RedTeamFactRepository? = null,
+    /** 红队协调器：控制台的所有查询与写入都经它。 */
+    internal val redTeamCoordinatorRef: top.tianyan.app.harness.redteam.RedTeamCoordinator? = null,
 ) : ViewModel() {
+    val failureMemoryAccess get() = operationCoordinator.failureMemories
+    val redTeamFacts: kotlinx.coroutines.flow.Flow<List<top.tianyan.app.core.database.RedTeamFactEntity>> = redTeamFactStream(); fun bindRedTeamTarget(target: String, scope: String) = bindRedTeam(sessionDao, target, scope); internal val redTeamConsoleController by lazy { buildRedTeamConsoleController() }
 
-    /**
-     * 模型回复里引用的沙箱绝对路径（如 /workspace/xxx.jpg）到宿主真实目录的映射，
-     * 供聊天媒体渲染把 PRoot 内路径翻译成 Android 可读文件。
-     */
-    val sandboxHostRoots: Map<String, java.io.File> = mapOf(
+    private val _workflowLaunchRequests = MutableSharedFlow<WorkflowLaunchRequest>(extraBufferCapacity = 2)
+    val workflowLaunchRequests: SharedFlow<WorkflowLaunchRequest> = _workflowLaunchRequests
+    private val _workflowSuggestions = MutableStateFlow<List<ProactiveWorkflowSuggestion>>(emptyList())
+    val workflowSuggestions: StateFlow<List<ProactiveWorkflowSuggestion>> = _workflowSuggestions.asStateFlow()
+
+    /** 模型回复里引用的沙箱绝对路径（如 /workspace/xxx.jpg）到宿主真实目录的映射，供聊天媒体渲染把 PRoot 内路径翻译成 Android 可读文件。 */
+    val sandboxHostRoots: Map<String, File> = mapOf(
         "workspace" to pathManager.workspaceDir,
         "attachments" to pathManager.attachmentsDir,
     )
@@ -155,15 +192,17 @@ class ChatViewModel @Inject constructor(
             .stateIn(viewModelScope, SharingStarted.Lazily, null)
 
     private val _eventHistory = MutableStateFlow<Map<String, List<HarnessEvent>>>(emptyMap())
-    private val _permissionRequests = kotlinx.coroutines.flow.MutableSharedFlow<HarnessEvent.PermissionRequired>(
+    private val _permissionRequests = MutableSharedFlow<HarnessEvent.PermissionRequired>(
         extraBufferCapacity = 8,
-        onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
-    val permissionRequests: kotlinx.coroutines.flow.SharedFlow<HarnessEvent.PermissionRequired> = _permissionRequests
+    val permissionRequests: SharedFlow<HarnessEvent.PermissionRequired> = _permissionRequests
 
     init {
+        A2uiChatBridge.bind(harnessLoop, context)
         viewModelScope.launch {
             quickPhraseRepository.ensureInitialized()
+            workflowRepository.ensureBuiltins()
         }
         viewModelScope.launch {
             eventBus.events.collect { event ->
@@ -175,133 +214,21 @@ class ChatViewModel @Inject constructor(
                 }
             }
         }
-        // Debug 广播总线：ChatViewModel 收到 CloneRepo 就直接调 gitClone，绕过 adb+IME 不可靠问题
         viewModelScope.launch {
-            debugActionBus.flow.collect { action ->
-                when (action) {
-                    is top.tianyan.app.runtime.debug.DebugActionBus.Action.CloneRepo -> gitClone(action.url)
-                    is top.tianyan.app.runtime.debug.DebugActionBus.Action.Diagnostic -> {
-                        viewModelScope.launch(Dispatchers.IO) {
-                            val r = runCatching {
-                                linuxRuntime.execute(
-                                    top.tianyan.app.runtime.shell.ShellCommand(
-                                        commandLine = action.command + " 2>&1",
-                                        workingDirectory = "/root",
-                                        timeoutMs = 300_000L,
-                                    ),
-                                )
-                            }.getOrNull()
-                            val out = ((r?.stdout ?: "") + "\n" + (r?.stderr ?: "")).trim().take(2000)
-                            android.util.Log.i("TianyanDiag", "CMD=${action.command} → EXIT=${r?.exitCode} OUT=$out")
-                            _gitOpMessage.value = GitOpMessage.Error("诊断：exit=${r?.exitCode}\n$out")
-                        }
-                    }
-                    is top.tianyan.app.runtime.debug.DebugActionBus.Action.SwitchWorkspace -> {
-                        harnessLoop.debugSetWorkspace(action.path)
-                        _gitOpMessage.value = GitOpMessage.Ok("已切工作区到 ${action.path}")
-                        refreshGitStatus()
-                    }
-                    top.tianyan.app.runtime.debug.DebugActionBus.Action.RefreshStatus -> refreshGitStatus()
-                    is top.tianyan.app.runtime.debug.DebugActionBus.Action.AddCred ->
-                        addGitCredential(action.name, action.host, action.user, action.token)
-                    top.tianyan.app.runtime.debug.DebugActionBus.Action.ClearCreds -> {
-                        viewModelScope.launch(Dispatchers.IO) { gitPreferences.setCredentials(emptyList()) }
-                    }
-                    is top.tianyan.app.runtime.debug.DebugActionBus.Action.VerifyCred ->
-                        verifyGitCredential(action.id)
-                    is top.tianyan.app.runtime.debug.DebugActionBus.Action.FetchRepos ->
-                        fetchUserRepos(action.host)
-                    top.tianyan.app.runtime.debug.DebugActionBus.Action.AiGenerateCommit ->
-                        aiGenerateCommitMessage()
-                    top.tianyan.app.runtime.debug.DebugActionBus.Action.GitPull -> gitPull()
-                    top.tianyan.app.runtime.debug.DebugActionBus.Action.GitPush -> gitPush()
-                    top.tianyan.app.runtime.debug.DebugActionBus.Action.GitStash -> gitStash()
-                    top.tianyan.app.runtime.debug.DebugActionBus.Action.GitStashPop -> gitStashPop()
-                    top.tianyan.app.runtime.debug.DebugActionBus.Action.GitRevertAll -> gitRevertAllUnstaged()
-                    is top.tianyan.app.runtime.debug.DebugActionBus.Action.GitRenameBranch ->
-                        gitRenameBranch(action.old, action.new)
-                    is top.tianyan.app.runtime.debug.DebugActionBus.Action.GitDeleteRemote ->
-                        gitDeleteRemoteBranch(action.name)
-                    is top.tianyan.app.runtime.debug.DebugActionBus.Action.GitCheckout ->
-                        gitCheckout(action.branch)
-                    is top.tianyan.app.runtime.debug.DebugActionBus.Action.ExtractText -> {
-                        viewModelScope.launch(Dispatchers.IO) {
-                            val r = runCatching { textExtractor.extract(action.guestPath, action.name) }
-                            val msg = when (val res = r.getOrNull()) {
-                                is top.tianyan.app.runtime.sandbox.SandboxTextExtractor.Result.Ok ->
-                                    "OK len=${res.text.length} truncated=${res.truncated} 前 200: ${res.text.take(200)}"
-                                is top.tianyan.app.runtime.sandbox.SandboxTextExtractor.Result.Skipped -> "SKIP ${res.reason}"
-                                is top.tianyan.app.runtime.sandbox.SandboxTextExtractor.Result.Failed -> "FAIL ${res.error}"
-                                null -> "EXC ${r.exceptionOrNull()?.message}"
-                            }
-                            android.util.Log.i("TianyanDiag", "extract ${action.name} → $msg")
-                            _gitOpMessage.value = GitOpMessage.Error("抽取 ${action.name}: $msg")
-                        }
-                    }
-                    is top.tianyan.app.runtime.debug.DebugActionBus.Action.SetProxy -> {
-                        viewModelScope.launch(Dispatchers.IO) {
-                            fullSettingsStore.setSandboxHttpProxy(action.value)
-                            android.util.Log.i("TianyanDiag", "SetProxy = '${action.value}'")
-                        }
-                    }
-                    is top.tianyan.app.runtime.debug.DebugActionBus.Action.SimulateAttachment -> {
-                        // 造一个内存 ChatAttachment 塞进 pendingAttachments → 走 extract 全链路 → 附件卡显示状态
-                        val fakeAtt = ChatAttachment(
-                            name = action.name,
-                            isImage = false,
-                            sizeBytes = action.sizeBytes,
-                            uri = android.net.Uri.parse("file://${action.guestPath}"),
-                            guestFilePath = action.guestPath,
-                        )
-                        _pendingAttachments.update { it + fakeAtt }
-                        viewModelScope.launch(Dispatchers.IO) { extractTextForAttachment(fakeAtt) }
-                    }
-                    is top.tianyan.app.runtime.debug.DebugActionBus.Action.GitStageAll ->
-                        if (action.on) gitStageAll() else gitUnstageAll()
-                    is top.tianyan.app.runtime.debug.DebugActionBus.Action.GitCommit ->
-                        gitCommit(action.message)
-                    is top.tianyan.app.runtime.debug.DebugActionBus.Action.GitCreateTag ->
-                        gitCreateTag(action.name)
-                    is top.tianyan.app.runtime.debug.DebugActionBus.Action.GitPushTag ->
-                        gitPushTag(action.name)
-                    is top.tianyan.app.runtime.debug.DebugActionBus.Action.GitDeleteTagLocal ->
-                        gitDeleteTag(action.name)
-                    is top.tianyan.app.runtime.debug.DebugActionBus.Action.GitDeleteTagRemote ->
-                        gitDeleteRemoteTag(action.name)
-                    is top.tianyan.app.runtime.debug.DebugActionBus.Action.CreateProject -> {
-                        viewModelScope.launch(Dispatchers.IO) {
-                            val inner = runCatching {
-                                workspaceManager.createProject(
-                                    name = action.name,
-                                    templateId = action.templateId,
-                                    packageName = action.pkg,
-                                )
-                            }
-                            val detail = inner.getOrNull()?.let { appRes ->
-                                appRes.getOrNull()?.let { "OK name=${it.name} linuxPath=${it.linuxPath}" }
-                                    ?: "FAIL " + appRes.errorOrNull()?.message
-                            } ?: ("EX " + inner.exceptionOrNull()?.message)
-                            android.util.Log.i("TianyanDiag", "CreateProject '${action.name}'(${action.templateId}) → $detail")
-                            _gitOpMessage.value = GitOpMessage.Error("CreateProject: $detail".take(500))
-                        }
-                    }
-                    is top.tianyan.app.runtime.debug.DebugActionBus.Action.GitRaw -> {
-                        viewModelScope.launch(Dispatchers.IO) {
-                            val out = runGitRead(currentGitWs(), action.cmd + " 2>&1") ?: "<null>"
-                            android.util.Log.i("TianyanDiag", "GitRaw '${action.cmd}' → $out")
-                            _gitOpMessage.value = GitOpMessage.Error("GitRaw:\n$out".take(600))
-                        }
-                    }
+            proactiveWorkflowAdvisor.observeSuggestions().collect { suggestion ->
+                _workflowSuggestions.update { current ->
+                    (listOf(suggestion) + current.filterNot { it.workflowId == suggestion.workflowId }).take(3)
                 }
             }
         }
+        btwController?.start(viewModelScope, harnessLoop.currentSessionId) { _notice.value = it }
     }
 
-    val quickPhrases: StateFlow<List<top.tianyan.app.core.model.QuickPhrase>> = quickPhraseRepository.observeAll()
+    val quickPhrases: StateFlow<List<QuickPhrase>> = quickPhraseRepository.observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val activeDistroId: StateFlow<String> = linuxRuntime.activeDistroId
-    val installedDistros: StateFlow<List<top.tianyan.app.core.model.InstalledDistro>> = linuxRuntime.installedDistros
+    val installedDistros: StateFlow<List<InstalledDistro>> = linuxRuntime.installedDistros
 
     fun switchDistro(distroId: String) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -310,1216 +237,112 @@ class ChatViewModel @Inject constructor(
             linuxRuntime.switchActiveDistro(distroId)
         }
     }
-
+    private val sessionDeletionFeedback = SessionDeletionFeedback()
     val messages: StateFlow<List<HarnessMessage>> = harnessLoop.messages
     val running: StateFlow<Boolean> = harnessLoop.running
-    val error: StateFlow<String?> = harnessLoop.error
+    val error: StateFlow<String?> = sessionDeletionFeedback.errors(harnessLoop.error, viewModelScope)
     val status: StateFlow<String?> = harnessLoop.status
     val thinkingLive: StateFlow<Boolean> = harnessLoop.thinkingLive
     val workspace: StateFlow<String> = harnessLoop.workspace
     val projectType: StateFlow<String> = harnessLoop.projectType
     /** 基于当前工作区内容自动推荐的 MCP 预设（已启用的已过滤），仅提示不自动启用。 */
-    val mcpRecommendations: StateFlow<List<top.tianyan.app.harness.mcp.McpWorkspaceRecommender.Recommendation>> =
+    val mcpRecommendations: StateFlow<List<McpWorkspaceRecommender.Recommendation>> =
         harnessLoop.mcpRecommendations
 
     fun enableMcpRecommendation(presetId: String) = harnessLoop.enableRecommendedMcp(presetId)
     fun dismissMcpRecommendation(presetId: String) = harnessLoop.dismissMcpRecommendation(presetId)
+    fun dismissWorkflowSuggestion(workflowId: String) {
+        _workflowSuggestions.update { suggestions -> suggestions.filterNot { it.workflowId == workflowId } }
+    }
+
+    private val _localHiddenSkillSuggestions = MutableStateFlow<Set<String>>(emptySet())
+    /** 已应用或忽略的技能进化建议 id；卡片从列表隐藏，转写消息本身保留。通过 DataStore 持久化防杀进程重复展示。 */
+    val hiddenSkillSuggestions: StateFlow<Set<String>> = combine(
+        settingsDataStore.dismissedSkillSuggestions,
+        _localHiddenSkillSuggestions,
+        agentSkillRepository.allSkills,
+        harnessLoop.messages,
+    ) { persisted, local, skills, messages ->
+        SkillSuggestionActions.computeHiddenSuggestionIds(persisted, local, skills, messages)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = emptySet(),
+    )
+
+    fun dismissSkillSuggestion(id: String) {
+        val suggestionId = id.trim()
+        if (suggestionId.isEmpty()) return
+        _localHiddenSkillSuggestions.update { it + suggestionId }
+        viewModelScope.launch {
+            settingsDataStore.dismissSkillSuggestion(suggestionId)
+        }
+    }
+
+    /** 应用技能进化建议：创建新技能或更新既有自定义技能（内置技能不可覆盖，降级为新建）；[createNew] 为 true 时始终新建（对应卡片「创建技能 / 另存为新技能」）。 */
+    fun applySkillSuggestion(suggestion: SkillSuggestion, createNew: Boolean) {
+        val trimmedName = suggestion.skillName.trim()
+        val trimmedPrompt = suggestion.systemPrompt.trim()
+        if (trimmedName.isBlank() || trimmedPrompt.isBlank()) {
+            dismissSkillSuggestion(suggestion.id)
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val skills = agentSkillRepository.allSkills.first()
+                val existing = SkillSuggestionActions.resolveExisting(suggestion, createNew, skills)
+                val skill = SkillSuggestionActions.toCustomSkill(suggestion, existing)
+                agentSkillRepository.addCustom(skill)
+                dismissSkillSuggestion(suggestion.id)
+                _notice.value = if (existing != null) {
+                    context.getString(R.string.chat_skill_suggestion_updated, skill.name)
+                } else {
+                    context.getString(R.string.chat_skill_suggestion_created, skill.name)
+                }
+            } catch (t: Throwable) {
+                Log.w(TAG, "applySkillSuggestion failed", t)
+                _notice.value = context.getString(
+                    R.string.chat_skill_suggestion_apply_failed,
+                    t.message ?: "unknown",
+                )
+            }
+        }
+    }
+
+    fun launchWorkflowSuggestion(suggestion: ProactiveWorkflowSuggestion) {
+        dismissWorkflowSuggestion(suggestion.workflowId)
+        _workflowLaunchRequests.tryEmit(
+            WorkflowLaunchRequest(suggestion.workflowId, suggestion.projectName, suggestion.initialVariables),
+        )
+    }
     /** 运行中排队的待发送消息（当前任务结束后自动接续）。 */
     val pendingMessages: StateFlow<List<PendingMessage>> = harnessLoop.pendingMessages
     val queuedPrompts: StateFlow<List<QueuedPrompt>> = harnessLoop.queuedPrompts
 
-    private val _sendMode = MutableStateFlow(ComposerSendMode.NEXT_RUN)
-    val sendMode: StateFlow<ComposerSendMode> = _sendMode.asStateFlow()
-
-    /**
-     * 智能体提问：非空时输入区改为呈现提问卡片，用户作答后模型继续。
-     * 同一时刻至多一个问题（broker 侧强约束），因此这里用单值而非列表。
-     */
-    val pendingQuestion: StateFlow<top.tianyan.app.harness.question.PendingQuestion?> =
-        questionBroker.pending
-
-    /**
-     * 提交提问作答。broker 返回 false 说明该提问已失效
-     * （重复提交 / 会话已取消 / 进程重启后重放），此时给出可读提示而不是静默丢弃。
-     */
-    fun answerQuestion(answers: List<top.tianyan.app.core.model.AgentQuestionAnswer>) {
-        val pending = questionBroker.pending.value ?: return
-        val normalized = questionBroker.normalize(pending.questions, answers)
-        if (!questionBroker.submit(pending.callId, normalized)) {
-            harnessLoop.reportUserFacingNotice(
-                sessionId = pending.sessionId,
-                message = "该提问已失效（可能已作答或会话已取消），无需重复提交",
-            )
-        }
-    }
-
-    // ===== Git 面板状态（绑定当前会话，不跨会话共享）=====
-    private val _gitPanelState = MutableStateFlow(GitPanelState())
-    val gitPanelState: StateFlow<GitPanelState> = _gitPanelState.asStateFlow()
-
-    private companion object {
-        const val MAX_VISIBLE_UNTRACKED = 100
-    }
-
-    /** 读取当前会话工作区的 Git 状态（分支 + 改动 + 分支列表 + 提交历史）。 */
-    fun refreshGitStatus() {
-        // 会话未绑定工作区时回退到沙箱内 /workspace 根目录；相对路径补 /workspace 前缀
-        val ws = workspace.value.ifBlank { "/workspace" }
-            .let { if (it.startsWith("/")) it else "/workspace/$it" }
-        _gitPanelState.value = GitPanelState(loading = true)
-        viewModelScope.launch(Dispatchers.IO) {
-            // Git's default untracked mode collapses large directories (e.g. an 800-skill pack)
-            // into one entry. Never materialize thousands of paths into Compose state.
-            val statusOut = runGitRead(ws, "git status --porcelain -b -u")
-            if (statusOut == null) {
-                // 超时/执行失败 ≠ 非仓库：之前误标 notARepo，用户会以为仓库没了。
-                // 真实场景是仓库过大（如误把 /workspace 根 init 成仓库）导致 15s 超时。
-                _gitPanelState.value = GitPanelState(
-                    loading = false,
-                    error = "git status 执行失败/超时（15s）：git 未就绪、仓库过大或存储 IO 过慢。若当前在工作区根目录，请切到具体项目目录",
-                )
-                return@launch
-            }
-            if (statusOut.contains("not a git repository", ignoreCase = true)) {
-                _gitPanelState.value = GitPanelState(loading = false, notARepo = true)
-                return@launch
-            }
-            val lines = statusOut.lines().filter { it.isNotBlank() }
-            val branchHeader = lines.firstOrNull { it.startsWith("## ") }?.removePrefix("## ") ?: ""
-            val branch = branchHeader
-                .substringBefore("...")
-                .substringBefore(" [")
-                .trim()
-                .removePrefix("No commits yet on ")
-                .takeIf { it.isNotBlank() }
-            // 解析形如 `[ahead 2, behind 5]` 或 `[ahead 2]` / `[behind 3]`
-            val aheadBehind = Regex("""\[([^\]]+)\]""").find(branchHeader)?.groupValues?.get(1)?.let { inner ->
-                val ahead = Regex("ahead (\\d+)").find(inner)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-                val behind = Regex("behind (\\d+)").find(inner)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-                if (ahead == 0 && behind == 0) null else ahead to behind
-            }
-            val staged = mutableListOf<GitFileChange>()
-            val unstaged = mutableListOf<GitFileChange>()
-            val untracked = mutableListOf<String>()
-            val untrackedCount = runGitRead(ws, "git ls-files --others --exclude-standard | wc -l")
-                ?.trim()?.toIntOrNull()?.coerceAtLeast(untracked.size) ?: untracked.size
-            var untrackedOverflow = false
-            for (line in lines.filterNot { it.startsWith("## ") }) {
-                if (line.length < 4) continue
-                val x = line[0]
-                val y = line[1]
-                val path = line.drop(3)
-                when {
-                    x == '?' && y == '?' -> if (untracked.size < MAX_VISIBLE_UNTRACKED) untracked += path else untrackedOverflow = true
-                    x != ' ' -> staged += GitFileChange(x, path)
-                    y != ' ' -> unstaged += GitFileChange(y, path)
-                }
-            }
-            // 注意：%(refname:short) 的括号必须引号包裹——裸括号会被 dash 当语法错误，
-            // 整个命令 exit 2 → 分支列表恒空（E2E 实锤）。
-            val localBranches = runGitRead(ws, "git branch --format='%(refname:short)'")
-                ?.lines()?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
-            val remoteBranches = runGitRead(ws, "git branch -r --format='%(refname:short)'")
-                ?.lines()?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
-            val tags = runGitRead(ws, "git tag --list")
-                ?.lines()?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
-            val graph = buildFreshGraph(ws)
-            val hasIdentity = runGitRead(ws, "git config user.name")?.isNotBlank() == true &&
-                runGitRead(ws, "git config user.email")?.isNotBlank() == true
-            val hasRemote = runGitRead(ws, "git remote")?.isNotBlank() == true
-            val isShallow = runGitRead(ws, "git rev-parse --is-shallow-repository")?.trim() == "true"
-            val stashCount = runGitRead(ws, "git stash list")
-                ?.lines()?.count { it.isNotBlank() } ?: 0
-            _gitPanelState.value = _gitPanelState.value.copy(
-                loading = false,
-                branch = branch,
-                aheadBehind = aheadBehind,
-                stashCount = stashCount,
-                staged = staged,
-                unstaged = unstaged,
-                untracked = untracked,
-                untrackedCount = untrackedCount,
-                untrackedOverflow = untrackedCount > untracked.size || untrackedOverflow,
-                localBranches = localBranches,
-                remoteBranches = remoteBranches,
-                tags = tags,
-                graph = graph,
-                commitFiles = emptyMap(),
-                hasIdentity = hasIdentity,
-                hasRemote = hasRemote,
-                isShallow = isShallow,
-                // 与原"新建 GitPanelState"语义一致：刷新清一次性视图态
-                diffPath = null,
-                diffText = null,
-                diffLoading = false,
-                commitDetailHash = null,
-                commitDetailText = null,
-                commitDetailLoading = false,
-                loadingCommit = null,
-                graphLoadingMore = false,
-                pullDirtyConfirm = false,
-                pendingCheckout = null,
-                error = null,
-            )
-        }
-    }
-
-    /** 分页游标：已加载的图提交（新→旧）与全量 refs 映射（refresh 时重置）。 */
-    private var loadedGraphCommits: List<top.tianyan.app.ui.chat.git.GraphCommit> = emptyList()
-    private var graphRefsByCommit: Map<String, List<top.tianyan.app.ui.chat.git.GitGraphRef>> = emptyMap()
-
-    /** 解析 `git for-each-ref` → hash→refs 映射（本地/远程分支 + 标签，一次命令拿全）。 */
-    private suspend fun loadGraphRefs(ws: String): Map<String, List<top.tianyan.app.ui.chat.git.GitGraphRef>> {
-        val raw = runGitRead(
-            ws,
-            "git for-each-ref --format=\"%(refname)%09%(objectname)%09%(*objectname)%09%(HEAD)\" refs/heads refs/remotes refs/tags",
-        ) ?: return emptyMap()
-        val map = mutableMapOf<String, MutableList<top.tianyan.app.ui.chat.git.GitGraphRef>>()
-        for (line in raw.lines()) {
-            val parts = line.split('\t')
-            if (parts.size < 3) continue
-            val full = parts[0]
-            // 附注标签的 objectname 指向 tag 对象，peeled 的 *objectname 才是提交哈希。
-            val hash = parts[2].ifBlank { parts[1] }.trim()
-            if (hash.length < 7) continue
-            val short = full.removePrefix("refs/heads/").removePrefix("refs/remotes/").removePrefix("refs/tags/")
-            val isRemote = full.startsWith("refs/remotes/")
-            val isBranch = full.startsWith("refs/heads/") || isRemote
-            val isCurrent = parts.size > 3 && parts[3] == "*" && full.startsWith("refs/heads/")
-            map.getOrPut(hash) { mutableListOf() } += top.tianyan.app.ui.chat.git.GitGraphRef(
-                name = short, isBranch = isBranch, isCurrent = isCurrent, isRemote = isRemote,
-            )
-        }
-        return map
-    }
-
-    /** 重拉第一页（30 条）并组装拓扑图；分页游标重置。 */
-    /** 反浅克隆：拉取完整历史后重建提交图（仅浅克隆仓库在图页露出该入口）。 */
-    fun unshallowRepo() {
-        if (_gitProgress.value != null) return
-        runStreamingGitOp(
-            label = "加载完整历史",
-            cmd = "git fetch --unshallow origin --progress",
-            resolveHostFromOrigin = true,
-            timeoutMs = 900_000L,
-        )
-    }
-
-    private suspend fun buildFreshGraph(ws: String): top.tianyan.app.ui.chat.git.GitGraph {
-        val logRaw = runGitRead(ws, "git log --pretty=format:%H%x1f%h%x1f%an%x1f%ar%x1f%P%x1f%b%x1f%s%x1e -30") ?: ""
-        loadedGraphCommits = top.tianyan.app.ui.chat.git.GitGraphBuilder.parseGraphCommits(logRaw)
-        graphRefsByCommit = loadGraphRefs(ws)
-        android.util.Log.i(
-            "GitGraph",
-            "fresh ws=$ws rawLen=${logRaw.length} hasSep=${logRaw.contains('\u001f')} commits=${loadedGraphCommits.size} refs=${graphRefsByCommit.size} " +
-                "head=${logRaw.take(40)}",
-        )
-        return top.tianyan.app.ui.chat.git.GitGraphBuilder.buildGraph(
-            loadedGraphCommits, graphRefsByCommit, hasMore = loadedGraphCommits.size >= 30,
-        )
-    }
-
-    /** 上拉加载更早提交（--skip 分页，AiCode graphAppend 语义）。 */
-    fun loadMoreCommits() {
-        val st = _gitPanelState.value
-        if (st.graphLoadingMore || !st.graph.hasMore) return
-        _gitPanelState.value = st.copy(graphLoadingMore = true)
-        viewModelScope.launch(Dispatchers.IO) {
-            val ws = currentGitWs()
-            val skip = loadedGraphCommits.size
-            val raw = runGitRead(
-                ws,
-                "git log --skip=$skip --pretty=format:%H%x1f%h%x1f%an%x1f%ar%x1f%P%x1f%b%x1f%s%x1e -30",
-            ) ?: ""
-            val more = top.tianyan.app.ui.chat.git.GitGraphBuilder.parseGraphCommits(raw)
-            val seen = loadedGraphCommits.mapTo(HashSet()) { it.hash }
-            loadedGraphCommits = loadedGraphCommits + more.filter { it.hash !in seen }
-            val graph = top.tianyan.app.ui.chat.git.GitGraphBuilder.buildGraph(
-                loadedGraphCommits, graphRefsByCommit, hasMore = more.size >= 30,
-            )
-            _gitPanelState.value = _gitPanelState.value.copy(graph = graph, graphLoadingMore = false)
-        }
-    }
-
-    /**
-     * git 是否可用；null 表示还没探过。
-     *
-     * 之前所有 git 操作都假设沙箱里有 git，而 rootfs 是运行时下载的，
-     * 里面不一定带 git。缺了之后的症状极具误导性：
-     *   · `runGitRead` 拼了 `|| true`，失败被吃掉 → `git init` 显示成功但什么都没发生；
-     *   · 用户去加 token，健康检查用 curl 探测，curl 也没有 → 报「网络不通」。
-     * 两个症状一个根因，用户会一路往网络和凭证上查。
-     */
-    @Volatile private var gitAvailable: Boolean? = null
-
-    /** 探测结果所属的发行版；换发行版/重建沙箱后 git 可能又没了，必须重探。 */
-    @Volatile private var gitProbedDistro: String? = null
-
-    /**
-     * 确保沙箱里有 git，没有就装。
-     *
-     * 返回 true 表示可用。装不上时返回 false 并给出原因，让调用方明确失败——
-     * 绝不能让「工具不存在」伪装成操作成功。
-     */
-    private suspend fun ensureGit(): Boolean {
-        // 缓存按发行版失效：换发行版后旧结果不再成立，
-        // 沿用会让所有 git 操作静默走「以为有 git」的路径。
-        val distro = linuxRuntime.activeDistroId.value
-        if (gitProbedDistro != distro) {
-            gitAvailable = null
-            gitProbedDistro = distro
-        }
-        if (gitAvailable == true) return true
-        val probe = runCatching {
-            linuxRuntime.execute(
-                top.tianyan.app.runtime.shell.ShellCommand(
-                    commandLine = "command -v git >/dev/null 2>&1 && git --version 2>&1",
-                    workingDirectory = "/root",
-                    timeoutMs = 20_000L,
-                ),
-            )
-        }.getOrNull()
-        if (probe != null && probe.isSuccess && probe.stdout.contains("git version")) {
-            gitAvailable = true
-            return true
-        }
-        // 缺则尝试安装：apt（Debian/Ubuntu）与 apk（Alpine）都试，
-        // 因为用户装的发行版不固定，写死一个包管理器必然有一半人装不上。
-        _gitOpMessage.value = GitOpMessage.Ok("沙箱里没有 git，正在安装…")
-        val install = runCatching {
-            linuxRuntime.execute(
-                top.tianyan.app.runtime.shell.ShellCommand(
-                    commandLine = buildString {
-                        append("if command -v apt-get >/dev/null 2>&1; then ")
-                        append("DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1; ")
-                        append("DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git >/dev/null 2>&1; ")
-                        append("elif command -v apk >/dev/null 2>&1; then ")
-                        append("apk add --no-cache git >/dev/null 2>&1; ")
-                        append("elif command -v dnf >/dev/null 2>&1; then ")
-                        append("dnf install -y -q git >/dev/null 2>&1; ")
-                        append("fi; ")
-                        append("command -v git >/dev/null 2>&1 && git --version 2>&1 || echo __TIANYAN_NO_GIT__")
-                    },
-                    workingDirectory = "/root",
-                    timeoutMs = 600_000L,
-                ),
-            )
-        }.getOrNull()
-        val out = ((install?.stdout ?: "") + "\n" + (install?.stderr ?: "")).trim()
-        if (install != null && install.isSuccess && out.contains("git version")) {
-            gitAvailable = true
-            _gitOpMessage.value = GitOpMessage.Ok("已安装 git，可以继续操作")
-            return true
-        }
-        gitAvailable = false
-        _gitOpMessage.value = GitOpMessage.Error(
-            "沙箱里没有 git，且自动安装失败。\n" +
-                "可以在终端里手动执行：apt-get update && apt-get install -y git\n" +
-                "（Alpine 用 apk add git）\n\n" + out.take(300),
-            action = GitOpAction.CopyError,
-        )
-        return false
-    }
-
-    private suspend fun runGitRead(ws: String, cmd: String): String? {
-        // 先确保 git 存在：缺了的话下面拼的 `|| true` 会把
-        // 「/bin/sh: git: not found」变成空输出，读操作静默返回 null，
-        // 界面显示成「没有改动/没有分支」，比报错更难查。
-        if (!ensureGit()) return null
-        val result = linuxRuntime.execute(
-            top.tianyan.app.runtime.shell.ShellCommand(
-                commandLine = "$cmd 2>&1 || true",
-                workingDirectory = ws,
-                timeoutMs = 15_000L,
-            ),
-        )
-        return if (result.isSuccess) {
-            (result.stdout + "\n" + result.stderr).trim().takeIf { it.isNotBlank() }
-        } else {
-            null
-        }
-    }
-
-    /** 查看某个改动文件的 diff（相对 HEAD，含暂存与未暂存）。 */
-    fun loadFileDiff(path: String) {
-        val ws = workspace.value.ifBlank { "/workspace" }.let { if (it.startsWith("/")) it else "/workspace/$it" }
-        _gitPanelState.value = _gitPanelState.value.copy(diffPath = path, diffText = null, diffLoading = true)
-        viewModelScope.launch(Dispatchers.IO) {
-            val quoted = "'${path.replace("'", "'\\''")}'"
-            val diff = runGitRead(ws, "git diff HEAD -- $quoted")
-            _gitPanelState.value = _gitPanelState.value.copy(
-                diffPath = path,
-                diffText = diff ?: "未跟踪的新文件（无 diff）",
-                diffLoading = false,
-            )
-        }
-    }
-
-    /** 关闭 diff 视图，返回状态列表。 */
-    fun clearDiff() {
-        _gitPanelState.value = _gitPanelState.value.copy(diffPath = null, diffText = null, diffLoading = false)
-    }
-
-    fun gitStage(path: String) = runGitWrite("git add -- ${shellQuote(path)}")
-    fun gitUnstage(path: String) = runGitWrite("git reset HEAD -- ${shellQuote(path)}")
-    fun gitStageAll() = runGitWrite("git add -A")
-    fun gitUnstageAll() = runGitWrite("git reset HEAD")
-    fun gitCommit(message: String) = runGitWrite("git commit -m ${shellQuote(message)}")
-    /**
-     * 本地有未提交改动时先弹确认（可能覆盖或冲突）；干净时直接 pull。
-     * 通过 [gitPanelState] 的 `pullDirtyConfirm` 字段驱动 UI 弹窗，用户在 UI 上点"继续拉取"再调 [gitPullNow]。
-     */
-    fun gitPull() {
-        val s = _gitPanelState.value
-        val dirty = s.staged.isNotEmpty() || s.unstaged.isNotEmpty()
-        if (dirty) {
-            _gitPanelState.value = s.copy(pullDirtyConfirm = true)
-        } else {
-            gitPullNow()
-        }
-    }
-
-    fun gitPullNow() {
-        _gitPanelState.value = _gitPanelState.value.copy(pullDirtyConfirm = false)
-        runStreamingGitOp(label = "拉取", cmd = "git pull --progress", resolveHostFromOrigin = true, timeoutMs = 300_000L)
-    }
-
-    fun dismissPullDirtyConfirm() {
-        _gitPanelState.value = _gitPanelState.value.copy(pullDirtyConfirm = false)
-    }
-    fun gitPush() {
-        viewModelScope.launch(Dispatchers.IO) {
-            val ws = currentGitWs()
-            // 检查有无 upstream；若没 → 首次 push 用 `git push -u origin <branch>` 自动建立
-            val branch = _gitPanelState.value.branch ?: runGitRead(ws, "git rev-parse --abbrev-ref HEAD")?.trim()
-            val upstreamSet = runGitRead(ws, "git rev-parse --abbrev-ref --symbolic-full-name @{u}")
-            val hasUpstream = upstreamSet != null && !upstreamSet.contains("unknown") && !upstreamSet.contains("no upstream")
-            val cmd = if (hasUpstream) "git push --progress"
-                else "git push --progress -u origin ${shellQuote(branch ?: "HEAD")}"
-            runStreamingGitOp(label = "推送", cmd = cmd, resolveHostFromOrigin = true, timeoutMs = 300_000L, syncTrackingRef = true)
-        }
-    }
-    /** 一键 stash 当前所有改动（含未跟踪），完成后 Snackbar 带 [还原 stash] 一键 pop。 */
-    fun gitStash(message: String = "") {
-        runGitWriteWithSuccess(
-            cmd = "git stash push -u${if (message.isNotBlank()) " -m " + shellQuote(message) else ""}",
-            successMessage = "✓ 已 stash（改动被暂存，工作区已干净）",
-            successAction = GitOpAction.StashPop,
-        )
-    }
-    /** 弹出最近一个 stash（保留记录用 apply；彻底用 pop）。 */
-    fun gitStashPop() = runGitWrite("git stash pop")
-    fun gitStashApply() = runGitWrite("git stash apply")
-    fun gitStashDrop(index: Int = 0) = runGitWrite("git stash drop stash@{$index}")
-    /**
-     * 切分支前检查工作区是否脏（P1-12）：
-     * - 若 dirty + 无 `checkoutDirtyConfirm` → 弹二次确认（可能覆盖或冲突）
-     * - 干净或已确认 → 直接 checkout
-     */
-    fun gitCheckout(branch: String) {
-        val s = _gitPanelState.value
-        val dirty = s.staged.isNotEmpty() || s.unstaged.isNotEmpty()
-        if (dirty && s.pendingCheckout != branch) {
-            _gitPanelState.value = s.copy(pendingCheckout = branch)
-            return
-        }
-        _gitPanelState.value = _gitPanelState.value.copy(pendingCheckout = null)
-        runGitWrite("git checkout ${shellQuote(branch)}")
-    }
-
-    fun confirmCheckoutDirty(branch: String) {
-        _gitPanelState.value = _gitPanelState.value.copy(pendingCheckout = null)
-        runGitWrite("git checkout ${shellQuote(branch)}")
-    }
-
-    fun dismissCheckoutConfirm() {
-        _gitPanelState.value = _gitPanelState.value.copy(pendingCheckout = null)
-    }
-    fun gitCreateBranch(name: String) = runGitWrite("git checkout -b ${shellQuote(name)}")
-    fun gitDeleteBranch(branch: String) = runGitWrite("git branch -d ${shellQuote(branch)}")
-    fun gitInit() {
-        // 仓库归仓库、工作区归工作区：/workspace 根混着 jdk/recon/嵌套项目等海量文件，
-        // 在这里 init 会让 git status 遍历全部内容（每条命令 15s 超时 × 10 条串行 = 面板卡死）。
-        // 2026-10-09 实锤过一次：/workspace 被误 init + add 2194 个文件（含 200MB jdk tarball）。
-        val ws = workspace.value.ifBlank { "/workspace" }.let { if (it.startsWith("/")) it else "/workspace/$it" }
-        if (ws == "/workspace") {
-            _gitOpMessage.value = GitOpMessage.Error(
-                "工作区根目录不初始化 Git 仓库——里面混着 jdk/recon/项目目录，init 后面板一刷新就卡死。" +
-                    "请克隆到子目录，或先把工作区切到项目目录再初始化",
-            )
-            return
-        }
-        runGitWrite("git init")
-    }
-    /**
-     * 克隆到当前工作区下的一个以仓库名命名的子目录。**流式进度**通过 [gitProgress] StateFlow 上抛，
-     * 顶栏横幅实时显示；成功后 [gitOpMessage] 带 [GitOpAction.SwitchWorkspaceTo] 一键切工作区。
-     * 失败按错误种类映射人话文案（同名目录 / 网络 / 认证 / URL 无效等），网络类自动重试 2 次。
-     */
-    fun gitClone(url: String) {
-        val trimmed = url.trim()
-        if (trimmed.isBlank()) {
-            _gitOpMessage.value = GitOpMessage.Error("仓库 URL 是空的，先粘贴一个再点克隆")
-            return
-        }
-        viewModelScope.launch(Dispatchers.IO) { fullSettingsStore.pushRecentCloneUrl(trimmed) }
-        val repoName = trimmed.trimEnd('/').substringAfterLast('/').removeSuffix(".git").ifBlank { "repo" }
-        val ws = currentGitWs()
-        viewModelScope.launch(Dispatchers.IO) {
-            // 工作区不存在 → 自动 mkdir -p 重建（clone 本质上是创建项目动作，父目录不该要求预先存在）。
-            // 若 mkdir 也失败（比如 /workspace 挂载点异常），才给用户报错。
-            if (!workspaceExists(ws)) {
-                val mkdirRes = runCatching {
-                    linuxRuntime.execute(
-                        top.tianyan.app.runtime.shell.ShellCommand(
-                            commandLine = "mkdir -p ${shellQuote(ws)} 2>&1 && test -d ${shellQuote(ws)} && echo ok",
-                            workingDirectory = "/root",
-                            timeoutMs = 15_000L,
-                        ),
-                    )
-                }.getOrNull()
-                val created = mkdirRes?.stdout?.trim()?.endsWith("ok") == true
-                if (!created) {
-                    _gitOpMessage.value = GitOpMessage.Error(
-                        "工作区 `$ws` 不存在且自动创建失败。可能是 /workspace 挂载异常，试试重启 App 或到工坊页检查",
-                    )
-                    return@launch
-                }
-                android.util.Log.i("GitClone", "工作区不存在，已自动 mkdir -p $ws")
-            }
-            // 目标已存在 → 明确提示，给"清空再试"选项
-            if (workspaceExists("$ws/$repoName")) {
-                _gitOpMessage.value = GitOpMessage.Error(
-                    "`$repoName/` 已存在。要不要清空再重新克隆？（会删除现有内容）",
-                    action = GitOpAction.RetryWithClean(trimmed, "$ws/$repoName"),
-                )
-                return@launch
-            }
-            // 克隆前先确保 git 存在：缺了的话三次重试全都报
-            // 「git: not found」，白等退避时间，还把它当成网络问题重试。
-            if (!ensureGit()) return@launch
-            // 网络类自动重试：2 次退避（1s → 3s）
-            var attempt = 0
-            var lastError = ""
-            while (attempt < 3 && !cancelRequested.get()) {
-                if (attempt > 0) {
-                    _gitProgress.value = GitProgress(label = "重试第 $attempt 次…")
-                    delay(1_000L * attempt)
-                }
-                cancelRequested.set(false)
-                _gitProgress.value = GitProgress(label = "开始克隆 $repoName（第 ${attempt + 1} 次）…")
-                val outcome = doCloneOnce(trimmed, repoName, ws)
-                when (outcome) {
-                    is CloneOutcome.Success -> {
-                        _gitProgress.value = null
-                        _gitOpMessage.value = GitOpMessage.Ok(
-                            message = "✓ 已克隆到 $repoName/",
-                            action = GitOpAction.SwitchWorkspaceTo("$ws/$repoName"),
-                        )
-                        refreshGitStatus()
-                        return@launch
-                    }
-                    is CloneOutcome.Cancelled -> {
-                        _gitProgress.value = null
-                        _gitOpMessage.value = GitOpMessage.Error("已取消")
-                        return@launch
-                    }
-                    is CloneOutcome.Failure -> {
-                        lastError = outcome.rawOutput
-                        // 网络/临时错误才重试；其它直接失败
-                        if (!isRetryable(outcome.rawOutput)) {
-                            _gitProgress.value = null
-                            val friendly = translateGitError(outcome.rawOutput, repoName)
-                            _gitOpMessage.value = GitOpMessage.Error(friendly, action = actionForError(friendly, trimmed, "$ws/$repoName"))
-                            return@launch
-                        }
-                        attempt++
-                    }
-                }
-            }
-            _gitProgress.value = null
-            _gitOpMessage.value = GitOpMessage.Error(
-                "克隆失败（重试 3 次仍不通）：\n" + translateGitError(lastError, repoName),
-                action = GitOpAction.RetrySame("clone:$trimmed"),
-            )
-        }
-    }
-
-    private sealed interface CloneOutcome {
-        data object Success : CloneOutcome
-        data class Failure(val rawOutput: String) : CloneOutcome
-        data object Cancelled : CloneOutcome
-    }
-
-    private suspend fun doCloneOnce(url: String, repoName: String, ws: String): CloneOutcome {
-        val host = GitAuth.hostOf(url)
-        val creds = gitPreferences.credentials.first()
-        val cred = GitAuth.findCredential(creds, host)
-        val raw = "git clone --progress --depth 1 ${shellQuote(url)} ${shellQuote(repoName)}"
-        val effective = if (cred != null) GitAuth.wrap(raw, cred) else raw
-        // 用 forcePty 让 git 走 tty，能吐 `% Receiving objects: NN%` 进度
-        val result = runCatching {
-            linuxRuntime.execute(
-                top.tianyan.app.runtime.shell.ShellCommand(
-                    commandLine = "$effective 2>&1",
-                    workingDirectory = ws,
-                    timeoutMs = 600_000L,
-                    onOutput = { chunk -> applyGitProgress(chunk, "克隆 $repoName…") },
-                    forcePty = true,
-                ),
-            )
-        }
-        val r = result.getOrNull()
-        val out = ((r?.stdout ?: "") + "\n" + (r?.stderr ?: "")).trim()
-        return when {
-            cancelRequested.get() -> CloneOutcome.Cancelled
-            r != null && r.isSuccess -> CloneOutcome.Success
-            else -> CloneOutcome.Failure(out.ifBlank { "git 无输出（可能网络不通或 URL 错误）" })
-        }
-    }
-
-    private suspend fun workspaceExists(path: String): Boolean {
-        val r = runCatching {
-            linuxRuntime.execute(
-                top.tianyan.app.runtime.shell.ShellCommand(
-                    commandLine = "test -d ${shellQuote(path)} && echo yes || echo no",
-                    workingDirectory = "/root",
-                    timeoutMs = 10_000L,
-                ),
-            )
-        }.getOrNull()
-        return r?.stdout?.trim() == "yes"
-    }
-
-    private fun isRetryable(out: String): Boolean {
-        val l = out.lowercase()
-        return "failed to connect" in l || "could not resolve host" in l ||
-            "connection reset" in l || "timed out" in l || "rpc failed" in l ||
-            "early eof" in l || "the requested url returned error: 5" in l
-    }
-
-    /** 把 git stderr 翻成人话（保留原摘要供调试）。 */
-    private fun translateGitError(out: String, repoName: String = ""): String {
-        val l = out.lowercase()
-        val core = when {
-            // 兜底：ensureGit() 之后仍出现「找不到 git」，说明安装没生效。
-            // 必须给出可执行指引——原文「/bin/sh: 1: git: not found」看不出下一步做什么。
-            "git: not found" in l || "git: command not found" in l ->
-                "沙箱里没有 git。到终端执行：apt-get update && apt-get install -y git" +
-                    "（Alpine 用 apk add git），然后重试。"
-            "already exists and is not an empty directory" in l ->
-                "`$repoName` 目录已存在且非空。可清空再试或改目录名。"
-            "authentication failed" in l || "invalid credentials" in l || "password authentication" in l ->
-                "认证失败：用户名或 PAT 不对/过期。到「凭证」页更新。"
-            "could not read username" in l || "terminal prompts disabled" in l ->
-                "私有仓库需要凭证。请先到「凭证」页添加该主机的 PAT。"
-            "permission denied" in l ->
-                "权限不足：账号没这个仓库的读写权，或 PAT 缺 scope。"
-            "repository not found" in l || "not found" in l && "http" in l ->
-                "仓库不存在（404）：URL 拼错了，或它是私有的但你无权访问。"
-            "unable to access" in l || "failed to connect" in l || "could not resolve host" in l ->
-                "网络不通：手机没连上代理，或 GitHub/Gitee 不可达。"
-            "connection reset" in l || "timed out" in l ->
-                "网络被重置：可能中途断流。稍后再试。"
-            "no space left on device" in l ->
-                "手机存储不够。清理工作区或卸载一些项目再试。"
-            "empty reply" in l || "rpc failed" in l ->
-                "服务端断开：可能仓库太大或对方限流。可以试浅克隆。"
-            else -> out.take(400)
-        }
-        return core
-    }
-
-    private fun actionForError(friendly: String, url: String, targetDir: String): GitOpAction? = when {
-        "已存在" in friendly -> GitOpAction.RetryWithClean(url, targetDir)
-        "网络不通" in friendly || "网络被重置" in friendly || "服务端断开" in friendly ->
-            GitOpAction.RetrySame("clone:$url")
-        else -> null
-    }
-
-    /** 「同名目录已存在，清空重试」的用户动作。 */
-    fun retryCloneAfterClean(url: String, targetDir: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            runCatching {
-                linuxRuntime.execute(
-                    top.tianyan.app.runtime.shell.ShellCommand(
-                        commandLine = "rm -rf ${shellQuote(targetDir)}",
-                        workingDirectory = "/root",
-                        timeoutMs = 15_000L,
-                    ),
-                )
-            }
-            gitClone(url)
-        }
-    }
-    fun gitConfigIdentity(name: String, email: String) = runGitWrite("git config user.name ${shellQuote(name)} && git config user.email ${shellQuote(email)}")
-    fun gitRevert(path: String) = runGitWrite("git checkout -- ${shellQuote(path)}")
-    /** 一键回退所有已修改未暂存文件（等价 IDE 里 "Rollback" 未暂存部分）；未跟踪文件不动。 */
-    fun gitRevertAllUnstaged() = runGitWrite("git checkout -- .")
-    /** 重命名分支：完成后 Snackbar 带 [撤销] 一键换回。 */
-    fun gitRenameBranch(oldName: String, newName: String) = runGitWriteWithSuccess(
-        cmd = "git branch -m ${shellQuote(oldName)} ${shellQuote(newName)}",
-        successMessage = "✓ $oldName 已重命名为 $newName",
-        successAction = GitOpAction.UndoRename(oldName = oldName, newName = newName),
-    )
-    /** 删除远程分支（不可撤销，UI 应二次确认）。 */
-    fun gitDeleteRemoteBranch(name: String) = runGitNetworkOp(
-        cmd = "git push origin --delete ${shellQuote(name)}",
-        resolveHostFromOrigin = true,
-        timeoutMs = 120_000L,
-    )
-    fun gitDeleteUntracked(path: String) = runGitWrite("rm -- ${shellQuote(path)}")
-    fun gitCreateTag(name: String) = runGitWrite("git tag ${shellQuote(name)}")
-    fun gitDeleteTag(name: String) = runGitWrite("git tag -d ${shellQuote(name)}")
-    /** 推单个 tag 到 origin（用网络 op 走 credential + proxy）。 */
-    fun gitPushTag(name: String) = runStreamingGitOp(
-        label = "推送标签 $name",
-        cmd = "git push origin ${shellQuote(name)}",
-        resolveHostFromOrigin = true,
-        timeoutMs = 180_000L,
-    )
-    /** 删远端 tag。 */
-    fun gitDeleteRemoteTag(name: String) = runStreamingGitOp(
-        label = "删远端标签 $name",
-        cmd = "git push origin --delete ${shellQuote(name)}",
-        resolveHostFromOrigin = true,
-        timeoutMs = 180_000L,
-    )
-
-    /**
-     * 网络型 git 操作（clone/pull/push），带凭证注入。凭证不落 `.git/config`：通过
-     * `GIT_CONFIG_KEY_0=credential.helper` + 一次性 `mktemp` 文件传给 git，跑完立即删除。
-     * - clone：从入参 URL 解析 host；
-     * - pull/push：从当前仓库 `origin` 反查 host。
-     */
-    /**
-     * pull/push 通用流式：设 progress → 用 forcePty 让 git 吐进度 → 解析 → 完成清理。
-     * 与 clone 共用 [applyGitProgress] + [translateGitError]。**网络类失败自动 3 次退避重试**。
-     */
-    private fun runStreamingGitOp(
-        label: String,
-        cmd: String,
-        resolveHostFromOrigin: Boolean,
-        timeoutMs: Long,
-        syncTrackingRef: Boolean = false,
-    ) {
-        val ws = currentGitWs()
-        viewModelScope.launch(Dispatchers.IO) {
-            // 网络型操作同样要先有 git：否则 clone/pull/push 全部报
-            // 「git: not found」，而用户会以为是网络或凭证的问题。
-            if (!ensureGit()) return@launch
-            cancelRequested.set(false)
-            val host = if (resolveHostFromOrigin) {
-                GitAuth.hostOf(runGitRead(ws, "git remote get-url origin").orEmpty().trim())
-            } else null
-            val creds = gitPreferences.credentials.first()
-            val cred = GitAuth.findCredential(creds, host)
-            val effective = if (cred != null) GitAuth.wrap(cmd, cred) else cmd
-            var attempt = 0
-            var lastOut = ""
-            var lastExit: Int? = null
-            while (attempt < 3 && !cancelRequested.get()) {
-                if (attempt > 0) {
-                    _gitProgress.value = GitProgress(label = "$label 重试第 $attempt 次…")
-                    delay(1_000L * attempt)
-                } else {
-                    _gitProgress.value = GitProgress(label = "$label 中…")
-                }
-                val result = runCatching {
-                    linuxRuntime.execute(
-                        top.tianyan.app.runtime.shell.ShellCommand(
-                            commandLine = "$effective 2>&1",
-                            workingDirectory = ws,
-                            timeoutMs = timeoutMs,
-                            onOutput = { chunk -> applyGitProgress(chunk, "$label 中…") },
-                            forcePty = true,
-                        ),
-                    )
-                }.getOrNull()
-                lastOut = ((result?.stdout ?: "") + "\n" + (result?.stderr ?: "")).trim()
-                lastExit = result?.exitCode
-                if (result != null && result.isSuccess) {
-                    _gitProgress.value = null
-                    // 推送成功且走的是临时凭据 URL/助手时，origin 的远程跟踪引用不会自动前进，
-                    // 面板会长期误显示「领先 N」。补一次带同凭据的 fetch 同步跟踪引用。
-                    if (syncTrackingRef) {
-                        val br = _gitPanelState.value.branch
-                            ?: runGitRead(ws, "git rev-parse --abbrev-ref HEAD")?.trim()
-                        if (!br.isNullOrBlank() && br != "HEAD") {
-                            val fetchCmd = "git fetch --quiet origin +refs/heads/${shellQuote(br)}:refs/remotes/origin/${shellQuote(br)}"
-                            runCatching {
-                                linuxRuntime.execute(
-                                    ShellCommand(
-                                        commandLine = "${if (cred != null) GitAuth.wrap(fetchCmd, cred) else fetchCmd} 2>&1",
-                                        workingDirectory = ws,
-                                        timeoutMs = 120_000L,
-                                    ),
-                                )
-                            }
-                        }
-                    }
-                    _gitOpMessage.value = GitOpMessage.Ok("✓ $label 完成")
-                    refreshGitStatus()
-                    return@launch
-                }
-                if (!isRetryable(lastOut)) break
-                attempt++
-            }
-            _gitProgress.value = null
-            _gitOpMessage.value = GitOpMessage.Error(
-                message = "$label 失败：\n" + translateGitError(lastOut),
-                action = if (isRetryable(lastOut)) GitOpAction.RetrySame(cmd) else null,
-            )
-            refreshGitStatus()
-        }
-    }
-
-    private fun runGitNetworkOp(
-        cmd: String,
-        resolveHostFromOrigin: Boolean,
-        explicitHost: String? = null,
-        timeoutMs: Long,
-    ) {
-        val ws = currentGitWs()
-        val isPush = cmd.startsWith("git push")
-        val isPull = cmd.startsWith("git pull")
-        _gitOpMessage.value = GitOpMessage.Busy(if (isPush) "正在推送…" else if (isPull) "正在拉取…" else "正在执行 git 命令…")
-        viewModelScope.launch(Dispatchers.IO) {
-            val host = if (resolveHostFromOrigin) {
-                GitAuth.hostOf(runGitRead(ws, "git remote get-url origin").orEmpty().trim())
-            } else {
-                explicitHost
-            }
-            val creds = gitPreferences.credentials.first()
-            val cred = GitAuth.findCredential(creds, host)
-            val effective = if (cred != null) GitAuth.wrap(cmd, cred) else cmd
-            val result = runCatching {
-                linuxRuntime.execute(
-                    top.tianyan.app.runtime.shell.ShellCommand(
-                        commandLine = "$effective 2>&1",
-                        workingDirectory = ws,
-                        timeoutMs = timeoutMs,
-                    ),
-                )
-            }
-            val r = result.getOrNull()
-            val out = ((r?.stdout ?: "") + "\n" + (r?.stderr ?: "")).trim()
-            val label = if (isPush) "推送" else if (isPull) "拉取" else "操作"
-            if (r != null && r.isSuccess) {
-                _gitOpMessage.value = GitOpMessage.Ok("✓ $label 成功")
-            } else {
-                _gitOpMessage.value = GitOpMessage.Error("$label 失败：\n" + out.take(600).ifBlank { "git 无输出" })
-            }
-            refreshGitStatus()
-        }
-    }
-
-    // ===== Git 凭证 CRUD（HTTPS 私有仓库：GitHub/Gitee/GitLab PAT 等）=====
-
-    /** 已保存的 Git 凭证列表（加密存储，UI 只显示名称+主机+用户名，token 掩码）。 */
-    val gitCredentials: StateFlow<List<GitCredential>> = gitPreferences.credentials
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
-    /** 当前工作区 URL 命中的凭证 id（Git 面板顶部提示用），无匹配则 null。 */
-    private val _matchedCredentialId = MutableStateFlow<String?>(null)
-    val matchedCredentialId: StateFlow<String?> = _matchedCredentialId.asStateFlow()
-
-    /** 最近 5 条克隆 URL（clone 对话框下拉）。 */
-    val recentCloneUrls: StateFlow<List<String>> = fullSettingsStore.gitRecentCloneUrls
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
-    /** 一次性 git 操作反馈（克隆/推送/拉取）：Busy / Ok / Error。UI 用 Snackbar 显示 + 消费后清回 Idle。 */
-    private val _gitOpMessage = MutableStateFlow<GitOpMessage>(GitOpMessage.Idle)
-    val gitOpMessage: StateFlow<GitOpMessage> = _gitOpMessage.asStateFlow()
-    fun consumeGitOpMessage() { _gitOpMessage.value = GitOpMessage.Idle }
-
-    /** 流式进度：ChatScreen 顶部横幅显示，git 每吐一行进度就更新。null = 无进行中操作。 */
-    private val _gitProgress = MutableStateFlow<GitProgress?>(null)
-    val gitProgress: StateFlow<GitProgress?> = _gitProgress.asStateFlow()
-
-    /** 用户点横幅右侧 ✕ 取消当前 git 操作（把 [cancelRequested] 置 true，异步任务下次轮询时看到就 kill）。 */
-    private val cancelRequested = java.util.concurrent.atomic.AtomicBoolean(false)
-    fun cancelGitOp() {
-        if (_gitProgress.value != null) {
-            cancelRequested.set(true)
-            _gitProgress.value = _gitProgress.value?.copy(label = "正在取消…")
-        }
-    }
-
-    /**
-     * 从 git 的 stderr 输出里抽进度信息（`Receiving objects: 45% (123/270), 3.5 MiB | 1.2 MiB/s`）。
-     * git 用 `\r` 在同一行覆盖写，所以 onOutput 每次的 chunk 可能带 `\r` 分段；只取最后一段。
-     */
-    private fun applyGitProgress(rawChunk: String, defaultLabel: String) {
-        // 取最后一段（覆盖式 progress 输出）
-        val last = rawChunk.split('\r').lastOrNull().orEmpty()
-        if (last.isBlank()) return
-        val phase = when {
-            "Counting objects" in last -> "枚举对象"
-            "Compressing objects" in last -> "压缩对象"
-            "Receiving objects" in last -> "接收对象"
-            "Resolving deltas" in last -> "解析增量"
-            "Checking out files" in last -> "检出文件"
-            "Writing objects" in last -> "写入对象"
-            "Enumerating objects" in last -> "枚举对象"
-            else -> null
-        }
-        val percent = Regex("(\\d+)%").find(last)?.groupValues?.get(1)?.toIntOrNull()
-        val objFrac = Regex("\\((\\d+)/(\\d+)\\)").find(last)
-        val objDone = objFrac?.groupValues?.get(1)?.toIntOrNull()
-        val objTotal = objFrac?.groupValues?.get(2)?.toIntOrNull()
-        val speedOrBytes = Regex("([\\d.]+\\s*[KM]?B)(?:/s)?").find(last)?.groupValues?.get(1)
-        _gitProgress.value = GitProgress(
-            label = phase ?: defaultLabel,
-            percent = percent,
-            objects = if (objDone != null && objTotal != null) "$objDone/$objTotal" else null,
-            transfer = speedOrBytes,
-            raw = last.take(120),
-        )
-    }
-
-    fun addGitCredential(name: String, host: String, username: String, token: String) {
-        val trimmedHost = host.trim().lowercase().removePrefix("https://").removeSuffix("/")
-        if (name.isBlank() || trimmedHost.isBlank() || username.isBlank() || token.isBlank()) return
-        viewModelScope.launch(Dispatchers.IO) {
-            val current = gitPreferences.credentials.first()
-            val newId = java.util.UUID.randomUUID().toString()
-            val updated = current + GitCredential(
-                id = newId,
-                name = name.trim(),
-                host = trimmedHost,
-                username = username.trim(),
-                token = token.trim(),
-                createdAtMillis = System.currentTimeMillis(),
-            )
-            gitPreferences.setCredentials(updated)
-            // 保存后**立即**跑一次健康检查，用户能一眼看到凭证是不是有效（P1-9）
-            verifyGitCredential(newId)
-        }
-    }
-
-    fun deleteGitCredential(id: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val current = gitPreferences.credentials.first()
-            gitPreferences.setCredentials(current.filterNot { it.id == id })
-        }
-    }
-
-    /** 用户从 Snackbar 「切过去」按钮触发：把工作区切到某个绝对路径（clone 完成后）。 */
-    fun switchWorkspace(path: String) {
-        val relative = path.removePrefix("/workspace/").trim('/')
-        harnessLoop.debugSetWorkspace(relative.ifBlank { path })
-        _gitOpMessage.value = GitOpMessage.Ok("✓ 工作区已切到 $relative")
-        refreshGitStatus()
-    }
-
-    /** 从给定 path 切工作区（DebugActionBus 用）。 */
-    fun switchWorkspaceFromDebug(path: String) = switchWorkspace(path)
-
-    /** 用给定 URL 探测是否有可用凭证（clone 对话框显示「将自动使用」提示）。 */
-    fun probeCredential(url: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val host = GitAuth.hostOf(url)
-            val creds = gitPreferences.credentials.first()
-            _matchedCredentialId.value = GitAuth.findCredential(creds, host)?.id
-        }
-    }
-
-    // ===== AI 生成 commit message（天衍独有：把 staged diff 交给当前激活模型，产出 Conventional Commits 消息）=====
-
-    private val _aiCommit = MutableStateFlow<GitAiCommitState>(GitAiCommitState.Idle)
-    val aiCommit: StateFlow<GitAiCommitState> = _aiCommit.asStateFlow()
-
-    /** 触发一次 AI 生成。若正在 loading 忽略。 */
-    fun aiGenerateCommitMessage() {
-        if (_aiCommit.value is GitAiCommitState.Loading) return
-        val ws = currentGitWs()
-        _aiCommit.value = GitAiCommitState.Loading
-        viewModelScope.launch(Dispatchers.IO) {
-            // 8KB diff 上限：过大模型也读不完 + 计费高
-            val diff = runGitRead(ws, "git diff --staged --stat && echo === && git diff --staged | head -c 8192")
-                .orEmpty()
-                .trim()
-            if (diff.isBlank()) {
-                _aiCommit.value = GitAiCommitState.Error("没有已暂存的改动，请先 stage 文件")
-                return@launch
-            }
-            try {
-                val model = providerClient.resolveModel()
-                val messages = listOf(
-                    top.tianyan.app.harness.ApiMessage(
-                        role = "system",
-                        content = "你是 Git 提交消息助手。根据用户给的 diff，写一条 Conventional Commits 风格的消息：" +
-                            "第一行 `<type>(<scope>): <简短摘要>` 不超过 72 字符；空一行；body 说明「为什么这么做」而非「改了哪些行」（≤ 4 行）。" +
-                            "type 从 feat/fix/refactor/docs/test/chore/perf/build/ci 里选。中文输出，禁止 markdown 代码块包裹，只输出消息本身。",
-                    ),
-                    top.tianyan.app.harness.ApiMessage(role = "user", content = "以下是 diff：\n\n$diff"),
-                )
-                val result = providerClient.chat(model, messages)
-                val text = result.content?.trim().orEmpty()
-                _aiCommit.value = if (text.isBlank()) GitAiCommitState.Error("模型返回空，试试再点一次")
-                    else GitAiCommitState.Done(text)
-            } catch (t: Throwable) {
-                _aiCommit.value = GitAiCommitState.Error("AI 生成失败：${t.message ?: "未知"}")
-            }
-        }
-    }
-
-    fun consumeAiCommit() { _aiCommit.value = GitAiCommitState.Idle }
-
-    // ===== 从 GitHub/Gitee 拉自己的仓库列表（clone 对话框里点「浏览我的仓库」用） =====
-
-    private val _repoList = MutableStateFlow<GitRepoListState>(GitRepoListState.Idle)
-    val repoList: StateFlow<GitRepoListState> = _repoList.asStateFlow()
-
-    /** 用给定主机上第一条凭证打 provider 的 /user/repos API，取回名字+URL 列表。 */
-    fun fetchUserRepos(host: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            _repoList.value = GitRepoListState.Loading
-            val cred = gitPreferences.credentials.first().firstOrNull { it.host.equals(host, ignoreCase = true) }
-            if (cred == null) {
-                _repoList.value = GitRepoListState.Error("$host 无保存凭证，先到「凭证」页添加")
-                return@launch
-            }
-            val quoted = shellQuote(cred.token)
-            val (url, auth) = when {
-                cred.host.contains("github", true) ->
-                    "https://api.github.com/user/repos?per_page=100&sort=updated" to
-                        "-H 'Authorization: Bearer $quoted' -H 'User-Agent: tianyan-app'"
-                cred.host.contains("gitee", true) ->
-                    "https://gitee.com/api/v5/user/repos?per_page=100&sort=updated" to
-                        "'access_token=$quoted'"
-                cred.host.contains("gitlab", true) ->
-                    "https://${cred.host.substringBefore('/')}/api/v4/projects?membership=true&per_page=100&order_by=last_activity_at" to
-                        "-H 'PRIVATE-TOKEN: $quoted'"
-                else -> {
-                    _repoList.value = GitRepoListState.Error("暂不支持 $host 仓库列表")
-                    return@launch
-                }
-            }
-            val curlCmd = if (cred.host.contains("gitee", true)) {
-                "curl -s --max-time 15 '$url?$auth'"
-            } else {
-                "curl -s --max-time 15 $auth '$url'"
-            }
-            val res = runCatching {
-                linuxRuntime.execute(ShellCommand(commandLine = curlCmd, workingDirectory = "/root", timeoutMs = 25_000L))
-            }
-            val body = res.getOrNull()?.stdout?.trim().orEmpty()
-            if (body.isBlank() || body.startsWith("<") || body.startsWith("curl:")) {
-                _repoList.value = GitRepoListState.Error("拉取失败（沙箱可能没网，或 provider 拒了）。可以直接手动粘 URL")
-                return@launch
-            }
-            runCatching {
-                val json = org.json.JSONArray(body)
-                val list = buildList {
-                    for (i in 0 until json.length()) {
-                        val obj = json.getJSONObject(i)
-                        val name = obj.optString("full_name").ifBlank { obj.optString("path_with_namespace") }
-                        val cloneUrl = obj.optString("clone_url").ifBlank { obj.optString("http_url_to_repo") }
-                        val isPrivate = obj.optBoolean("private", false)
-                        if (name.isNotBlank() && cloneUrl.isNotBlank()) add(GitRepoInfo(name, cloneUrl, isPrivate))
-                    }
-                }
-                _repoList.value = if (list.isEmpty()) GitRepoListState.Error("账号下无仓库或返回空")
-                    else GitRepoListState.Ready(list)
-            }.onFailure {
-                _repoList.value = GitRepoListState.Error("解析失败：${it.message}")
-            }
-        }
-    }
-
-    fun clearRepoList() { _repoList.value = GitRepoListState.Idle }
-
-    // ===== 凭证健康检查（点击每条凭证的验证图标 → 用 curl 打 provider /user 端点） =====
-
-    private val _credHealth = MutableStateFlow<Map<String, GitCredHealth>>(emptyMap())
-    val credHealth: StateFlow<Map<String, GitCredHealth>> = _credHealth.asStateFlow()
-
-    /** 一键重验：对所有已保存凭证并发跑一次 verify（用户不必一条条点）。 */
-    fun verifyAllCredentials() {
-        viewModelScope.launch(Dispatchers.IO) {
-            val list = gitPreferences.credentials.first()
-            list.forEach { c -> verifyGitCredential(c.id) }
-        }
-    }
-
-    fun verifyGitCredential(id: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            _credHealth.value = _credHealth.value + (id to GitCredHealth.Checking)
-            val cred = gitPreferences.credentials.first().firstOrNull { it.id == id }
-            if (cred == null) {
-                _credHealth.value = _credHealth.value + (id to GitCredHealth.Unknown("凭证已删除"))
-                return@launch
-            }
-            val (url, authMode) = when {
-                cred.host.contains("github", true) -> "https://api.github.com/user" to "Bearer"
-                cred.host.contains("gitee", true) -> "https://gitee.com/api/v5/user" to "query"
-                cred.host.contains("gitlab", true) -> "https://${cred.host.substringBefore('/')}/api/v4/user" to "PRIVATE-TOKEN"
-                else -> null to null
-            }
-            if (url == null) {
-                _credHealth.value = _credHealth.value + (id to GitCredHealth.Unknown("未知主机：${cred.host}"))
-                return@launch
-            }
-            val quoted = shellQuote(cred.token)
-            val curlCmd = when (authMode) {
-                "query" -> "curl -s -o /dev/null -w '%{http_code}' --max-time 12 '${url}?access_token=$quoted'"
-                "PRIVATE-TOKEN" -> "curl -s -o /dev/null -w '%{http_code}' --max-time 12 -H 'PRIVATE-TOKEN: $quoted' '$url'"
-                else -> "curl -s -o /dev/null -w '%{http_code}' --max-time 12 -H 'Authorization: Bearer $quoted' -H 'User-Agent: tianyan-app' '$url'"
-            }
-            // 先确认 curl 存在：缺了的话命令直接失败，stdout 为空 →
-            // 下面的判据会把它当成「网络不通」，用户于是去查代理和网络，
-            // 而真正的问题是沙箱里没有 curl。这类误报比不报更难查。
-            val curlCmdFinal = "command -v curl >/dev/null 2>&1 || { " +
-                "(command -v apt-get >/dev/null 2>&1 && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl >/dev/null 2>&1) || " +
-                "(command -v apk >/dev/null 2>&1 && apk add --no-cache curl >/dev/null 2>&1); }; " +
-                "command -v curl >/dev/null 2>&1 || { echo __TIANYAN_NO_CURL__; exit 0; }; " +
-                curlCmd
-            val result = runCatching {
-                linuxRuntime.execute(ShellCommand(commandLine = curlCmdFinal, workingDirectory = "/root", timeoutMs = 180_000L))
-            }
-            val raw = result.getOrNull()?.stdout?.trim().orEmpty()
-            if ("__TIANYAN_NO_CURL__" in raw) {
-                _credHealth.value = _credHealth.value + (id to GitCredHealth.Unknown("沙箱里没有 curl，装不上：无法探测凭证（不是网络问题）"))
-                return@launch
-            }
-            val code = raw.takeLast(3)
-            val h = when {
-                code == "200" -> GitCredHealth.Ok()
-                code == "401" || code == "403" -> GitCredHealth.Invalid(code)
-                code == "000" || code.isBlank() || !code.all { it.isDigit() } -> GitCredHealth.Unknown("网络不通（可能手机没挂代理或 host 不可达）")
-                else -> GitCredHealth.Unknown("HTTP $code")
-            }
-            _credHealth.value = _credHealth.value + (id to h)
-        }
-    }
-
-
-    private fun currentGitWs(): String =
-        workspace.value.ifBlank { "/workspace" }.let { if (it.startsWith("/")) it else "/workspace/$it" }
-
-    /**
-     * 打开提交详情（AiCode 弹层语义）：commitFiles 缓存优先，未加载则
-     * `git show --name-status` 拉该提交改动文件清单。
-     */
-    fun loadCommitDetail(hash: String) {
-        val safe = safeHash(hash) ?: return
-        val ws = currentGitWs()
-        _gitPanelState.value = _gitPanelState.value.copy(commitDetailHash = hash, loadingCommit = hash)
-        if (_gitPanelState.value.commitFiles.containsKey(hash)) {
-            _gitPanelState.value = _gitPanelState.value.copy(loadingCommit = null)
-            return
-        }
-        viewModelScope.launch(Dispatchers.IO) {
-            val raw = runGitRead(ws, "git show --name-status --format= $safe") ?: ""
-            val files = raw.lines().mapNotNull { line ->
-                val parts = line.trimEnd().split('\t')
-                if (parts.size < 2) return@mapNotNull null
-                val code = parts[0].firstOrNull()?.uppercaseChar() ?: return@mapNotNull null
-                // 重命名 R100 旧路径 新路径：取末段（新路径）
-                GitFileChange(code, parts.last().trim())
-            }
-            _gitPanelState.value = _gitPanelState.value.copy(
-                commitFiles = _gitPanelState.value.commitFiles + (hash to files),
-                loadingCommit = null,
-            )
-        }
-    }
-
-    /** 提交 hash 白名单：仅 7-64 位十六进制。被污染的 hash（换行/空格）拼进命令会被 sh 拆行执行，绝不允许。 */
-    private fun safeHash(hash: String): String? = hash.takeIf { it.matches(Regex("[0-9a-fA-F]{7,64}")) }
-
-    /** 详情弹层里点文件：进全屏 diff（`git diff <hash>^ <hash> -- path`；根提交回退 git show）。 */
-    fun loadCommitFileDiff(hash: String, path: String) {
-        val safe = safeHash(hash)
-        if (safe == null) {
-            _gitPanelState.value = _gitPanelState.value.copy(diffPath = "无效提交号", diffText = "提交 hash 格式非法：$hash", diffLoading = false)
-            return
-        }
-        val ws = currentGitWs()
-        _gitPanelState.value = _gitPanelState.value.copy(diffPath = "$hash · $path", diffText = null, diffLoading = true)
-        viewModelScope.launch(Dispatchers.IO) {
-            var diff = runGitRead(ws, "git diff ${safe}^ $safe -- ${shellQuote(path)}")
-            if (diff == null || diff.startsWith("fatal:")) {
-                // 根提交没有 hash^，回退 git show
-                diff = runGitRead(ws, "git show $safe --format= -- ${shellQuote(path)}")
-            }
-            _gitPanelState.value = _gitPanelState.value.copy(
-                diffText = diff?.takeIf { it.isNotBlank() } ?: "（无差异输出或为二进制文件）",
-                diffLoading = false,
-            )
-        }
-    }
-
-    fun clearCommitDetail() {
-        _gitPanelState.value = _gitPanelState.value.copy(
-            commitDetailHash = null, commitDetailText = null, commitDetailLoading = false, loadingCommit = null,
-        )
-    }
-
-    private fun runGitWrite(cmd: String) {
-        val ws = workspace.value.ifBlank { "/workspace" }.let { if (it.startsWith("/")) it else "/workspace/$it" }
-        runGitWriteRaw(ws, cmd, successMessage = null, successAction = null)
-    }
-
-    /** 通用「一次 git 写操作 + 完成时给 Snackbar 提示 + 可带一个撤销/还原动作」。 */
-    private fun runGitWriteWithSuccess(
-        cmd: String,
-        successMessage: String,
-        successAction: GitOpAction? = null,
-    ) {
-        val ws = workspace.value.ifBlank { "/workspace" }.let { if (it.startsWith("/")) it else "/workspace/$it" }
-        runGitWriteRaw(ws, cmd, successMessage, successAction)
-    }
-
-    private fun runGitWriteRaw(
-        ws: String,
-        cmd: String,
-        successMessage: String?,
-        successAction: GitOpAction?,
-    ) {
-        viewModelScope.launch(Dispatchers.IO) {
-            // 写操作（init/add/commit/…）必须先确保 git：原来直接跑，
-            // `/bin/sh: 1: git: not found` 被当作普通失败输出，用户看到的是
-            // 「init 失败：git: not found」而不知道下一步该做什么。
-            if (!ensureGit()) return@launch
-            val result = runCatching {
-                linuxRuntime.execute(
-                    top.tianyan.app.runtime.shell.ShellCommand(
-                        commandLine = "$cmd 2>&1",
-                        workingDirectory = ws,
-                        timeoutMs = 30_000L,
-                    ),
-                )
-            }
-            val r = result.getOrNull()
-            val out = ((r?.stdout ?: "") + "\n" + (r?.stderr ?: "")).trim()
-            if (r != null && r.isSuccess) {
-                if (successMessage != null) {
-                    _gitOpMessage.value = GitOpMessage.Ok(successMessage, successAction)
-                }
-            } else {
-                val op = cmd.substringAfter("git ").substringBefore(' ').ifBlank { "git" }
-                _gitOpMessage.value = GitOpMessage.Error(
-                    "$op 失败：\n" + out.take(500),
-                    action = GitOpAction.CopyError,
-                )
-            }
-            refreshGitStatus()
-        }
-    }
-
-    private fun shellQuote(value: String): String = "'${value.replace("'", "'\\''")}'"
+    /** 发送键语义：运行中跟随「运行中发送方式」偏好，空闲恒为 NEXT_RUN（空闲发送即发起新一轮，无插队语境）。 */
+    private val runningSendModePref: StateFlow<RunningSendMode> = settingsDataStore.runningSendMode
+        .stateIn(viewModelScope, SharingStarted.Eagerly, RunningSendMode.QUEUE)
+    val sendMode: StateFlow<ComposerSendMode> = combine(harnessLoop.running, runningSendModePref) { running, mode ->
+        if (running && mode == RunningSendMode.STEER) ComposerSendMode.STEER else ComposerSendMode.NEXT_RUN
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, ComposerSendMode.NEXT_RUN)
 
     val runtimeEvents: StateFlow<List<HarnessEvent>> = combine(
         harnessLoop.currentSessionId,
         _eventHistory,
-        messages,
-    ) { sessionId, history, msgList ->
+        // 把「消息列表」打包成 (revision, list) 再 distinctUntilChanged by revision：
+        // revision = 数量 + 末条 id，流式 token 增量不会改变它，因此上游发射被压缩为
+        // 「真正新增/替换了一条消息」才触发，避免每帧全量重合成上千条事件（聊久了变卡的主因）。
+        // 用 Pair 一起传下去，避免在 lambda 里读 messages.value 拿到过期值的时序问题。
+        messages.map { list -> (list.size to list.lastOrNull()?.id) to list }
+            .distinctUntilChanged { a, b -> a.first == b.first },
+    ) { sessionId, history, revisionAndList ->
         val live = history[sessionId].orEmpty()
-        mergeHistoricalAndLiveEvents(sessionId, msgList, live)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+        mergeHistoricalAndLiveEvents(sessionId, revisionAndList.second, live)
+    }
+        // 首屏卡顿修复（P1）：合成历史事件（synthesizeHistoricalEvents）是 O(n) 遍历，
+        // stateIn 默认在 Main 上跑，首订阅时会整段压在主线程。移到 Default 执行。
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _branchRefresh = MutableStateFlow(0)
     private val branchMessageRevision = messages.map { list -> list.size to list.lastOrNull()?.id }.distinctUntilChanged()
@@ -1528,73 +351,101 @@ class ChatViewModel @Inject constructor(
     private val branchEventRevision = runtimeEvents.map { events ->
         events.size to (events.lastOrNull()?.hashCode() ?: 0)
     }.distinctUntilChanged()
-    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @OptIn(ExperimentalCoroutinesApi::class)
     val branches: StateFlow<List<ConversationBranch>> = combine(
         harnessLoop.currentSessionId,
         branchMessageRevision,
         _branchRefresh,
         branchEventRevision,
-    ) { sessionId, _, _, _ -> sessionId }.mapLatest { sessionId ->
+    ) { sessionId, messageRevision, refresh, eventRevision ->
+        // 关键：把四个流压缩成一个「可比较的重投影信号」，而不是丢弃后三个。
+        // 此前写法为 `{ sessionId, _, _, _ -> sessionId }`，后三个流的变化被完全吞掉，
+        // 导致 _branchRefresh++ 与运行事件（子智能体进展）都无法触发重投影——
+        // 注释声称「用运行事件驱动分支重投影」，实现却做不到（注释与实现两张皮）。
+        // 这里显式纳入 messageRevision / refresh / eventRevision，任一变化都会重新拉取分支。
+        ProjectionKey(
+            sessionId = sessionId,
+            messageRevision = messageRevision,
+            refresh = refresh,
+            eventRevision = eventRevision,
+        )
+    }.distinctUntilChanged().mapLatest { key ->
+        val sessionId = key.sessionId
         if (sessionId.isBlank()) emptyList() else runCatching { laneManager.branches(sessionId) }.getOrDefault(emptyList())
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    }
+        // 首屏卡顿修复（P0）：laneManager.branches() 内部会读取该会话**全部** entry
+        // （HarnessRuntimeDao.listEntries 无 LIMIT）并逐个 leaf 做路径回溯 + payload 解码，
+        // 属 O(entries) 的重活。stateIn(viewModelScope) 默认跑在 Dispatchers.Main，
+        // 而这条链此前没有任何 flowOn —— 于是「刚进入聊天界面」首次订阅时，
+        // 全量投影直接压在主线程上，与首帧布局争抢，表现为进入即卡。
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** 当前选中的会话 ID */
     val currentSessionId: StateFlow<String> = harnessLoop.currentSessionId
     /** 所有会话的多 Agent 并发运行状态映射 (IDLE / RUNNING / COMPLETED / FAILED) */
-    val sessionRunStates: StateFlow<Map<String, top.tianyan.app.core.model.SessionRunState>> = harnessLoop.sessionRunStates
-    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val sessionRunStates: StateFlow<Map<String, SessionRunState>> = harnessLoop.sessionRunStates
+    @OptIn(ExperimentalCoroutinesApi::class)
     val pendingApprovals: StateFlow<List<AgentApprovalRequestEntity>> = harnessLoop.currentSessionId.flatMapLatest { sessionId ->
-        if (sessionId.isBlank()) kotlinx.coroutines.flow.flowOf(emptyList()) else approvalRepository.pendingForSession(sessionId)
+        if (sessionId.isBlank()) flowOf(emptyList()) else approvalRepository.pendingForSession(sessionId)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    /**
-     * 当前会话的活跃结构化任务规划（模型通过 plan 工具写入的 AgentPlanEntity）。
-     * 以 currentSessionId + 运行状态为键重新读取：一轮执行内状态多次变化，
-     * 借此近似实时刷新看板进度；无规划或非活跃时为 null。
-     */
-    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    val activePlan: StateFlow<top.tianyan.app.core.database.AgentPlanEntity?> =
-        combine(harnessLoop.currentSessionId, harnessLoop.status) { sessionId, _ -> sessionId }
+    /** 当前会话的活跃结构化任务规划（模型通过 plan 工具写入的 AgentPlanEntity）。以 currentSessionId + 运行状态为键重新读取：一轮执行内状态多次变化，借此近似实时刷新看板进度；无规划或非活跃时为 null。 */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val activePlan: StateFlow<AgentPlanEntity?> =
+        combine(harnessLoop.currentSessionId, harnessLoop.status) { sessionId, status ->
+            // 原写法 lambda 输出恒等于 sessionId，配合下游 distinctUntilChanged 去重后，
+            // status 的变化被完全吞掉；而一轮执行内状态多次变化（工具往返、压缩、等待审批），
+            // 看板进度因此无法实时刷新。这里让 status 真正参与，状态每变一次即重读。
+            sessionId to status
+        }
             .distinctUntilChanged()
-            .flatMapLatest { sessionId ->
-                kotlinx.coroutines.flow.flow {
+            .flatMapLatest { (sessionId, _) ->
+                flow {
                     emit(if (sessionId.isBlank()) null else agentContextDao.getActivePlan(sessionId)?.takeIf { it.status == "active" })
                 }
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    /**
-     * 当前会话最近一次上下文压缩的快照（折叠条数 + 摘要预览）。
-     * 会话从未压缩时为 null——UI 据此隐藏提示横幅。
-     */
-    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    val activeCompaction: StateFlow<top.tianyan.app.harness.compaction.CompactionSnapshot?> =
-        combine(harnessLoop.currentSessionId, harnessLoop.status) { sessionId, _ -> sessionId }
+    /** 当前会话最近一次上下文压缩的快照（折叠条数 + 摘要预览）；会话从未压缩时为 null——UI 据此隐藏提示横幅。 */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val activeCompaction: StateFlow<CompactionSnapshot?> =
+        // 原写法 combine(currentSessionId, messages) { sessionId, _ -> sessionId }
+        // 的 lambda 输出恒等于 sessionId：messages 变化虽会触发重跑，但输出值不变，
+        // 若上游加了 distinctUntilChanged 则变化被吞。上下文压缩恰好伴随状态切换
+        // （运行 → 压缩 → 运行），以 (sessionId, status) 作为重投影信号更贴合语义，
+        // 状态每变一次即重读快照。
+        combine(harnessLoop.currentSessionId, harnessLoop.status) { sessionId, status ->
+            sessionId to status
+        }
             .distinctUntilChanged()
-            .flatMapLatest { sessionId ->
-                kotlinx.coroutines.flow.flow {
+            .flatMapLatest { (sessionId, _) ->
+                flow {
                     emit(if (sessionId.isBlank()) null else compactionManager.latestSnapshot(sessionId))
                 }
             }
+            // 首屏修复（P1）：latestSnapshot 会读 DB（lane 查询 + entry 解码），
+            // 首订阅时不应压在主线程，与 branches/runtimeEvents 一并移到 Default。
+            .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** 全量长期记忆（memory 工具写入），供记忆抽屉管理与模型上下文核对。 */
-    val memories: StateFlow<List<top.tianyan.app.core.database.AgentMemoryEntity>> =
+    val memories: StateFlow<List<AgentMemoryEntity>> =
         agentContextDao.observeAllMemories()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val scratchpadRefresh = MutableStateFlow(0)
 
     /** 当前会话的草稿便签；随运行状态变化与手动刷新重建。 */
-    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    val scratchpads: StateFlow<List<top.tianyan.app.core.database.AgentScratchpadEntity>> =
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val scratchpads: StateFlow<List<AgentScratchpadEntity>> =
         combine(
             harnessLoop.currentSessionId,
             harnessLoop.status,
             scratchpadRefresh,
-        ) { sessionId, _, _ -> sessionId }
+        ) { sessionId, status, refresh -> Triple(sessionId, status, refresh) }
             .distinctUntilChanged()
-            .flatMapLatest { sessionId ->
+            .flatMapLatest { (sessionId, _, _) ->
                 flow {
                     emit(if (sessionId.isBlank()) emptyList() else agentContextDao.listScratchpads(sessionId))
                 }
@@ -1623,53 +474,17 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    fun resolveApproval(requestId: String, approved: Boolean) {
-        harnessLoop.resolveApproval(requestId, approved)
+    fun resolveApproval(requestId: String, approved: Boolean, rememberForSession: Boolean = false) {
+        harnessLoop.resolveApproval(requestId, approved, rememberForSession)
+    }
+
+    /** 提交 ask_user 问题卡的回答；答案作为该工具调用的结果落库并续跑会话。 */
+    fun resolveQuestion(requestId: String, answersJson: String) {
+        harnessLoop.resolveQuestion(requestId, answersJson)
     }
 
     val sessions: StateFlow<List<HarnessSessionEntity>> = sessionDao.observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
-    /**
-     * 新建会话时可选的全部智能体（含禁用项，UI 侧置灰并说明），按部门与排序号排列。
-     *
-     * 用 observeAll 而非 enabledProfiles：设置页改了开关或新增自定义智能体后，
-     * 选择器要立刻反映，不能等下一次进入对话框。
-     */
-    val availableAgents: StateFlow<List<top.tianyan.app.core.model.AgentSubagent>> =
-        subagentRepository.profiles
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
-    /**
-     * 可绑定的智能体引擎（Claude Code / Codex / DSH 等）。
-     *
-     * 与 [availableAgents]（天衍本体的人格档案）是两类东西：人格决定「用什么口吻与视角」，
-     * 引擎决定「由谁来执行」——引擎是真实进程，自带工具循环。两者共用会话的 agentId
-     * 字段，选择器按类型分组展示，避免把「换个说法」和「换套引擎」混为一谈。
-     */
-    val availableEngines: StateFlow<List<top.tianyan.app.harness.acp.AgentEngineProfile>> =
-        flow { emit(agentEngineCatalog.all()) }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
-    /** 当前会话绑定的智能体 id；空串表示沿用默认天衍本体。 */
-    val currentAgentId: StateFlow<String> = currentSessionId.flatMapLatest { id ->
-        if (id.isBlank()) flow { emit("") } else flow {
-            emit(sessionDao.findById(id)?.agentId.orEmpty())
-        }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
-
-    /** 切换会话的智能体绑定；绑定影响可缓存前缀，仅允许在会话尚未产出消息时改写。 */
-    fun bindSessionAgent(agentId: String?) {
-        val sessionId = currentSessionId.value
-        if (sessionId.isBlank()) return
-        viewModelScope.launch {
-            sessionDao.setAgentBinding(
-                sessionId,
-                agentId?.trim()?.takeIf { it.isNotBlank() },
-                System.currentTimeMillis(),
-            )
-        }
-    }
 
     fun setCurrentSessionApprovalMode(mode: ApprovalMode) {
         val sessionId = currentSessionId.value
@@ -1679,18 +494,45 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /** 切换当前会话的运行意图（BUILD / PLAN）；下次工具调用即按新模式门禁。 */
+    fun setCurrentSessionRunMode(mode: RunMode) {
+        val sessionId = currentSessionId.value
+        if (sessionId.isBlank()) return
+        viewModelScope.launch {
+            sessionDao.setRunMode(sessionId, mode.id, System.currentTimeMillis())
+        }
+    }
+
     val models: StateFlow<List<AiModelEntity>> = aiModelDao.observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    val workspaces: StateFlow<List<WorkspaceProject>> = workspaceManager.observeProjects()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    /** 当前会话绑定的模型档案。占用圆环 / 压缩预算必须跟会话走，不能回落到创建会话时的全局 isActive 默认模型。 */
+    private val sessionBoundModel: StateFlow<AiModelEntity?> = combine(
+        models,
+        sessions,
+        currentSessionId,
+    ) { currentModels, currentSessions, sessionId ->
+        val session = currentSessions.firstOrNull { it.id == sessionId }
+        session?.modelId?.let { id -> currentModels.firstOrNull { it.id == id } }
+            ?: currentModels.firstOrNull { it.isActive }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    val workspaceCatalog = workspaceCatalogSource.observe().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), top.tianyan.app.runtime.SessionWorkspaceCatalogState())
+    val workspaces = workspaceCatalog.map { it.projects }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     /** 思考过程块是否默认展开（持久化，重启后保留）。 */
     val thinkingExpanded: StateFlow<Boolean> = settingsDataStore.thinkingExpanded
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
-    fun setThinkingExpanded(value: Boolean) {
-        viewModelScope.launch { settingsDataStore.setThinkingExpanded(value) }
+    fun setThinkingExpanded(value: Boolean) { viewModelScope.launch { settingsDataStore.setThinkingExpanded(value) } }
+    /** 思考过程是否在展开时自动翻译为中文。 */
+    val thinkingAutoTranslate: StateFlow<Boolean> = settingsDataStore.thinkingAutoTranslate
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+    /** 历史轮次中间过程自动折叠（默认关闭；仅用户主动开启后生效）。 */
+    val chatRoundCollapse: StateFlow<Boolean> = settingsDataStore.chatRoundCollapse
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    fun navigateToAgentSettings() {
+        globalNavigationBus?.navigateTo(AppNavigationTarget.AgentSettings)
     }
 
     // 输入草稿：同步写入 SavedStateHandle，进程重建 / 旋转后可恢复
@@ -1703,86 +545,173 @@ class ChatViewModel @Inject constructor(
         savedStateHandle[KEY_INPUT_DRAFT] = value
     }
 
-    val activeSkills: StateFlow<List<top.tianyan.app.core.model.AgentSkill>> = agentSkillRepository.activeSkills
+    // 系统分享入口：预填文本 + 快捷指令行（UI 见 ChatShareSupport）
+    private val _pendingShare = MutableStateFlow<String?>(null)
+
+    /** 分享快捷指令行状态（null=隐藏）；分享文本只预填输入框，不自动发送。 */
+    val shareActions: StateFlow<ShareQuickActionsState?> = _pendingShare.map { text ->
+        text?.let { ShareQuickActionsState(it, ::resolveShareAction, ::dismissPendingShare) }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** 系统分享进入：预填输入框并展示快捷指令行。 */
+    fun onSharedTextReceived(text: String) {
+        if (text.isBlank()) return
+        setInput(text)
+        _pendingShare.value = text
+    }
+
+    private fun resolveShareAction(action: ShareQuickAction) {
+        val text = _pendingShare.value ?: return
+        _pendingShare.value = null
+        send(wrapSharePrompt(action, text))
+    }
+
+    /** 关闭快捷指令行，保留输入框中已预填的文本。 */
+    fun dismissPendingShare() {
+        _pendingShare.value = null
+    }
+
+    val activeSkills: StateFlow<List<AgentSkill>> = agentSkillRepository.activeSkills
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    val allSkills: StateFlow<List<top.tianyan.app.core.model.AgentSkill>> = agentSkillRepository.allSkills
+    val allSkills: StateFlow<List<AgentSkill>> = agentSkillRepository.allSkills
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    /**
-     * 当前会话待确认的技能候选（会话完成后由提炼器自动生成）。
-     * 由 manager 的全量候选表按 currentSessionId 投影得到；用户采纳或忽略后即消失。
-     */
-    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    val pendingSkillCandidates: StateFlow<List<top.tianyan.app.harness.skill.PendingSkillCandidate>> =
-        harnessLoop.currentSessionId.flatMapLatest { sessionId ->
-            skillDistillationManager.pendingCandidates.map { it[sessionId].orEmpty() }.distinctUntilChanged()
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val mcpServers: StateFlow<List<McpServerConfig>> = mcpServerRepository.servers
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    /**
-     * 最近一次技能提炼失败（弹窗交互改造后失败必须可见，不再静默吞掉）。
-     */
-    val distillFailure: StateFlow<String?> = skillDistillationManager.lastFailure
-
-    /** UI 展示完失败提示后清除。 */
-    fun consumeDistillFailure() = skillDistillationManager.consumeFailure()
-
-    /** 采纳技能候选：构造自定义技能入库并撤下候选卡片。 */
-    fun acceptSkillCandidate(candidate: top.tianyan.app.harness.skill.PendingSkillCandidate) {
-        viewModelScope.launch {
-            runCatching { skillDistillationManager.acceptCandidate(candidate.sessionId, candidate) }
-                .onFailure { throwable -> Log.w(TAG, "采纳技能候选失败：${throwable.message}") }
+    /** 真实压缩投影缓存（与引擎 ApiContextAssembler 同源）：按 (sessionId, compactionRevision) 从树读取 `CompactionManager.project()`。只在会话切换或某次压缩落库后才重读，避免流式期间（每 token 一次）对 DAO 的频繁查询。键必须同时含 revision：只发 sessionId 会被 distinctUntilChanged 吞掉压缩信号，面板就只有重进应用（ViewModel 重建）才能看到压缩后的用量。已折叠历史以摘要层形式计 token，不再重复计入对话体积。 */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val compactedContext: StateFlow<CompactedContext?> =
+        combine(harnessLoop.currentSessionId, compactionManager.compactionRevision) { sessionId, revision ->
+            sessionId to revision
         }
-    }
+            .distinctUntilChanged()
+            .mapLatest { (sessionId, _) -> compactionManager.project(sessionId) }
+            .flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    /** 忽略技能候选：仅撤下候选卡片，不写库。 */
-    fun dismissSkillCandidate(candidate: top.tianyan.app.harness.skill.PendingSkillCandidate) {
-        skillDistillationManager.dismissCandidate(candidate.sessionId, candidate)
-    }
-
-    val mcpServers: StateFlow<List<top.tianyan.app.core.model.McpServerConfig>> = mcpServerRepository.servers
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
-    /**
-     * 当前会话上下文用量的 UI 估算。Harness 发请求时会用同一字符/token 近似值再做最终压缩，
-     * 因此这里明确是预估值，而不是 provider 返回的精确 tokenizer 计数。
-     */
+    /** 当前会话上下文用量的 UI 估算。Harness 发请求时会用同一字符/token 近似值再做最终压缩，因此这里明确是预估值，而不是 provider 返回的精确 tokenizer 计数。 */
     val contextUsage: StateFlow<ContextUsage> = combine(
-        messages,
-        models,
-        allSkills,
-        mcpServers,
+        // 用 revision（消息数量 + 末条 id + 末条内容长度）压缩上游：
+        // contextUsage 的计算含 estimateEffectiveUsage（遍历全部消息）与两次 filterIsInstance 求和，
+        // 都是 O(n)。流式期间 messages 每个 token 块都换新引用，若不压缩会每帧全量重算，
+        // 叠加列表渲染开销后表现为「聊久了明显变卡」。
+        // 末条内容长度必须计入：流式时末条长度持续变化，是 contextUsage 真正需要更新的信号。
+        messages.map { list ->
+            Triple(
+                list.size,
+                list.lastOrNull()?.id,
+                list.lastOrNull()?.let { m ->
+                    when (m) {
+                        is AssistantText -> m.text.length
+                        is ToolResult -> m.output.length
+                        is UserMessage -> m.text.length
+                        else -> 0
+                    }
+                },
+            ) to list
+        }.distinctUntilChanged { a, b -> a.first == b.first },
+        sessionBoundModel,
         settingsDataStore.contextBudgetTokens,
-    ) { currentMessages, currentModels, skills, mcps, defaultBudget ->
+    ) { revisionAndMessages, boundModel, defaultBudget ->
         ContextUsageInputs(
-            currentMessages = currentMessages,
-            activeModel = currentModels.firstOrNull { it.isActive },
-            skills = skills,
-            mcps = mcps,
+            currentMessages = revisionAndMessages.second,
+            // 与顶栏同源：会话绑定模型优先，回退全局 isActive（详见 sessionBoundModel）。
+            activeModel = boundModel,
             defaultBudget = defaultBudget,
         )
-    }.combine(settingsDataStore.contextCompactionEnabled) { inputs, compactionEnabled ->
+    }.combine(currentSessionId) { inputs, sessionId ->
+        inputs to sessionId
+    }.combine(settingsDataStore.contextCompactionEnabled) { (inputs, sessionId), compactionEnabled ->
+        Triple(inputs, sessionId, compactionEnabled)
+    }.combine(settingsDataStore.contextFoldingRatioPercent) { (inputs, sessionId, compactionEnabled), foldingRatioPercent ->
+        ContextUsageCalculation(inputs, sessionId, compactionEnabled, foldingRatioPercent)
+    }.combine(systemPromptBuilder.usageSnapshots) { calculation, snapshots ->
+        calculation to snapshots
+    }.combine(compactedContext) { (calculation, snapshots), compacted ->
+        val (inputs, sessionId, compactionEnabled, foldingRatioPercent) = calculation
         val activeModel = inputs.activeModel
-        val systemTokens = if (activeModel?.pureChatMode == true) {
-            0
-        } else {
-            // 与 SystemPromptBuilder 的真实注入对齐：技能只进渐进式披露 Tier 1 的「名称 + 摘要」
-            // 段（总预算 1500 字符），正文按需用 load_rule("skill:<id>") 读取。
-            // 旧实现按 SKILL.md 正文长度累加 —— 装 818 个技能时会算成 2.7M token，
-            // 让用量面板永远 100%，还会让压缩器误判「预算已被系统提示吃光」。
-            val skillTokens = SystemPromptBuilder.estimateSkillDiscoveryTokens(
-                inputs.skills.filter { it.isEnabled },
-            )
-            val mcpTokens = inputs.mcps.filter { it.isEnabled }.sumOf {
-                ContextWindowPolicy.estimateTokens("${it.name}\n${it.description}\n${it.command}\n${it.args.joinToString(" ")}")
-            }
-            SYSTEM_PROMPT_BASE_TOKENS + skillTokens + mcpTokens
+        val pureChat = activeModel?.pureChatMode == true
+        val toolDisabled = pureChat || activeModel?.toolCallMode.equals("disabled", ignoreCase = true)
+        val toolCallMode = when {
+            toolDisabled -> ToolCallMode.DISABLED
+            activeModel?.toolCallMode.equals("json", ignoreCase = true) -> ToolCallMode.JSON_TEXT
+            else -> ToolCallMode.NATIVE
         }
-        val effectiveUsage = ContextWindowPolicy.estimateEffectiveUsage(
-            messages = inputs.currentMessages,
-            budget = (activeModel?.contextTokens ?: inputs.defaultBudget).coerceAtLeast(1),
-            systemTokens = systemTokens,
+        val snapshot = snapshots[sessionId]?.takeIf { it.toolCallMode == toolCallMode }
+
+        val systemPromptTokens = if (pureChat) 0 else snapshot?.systemTokens ?: ContextWindowPolicy.DEFAULT_SYSTEM_PROMPT_TOKENS
+        // NATIVE 的 tools 数组与 JSON_TEXT 注入 system 的 schema 都占真实上下文，
+        // 只有纯聊天 / 工具禁用（toolDisabled）才为 0；按 toolCallMode != NATIVE 归零会漏算 JSON_TEXT 的 5.5k。
+        val toolDefinitionTokens = if (toolDisabled) 0 else
+            snapshot?.toolDefinitionTokens ?: ContextWindowPolicy.DEFAULT_NATIVE_TOOL_TOKENS
+        val rulesTokens = if (pureChat) 0 else snapshot?.rulesTokens ?: ContextWindowPolicy.DEFAULT_RULES_TOKENS
+        // 技能正文仅在被 @ 提及后注入。尚无请求快照时不把所有已启用技能误算为常驻正文。
+        val skillTokens = if (pureChat) 0 else snapshot?.skillsTokens ?: 0
+        val mcpTokens = if (pureChat) 0 else snapshot?.mcpTokens ?: 0
+        val subagentTokens = if (toolDisabled) 0 else snapshot?.subagentTokens ?: ContextWindowPolicy.DEFAULT_SUBAGENT_TOKENS
+
+        val totalSystemTokens = systemPromptTokens + toolDefinitionTokens + rulesTokens + skillTokens + mcpTokens + subagentTokens
+        // 折叠线只扣除持续占据上下文且不在 messages 内的真实提示开销；
+        // toolDefinitionTokens 已由 foldingLimitFor 内部的工具 schema 预留支付（NATIVE/JSON_TEXT 才预留，
+        // 纯聊天与工具禁用时为 0），不能在这里再扣一次（旧实现双重扣减，会把 1M 模型错误压到 67K 左右）。
+        val promptOverheadTokens = systemPromptTokens + rulesTokens + skillTokens + mcpTokens + subagentTokens
+        // 与引擎 ApiContextAssembler 同口径按模式取工具 schema 预留
+        val toolSchemaReserveTokens = ContextWindowPolicy.toolSchemaReserveTokensFor(pureChat, toolDisabled)
+        val declaredTokens = activeModel?.contextTokens
+        val effectiveContextWindow = ContextWindowPolicy.resolveContextWindow(
+            declaredContextTokens = declaredTokens,
+            modelId = activeModel?.model,
+            providerId = activeModel?.provider,
+        )
+        // 与引擎 ApiContextAssembler 同源：占用判定与折叠都走 clampedBudget。
+        val budget = ContextWindowPolicy.clampedBudget(
+            declaredTokens,
+            inputs.defaultBudget,
+            modelId = activeModel?.model,
+            providerId = activeModel?.provider,
+        )
+
+        // 与引擎同源（ApiContextAssembler）：把消息投影成「实际会发送的那份」再估算。
+        // 引擎在压缩判定前会截断老轮次工具结果（浏览器快照、长 read 等大输出），面板此前漏了这一步，
+        // 导致已用量虚高（实测 457.8K vs 实际发送 ~141K，约 3 倍）。收敛到 ContextWindowPolicy.projectForUsage。
+        //
+        // 关键修复：投影必须基于「真实压缩投影」compacted（CompactionManager.project()）而不是
+        // 全量转写 inputs.currentMessages。压缩是树状折叠，UI 转写（SessionMessageProjector）只增不删，
+        // 旧实现拿全量转写每次重新做预算折叠，导致手动/系统自动压缩成功后面板用量纹丝不动。
+        // compacted.messages 即引擎发送形态（summary 层 + retained + healed + after）。
+        val projectedMessages = ContextWindowPolicy.projectForUsage(
+            messages = compacted?.messages ?: inputs.currentMessages,
             compactionEnabled = compactionEnabled,
+        )
+
+        // 与引擎同源（ApiContextAssembler 折叠线）：真实摘要层与召回后缀都计为固定系统开销，
+        // 从历史预算中扣除，否则面板的折叠触发线会比引擎实际行为偏高。
+        // summaryTokens 同时计入「已折叠对话」细分——estimateEffectiveUsage 的 summarizedTokens
+        // 只反映预算驱动的再折叠，压缩后保留窗不再越过预算线 → 恒为 0，若不补真值，压缩这种
+        // 最大的体积削减会从面板上完全消失。
+        val summaryTokens = if (compactionEnabled) {
+            ContextWindowPolicy.estimateTokens(compacted?.summaryLayer.orEmpty())
+        } else 0
+        val recallTokens = if (compactionEnabled) {
+            ContextWindowPolicy.estimateTokens(compacted?.recallBlocks?.values.orEmpty().joinToString("\n"))
+        } else 0
+        val foldingOverheadTokens = promptOverheadTokens + summaryTokens + recallTokens
+
+        val effectiveUsage = ContextWindowPolicy.estimateEffectiveUsage(
+            messages = projectedMessages,
+            budget = budget,
+            systemTokens = foldingOverheadTokens,
+            compactionEnabled = compactionEnabled,
+            systemPromptTokens = systemPromptTokens,
+            toolDefinitionTokens = toolDefinitionTokens,
+            rulesTokens = rulesTokens,
+            skillsTokens = skillTokens,
+            mcpTokens = mcpTokens,
+            subagentTokens = subagentTokens,
+            foldingRatioPercent = foldingRatioPercent,
+            toolSchemaReserveTokens = toolSchemaReserveTokens,
         )
         val totalPromptTokens = inputs.currentMessages.filterIsInstance<AssistantText>().mapNotNull { it.promptTokens?.toLong() }.sum()
         val totalCachedTokens = inputs.currentMessages.filterIsInstance<AssistantText>().mapNotNull { it.cachedTokens?.toLong() }.sum()
@@ -1790,26 +719,46 @@ class ChatViewModel @Inject constructor(
             ((totalCachedTokens * 100L) / totalPromptTokens).toInt().coerceIn(1, 100)
         } else null
 
+        val compactionThresholdTokens = ContextWindowPolicy.foldingLimitFor(
+            budget = budget,
+            ratioPercent = foldingRatioPercent,
+            systemTokens = foldingOverheadTokens,
+            toolSchemaReserveTokens = toolSchemaReserveTokens,
+        ).coerceAtLeast(1)
+
+        // 引擎会把召回后缀追加到 user 消息上随请求发送，因此「已用」总量与对话细分都应计入
+        // recall——否则 usedTokens 相对引擎实际发送量系统性偏低（召回只影响过触发线、没进总量）。
+        val foldedBreakdown = effectiveUsage.breakdown.copy(
+            summarizedTokens = effectiveUsage.breakdown.summarizedTokens + summaryTokens,
+            conversationTokens = effectiveUsage.breakdown.conversationTokens + recallTokens,
+        )
         ContextUsage(
-            // 三段自洽：已用 = 系统提示 + 对话历史 + 工具输出，与面板构成条的分母一致。
-            // systemTokens 修正为真实注入量后，这里不会再出现「新会话就 100%」。
-            usedTokens = effectiveUsage.totalTokens,
-            limitTokens = (activeModel?.contextTokens ?: inputs.defaultBudget).coerceAtLeast(1),
-            systemTokens = systemTokens,
+            usedTokens = foldedBreakdown.totalTokens,
+            limitTokens = budget,
+            compactionThresholdTokens = compactionThresholdTokens,
+            declaredTokens = effectiveContextWindow ?: budget,
+            systemTokens = totalSystemTokens,
             toolTokens = effectiveUsage.toolTokens,
-            conversationTokens = effectiveUsage.conversationTokens,
-            compacted = effectiveUsage.keepFromIndex > 0,
+            conversationTokens = effectiveUsage.conversationTokens + recallTokens,
+            compacted = summaryTokens > 0 || effectiveUsage.keepFromIndex > 0,
             cachedTokens = totalCachedTokens,
             cacheHitRatePercent = cacheHitPct,
+            foldingRatioPercent = foldingRatioPercent,
+            breakdown = foldedBreakdown,
         )
-    // 估算涉及对全部消息文本的逐字符扫描（长会话 + 大技能包时每分片达百万级字符迭代），
-    // flowOn 移到 Default 线程池执行，stateIn 的 Main 收集方只接收最终结果。
-    }.flowOn(Dispatchers.Default)
-    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ContextUsage())
+
+    }
+        // 首屏卡顿修复（P1）：estimateEffectiveUsage 与两次 filterIsInstance 求和都是 O(消息数)，
+        // stateIn 默认在 Main 执行；首订阅（空列表 → 全量）时会整段压在主线程，与首帧布局争抢。
+        .flowOn(Dispatchers.Default)
+        .combine(combine(currentSessionId, requestDiagnostics.snapshots, requestDiagnostics.archiveStatus) { id, snapshots, status -> snapshots[id].orEmpty() to status }) { usage, diagnostics ->
+            usage.copy(requests = diagnostics.first, requestArchiveStatus = diagnostics.second)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ContextUsage())
 
     /** 各 MCP 服务的实时连通性状态（与 McpManager 共享，聊天挂载面板 / 设置页联动）。 */
     val mcpConnectionStates: StateFlow<Map<String, McpConnectionState>> = mcpManager.connectionStates
-
+    val mcpToolCounts: StateFlow<Map<String, Int>> = mcpConnectionStates.map { mcpManager.cachedToolCounts() }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
     fun refreshMcpConnections() {
         viewModelScope.launch { mcpManager.refreshConnections() }
     }
@@ -1827,8 +776,8 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    /** 斜杠指令建议列表（当输入以 / 开头时实时过滤展示，自动合并已激活的专精技能与工作流 /wf）。 */
-    val matchingCommands: StateFlow<List<SlashCommandItem>> = kotlinx.coroutines.flow.combine(
+    /** 斜杠指令建议列表（当输入以 / 开头时实时过滤展示，自动合并已激活的专精技能与可用工作流）。 */
+    val matchingCommands: StateFlow<List<SlashCommandItem>> = combine(
         _input,
         agentSkillRepository.activeSkills,
         workflowRepository.observeDefinitions(),
@@ -1837,17 +786,17 @@ class ChatViewModel @Inject constructor(
         else emptyList()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    private fun skillToMentionItem(skill: top.tianyan.app.core.model.AgentSkill): MentionItem = MentionItem(
+    private fun skillToMentionItem(skill: AgentSkill): MentionItem = MentionItem(
         id = skill.id,
         name = skill.name,
         description = skill.description,
         category = context.getString(R.string.chat_skill_category),
         type = MentionType.SKILL,
-        icon = top.tianyan.app.ui.components.RuntimeIconName.Brain,
+        icon = RuntimeIconName.BookOpen,
     )
 
     private fun mcpToMentionItem(
-        mcp: top.tianyan.app.core.model.McpServerConfig,
+        mcp: McpServerConfig,
         description: String = mcp.description,
     ): MentionItem = MentionItem(
         id = mcp.id,
@@ -1855,11 +804,11 @@ class ChatViewModel @Inject constructor(
         description = description,
         category = context.getString(R.string.chat_mcp_category),
         type = MentionType.MCP_SERVER,
-        icon = top.tianyan.app.ui.components.RuntimeIconName.Cpu,
+        icon = RuntimeIconName.Extension,
     )
 
     /** @ 艾特唤醒建议列表（当输入包含 @ 时实时过滤技能与 MCP 插件）。 */
-    val matchingMentions: StateFlow<List<MentionItem>> = kotlinx.coroutines.flow.combine(
+    val matchingMentions: StateFlow<List<MentionItem>> = combine(
         _input,
         agentSkillRepository.allSkills,
         mcpServerRepository.servers,
@@ -1884,7 +833,7 @@ class ChatViewModel @Inject constructor(
     val pinnedMentionIds: StateFlow<Set<String>> = _pinnedMentionIds.asStateFlow()
 
     /** 当前会话中已钉选常驻的技能与 MCP 列表（默认为空，仅在用户显式钉选后常驻展示并生效）。 */
-    val pinnedCapabilities: StateFlow<List<MentionItem>> = kotlinx.coroutines.flow.combine(
+    val pinnedCapabilities: StateFlow<List<MentionItem>> = combine(
         _pinnedMentionIds,
         agentSkillRepository.allSkills,
         mcpServerRepository.servers,
@@ -1923,7 +872,7 @@ class ChatViewModel @Inject constructor(
     }
 
     /** 当前输入框中已挂载的技能与 MCP 标签列表（用于输入框顶部展示高亮双排 Chips）。 */
-    val attachedMentions: StateFlow<List<MentionItem>> = kotlinx.coroutines.flow.combine(
+    val attachedMentions: StateFlow<List<MentionItem>> = combine(
         _input,
         agentSkillRepository.allSkills,
         mcpServerRepository.servers,
@@ -1962,18 +911,11 @@ class ChatViewModel @Inject constructor(
             if (latest != null) {
                 harnessLoop.loadSession(latest.id)
             } else {
-                harnessLoop.newSession(context.getString(R.string.chat_new_session))
+                try { harnessLoop.newSession(context.getString(R.string.chat_new_session)) }
+                catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (e: Exception) { _notice.value = e.message ?: "无法创建会话，请明确选择执行环境" }
             }
             _initializing.value = false
-        }
-        // 工作区变更随会话落库：修复重启后 Git 面板要重新绑定（loadSession 此前只能
-        // 恢复到会话创建时的旧值——switchWorkspace 只改内存 StateFlow 从不回写 DB）。
-        viewModelScope.launch(Dispatchers.IO) {
-            combine(harnessLoop.currentSessionId, harnessLoop.workspace) { sid, ws -> sid to ws }
-                .distinctUntilChanged()
-                .collect { (sid, ws) ->
-                    if (sid.isNotBlank()) runCatching { sessionDao.updateWorkspace(sid, ws) }
-                }
         }
     }
 
@@ -1991,7 +933,7 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    fun applyQuickPhrase(phrase: top.tianyan.app.core.model.QuickPhrase) {
+    fun applyQuickPhrase(phrase: QuickPhrase) {
         if (phrase.content.trim() == "/clear") {
             createSession(context.getString(R.string.chat_new_session))
             setInput("")
@@ -2001,7 +943,6 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    /** /clear 会静默重建会话，用 Toast 明确告知用户上下文已重置 */
     private fun notifyNewSessionCreated() {
         Toast.makeText(context, context.getString(R.string.chat_new_session_created), Toast.LENGTH_SHORT).show()
     }
@@ -2032,10 +973,6 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    fun setSendMode(mode: ComposerSendMode) {
-        _sendMode.value = mode
-    }
-
     private val _pendingAttachments = MutableStateFlow<List<ChatAttachment>>(emptyList())
 
     /** 待发送附件；处理（复制/压缩/编码）在 IO 线程完成 */
@@ -2046,6 +983,14 @@ class ChatViewModel @Inject constructor(
     val attachmentsProcessing: StateFlow<Boolean> = _attachmentsProcessing.asStateFlow()
 
     /** 需要以 Toast 提示用户的轻量通知（附件失败、模型档案已存在等），展示后调用 clearNotice() */
+    /** 手动压缩当前会话历史为结构化摘要（"+" 附件弹窗入口）。 */
+    fun compactContextNow() {
+        viewModelScope.launch {
+            val (ok, message) = contextMemoryBackend.manualCompact(currentSessionId.value)
+            _notice.value = if (ok) message else "压缩失败：$message"
+        }
+    }
+
     private val _notice = MutableStateFlow<String?>(null)
     val notice: StateFlow<String?> = _notice.asStateFlow()
 
@@ -2057,57 +1002,16 @@ class ChatViewModel @Inject constructor(
         if (uris.isEmpty()) return
         viewModelScope.launch(Dispatchers.IO) {
             _attachmentsProcessing.value = true
-            val items = uris.mapNotNull { AttachmentHelper.processUri(context, it, isImage) }
-            val failed = uris.size - items.size
-            if (failed > 0) {
-                _notice.value = context.getString(R.string.chat_attachment_process_failed, failed)
-            }
-            _pendingAttachments.update { it + items }
+            val outcome = AttachmentHelper.processPicked(context, uris, isImage)
+            outcome.notice?.let { _notice.value = it }
+            _pendingAttachments.update { it + outcome.items }
             _attachmentsProcessing.value = false
-            // **并发**抽文档文本（P0 附件多文件并发）：coroutineScope + 每个 item 单独 launch；
-            // 5 个 PDF 同时下发到沙箱 → 一起跑，不用排队（沙箱本身多进程能扛，且每个 extract 内部有 90s timeout 兜底）
-            val docItems = items.filter { !it.isImage }
-            if (docItems.isNotEmpty()) {
-                kotlinx.coroutines.coroutineScope {
-                    docItems.forEach { att -> launch { extractTextForAttachment(att) } }
-                }
-            }
         }
     }
-
-    /** 附件 id → 抽取到的纯文本；null 值表示"已尝试但抽不出"，key 不在则"未开始或进行中"。 */
-    private val _extractedTexts = MutableStateFlow<Map<String, String?>>(emptyMap())
-    val extractedTexts: StateFlow<Map<String, String?>> = _extractedTexts.asStateFlow()
-
-    private suspend fun extractTextForAttachment(attachment: ChatAttachment) {
-        val guest = attachment.guestFilePath ?: return
-        _attachmentExtracting.value = _attachmentExtracting.value + (attachment.id to true)
-        val result = runCatching { textExtractor.extract(guest, attachment.name) }.getOrNull()
-        val text = when (result) {
-            is top.tianyan.app.runtime.sandbox.SandboxTextExtractor.Result.Ok -> {
-                val truncated = if (result.truncated) "\n\n[文档过长，前 40KB 已展示]" else ""
-                result.text + truncated
-            }
-            is top.tianyan.app.runtime.sandbox.SandboxTextExtractor.Result.Skipped -> {
-                android.util.Log.i("AttachmentExtract", "跳过 ${attachment.name}: ${result.reason}")
-                null
-            }
-            is top.tianyan.app.runtime.sandbox.SandboxTextExtractor.Result.Failed -> {
-                _notice.value = "解析 ${attachment.name} 失败：${result.error}"
-                null
-            }
-            null -> null
-        }
-        _extractedTexts.value = _extractedTexts.value + (attachment.id to text)
-        _attachmentExtracting.value = _attachmentExtracting.value - attachment.id
-    }
-
-    private val _attachmentExtracting = MutableStateFlow<Map<String, Boolean>>(emptyMap())
-    val attachmentExtracting: StateFlow<Map<String, Boolean>> = _attachmentExtracting.asStateFlow()
 
     fun removeAttachment(attachment: ChatAttachment) {
         _pendingAttachments.update { list -> list.filter { it.id != attachment.id } }
-        _extractedTexts.value = _extractedTexts.value - attachment.id
+        AttachmentHelper.deleteHostFile(attachment.hostFilePath)
     }
 
     /** 组装附件挂载说明并委托 send() 发送；View 只需在输入框非空或有附件时触发 */
@@ -2116,62 +1020,12 @@ class ChatViewModel @Inject constructor(
         val attachments = _pendingAttachments.value
         if (trimmedInput.isBlank() && attachments.isEmpty()) return
         val imageUrls = attachments.mapNotNull { it.base64DataUrl }
-        // Use only the raw user input as message text; attachment info is not appended
-        val fullMessage = trimmedInput
+        val fullMessage = buildComposerMessage(context, trimmedInput, attachments)
         _pendingAttachments.value = emptyList()
-        _extractedTexts.value = emptyMap()
-        val persistedAttachments = attachments.map { att ->
-            top.tianyan.app.harness.MessageAttachment(
-                name = att.name,
-                isImage = att.isImage,
-                sizeBytes = att.sizeBytes,
-                guestPath = att.guestFilePath ?: "/attachments/${att.name}",
-                // 图片的 base64 data URL 只走 UserMessage.imageUrls（渲染缩略图 + 发模型），
-                // 不再重复落进 attachment.imageUrl：否则每张图在 payloadJson 里序列化两份，
-                // 反序列化后也多出一份大 String，长会话 + 多图时会把 256MB 堆挤到 OOM。
-                imageUrl = null,
-                mimeType = att.mimeType,
-            )
-        }
-        send(fullMessage, imageUrls, persistedAttachments)
+        send(fullMessage, imageUrls)
     }
 
-    // ===== 工作流（taixu v0.13 /wf 命令 + 主动建议，逻辑逐字对齐）=====
-    private val _workflowLaunchRequests = kotlinx.coroutines.flow.MutableSharedFlow<WorkflowLaunchRequest>(extraBufferCapacity = 8)
-    val workflowLaunchRequests: kotlinx.coroutines.flow.SharedFlow<WorkflowLaunchRequest> get() = _workflowLaunchRequests
-    private val _workflowSuggestions = MutableStateFlow<List<top.tianyan.app.harness.workflow.ProactiveWorkflowSuggestion>>(emptyList())
-    val workflowSuggestions: StateFlow<List<top.tianyan.app.harness.workflow.ProactiveWorkflowSuggestion>> = _workflowSuggestions.asStateFlow()
-
-    init {
-        viewModelScope.launch(Dispatchers.IO) {
-            runCatching { workflowRepository.ensureBuiltins() }
-                .onFailure { android.util.Log.w("Workflow", "ensureBuiltins 失败: ${it.message}") }
-        }
-        viewModelScope.launch {
-            proactiveWorkflowAdvisor.observeSuggestions().collect { suggestion ->
-                _workflowSuggestions.update { current ->
-                    (listOf(suggestion) + current.filterNot { it.workflowId == suggestion.workflowId }).take(3)
-                }
-            }
-        }
-    }
-
-    fun dismissWorkflowSuggestion(workflowId: String) {
-        _workflowSuggestions.update { suggestions -> suggestions.filterNot { it.workflowId == workflowId } }
-    }
-
-    fun launchWorkflowSuggestion(suggestion: top.tianyan.app.harness.workflow.ProactiveWorkflowSuggestion) {
-        dismissWorkflowSuggestion(suggestion.workflowId)
-        _workflowLaunchRequests.tryEmit(
-            WorkflowLaunchRequest(suggestion.workflowId, suggestion.projectName, suggestion.initialVariables),
-        )
-    }
-
-    fun send(
-        customText: String? = null,
-        imageUrls: List<String> = emptyList(),
-        attachments: List<top.tianyan.app.harness.MessageAttachment> = emptyList(),
-    ) {
+    fun send(customText: String? = null, imageUrls: List<String> = emptyList()) {
         val rawText = (customText ?: _input.value).trim()
         if (rawText.isBlank() && imageUrls.isEmpty()) return
         WORKFLOW_COMMAND.matchEntire(rawText)?.let { match ->
@@ -2180,11 +1034,17 @@ class ChatViewModel @Inject constructor(
             _workflowLaunchRequests.tryEmit(WorkflowLaunchRequest(match.groupValues[1].takeIf(String::isNotBlank), projectName))
             return
         }
+        // 旁路问答：基于当前会话进展的"顺便问一句"，不打断回合、不进入模型上下文。
+        BtwChatController.COMMAND.matchEntire(rawText)?.let { match ->
+            setInput("")
+            btwController?.submit(match.groupValues[1])
+            return
+        }
         setInput("")
 
         val pinnedIds = _pinnedMentionIds.value
         val effectiveText = if (pinnedIds.isNotEmpty()) {
-            val existingMentions = top.tianyan.app.harness.MentionExtractor.parse(rawText)
+            val existingMentions = MentionExtractor.parse(rawText)
             val missingPins = pinnedIds.filter { pin ->
                 pin.lowercase() !in existingMentions
             }
@@ -2197,18 +1057,20 @@ class ChatViewModel @Inject constructor(
             rawText
         }
 
-        // 先认目标再发：让本轮的工具调用一开始就有授权范围可用。
-        maybeAutoBindRedTeamTarget(effectiveText)
-
         if (!running.value) {
-            harnessLoop.send(effectiveText, imageUrls = imageUrls, attachments = attachments)
+            harnessLoop.send(effectiveText, imageUrls = imageUrls)
         } else {
-            when (_sendMode.value) {
-                // 插话/排队同样带上附件：排队消息也要在 UI 上显示文件卡片。
-                ComposerSendMode.STEER -> harnessLoop.steer(effectiveText, imageUrls = imageUrls, attachments = attachments)
-                ComposerSendMode.NEXT_RUN -> harnessLoop.send(effectiveText, imageUrls = imageUrls, attachments = attachments)
+            // 运行中投递语义跟随「运行中发送方式」偏好；send() 非挂起函数，故读 stateIn 快照。
+            // STEER 在当前这批工具调用完成后、下一轮推理开始前注入，不打断正在执行的工具调用。
+            when (runningSendModePref.value) {
+                RunningSendMode.STEER -> harnessLoop.steer(effectiveText, imageUrls = imageUrls)
+                RunningSendMode.QUEUE -> harnessLoop.send(effectiveText, imageUrls = imageUrls)
             }
         }
+    }
+
+    private companion object {
+        val WORKFLOW_COMMAND = Regex("^/wf(?:\\s+([A-Za-z0-9_.-]+))?\$")
     }
 
     /** 创建针对工具安装或沙箱异常的专属自愈会话并立即启动诊断 */
@@ -2289,22 +1151,13 @@ class ChatViewModel @Inject constructor(
 
     fun clearPendingMessages() = harnessLoop.clearPendingMessages()
 
-    fun clearError() = harnessLoop.clearError()
+    fun clearError() { sessionDeletionFeedback.clear(); harnessLoop.clearError() }
 
-    /** 新建会话（支持自定义标题并关联工作区）。红队会话由 projectType = RED_TEAM 决定。 */
-    fun createSession(
-        title: String = "",
-        workspace: String = "",
-        projectType: String = "",
-        agentId: String? = null,
-    ) {
+    fun createSession(title: String = "", workspace: String = "", projectType: String = "") {
         viewModelScope.launch {
-            harnessLoop.newSession(
-                title.trim().ifBlank { context.getString(R.string.chat_new_session) },
-                workspace,
-                projectType,
-                agentId,
-            )
+            try { workspaceCatalogSource.validate(workspaceCatalog.value, workspace); harnessLoop.newSession(title.trim().ifBlank { context.getString(R.string.chat_new_session) }, workspace, projectType) }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) { _notice.value = e.message ?: "会话创建失败，请检查执行环境" }
         }
     }
 
@@ -2312,419 +1165,8 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch { harnessLoop.loadSession(id) }
     }
 
-    // flatMapLatest 仍标记为 ExperimentalCoroutinesApi；此处语义明确（会话切换时切数据源），
-    // 显式 OptIn 而不是依赖编译器默认放行，避免将来版本收紧后突然报错。
-    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    val redTeamFacts: kotlinx.coroutines.flow.Flow<List<top.tianyan.app.core.database.RedTeamFactEntity>>
-        get() = currentSessionId.flatMapLatest { id ->
-            if (id.isBlank()) kotlinx.coroutines.flow.flowOf(emptyList()) else redTeamFactRepository.observeForSession(id)
-        }
-
-    /**
-     * 用户直接说目标就自动绑定，不再要求先去面板手填。
-     *
-     * 触发条件刻意收紧到「红队会话 + 还没绑目标 + 消息里能认出目标」：
-     *   · 已绑定就不动 —— 用户可能是中途补充说明，随便改绑会把范围悄悄换掉，
-     *     而后续所有派活与越界校验都挂在这个范围上；
-     *   · 认不出就不绑 —— 宁可让用户手动补，也不能瞎绑一个词，
-     *     绑错目标比不绑危险得多。
-     *
-     * 范围按目标类型放宽一档（IP → /24，域名 → 域名本身），
-     * 只授权单个 IP 的话同段横向路径立刻全部越界，演练第一步就卡住。
-     */
-    private fun maybeAutoBindRedTeamTarget(text: String) {
-        val sessionId = currentSessionId.value.takeIf { it.isNotBlank() } ?: return
-        viewModelScope.launch(Dispatchers.IO) {
-            val session = runCatching { sessionDao.findById(sessionId) }.getOrNull() ?: return@launch
-            if (session.redTeamMode != top.tianyan.app.core.model.RedTeamMode.RED_TEAM.id) return@launch
-            if (!session.redTeamTarget.isNullOrBlank()) return@launch
-            val hit = top.tianyan.app.core.model.RedTeamTargetExtractor.extract(text) ?: return@launch
-            val scope = top.tianyan.app.core.model.RedTeamTargetExtractor.defaultScope(hit)
-            runCatching { redTeamCoordinator.bind(sessionId, hit.target, scope) }
-                .onSuccess {
-                    _redTeamAutoBind.value = "已从消息中识别目标并绑定：${hit.target}（范围 $scope）"
-                    // 绑定后刷新控制台与体检，否则面板还显示「未绑定靶标」。
-                    refreshRedTeamConsole()
-                    refreshRedTeamSkillHealth()
-                }
-                .onFailure { error ->
-                    _redTeamAutoBind.value = "目标自动绑定失败：${error.message ?: "未知错误"}"
-                }
-        }
-    }
-
-    private val _redTeamAutoBind = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
-    /** 自动绑定的一次性提示；面板显示后由界面调 [consumeRedTeamAutoBind] 清掉。 */
-    val redTeamAutoBind: kotlinx.coroutines.flow.StateFlow<String?> = _redTeamAutoBind.asStateFlow()
-
-    fun consumeRedTeamAutoBind() {
-        _redTeamAutoBind.value = null
-    }
-
-    fun bindRedTeamTarget(target: String, scope: String) {
-        val sessionId = currentSessionId.value.takeIf { it.isNotBlank() } ?: return
-        viewModelScope.launch(Dispatchers.IO) {
-            redTeamCoordinator.bind(sessionId, target, scope)
-        }
-    }
-
-    private val _redTeamSkillHealth =
-        kotlinx.coroutines.flow.MutableStateFlow<top.tianyan.app.core.model.RedTeamPreflightReport?>(null)
-    val redTeamSkillHealth: kotlinx.coroutines.flow.StateFlow<top.tianyan.app.core.model.RedTeamPreflightReport?> =
-        _redTeamSkillHealth.asStateFlow()
-
-    /**
-     * 体检要读技能库与文件系统，属于 IO 动作，所以只在用户进入红队面板或主动点「重新体检」时跑，
-     * 不挂在每次重组上——否则打开面板就会反复扫盘。
-     */
-    fun refreshRedTeamSkillHealth() {
-        val sessionId = currentSessionId.value.takeIf { it.isNotBlank() } ?: return
-        viewModelScope.launch(Dispatchers.IO) {
-            runCatching { redTeamCoordinator.skillHealth(sessionId) }
-                .onSuccess { _redTeamSkillHealth.value = it }
-        }
-    }
-
-    // ── RedTeam 控制台 ────────────────────────────────────────────────────────
-    // 面板要的是结构化行，不是工具输出的散文：让面板去正则抠 `assets=12`，
-    // 工具输出改一个字面板就瞎了。这里直接走协调器的投影 API。
-
-    private val _redTeamConsole = kotlinx.coroutines.flow.MutableStateFlow(RedTeamConsoleState())
-    val redTeamConsole: kotlinx.coroutines.flow.StateFlow<RedTeamConsoleState> = _redTeamConsole.asStateFlow()
-
-    private fun updateConsole(block: (RedTeamConsoleState) -> RedTeamConsoleState) {
-        _redTeamConsole.value = block(_redTeamConsole.value)
-    }
-
-    /**
-     * 进控制台前拉一次首屏。
-     *
-     * 面板改成「点入口才整页进入」之后，不再有常开状态需要维护；
-     * 由界面在打开时调这个方法，避免每次重组都读一遍事实库。
-     */
-    fun openRedTeamConsole() = refreshRedTeamConsole()
-
-    fun setRedTeamConsoleTab(tab: RedTeamConsoleTab) {
-        updateConsole { it.copy(tab = tab) }
-        when (tab) {
-            RedTeamConsoleTab.PROMPTS -> if (_redTeamConsole.value.roles.isEmpty()) loadConsoleRoles()
-            RedTeamConsoleTab.SKILLS -> if (_redTeamConsole.value.skills.isEmpty()) loadConsoleSkills()
-            RedTeamConsoleTab.OVERVIEW -> if (_redTeamConsole.value.agents == null) loadConsoleAgents()
-            RedTeamConsoleTab.ASSETS -> Unit
-            // 分区页签按需读：一次读全部事实在小库上无所谓，大库上会明显拖慢开面板。
-            else -> loadConsoleSection(tab.section)
-        }
-    }
-
-    /** 页签到分区的映射；只有这里一处，避免两边各写一套对应关系。 */
-    private val RedTeamConsoleTab.section: top.tianyan.app.core.model.RedTeamConsoleModel.Section?
-        get() = when (this) {
-            RedTeamConsoleTab.SESSIONS -> top.tianyan.app.core.model.RedTeamConsoleModel.Section.SESSIONS
-            RedTeamConsoleTab.VULNS -> top.tianyan.app.core.model.RedTeamConsoleModel.Section.VULNS
-            RedTeamConsoleTab.CHAIN -> top.tianyan.app.core.model.RedTeamConsoleModel.Section.CHAIN
-            RedTeamConsoleTab.SCORES -> top.tianyan.app.core.model.RedTeamConsoleModel.Section.SCORES
-            RedTeamConsoleTab.TARGETS -> top.tianyan.app.core.model.RedTeamConsoleModel.Section.TARGETS
-            RedTeamConsoleTab.REPORT -> top.tianyan.app.core.model.RedTeamConsoleModel.Section.REPORT
-            RedTeamConsoleTab.KNOWLEDGE -> top.tianyan.app.core.model.RedTeamConsoleModel.Section.KNOWLEDGE
-            else -> null
-        }
-
-    private fun loadConsoleSection(section: top.tianyan.app.core.model.RedTeamConsoleModel.Section?) {
-        if (section == null) return
-        val sessionId = currentSessionId.value.takeIf { it.isNotBlank() } ?: return
-        viewModelScope.launch(Dispatchers.IO) {
-            runCatching {
-                redTeamCoordinator.consoleSectionRows(sessionId, section) to
-                    redTeamCoordinator.consoleSections(sessionId)
-            }.onSuccess { (rows, digests) ->
-                updateConsole {
-                    it.copy(sections = digests, sectionRows = it.sectionRows + (section.id to rows), error = null)
-                }
-            }.onFailure { error ->
-                updateConsole { it.copy(error = error.message ?: "读取分区失败") }
-            }
-        }
-    }
-
-    fun refreshRedTeamConsole() {
-        val sessionId = currentSessionId.value.takeIf { it.isNotBlank() } ?: return
-        updateConsole { it.copy(loading = true, error = null) }
-        viewModelScope.launch(Dispatchers.IO) {
-            runCatching {
-                val snapshot = redTeamCoordinator.consoleSnapshot(sessionId)
-                val state = _redTeamConsole.value
-                val filter = state.filter.copy(cidr = state.selectedSegment)
-                val (total, rows) = redTeamCoordinator.consoleAssets(sessionId, filter)
-                val digests = redTeamCoordinator.consoleSections(sessionId)
-                Triple(snapshot, total, rows) to digests
-            }.onSuccess { (triple, digests) ->
-                val (snapshot, total, rows) = triple
-                updateConsole {
-                    it.copy(
-                        loading = false,
-                        engagements = snapshot.engagements,
-                        currentEngagement = snapshot.current,
-                        stats = snapshot.stats,
-                        segments = snapshot.segments,
-                        assets = rows,
-                        total = total,
-                        sections = digests,
-                        error = null,
-                    )
-                }
-            }.onFailure { error ->
-                updateConsole { it.copy(loading = false, error = error.message ?: "控制台读取失败") }
-            }
-        }
-    }
-
-    /** 过滤条件变了就重查一次；总数与列表必须同一次算出，否则底栏和列表会对不上。 */
-    private fun requeryConsoleAssets() {
-        val sessionId = currentSessionId.value.takeIf { it.isNotBlank() } ?: return
-        val state = _redTeamConsole.value
-        viewModelScope.launch(Dispatchers.IO) {
-            runCatching {
-                redTeamCoordinator.consoleAssets(sessionId, state.filter.copy(cidr = state.selectedSegment))
-            }.onSuccess { (total, rows) ->
-                updateConsole { it.copy(total = total, assets = rows, error = null) }
-            }.onFailure { error ->
-                updateConsole { it.copy(error = error.message ?: "资产查询失败") }
-            }
-        }
-    }
-
-    fun selectRedTeamConsoleSegment(cidr: String?) {
-        updateConsole { it.copy(selectedSegment = cidr, expandedAsset = null, detail = null) }
-        requeryConsoleAssets()
-        if (_redTeamConsole.value.view == RedTeamConsoleView.GRAPH) loadConsoleGraph()
-    }
-
-    fun updateRedTeamConsoleQuery(value: String) = updateConsole { it.copy(queryDraft = value) }
-
-    fun updateRedTeamConsoleService(value: String) = updateConsole { it.copy(serviceDraft = value) }
-
-    fun updateRedTeamConsolePort(value: String) = updateConsole { it.copy(portDraft = value.filter { ch -> ch.isDigit() }) }
-
-    /** 回车提交：把草稿并进过滤条件后重查。 */
-    fun submitRedTeamConsoleQuery() {
-        val state = _redTeamConsole.value
-        updateConsole {
-            it.copy(
-                filter = it.filter.copy(
-                    q = state.queryDraft.trim().ifBlank { null },
-                    service = state.serviceDraft.trim().ifBlank { null },
-                    port = state.portDraft.toIntOrNull(),
-                ),
-            )
-        }
-        requeryConsoleAssets()
-    }
-
-    fun setRedTeamConsoleProvenance(provenance: String?) {
-        updateConsole { it.copy(filter = it.filter.copy(provenance = provenance)) }
-        requeryConsoleAssets()
-    }
-
-    fun setRedTeamConsoleSort(sort: RedTeamConsoleModel.Sort) {
-        updateConsole { it.copy(filter = it.filter.copy(sort = sort)) }
-        requeryConsoleAssets()
-    }
-
-    fun setRedTeamConsoleView(view: RedTeamConsoleView) {
-        updateConsole { it.copy(view = view) }
-        if (view == RedTeamConsoleView.GRAPH) loadConsoleGraph()
-    }
-
-    fun loadConsoleGraph() {
-        val sessionId = currentSessionId.value.takeIf { it.isNotBlank() } ?: return
-        val cidr = _redTeamConsole.value.selectedSegment
-        updateConsole { it.copy(graphLoading = true) }
-        viewModelScope.launch(Dispatchers.IO) {
-            runCatching { redTeamCoordinator.consoleGraph(sessionId, cidr) }
-                .onSuccess { graph -> updateConsole { it.copy(graph = graph, graphLoading = false) } }
-                .onFailure { error ->
-                    updateConsole { it.copy(graphLoading = false, error = error.message ?: "图谱加载失败") }
-                }
-        }
-    }
-
-    /** 展开一台资产才去查详情：一次拉全部资产的观测溯源等于把事实库读两遍。 */
-    fun toggleRedTeamConsoleAsset(assetId: String) {
-        val sessionId = currentSessionId.value.takeIf { it.isNotBlank() } ?: return
-        if (_redTeamConsole.value.expandedAsset == assetId) {
-            updateConsole { it.copy(expandedAsset = null, detail = null) }
-            return
-        }
-        updateConsole { it.copy(expandedAsset = assetId, detail = null) }
-        viewModelScope.launch(Dispatchers.IO) {
-            runCatching { redTeamCoordinator.consoleAssetDetail(sessionId, assetId) }
-                .onSuccess { detail -> updateConsole { it.copy(detail = detail) } }
-        }
-    }
-
-    fun loadConsoleRoles() {
-        val sessionId = currentSessionId.value.takeIf { it.isNotBlank() } ?: return
-        viewModelScope.launch(Dispatchers.IO) {
-            runCatching { redTeamCoordinator.consoleRoles(sessionId) }
-                .onSuccess { roles ->
-                    updateConsole { state ->
-                        val keep = state.roleId?.takeIf { id -> roles.any { it.id == id } } ?: roles.firstOrNull()?.id
-                        state.copy(
-                            roles = roles,
-                            roleId = keep,
-                            roleDraft = roles.firstOrNull { it.id == keep }?.content ?: state.roleDraft,
-                        )
-                    }
-                }
-                .onFailure { error -> updateConsole { it.copy(roleMessage = error.message ?: "读取角色提示词失败") } }
-        }
-    }
-
-    fun selectConsoleRole(roleId: String) {
-        updateConsole { state ->
-            state.copy(roleId = roleId, roleDraft = state.roles.firstOrNull { it.id == roleId }?.content.orEmpty(), roleMessage = null)
-        }
-    }
-
-    fun updateConsoleRoleDraft(text: String) = updateConsole { it.copy(roleDraft = text, roleMessage = null) }
-
-    fun saveConsoleRole() {
-        val sessionId = currentSessionId.value.takeIf { it.isNotBlank() } ?: return
-        val state = _redTeamConsole.value
-        val roleId = state.roleId ?: return
-        updateConsole { it.copy(roleSaving = true, roleMessage = null) }
-        viewModelScope.launch(Dispatchers.IO) {
-            runCatching { redTeamCoordinator.consoleSaveRolePrompt(sessionId, roleId, state.roleDraft) }
-                .onSuccess { overridden ->
-                    updateConsole { it.copy(roleSaving = false, roleMessage = if (overridden) "已保存" else "已恢复内置文案") }
-                    loadConsoleRoles()
-                }
-                .onFailure { error ->
-                    updateConsole { it.copy(roleSaving = false, roleMessage = error.message ?: "保存失败") }
-                }
-        }
-    }
-
-    /** 恢复内置：保存空正文即上游的 reset 语义，不需要另一个按钮。 */
-    fun resetConsoleRole() {
-        updateConsole { it.copy(roleDraft = "") }
-        saveConsoleRole()
-    }
-
-    fun loadConsoleAgents() {
-        val sessionId = currentSessionId.value.takeIf { it.isNotBlank() } ?: return
-        viewModelScope.launch(Dispatchers.IO) {
-            runCatching { redTeamCoordinator.consoleAgentsStatus(sessionId) }
-                .onSuccess { status -> updateConsole { it.copy(agents = status) } }
-                .onFailure { error -> updateConsole { it.copy(agentsMessage = error.message ?: "读取并发上限失败") } }
-        }
-    }
-
-    /** 改并发上限：立即生效，不用重启——这一点由协调器保证（派活时现读）。 */
-    fun setConsoleAgentsMax(value: Int) {
-        viewModelScope.launch(Dispatchers.IO) {
-            runCatching { redTeamCoordinator.consoleSetAgentsMax(value) }
-                .onSuccess { applied ->
-                    updateConsole { it.copy(agentsMessage = "已保存为 $applied 个并发执行智能体，立即生效") }
-                    loadConsoleAgents()
-                }
-                .onFailure { error ->
-                    updateConsole { it.copy(agentsMessage = error.message ?: "保存失败") }
-                }
-        }
-    }
-
-    fun loadConsoleSkills() {
-        viewModelScope.launch(Dispatchers.IO) {
-            runCatching { redTeamCoordinator.consoleSkills() }
-                .onSuccess { skills -> updateConsole { it.copy(skills = skills) } }
-                .onFailure { error -> updateConsole { it.copy(skillMessage = error.message ?: "读取技能库失败") } }
-        }
-    }
-
-    fun selectConsoleSkill(id: String) {
-        updateConsole { state ->
-            state.copy(skillDraft = state.skills.firstOrNull { it.id == id }, skillMessage = null)
-        }
-    }
-
-    fun newConsoleSkill() {
-        updateConsole {
-            it.copy(
-                skillDraft = top.tianyan.app.harness.redteam.RedTeamSkillStore.Skill(
-                    id = "",
-                    name = "",
-                    role = null,
-                    enabled = true,
-                    description = "",
-                    whenToUse = null,
-                    body = "",
-                    path = null,
-                    builtin = false,
-                ),
-                skillMessage = null,
-            )
-        }
-    }
-
-    fun updateConsoleSkillDraft(transform: (top.tianyan.app.harness.redteam.RedTeamSkillStore.Skill) -> top.tianyan.app.harness.redteam.RedTeamSkillStore.Skill) {
-        updateConsole { state -> state.skillDraft?.let { state.copy(skillDraft = transform(it), skillMessage = null) } ?: state }
-    }
-
-    fun saveConsoleSkill() {
-        val draft = _redTeamConsole.value.skillDraft ?: return
-        if (draft.name.isBlank()) {
-            updateConsole { it.copy(skillMessage = "技能名不能为空") }
-            return
-        }
-        if (draft.body.isBlank()) {
-            updateConsole { it.copy(skillMessage = "技能正文不能为空") }
-            return
-        }
-        updateConsole { it.copy(skillSaving = true, skillMessage = null) }
-        viewModelScope.launch(Dispatchers.IO) {
-            runCatching { redTeamCoordinator.consoleSaveSkill(draft) }
-                .onSuccess { saved ->
-                    updateConsole { it.copy(skillSaving = false, skillDraft = saved, skillMessage = "已保存") }
-                    loadConsoleSkills()
-                }
-                .onFailure { error ->
-                    updateConsole { it.copy(skillSaving = false, skillMessage = error.message ?: "保存失败") }
-                }
-        }
-    }
-
-    fun deleteConsoleSkill() {
-        val draft = _redTeamConsole.value.skillDraft ?: return
-        if (draft.builtin) {
-            updateConsole { it.copy(skillMessage = "内置技能不可删除") }
-            return
-        }
-        if (draft.id.isBlank()) {
-            updateConsole { it.copy(skillDraft = null, skillMessage = null) }
-            return
-        }
-        updateConsole { it.copy(skillSaving = true, skillMessage = null) }
-        viewModelScope.launch(Dispatchers.IO) {
-            runCatching { redTeamCoordinator.consoleDeleteSkill(draft.id) }
-                .onSuccess { removed ->
-                    updateConsole {
-                        it.copy(
-                            skillSaving = false,
-                            skillDraft = null,
-                            skillMessage = if (removed) "已删除" else "删除失败：技能不存在或为内置技能",
-                        )
-                    }
-                    loadConsoleSkills()
-                }
-                .onFailure { error ->
-                    updateConsole { it.copy(skillSaving = false, skillMessage = error.message ?: "删除失败") }
-                }
-        }
-    }
-
     fun deleteSession(id: String) {
-        viewModelScope.launch { harnessLoop.deleteSession(id) }
+        sessionDeletionFeedback.delete(viewModelScope, harnessLoop, id, context.getString(R.string.chat_request_archive_delete_error))
     }
 
     fun renameSession(id: String, title: String) {
@@ -2733,11 +1175,8 @@ class ChatViewModel @Inject constructor(
 
     // ---- 撤回到此轮（Checkpoint Rewind） ----
 
-    /**
-     * 撤回到 [messageId] 所在用户轮：按 checkpoint 锚点定位轮次，
-     * prepare/commit 两段式执行；CONVERSATION/BOTH 会派生回退分支并切换过去。
-     */
-    fun rewindToMessage(messageId: String, scope: top.tianyan.app.harness.checkpoint.RewindScope) {
+    /** 撤回到 [messageId] 所在用户轮：按 checkpoint 锚点定位轮次，prepare/commit 两段式执行；CONVERSATION/BOTH 会派生回退分支并切换过去。 */
+    fun rewindToMessage(messageId: String, scope: RewindScope) {
         viewModelScope.launch(Dispatchers.IO) {
             val sessionId = harnessLoop.currentSessionId.value
             val target = harnessLoop.sessionCheckpoints(sessionId)
@@ -2753,14 +1192,41 @@ class ChatViewModel @Inject constructor(
                 if (forkedSessionId != null) {
                     harnessLoop.loadSession(forkedSessionId)
                 }
-                _notice.value = buildString {
-                    append(context.getString(R.string.chat_rewind_done, result.filesRestored, result.filesDeleted))
-                    if (forkedSessionId != null) append(" · ").append(context.getString(R.string.chat_rewind_switched))
-                    result.note?.let { append("\n").append(it) }
-                }
+                // 成功的 rewind 走带「撤销回滚」动作的 Snackbar（Toast 无法承载动作）；
+                // 失败/无锚点仍走 _notice Toast。
+                _rewindCompletedEvents.tryEmit(
+                    buildString {
+                        append(context.getString(R.string.chat_rewind_done, result.filesRestored, result.filesDeleted))
+                        if (forkedSessionId != null) append(" · ").append(context.getString(R.string.chat_rewind_switched))
+                        result.note?.let { append("\n").append(it) }
+                    },
+                )
             }.onFailure { throwable ->
                 _notice.value = context.getString(R.string.chat_rewind_failed, throwable.message ?: "unknown")
             }
+        }
+    }
+
+    private val _rewindCompletedEvents = MutableSharedFlow<String>(
+        extraBufferCapacity = 4,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+
+    /** rewind 成功完成的事件（消息正文）；UI 以 Snackbar 呈现并附「撤销回滚」动作。 */
+    val rewindCompletedEvents: SharedFlow<String> = _rewindCompletedEvents
+
+    /** 撤销最近一次 rewind：文件还原到 rewind 前状态（对话侧切回原会话即可）。 */
+    fun undoLastRewind() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val sessionId = harnessLoop.currentSessionId.value
+            runCatching { harnessLoop.undoRewind(sessionId, workspace.value) }.getOrNull()
+                ?.let { result ->
+                    _notice.value = buildString {
+                        append(context.getString(R.string.chat_rewind_undone, result.filesRestored, result.filesDeleted))
+                        result.note?.let { append("\n").append(it) }
+                    }
+                }
+                ?: run { _notice.value = context.getString(R.string.chat_rewind_no_undo) }
         }
     }
 
@@ -2858,11 +1324,13 @@ class ChatViewModel @Inject constructor(
 
     fun selectModel(id: String, subModel: String? = null) {
         viewModelScope.launch {
-            val entity = aiModelDao.findById(id) ?: return@launch
             val sessionId = currentSessionId.value.takeIf { it.isNotBlank() } ?: return@launch
-            val variant = subModel?.trim()?.takeIf { it.isNotBlank() }
-                ?: entity.model.substringBefore(',').trim().takeIf { it.isNotBlank() }
-            sessionDao.setModelSelection(sessionId, entity.id, variant, System.currentTimeMillis())
+            sessionModelSwitcher.switchModel(
+                sessionId = sessionId,
+                profileId = id,
+                variant = subModel,
+                compactIfNeeded = !running.value,
+            )
         }
     }
 
@@ -2911,17 +1379,18 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    /**
-     * 在同一供应商档案内为当前会话选择具体模型 ID（复用 baseUrl / Key / 推理参数）。
-     * 档案本身保持不变，避免其他会话被连带切换。
-     */
+    /** 在同一供应商档案内为当前会话选择具体模型 ID（复用 baseUrl / Key / 推理参数）；档案本身保持不变，避免其他会话被连带切换。 */
     fun switchModelInProfile(profileId: String, modelId: String) {
         val trimmed = modelId.trim()
         if (trimmed.isBlank()) return
         viewModelScope.launch {
-            val profile = aiModelDao.findById(profileId) ?: return@launch
             val sessionId = currentSessionId.value.takeIf { it.isNotBlank() } ?: return@launch
-            sessionDao.setModelSelection(sessionId, profile.id, trimmed, System.currentTimeMillis())
+            sessionModelSwitcher.switchModel(
+                sessionId = sessionId,
+                profileId = profileId,
+                variant = trimmed,
+                compactIfNeeded = !running.value,
+            )
             closeProviderModelPicker()
         }
     }
@@ -2941,67 +1410,6 @@ class ChatViewModel @Inject constructor(
         }
     }
 }
-
-/** AI 生成 commit 消息的状态机：Idle / Loading / Done(text) / Error(reason)。 */
-sealed interface GitAiCommitState {
-    data object Idle : GitAiCommitState
-    data object Loading : GitAiCommitState
-    data class Done(val message: String) : GitAiCommitState
-    data class Error(val reason: String) : GitAiCommitState
-}
-
-/** 凭证健康检查的四种状态（checkedAtMillis 用于「N 分钟前验证过」显示）。 */
-sealed interface GitCredHealth {
-    val checkedAtMillis: Long get() = 0L
-    data class Ok(override val checkedAtMillis: Long = System.currentTimeMillis()) : GitCredHealth
-    data class Invalid(val code: String, override val checkedAtMillis: Long = System.currentTimeMillis()) : GitCredHealth
-    data class Unknown(val reason: String, override val checkedAtMillis: Long = System.currentTimeMillis()) : GitCredHealth
-    data object Checking : GitCredHealth
-}
-
-/** 仓库列表条目（clone 对话框「浏览我的仓库」用）。 */
-data class GitRepoInfo(val fullName: String, val cloneUrl: String, val private: Boolean)
-
-/** 仓库列表加载的三态。 */
-sealed interface GitRepoListState {
-    data object Idle : GitRepoListState
-    data object Loading : GitRepoListState
-    data class Ready(val repos: List<GitRepoInfo>) : GitRepoListState
-    data class Error(val reason: String) : GitRepoListState
-}
-
-/** Git 一次性操作反馈（克隆/拉取/推送）：给 UI Snackbar 消费。 */
-sealed interface GitOpMessage {
-    data object Idle : GitOpMessage
-    data class Busy(val label: String) : GitOpMessage
-    data class Ok(val message: String, val action: GitOpAction? = null) : GitOpMessage
-    data class Error(val message: String, val action: GitOpAction? = null) : GitOpMessage
-}
-
-/** 反馈消息里可点的动作（Snackbar 的 action 按钮）。 */
-sealed interface GitOpAction {
-    /** 一键把工作区切到某个子目录（clone 完成后）。 */
-    data class SwitchWorkspaceTo(val path: String) : GitOpAction
-    /** 同名目录已存在时的一键清空再试。 */
-    data class RetryWithClean(val url: String, val targetDir: String) : GitOpAction
-    /** 网络错误重试。 */
-    data class RetrySame(val command: String) : GitOpAction
-    /** 复制错误详情到剪贴板（用户可粘给助手/日志）。 */
-    data object CopyError : GitOpAction
-    /** 撤销上一步 rename（Snackbar 点一下就换回去）。 */
-    data class UndoRename(val oldName: String, val newName: String) : GitOpAction
-    /** stash push 后一键 pop。 */
-    data object StashPop : GitOpAction
-}
-
-/** 流式进度条数据。git 每次输出进度 chunk 更新一次。 */
-data class GitProgress(
-    val label: String,
-    val percent: Int? = null,
-    val objects: String? = null,
-    val transfer: String? = null,
-    val raw: String? = null,
-)
 
 internal fun mergeHistoricalAndLiveEvents(
     sessionId: String,
@@ -3109,85 +1517,21 @@ private fun synthesizeHistoricalEvents(sessionId: String, messages: List<Harness
     return events
 }
 
-enum class ComposerSendMode(val queue: PromptQueue) {
-    STEER(PromptQueue.STEER),
-    NEXT_RUN(PromptQueue.NEXT_RUN),
-}
-
-/**
- * 系统提示固定骨架的保守 token 估算：环境段、工具调用规则、沙箱套件清单、MCP 引导等
- * 与技能/会话无关的常量部分。技能摘要段与 MCP 描述另行按真实注入量累加。
- */
-private const val SYSTEM_PROMPT_BASE_TOKENS = 1_600
+/** 聊天发送键语义：仅驱动发送键配色。实际投递行为由「运行中发送方式」偏好（RunningSendMode）决定。 */
+enum class ComposerSendMode { STEER, NEXT_RUN }
 
 private data class ContextUsageInputs(
     val currentMessages: List<HarnessMessage>,
     val activeModel: AiModelEntity?,
-    val skills: List<top.tianyan.app.core.model.AgentSkill>,
-    val mcps: List<top.tianyan.app.core.model.McpServerConfig>,
     val defaultBudget: Int,
 )
 
-data class ContextUsage(
-    val usedTokens: Int = 0,
-    val limitTokens: Int = 128_000,
-    val systemTokens: Int = 0,
-    val toolTokens: Int = 0,
-    val conversationTokens: Int = 0,
-    val compacted: Boolean = false,
-    val cachedTokens: Long = 0L,
-    val cacheHitRatePercent: Int? = null,
+private data class ContextUsageCalculation(
+    val inputs: ContextUsageInputs,
+    val sessionId: String,
+    val compactionEnabled: Boolean,
+    val foldingRatioPercent: Int,
 )
-
-/** Git 面板状态：当前会话工作区的分支、改动、分支列表与提交历史（不跨会话共享）。 */
-data class GitFileChange(
-    val status: Char,
-    val path: String,
-)
-
-data class GitPanelState(
-    val loading: Boolean = false,
-    val branch: String? = null,
-    /** 相对 upstream 的 ahead/behind 计数（无 upstream 或未同步为 null）。 */
-    val aheadBehind: Pair<Int, Int>? = null,
-    val staged: List<GitFileChange> = emptyList(),
-    val unstaged: List<GitFileChange> = emptyList(),
-    val untracked: List<String> = emptyList(),
-    /** 未跟踪路径总数，仅保存计数，不把大目录展开到 Compose。 */
-    val untrackedCount: Int = 0,
-    /** 超过展示上限的未跟踪路径只保留聚合提示，避免大技能包拖垮 UI。 */
-    val untrackedOverflow: Boolean = false,
-    val localBranches: List<String> = emptyList(),
-    val remoteBranches: List<String> = emptyList(),
-    val tags: List<String> = emptyList(),
-    /** AiCode 风格提交拓扑图（泳道/边/refs）。 */
-    val graph: top.tianyan.app.ui.chat.git.GitGraph = top.tianyan.app.ui.chat.git.GitGraph.EMPTY,
-    /** hash → 该提交改动文件清单（点开详情时懒加载缓存）。 */
-    val commitFiles: Map<String, List<GitFileChange>> = emptyMap(),
-    /** 分页拉取更早提交中。 */
-    val graphLoadingMore: Boolean = false,
-    /** 正在加载文件清单的提交 hash。 */
-    val loadingCommit: String? = null,
-    val hasIdentity: Boolean = false,
-    val hasRemote: Boolean = false,
-    /** 当前 `git stash list` 条数（>0 时可 pop）。 */
-    val stashCount: Int = 0,
-    /** 浅克隆仓库（--depth 1 等）：提交图只有少数几条，图页提供「加载完整历史」反浅克隆。 */
-    val isShallow: Boolean = false,
-    val notARepo: Boolean = false,
-    val diffPath: String? = null,
-    val diffText: String? = null,
-    val diffLoading: Boolean = false,
-    /** 本地脏时 pull 前需要用户二次确认（可能被覆盖或产生冲突）。 */
-    val pullDirtyConfirm: Boolean = false,
-    /** 本地脏时切分支前的二次确认（branch 名）。非空 = 需确认。 */
-    val pendingCheckout: String? = null,
-    val commitDetailHash: String? = null,
-    val commitDetailText: String? = null,
-    val commitDetailLoading: Boolean = false,
-    val error: String? = null,
-)
-
 
 data class MentionItem(
     val id: String,
@@ -3195,19 +1539,17 @@ data class MentionItem(
     val description: String,
     val category: String,
     val type: MentionType,
-    val icon: top.tianyan.app.ui.components.RuntimeIconName,
+    val icon: RuntimeIconName,
 )
 
 enum class MentionType {
     SKILL, MCP_SERVER
 }
 
-/** /wf 启动请求（nav 层收集后 push WorkflowDestination，对齐 taixu v0.13）。 */
-data class WorkflowLaunchRequest(
-    val workflowId: String?,
-    val projectName: String,
-    val initialVariables: Map<String, String> = emptyMap(),
+/** 分支列表重投影的触发键。 用于把 combine 的多个上游流压缩成一个「可比较信号」，任一上游变化都会产生不同的 key， 从而触发重新投影；配合 distinctUntilChanged 避免同一 key 重复拉取。 取代此前 `{ sessionId, _, _, _ -> sessionId }` 丢弃上游的做法。 / */
+private data class ProjectionKey(
+    val sessionId: String,
+    val messageRevision: Pair<Int, String?>,
+    val refresh: Int,
+    val eventRevision: Pair<Int, Int>,
 )
-
-/** `/wf` 或 `/wf <workflowId>`；组 1 为可选工作流 id。 */
-private val WORKFLOW_COMMAND = Regex("^/wf(?:\\s+([A-Za-z0-9_.-]+))?$")

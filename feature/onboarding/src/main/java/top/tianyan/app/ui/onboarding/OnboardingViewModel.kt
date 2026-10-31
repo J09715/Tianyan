@@ -10,12 +10,9 @@ import top.tianyan.app.core.tools.AgentModelDiscovery
 import top.tianyan.app.runtime.LinuxRuntime
 import top.tianyan.app.runtime.RegistryRoute
 import top.tianyan.app.runtime.RuntimeInstallRequest
-import dagger.hilt.android.lifecycle.HiltViewModel
 import android.content.Context
 import android.net.Uri
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
-import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -30,22 +27,26 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 import top.tianyan.app.core.tools.ProviderEndpointPolicy
+import top.tianyan.app.core.model.AiModelProfileExport
+import top.tianyan.app.core.model.BuiltinPluginBundles
+import top.tianyan.app.core.model.PluginBundle
+import top.tianyan.app.core.tools.AiProfileBackupCodec
+import top.tianyan.app.core.tools.AiProfileWriter
+import top.tianyan.app.core.tools.ToolManager
+import top.tianyan.app.runtime.tools.InstallEvent
 
 data class OnboardingStatus(val loaded: Boolean = false, val completed: Boolean = false)
 
-@HiltViewModel
-class OnboardingViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
+class OnboardingViewModel(
+    private val context: Context,
     private val settings: OnboardingPreferences,
     private val linuxRuntime: LinuxRuntime,
     private val providerRepository: ProviderRepository,
     private val providerCatalogRepository: AgentProviderCatalog,
     private val modelDiscovery: AgentModelDiscovery,
-    private val toolManager: top.tianyan.app.core.tools.ToolManager,
-    private val toolRegistry: top.tianyan.app.core.tools.ToolRegistry,
-    private val logger: top.tianyan.app.core.common.logging.AppLogger,
-    private val profileWriter: top.tianyan.app.core.tools.AiProfileWriter,
-    private val profileBackupCodec: top.tianyan.app.core.tools.AiProfileBackupCodec,
+    private val toolManager: ToolManager,
+    private val profileWriter: AiProfileWriter,
+    private val profileBackupCodec: AiProfileBackupCodec,
 ) : ViewModel() {
     val providerCatalog = providerCatalogRepository.providers
 
@@ -61,10 +62,11 @@ class OnboardingViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.Eagerly, OnboardingStatus())
     val runtimeState: StateFlow<RuntimeState> = linuxRuntime.state
 
-    val devSuites: List<top.tianyan.app.core.model.PluginBundle> = top.tianyan.app.core.model.BuiltinPluginBundles.bundles
+    /** 引导页可见的套件。按需能力（如 MCP 能力仓库）不默认勾选，但仍可在这里被用户主动勾上。 */
+    val devSuites: List<PluginBundle> = BuiltinPluginBundles.bundles
 
     private val _selectedSuites = MutableStateFlow<Set<String>>(
-        top.tianyan.app.core.model.BuiltinPluginBundles.bundles.map { it.id }.toSet(),
+        BuiltinPluginBundles.bundles.filter { it.defaultSelected }.map { it.id }.toSet(),
     )
     val selectedSuites = _selectedSuites.asStateFlow()
 
@@ -72,10 +74,7 @@ class OnboardingViewModel @Inject constructor(
     val isInstallingPlugins = _isInstallingPlugins.asStateFlow()
 
     private val _pluginInstallProgress = MutableStateFlow<String?>(null)
-    val pluginInstallProgress: StateFlow<String?> = _pluginInstallProgress.asStateFlow()
-
-    private val _pluginInstallError = MutableStateFlow<String?>(null)
-    val pluginInstallError: StateFlow<String?> = _pluginInstallError.asStateFlow()
+    val pluginInstallProgress = _pluginInstallProgress.asStateFlow()
 
     private val _distribution = MutableStateFlow("ubuntu")
     val distribution = _distribution.asStateFlow()
@@ -83,7 +82,7 @@ class OnboardingViewModel @Inject constructor(
     val mirror = _mirror.asStateFlow()
     private val _page = MutableStateFlow(0)
     val page = _page.asStateFlow()
-    private val _modelProvider = MutableStateFlow("自定义 OpenAI 兼容接口")
+    private val _modelProvider = MutableStateFlow("OpenAI 兼容接口")
     val modelProvider = _modelProvider.asStateFlow()
     private val _modelName = MutableStateFlow("")
     val modelName = _modelName.asStateFlow()
@@ -93,7 +92,7 @@ class OnboardingViewModel @Inject constructor(
     val baseUrl = _baseUrl.asStateFlow()
     private val _apiKey = MutableStateFlow("")
     val apiKey = _apiKey.asStateFlow()
-    private val _importedProfile = MutableStateFlow<top.tianyan.app.core.model.AiModelProfileExport?>(null)
+    private val _importedProfile = MutableStateFlow<AiModelProfileExport?>(null)
     val importedProfile = _importedProfile.asStateFlow()
     private val _discoveredModels = MutableStateFlow<List<String>>(emptyList())
     val discoveredModels = _discoveredModels.asStateFlow()
@@ -113,15 +112,7 @@ class OnboardingViewModel @Inject constructor(
             _mirror.value = settings.mirrorPolicy.first()
             prefsLoaded.value = true
         }
-        // APK 自带的插件包先落盘，再恢复沙箱。
-        //
-        // 顺序有意义：seed 只是把 .txplugin 解到 filesDir/plugins/（纯 IO，不碰 PRoot），
-        // 而工具中心读 registry 时会把它并进来，因此用户打开设置页就能看到「可安装」，
-        // 不必先等沙箱 Ready。与 restoreInstalledState 并发执行也可以，但放在同一个
-        // 协程里串起来能让失败顺序可预期。
         viewModelScope.launch {
-            runCatching { toolRegistry.seedBundledPlugins() }
-                .onFailure { logger.w("内置插件落盘失败：${it.message}", it) }
             restoreInstalledState()
         }
     }
@@ -257,19 +248,6 @@ class OnboardingViewModel @Inject constructor(
             if (!settings.onboardingCompleted.first() && linuxRuntime.state.value is RuntimeState.Ready) {
                 _page.value = 1
             }
-            // 沙箱就绪后拉起勾了「自启动」的 web/service 插件。
-            //
-            // 必须等 restoreInstalledState 返回：那之前 PRoot 尚未 Ready，startGateway
-            // 会因端口探测超时而把刚起来的进程杀掉。放在这里而不是 LinuxRuntime 内部，
-            // 是因为 runtime 模块不允许反向依赖 tools（架构铁律：feature → core/runtime/
-            // harness/tools 单向），而本类已经持有 toolManager。
-            //
-            // 失败不阻断：单个插件的配置错误不该影响应用启动，异常在 ToolManager 内部
-            // 已按工具粒度吞掉并记日志。
-            if (linuxRuntime.state.value is RuntimeState.Ready) {
-                runCatching { toolManager.startAutoStartServices() }
-                    .onFailure { logger.w("开机自启流程异常：${it.message}", it) }
-            }
         }
     }
 
@@ -294,19 +272,14 @@ class OnboardingViewModel @Inject constructor(
 
         viewModelScope.launch(Dispatchers.IO) {
             _isInstallingPlugins.value = true
-            _pluginInstallError.value = null
             try {
                 toolManager.batchInstallSuites(selected).collect { event ->
-                    if (event is top.tianyan.app.runtime.tools.InstallEvent.Progress) {
+                    if (event is InstallEvent.Progress) {
                         _pluginInstallProgress.value = event.message
                     }
                 }
-            } catch (cancellation: kotlinx.coroutines.CancellationException) {
-                throw cancellation
             } catch (e: Exception) {
-                // 用户此时已在模型配置页，装配失败若只吞掉，事后只会表现为
-                // 「工具中心里这些套件莫名其妙没装上」，无从追溯。
-                _pluginInstallError.value = e.message ?: e::class.simpleName ?: "未知错误"
+                // 忽略异常保证流程顺畅
             } finally {
                 _isInstallingPlugins.value = false
                 _pluginInstallProgress.value = null
@@ -318,7 +291,7 @@ class OnboardingViewModel @Inject constructor(
         _modelName.value = name
     }
 
-    fun importProfileFromJson(rawJson: String): Result<top.tianyan.app.core.model.AiModelProfileExport> {
+    fun importProfileFromJson(rawJson: String): Result<AiModelProfileExport> {
         return profileBackupCodec.parseProfiles(rawJson).mapCatching { profiles ->
             val profile = profiles.firstOrNull() ?: error("导入包中没有模型档案")
             require(profile.model.isNotBlank() || profile.name.isNotBlank()) { "模型配置缺少模型名称或 ID" }
@@ -355,7 +328,7 @@ class OnboardingViewModel @Inject constructor(
                 model
             }
             profileWriter.upsertProfile(
-                top.tianyan.app.core.tools.AiProfileWriter.UpsertRequest(
+                AiProfileWriter.UpsertRequest(
                     name = _modelName.value.ifBlank { model },
                     provider = _modelProvider.value,
                     model = modelList,
@@ -369,6 +342,10 @@ class OnboardingViewModel @Inject constructor(
                     reasoningEffort = imported?.reasoningEffort,
                     toolCallMode = imported?.toolCallMode,
                     contextTokens = imported?.contextTokens,
+                    compactionKeepRecentTokens = imported?.compactionKeepRecentTokens,
+                    compactionReserveTokens = imported?.compactionReserveTokens,
+                    promptCachingEnabled = imported?.promptCachingEnabled ?: true,
+                    promptCacheTtl1h = imported?.promptCacheTtl1h ?: false,
                     customHeaders = imported?.customHeaders.orEmpty(),
                     pureChatMode = imported?.pureChatMode ?: false,
                     visionEnabled = imported?.visionEnabled ?: true,

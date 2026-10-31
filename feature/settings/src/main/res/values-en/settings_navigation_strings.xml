@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_nav_models_summary">Manage models, providers, and connections</string>
+    <string name="settings_nav_local_summary">Import GGUF models for offline inference</string>
+    <string name="settings_nav_phrases_summary">Saved prompts and quick commands</string>
+    <string name="settings_nav_stats_summary">Usage, activity, and model rankings</string>
+    <string name="settings_nav_tools_summary">Install and manage local developer tools</string>
+    <string name="settings_nav_tools_remote_summary">Switch to the local system to install tools</string>
+    <string name="settings_nav_cc_summary">Agent versions and model configuration</string>
+    <string name="settings_nav_execution_summary">Reasoning display, context, and tool calls</string>
+    <string name="settings_nav_roles_summary">Delegation and agent roles</string>
+    <string name="settings_nav_skills_summary">Prompts, scripts, and runtime plugins</string>
+    <string name="settings_nav_mcp_summary">Built-in and third-party MCP services</string>
+    <string name="settings_nav_agents_summary">Models, tools, skills, and MCP</string>
+    <string name="settings_nav_linux_summary">Distributions, storage mounts, and access</string>
+    <string name="settings_nav_appearance_summary">Theme, text, backgrounds, and terminal</string>
+    <string name="settings_nav_diagnostics_summary">Background operation and diagnostics</string>
+    <string name="settings_nav_features_summary">AI creation, collaboration, and automation</string>
+    <string name="settings_nav_about_summary">App updates and community</string>
+    <string name="settings_nav_about_title">About and community</string>
+</resources>

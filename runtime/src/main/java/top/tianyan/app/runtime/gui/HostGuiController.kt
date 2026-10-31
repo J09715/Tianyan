@@ -9,17 +9,18 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.widget.Toast
-import dagger.hilt.android.qualifiers.ApplicationContext
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import top.tianyan.app.core.common.shell.ShellQuote
 import top.tianyan.app.runtime.privilege.PrivilegeManager
-import javax.inject.Inject
-import javax.inject.Singleton
 
 data class ScreenObservation(
     val packageName: String,
@@ -32,20 +33,39 @@ data class ScreenObservation(
         if (nodes.isEmpty()) {
             appendLine("【屏幕控件】当前界面未检测到交互节点或正在加载动画中")
         } else {
-            appendLine("【交互与可视节点】(共 ${nodes.size} 个，展示前 ${minOf(nodes.size, maxNodes)} 个)")
-            nodes.take(maxNodes).forEach { node ->
+            val shown = selectForDisplay(maxNodes)
+            appendLine("【交互与可视节点】(共 ${nodes.size} 个，展示 ${shown.size} 个；id 省略包名前缀，@x,y 为控件中心坐标可直接用于点击)")
+            shown.forEach { node ->
                 appendLine("- ${node.toCompactString()}")
             }
-            if (nodes.size > maxNodes) {
-                appendLine("[其余 ${nodes.size - maxNodes} 个节点已省略...]")
+            if (shown.size < nodes.size) {
+                appendLine("[其余 ${nodes.size - shown.size} 个节点已省略（可交互控件优先保留）...]")
             }
         }
     }
+
+    /**
+     * 挑选要展示的节点。节点按 DFS 先序产出，直接 take(maxNodes) 会把排在后面的可交互控件
+     * （屏幕底部/右侧的发送、悬浮按钮等）整段截掉，模型看不到就不会去点。
+     * 因此先保证 editable/clickable/scrollable 控件入选，剩余名额再按原顺序补纯文本节点；
+     * 返回时仍按原顺序，保持模型对界面布局与阅读顺序的认知。
+     */
+    private fun selectForDisplay(maxNodes: Int): List<GuiNode> {
+        if (nodes.size <= maxNodes) return nodes
+        val interactive = nodes.filter { it.editable || it.clickable || it.scrollable }
+        if (interactive.size >= maxNodes) return interactive.take(maxNodes)
+        val keepIds = interactive.mapTo(HashSet()) { it.id }
+        val textBudget = maxNodes - keepIds.size
+        nodes.asSequence()
+            .filter { it.id !in keepIds }
+            .take(textBudget)
+            .forEach { keepIds.add(it.id) }
+        return nodes.filter { it.id in keepIds }
+    }
 }
 
-@Singleton
-class HostGuiController @Inject constructor(
-    @ApplicationContext private val context: Context,
+class HostGuiController(
+    private val context: Context,
     private val privilegeManager: PrivilegeManager,
     private val toolkit: HostGuiToolkit,
     private val hud: WorkflowGuiHudBridge,
@@ -58,8 +78,8 @@ class HostGuiController @Inject constructor(
         try {
             runCatching {
                 val foreground = getForegroundInfo()
-                val dumpPath = "/data/local/tmp/taixu_gui_dump.xml"
-                val fallbackDumpPath = "/sdcard/taixu_gui_dump.xml"
+                val dumpPath = "/data/local/tmp/tianyan_gui_dump.xml"
+                val fallbackDumpPath = "/sdcard/tianyan_gui_dump.xml"
 
                 // 优先 dump 到 /data/local/tmp，失败则回退 /sdcard
                 val dumpResult = privilegeManager.executeShellCommand(
@@ -76,15 +96,43 @@ class HostGuiController @Inject constructor(
                 }
 
                 val nodes = AndroidGuiXmlParser.parse(xmlContent, onlyInteractive)
+                // rawXml 不再随观察结果持有：uiautomator 全量 XML 可达数 MB，挂存会让每次
+                // screen_observe 都把整棵节点树常驻 Java 堆（无人消费的死重，曾致 target
+                // footprint OOM）。解析所需的瞬态字符串在此作用域结束后即可被 GC 回收。
                 ScreenObservation(
                     packageName = foreground.first,
                     activityName = foreground.second,
                     nodes = nodes,
-                    rawXml = xmlContent,
                 )
             }
         } finally {
             hud.endScreenOp()
+        }
+    }
+
+    /**
+     * 动作执行后等待界面稳定。
+     * 有 AccessibilityService 且收到过窗口事件时：先观察一个短窗口，若期间没有窗口状态变化，
+     * 说明界面根本没动（纯文字输入、点击无效等），立即返回；若正在切换则等到事件静默，上限 maxMs。
+     * 无服务或从未收到过事件时回退固定等待，行为与改造前一致。
+     */
+    suspend fun awaitUiSettled(
+        settleWindowMs: Long = 350L,
+        quietMs: Long = 200L,
+        maxMs: Long = 1_500L,
+        fallbackMs: Long = 900L,
+    ) {
+        if (!AccessibilityGestureBridge.isAvailable() || !UiSettleSignal.hasSignal()) {
+            delay(fallbackMs)
+            return
+        }
+        val start = SystemClock.uptimeMillis()
+        val before = UiSettleSignal.lastEventAt()
+        delay(settleWindowMs)
+        if (UiSettleSignal.lastEventAt() == before) return
+        while (SystemClock.uptimeMillis() - start < maxMs) {
+            if (SystemClock.uptimeMillis() - UiSettleSignal.lastEventAt() >= quietMs) return
+            delay(40L)
         }
     }
 
@@ -154,7 +202,7 @@ class HostGuiController @Inject constructor(
             } else {
                 // 回退 monkey 唤醒
                 val res = privilegeManager.executeShellCommand(
-                    "/system/bin/monkey -p ${shellQuote(packageName)} -c android.intent.category.LAUNCHER 1"
+                    "/system/bin/monkey -p ${ShellQuote.of(packageName)} -c android.intent.category.LAUNCHER 1"
                 )
                 if (res.success) "已通过 shell 唤起应用：$packageName" else error("无法启动应用 $packageName：${res.stderr}")
             }
@@ -166,7 +214,7 @@ class HostGuiController @Inject constructor(
      */
     suspend fun captureScreenshot(targetPath: String): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
-            val res = privilegeManager.executeShellCommand("/system/bin/screencap -p ${shellQuote(targetPath)}")
+            val res = privilegeManager.executeShellCommand("/system/bin/screencap -p ${ShellQuote.of(targetPath)}")
             if (res.success) "屏幕截图已保存至 $targetPath" else error(res.stderr.ifBlank { "截图失败" })
         }
     }
@@ -209,14 +257,14 @@ class HostGuiController @Inject constructor(
 
     suspend fun forceStopApp(packageName: String): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
-            val res = privilegeManager.executeShellCommand("/system/bin/am force-stop ${shellQuote(packageName)}")
+            val res = privilegeManager.executeShellCommand("/system/bin/am force-stop ${ShellQuote.of(packageName)}")
             if (res.success) "已强制停止：$packageName" else error(res.stderr.ifBlank { "force-stop 失败" })
         }
     }
 
     suspend fun clearAppData(packageName: String): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
-            val res = privilegeManager.executeShellCommand("/system/bin/pm clear ${shellQuote(packageName)}")
+            val res = privilegeManager.executeShellCommand("/system/bin/pm clear ${ShellQuote.of(packageName)}")
             if (res.success) "已清除数据：$packageName\n${res.stdout}".trim() else error(res.stderr.ifBlank { "pm clear 失败" })
         }
     }
@@ -261,19 +309,19 @@ class HostGuiController @Inject constructor(
     }
 
     fun clipboardSet(text: String): Result<String> = runCatching {
-        val latch = java.util.concurrent.CountDownLatch(1)
+        val latch = CountDownLatch(1)
         var error: Throwable? = null
         Handler(Looper.getMainLooper()).post {
             try {
                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                clipboard.setPrimaryClip(ClipData.newPlainText("taixu-workflow", text))
+                clipboard.setPrimaryClip(ClipData.newPlainText("tianyan-workflow", text))
             } catch (t: Throwable) {
                 error = t
             } finally {
                 latch.countDown()
             }
         }
-        if (!latch.await(3, java.util.concurrent.TimeUnit.SECONDS)) {
+        if (!latch.await(3, TimeUnit.SECONDS)) {
             error("写入剪贴板超时")
         }
         error?.let { throw it }
@@ -338,6 +386,4 @@ class HostGuiController @Inject constructor(
             "Unknown" to "Unknown"
         }
     }
-
-    private fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 }

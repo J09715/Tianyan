@@ -9,6 +9,7 @@ import org.junit.Test
 import top.tianyan.app.harness.AssistantText
 import top.tianyan.app.harness.ApiToolCallSpec
 import top.tianyan.app.harness.HarnessTool
+import top.tianyan.app.harness.SkillSuggestion
 import top.tianyan.app.harness.TextToolCallCodec
 import top.tianyan.app.harness.ToolCall
 import top.tianyan.app.harness.ToolResult
@@ -32,6 +33,26 @@ class SubagentLaneRunnerTest {
         assertEquals("子任务", result[1].content)
         assertFalse(result.any { it.content == "父任务" || it.content == "父回复" })
         assertFalse(result.any { it.tool_calls?.any { call -> call.id == "delegate" } == true })
+    }
+
+    @Test
+    fun `isolated messages drop ui only skill suggestions`() {
+        val result = isolatedProviderMessages(
+            messages = listOf(
+                UserMessage("child-user", 1L, "task"),
+                SkillSuggestion(
+                    id = "s1",
+                    createdAt = 2L,
+                    action = "create",
+                    skillName = "demo",
+                    description = "demo skill",
+                    systemPrompt = "demo prompt",
+                ),
+            ),
+            systemPrompt = "system prompt",
+            forceFinalAnswer = false,
+        )
+        assertEquals(listOf("system", "user"), result.map { it.role })
     }
 
     @Test

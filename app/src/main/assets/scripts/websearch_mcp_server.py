@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # ==============================================================================
 # Tianyan (LinuxAIRuntime) - 内置 Web 搜索与网页抓取 MCP 服务端 (stdio transport)

@@ -1,4 +1,4 @@
-package top.tianyan.app.core.common.result
+﻿package top.tianyan.app.core.common.result
 
 sealed class AppResult<out T> {
     data class Success<T>(val data: T) : AppResult<T>()

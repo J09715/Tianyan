@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="components_nav_home">Tianyan</string>
+    <string name="components_nav_home">天衍</string>
     <string name="components_nav_agent">Agent</string>
     <string name="components_nav_workspace">Workspace</string>
+    <string name="components_nav_bots">Bots</string>
     <string name="components_nav_settings">Settings</string>
     <string name="components_back">Back</string>
     <string name="components_tianyan_logo">Tianyan logo</string>
@@ -12,5 +13,18 @@
     <string name="components_nav_subtitle_home">Genesis</string>
     <string name="components_nav_subtitle_agent">AI Agent</string>
     <string name="components_nav_subtitle_workspace">Workspace</string>
+    <string name="components_nav_subtitle_bots">Bot Team</string>
     <string name="components_nav_subtitle_settings">Settings</string>
+    <!-- Markdown Rendering Components -->
+    <string name="components_md_web_content">Web image</string>
+    <string name="components_md_image_preview">Image preview</string>
+    <string name="components_md_image_load_failed">Failed to load image</string>
+    <string name="components_md_image_saved">Image saved to gallery</string>
+    <string name="components_md_image_save_failed">Failed to save image</string>
+    <string name="components_md_save_image">Save image</string>
+    <string name="components_md_code_clipboard_label">Code</string>
+    <string name="components_md_code_copied">Code copied to clipboard</string>
+    <string name="components_md_code_badge">CODE</string>
+    <string name="components_md_copy">Copy</string>
+    <string name="components_clear_search">Clear search</string>
 </resources>

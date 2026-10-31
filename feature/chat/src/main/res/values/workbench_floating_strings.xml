@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_workbench_floating_window">悬浮小窗</string>
+    <string name="chat_workbench_floating_description">切到桌面继续对话</string>
+    <string name="chat_floating_launch_failed">无法开启悬浮小窗，请检查悬浮窗权限后重试</string>
+</resources>

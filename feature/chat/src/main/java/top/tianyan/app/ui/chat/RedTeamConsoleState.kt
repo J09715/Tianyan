@@ -21,6 +21,8 @@ enum class RedTeamConsoleTab(val label: String) {
     TARGETS("目标"),
     REPORT("报告"),
     KNOWLEDGE("知识"),
+    /** 凭据与文件：凭据、已获得访问会话、攻击文件三组（对齐上游 ArtifactsTab）。 */
+    ARTIFACTS("凭据文件"),
     PROMPTS("提示词"),
     SKILLS("技能"),
 }

@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+case "${1:-}" in
+  --version) printf '%s\n' '{{pluginVersion}}' ;;
+  --mcp) exec python3 "$(dirname "$0")/../lib/plugin_server.py" ;;
+  *) printf '%s\n' 'Hello from {{pluginName}} ({{pluginId}})' ;;
+esac

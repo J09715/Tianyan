@@ -3,19 +3,22 @@ package top.tianyan.app.core.tools
 import kotlinx.coroutines.flow.first
 import top.tianyan.app.core.database.AiModelEntity
 import top.tianyan.app.core.database.AiModelRepository
+import top.tianyan.app.core.model.AiModelProfileExport
+import top.tianyan.app.core.model.AiProfileImportMode
 import java.util.UUID
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * AI 模型档案的统一写入入口：负责 secretRef 生成、Key 持久化、活跃档案维护。
  * Settings / Chat / Onboarding 的模型保存与删除都应经由本类，避免各处自行拼装实体。
  */
-@Singleton
-class AiProfileWriter @Inject constructor(
+class AiProfileWriter(
     private val aiModelDao: AiModelRepository,
-    private val providerRepository: ProviderRepository,
+    private val providerRepository: ModelCredentialStore,
 ) {
+    suspend fun importProfiles(
+        profiles: List<AiModelProfileExport>,
+        mode: AiProfileImportMode,
+    ): Int = importModelProfiles(aiModelDao, providerRepository, profiles, mode)
 
     /** 解析多行 Key 文本为去重的 Key 列表 */
     fun parseApiKeys(raw: String): List<String> = raw
@@ -42,11 +45,19 @@ class AiProfileWriter @Inject constructor(
         val reasoningEffort: String? = null,
         val toolCallMode: String? = null,
         val contextTokens: Int? = null,
+        /** 每模型压缩预算覆盖：压缩触发时保留的最近 token 上限（null = 不启用）。 */
+        val compactionKeepRecentTokens: Int? = null,
+        /** 每模型压缩预算覆盖：为 LLM 响应预留的 token（null = 内置默认）。 */
+        val compactionReserveTokens: Int? = null,
         val customHeaders: String = "",
         val pureChatMode: Boolean = false,
         val visionEnabled: Boolean = true,
         val imageGenerationEnabled: Boolean = false,
         val responseApiEnabled: Boolean = false,
+        /** Anthropic Prompt Caching 开关（默认开）。 */
+        val promptCachingEnabled: Boolean = true,
+        /** 是否使用 1 小时缓存 TTL。 */
+        val promptCacheTtl1h: Boolean = false,
     )
 
     suspend fun upsertProfile(request: UpsertRequest) {
@@ -75,11 +86,15 @@ class AiProfileWriter @Inject constructor(
                 reasoningEffort = request.reasoningEffort?.ifBlank { null },
                 toolCallMode = request.toolCallMode?.ifBlank { null },
                 contextTokens = request.contextTokens,
+                compactionKeepRecentTokens = request.compactionKeepRecentTokens,
+                compactionReserveTokens = request.compactionReserveTokens,
                 customHeaders = request.customHeaders.trim(),
                 pureChatMode = request.pureChatMode,
                 visionEnabled = request.visionEnabled,
                 imageGenerationEnabled = request.imageGenerationEnabled,
                 responseApiEnabled = request.responseApiEnabled,
+                promptCachingEnabled = request.promptCachingEnabled,
+                promptCacheTtl1h = request.promptCacheTtl1h,
                 apiKeyCount = submittedKeys.ifEmpty { existingKeys }.size,
                 requestsPerMinutePerKey = request.requestsPerMinutePerKey.coerceAtLeast(0),
             ),

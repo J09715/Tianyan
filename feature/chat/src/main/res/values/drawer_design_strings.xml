@@ -1,0 +1,5 @@
+<resources>
+    <string name="chat_drawer_search">搜索会话</string>
+    <string name="chat_drawer_destinations">功能与插件</string>
+    <string name="chat_drawer_no_matches">没有匹配的会话</string>
+</resources>

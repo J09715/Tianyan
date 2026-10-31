@@ -2,10 +2,10 @@ package top.tianyan.app.di
 
 import android.content.Context
 import androidx.room.Room
+import java.io.File
 import top.tianyan.app.core.database.AppDatabase
 import top.tianyan.app.core.database.MIGRATION_27_28
 import top.tianyan.app.core.database.MIGRATION_28_29
-import top.tianyan.app.core.database.MIGRATION_29_30
 import top.tianyan.app.core.database.MIGRATION_30_31
 import top.tianyan.app.core.database.MIGRATION_31_32
 import top.tianyan.app.core.database.MIGRATION_33_34
@@ -26,6 +26,48 @@ import top.tianyan.app.core.database.MIGRATION_47_48
 import top.tianyan.app.core.database.MIGRATION_48_49
 import top.tianyan.app.core.database.MIGRATION_49_50
 import top.tianyan.app.core.database.MIGRATION_50_51
+import top.tianyan.app.core.database.MIGRATION_51_52
+import top.tianyan.app.core.database.MIGRATION_52_53
+import top.tianyan.app.core.database.MIGRATION_53_54
+import top.tianyan.app.core.database.MIGRATION_54_55
+import top.tianyan.app.core.database.MIGRATION_55_56
+import top.tianyan.app.core.database.MIGRATION_56_57
+import top.tianyan.app.core.database.MIGRATION_57_58
+import top.tianyan.app.core.database.MIGRATION_58_59
+import top.tianyan.app.core.database.MIGRATION_62_63
+import top.tianyan.app.core.database.MIGRATION_63_64
+import top.tianyan.app.core.database.MIGRATION_64_65
+import top.tianyan.app.core.database.MIGRATION_65_66
+import top.tianyan.app.core.database.MIGRATION_66_67
+import top.tianyan.app.core.database.MIGRATION_67_68
+import top.tianyan.app.core.database.MIGRATION_68_69
+import top.tianyan.app.core.database.MIGRATION_69_70
+import top.tianyan.app.core.database.MIGRATION_71_72
+import top.tianyan.app.core.database.MIGRATION_73_74
+import top.tianyan.app.core.database.MIGRATION_78_79
+import top.tianyan.app.core.database.MIGRATION_79_80
+import top.tianyan.app.core.database.MIGRATION_80_81
+import top.tianyan.app.core.database.MIGRATION_81_82
+import top.tianyan.app.core.database.MIGRATION_82_83
+import top.tianyan.app.core.database.MIGRATION_77_78
+import top.tianyan.app.core.database.MIGRATION_76_77
+import top.tianyan.app.core.database.MIGRATION_75_76
+import top.tianyan.app.core.database.MIGRATION_74_75
+import top.tianyan.app.core.database.MIGRATION_72_73
+import top.tianyan.app.core.database.MIGRATION_70_71
+import top.tianyan.app.core.database.MIGRATION_61_62
+import top.tianyan.app.core.database.MIGRATION_60_61
+import top.tianyan.app.core.database.MIGRATION_59_60
+import top.tianyan.app.core.database.BotAssignmentDao
+import top.tianyan.app.core.database.BotGroupSessionDao
+import top.tianyan.app.core.database.BtwQueryDao
+import top.tianyan.app.core.database.BotMemberGroupDao
+import top.tianyan.app.core.database.BotScheduleDeliveryDao
+import top.tianyan.app.core.database.BotScheduleDao
+import top.tianyan.app.core.database.GroupChatDao
+import top.tianyan.app.core.database.PersonaBotDao
+import top.tianyan.app.core.database.WorkflowDao
+import top.tianyan.app.core.database.WorkflowScheduleDao
 import top.tianyan.app.core.database.BuildScriptDao
 import top.tianyan.app.core.database.task.AgentTaskDao
 import top.tianyan.app.core.database.ToolDao
@@ -39,15 +81,24 @@ import top.tianyan.app.core.database.TerminalSessionDao
 import top.tianyan.app.core.database.AgentSubagentDao
 import top.tianyan.app.core.database.AgentSkillDao
 import top.tianyan.app.core.database.McpServerDao
+import top.tianyan.app.core.database.McpOAuthCredentialDao
+import top.tianyan.app.core.database.McpOAuthTransactionDao
 import top.tianyan.app.core.database.StorageMountBindingDao
 import top.tianyan.app.core.database.ToolSettingsDao
+import top.tianyan.app.core.database.AgentApprovalAuditDao
 import top.tianyan.app.core.database.AgentApprovalDao
+import top.tianyan.app.core.database.AgentMessageFeedbackDao
 import top.tianyan.app.core.database.QuickPhraseDao
-import top.tianyan.app.core.database.WorkflowDao
-import top.tianyan.app.core.database.RedTeamFactDao
 import top.tianyan.app.core.database.HarnessRuntimeDao
 import top.tianyan.app.core.database.AndroidAppDao
 import top.tianyan.app.harness.WorkspaceFileAccess
+import top.tianyan.app.harness.model.ModelsDevUpdater
+import top.tianyan.app.harness.checkpoint.CheckpointStore
+import top.tianyan.app.harness.checkpoint.FileCheckpointPersistence
+import top.tianyan.app.core.database.AgentContextDao
+import top.tianyan.app.core.database.RoomWorkflowScheduleStore
+import top.tianyan.app.core.database.WorkflowScheduleStore
+import top.tianyan.app.runtime.RuntimePathManager
 import top.tianyan.app.core.tools.RuntimeManager
 import top.tianyan.app.core.tools.RuntimeManagerImpl
 import top.tianyan.app.core.tools.DependencyManager
@@ -67,23 +118,13 @@ import top.tianyan.app.runtime.service.LocalServiceLauncher
 import top.tianyan.app.runtime.service.LocalServiceLauncherImpl
 import top.tianyan.app.service.AgentForegroundLauncherImpl
 import top.tianyan.app.harness.AgentForegroundLauncher
-import dagger.Module
-import dagger.Provides
-import dagger.hilt.InstallIn
-import dagger.hilt.android.qualifiers.ApplicationContext
-import dagger.hilt.components.SingletonComponent
 import io.ktor.client.HttpClient
-import javax.inject.Singleton
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 
 
-@Module
-@InstallIn(SingletonComponent::class)
 object AppModule {
 
-    @Provides
-    @Singleton
     fun provideJson(): Json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
@@ -91,165 +132,121 @@ object AppModule {
         explicitNulls = false
     }
 
-    @Provides
-    @Singleton
-    fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
+    fun provideDatabase(context: Context): AppDatabase {
         return Room.databaseBuilder(context, AppDatabase::class.java, "tianyan.db")
-            // 完整迁移链 27→47（含此前缺失的 29→30）：升级不再破坏性丢数据。
-            .addMigrations(MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_33_34, MIGRATION_34_35, MIGRATION_35_36, MIGRATION_36_37, MIGRATION_37_38, MIGRATION_38_39, MIGRATION_39_40, MIGRATION_40_41, MIGRATION_41_42, MIGRATION_42_43, MIGRATION_43_44, MIGRATION_44_45, MIGRATION_45_46, MIGRATION_46_47, MIGRATION_47_48, MIGRATION_48_49, MIGRATION_49_50, MIGRATION_50_51)
+            .addMigrations(MIGRATION_27_28, MIGRATION_28_29, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_33_34, MIGRATION_34_35, MIGRATION_35_36, MIGRATION_36_37, MIGRATION_37_38, MIGRATION_38_39, MIGRATION_39_40, MIGRATION_40_41, MIGRATION_41_42, MIGRATION_42_43, MIGRATION_43_44, MIGRATION_44_45, MIGRATION_45_46, MIGRATION_46_47, MIGRATION_47_48, MIGRATION_48_49, MIGRATION_49_50, MIGRATION_50_51, MIGRATION_51_52, MIGRATION_52_53, MIGRATION_53_54, MIGRATION_54_55, MIGRATION_55_56, MIGRATION_56_57, MIGRATION_57_58, MIGRATION_58_59, MIGRATION_59_60, MIGRATION_60_61, MIGRATION_61_62, MIGRATION_62_63, MIGRATION_63_64, MIGRATION_64_65, MIGRATION_65_66, MIGRATION_66_67, MIGRATION_67_68, MIGRATION_68_69, MIGRATION_69_70, MIGRATION_70_71, MIGRATION_71_72, MIGRATION_72_73, MIGRATION_73_74, MIGRATION_74_75, MIGRATION_75_76, MIGRATION_76_77, MIGRATION_77_78, MIGRATION_78_79, MIGRATION_79_80, MIGRATION_80_81, MIGRATION_81_82, MIGRATION_82_83)
             .build()
     }
 
-    @Provides
-    @Singleton
     fun provideToolDao(database: AppDatabase): ToolDao = database.toolDao()
 
-    @Provides
-    @Singleton
     fun provideInstallLogDao(database: AppDatabase): InstallLogDao = database.installLogDao()
 
-    @Provides
-    @Singleton
     fun provideInstallTaskDao(database: AppDatabase): InstallTaskDao = database.installTaskDao()
 
-    @Provides
-    @Singleton
-    fun provideRuntimeDao(database: AppDatabase): RuntimeDao = database.runtimeDao()
-
-    @Provides
-    @Singleton
-    fun provideHarnessSessionDao(database: AppDatabase): HarnessSessionDao = database.harnessSessionDao()
-
-    @Provides
-    @Singleton
-    fun provideAiModelDao(database: AppDatabase): AiModelDao = database.aiModelDao()
-
-    @Provides
-    @Singleton
-    fun provideWorkspaceDao(database: AppDatabase): WorkspaceDao = database.workspaceDao()
-
-    @Provides
-    @Singleton
-    fun provideTerminalSessionDao(database: AppDatabase): TerminalSessionDao = database.terminalSessionDao()
-
-    @Provides
-    @Singleton
-    fun provideAgentContextDao(database: AppDatabase): top.tianyan.app.core.database.AgentContextDao = database.agentContextDao()
-
-    @Provides
-    @Singleton
-    fun provideAgentSubagentDao(database: AppDatabase): AgentSubagentDao = database.agentSubagentDao()
-
-    @Provides
-    @Singleton
-    fun provideMcpServerDao(database: AppDatabase): McpServerDao = database.mcpServerDao()
-
-    @Provides
-    @Singleton
-    fun provideAgentSkillDao(database: AppDatabase): AgentSkillDao = database.agentSkillDao()
-
-    @Provides
-    @Singleton
-    fun provideStorageMountBindingDao(database: AppDatabase): StorageMountBindingDao = database.storageMountBindingDao()
-
-    @Provides
-    @Singleton
-    fun provideToolSettingsDao(database: AppDatabase): ToolSettingsDao = database.toolSettingsDao()
-
-    @Provides
-    @Singleton
-    fun provideAgentApprovalDao(database: AppDatabase): AgentApprovalDao = database.agentApprovalDao()
-
-    @Provides
-    @Singleton
-    fun provideQuickPhraseDao(database: AppDatabase): QuickPhraseDao = database.quickPhraseDao()
-
-    @Provides
-    @Singleton
     fun provideWorkflowDao(database: AppDatabase): WorkflowDao = database.workflowDao()
 
-    @Provides
-    @Singleton
-    fun provideRedTeamFactDao(database: AppDatabase): RedTeamFactDao = database.redTeamFactDao()
+    fun provideWorkflowScheduleDao(database: AppDatabase): WorkflowScheduleDao = database.workflowScheduleDao()
 
-    @Provides
-    @Singleton
+    fun provideWorkflowScheduleStore(store: RoomWorkflowScheduleStore): WorkflowScheduleStore = store
+
+    fun providePersonaBotDao(database: AppDatabase): PersonaBotDao = database.personaBotDao()
+
+    fun provideBotMemberGroupDao(database: AppDatabase): BotMemberGroupDao = database.botMemberGroupDao()
+
+    fun provideGroupChatDao(database: AppDatabase): GroupChatDao = database.groupChatDao()
+
+    fun provideBotScheduleDeliveryDao(database: AppDatabase): BotScheduleDeliveryDao = database.botScheduleDeliveryDao()
+
+    fun provideBotScheduleDao(database: AppDatabase): BotScheduleDao = database.botScheduleDao()
+
+    fun provideBotAssignmentDao(database: AppDatabase): BotAssignmentDao = database.botAssignmentDao()
+
+    fun provideBotGroupSessionDao(database: AppDatabase): BotGroupSessionDao = database.botGroupSessionDao()
+
+    fun provideBtwQueryDao(database: AppDatabase): BtwQueryDao = database.btwQueryDao()
+
+    fun provideRuntimeDao(database: AppDatabase): RuntimeDao = database.runtimeDao()
+
+    fun provideHarnessSessionDao(database: AppDatabase): HarnessSessionDao = database.harnessSessionDao()
+
+    fun provideAiModelDao(database: AppDatabase): AiModelDao = database.aiModelDao()
+
+    fun provideWorkspaceDao(database: AppDatabase): WorkspaceDao = database.workspaceDao()
+
+    fun provideTerminalSessionDao(database: AppDatabase): TerminalSessionDao = database.terminalSessionDao()
+
+    fun provideAgentContextDao(database: AppDatabase): AgentContextDao = database.agentContextDao()
+
+    fun provideAgentSubagentDao(database: AppDatabase): AgentSubagentDao = database.agentSubagentDao()
+
+    fun provideMcpServerDao(database: AppDatabase): McpServerDao = database.mcpServerDao()
+
+    fun provideMcpOAuthCredentialDao(database: AppDatabase): McpOAuthCredentialDao = database.mcpOAuthCredentialDao()
+
+    fun provideMcpOAuthTransactionDao(database: AppDatabase): McpOAuthTransactionDao = database.mcpOAuthTransactionDao()
+
+    fun provideAgentSkillDao(database: AppDatabase): AgentSkillDao = database.agentSkillDao()
+
+    fun provideStorageMountBindingDao(database: AppDatabase): StorageMountBindingDao = database.storageMountBindingDao()
+
+    fun provideToolSettingsDao(database: AppDatabase): ToolSettingsDao = database.toolSettingsDao()
+
+    fun provideAgentApprovalDao(database: AppDatabase): AgentApprovalDao = database.agentApprovalDao()
+
+    fun provideAgentApprovalAuditDao(database: AppDatabase): AgentApprovalAuditDao = database.agentApprovalAuditDao()
+
+    fun provideAgentMessageFeedbackDao(database: AppDatabase): AgentMessageFeedbackDao = database.agentMessageFeedbackDao()
+
+    fun provideQuickPhraseDao(database: AppDatabase): QuickPhraseDao = database.quickPhraseDao()
+
     fun provideHarnessRuntimeDao(database: AppDatabase): HarnessRuntimeDao = database.harnessRuntimeDao()
 
-    @Provides
-    @Singleton
     fun provideAndroidAppDao(database: AppDatabase): AndroidAppDao = database.androidAppDao()
 
-    @Provides
-    @Singleton
     fun provideBuildScriptDao(database: AppDatabase): BuildScriptDao = database.buildScriptDao()
 
-    @Provides
-    @Singleton
     fun provideAgentTaskDao(database: AppDatabase): AgentTaskDao = database.agentTaskDao()
 
-    @Provides
-    @Singleton
-    fun provideWorkspaceFileAccess(pathManager: top.tianyan.app.runtime.RuntimePathManager): WorkspaceFileAccess =
+    fun provideWorkspaceFileAccess(pathManager: RuntimePathManager): WorkspaceFileAccess =
         WorkspaceFileAccess(pathManager.workspaceDir)
 
     /** checkpoint 快照落盘到应用私有目录（linux-runtime/checkpoints/<sessionId>/），模型不可见。 */
-    @Provides
-    @Singleton
     fun provideCheckpointStore(
-        pathManager: top.tianyan.app.runtime.RuntimePathManager,
-    ): top.tianyan.app.harness.checkpoint.CheckpointStore =
-        top.tianyan.app.harness.checkpoint.CheckpointStore().apply {
-            persistence = top.tianyan.app.harness.checkpoint.FileCheckpointPersistence(
-                java.io.File(pathManager.baseDir, "checkpoints"),
+        pathManager: RuntimePathManager,
+    ): CheckpointStore =
+        CheckpointStore().apply {
+            persistence = FileCheckpointPersistence(
+                File(pathManager.baseDir, "checkpoints"),
             )
         }
 
-    @Provides
-    @Singleton
     fun provideRuntimeManager(impl: RuntimeManagerImpl): RuntimeManager = impl
 
-    @Provides
-    @Singleton
     fun provideDependencyManager(impl: DependencyManagerImpl): DependencyManager = impl
 
-    @Provides
-    @Singleton
     fun provideProcessRegistry(impl: ProcessRegistryImpl): ProcessRegistry = impl
 
-    @Provides
-    @Singleton
     fun provideOkHttpClient(provider: HttpClientProvider): OkHttpClient = provider.create()
 
-    @Provides
-    @Singleton
+    fun provideModelsDevUpdater(context: Context, okHttpClient: OkHttpClient): ModelsDevUpdater =
+        ModelsDevUpdater(context, okHttpClient)
+
     fun provideKtorHttpClient(
         provider: HttpClientProvider,
         okHttpClient: OkHttpClient,
     ): HttpClient = provider.createKtorClient(okHttpClient)
 
-    @Provides
-    @Singleton
     fun provideFileDownloader(impl: ResumableFileDownloader): FileDownloader = impl
 
-    @Provides
-    @Singleton
     fun provideShellExecutor(impl: ProcessShellExecutor): ShellExecutor = impl
 
-    @Provides
-    @Singleton
     fun providePtyManager(impl: NativePtyManager): PtyManager = impl
 
-    @Provides
-    @Singleton
     fun provideLinuxRuntime(impl: LinuxRuntimeImpl): LinuxRuntime = impl
 
-    @Provides
-    @Singleton
     fun provideLocalServiceLauncher(impl: LocalServiceLauncherImpl): LocalServiceLauncher = impl
 
-    @Provides
-    @Singleton
     fun provideAgentForegroundLauncher(impl: AgentForegroundLauncherImpl): AgentForegroundLauncher = impl
 }
 

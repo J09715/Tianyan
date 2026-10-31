@@ -2,22 +2,29 @@ package top.tianyan.app.runtime
 
 import android.os.Build
 import android.os.StatFs
+import top.tianyan.app.runtime.environment.boundLocalDistribution
 import top.tianyan.app.core.common.logging.AppLogger
 import top.tianyan.app.core.common.result.AppError
 import top.tianyan.app.core.common.result.AppResult
 import top.tianyan.app.core.common.result.ErrorCode
+import top.tianyan.app.core.database.StorageMountBindingRepository
+import top.tianyan.app.core.datastore.RuntimePreferences
 import top.tianyan.app.core.model.CpuArch
+import top.tianyan.app.core.model.InstalledDistro
 import top.tianyan.app.core.model.RuntimeState
 import top.tianyan.app.core.model.StorageMountBinding
-import top.tianyan.app.runtime.proot.ProotCommandBuilder
+import top.tianyan.app.runtime.backend.BackendSelector
 import top.tianyan.app.runtime.proot.QemuCompatibilityLayout
+import top.tianyan.app.runtime.proot.hostSupplementaryGroupIds
 import top.tianyan.app.runtime.proot.syncGuestGroups
 import top.tianyan.app.runtime.bridge.HostBridge
+import top.tianyan.app.runtime.bridge.SandboxCredentialStore
 import top.tianyan.app.runtime.pty.PtyManager
 import top.tianyan.app.runtime.proot.ProotInstaller
 import top.tianyan.app.runtime.rootfs.RootfsInstaller
 import top.tianyan.app.runtime.terminal.terminalBanner
 import top.tianyan.app.runtime.shell.CommandResult
+import top.tianyan.app.runtime.shell.InteractiveLaunchSpec
 import top.tianyan.app.runtime.shell.LinuxSession
 import top.tianyan.app.runtime.shell.ManagedProcess
 import top.tianyan.app.runtime.shell.ProcessType
@@ -25,19 +32,13 @@ import top.tianyan.app.runtime.shell.ProcessRegistry
 import top.tianyan.app.runtime.shell.SessionConfig
 import top.tianyan.app.runtime.shell.ShellCommand
 import top.tianyan.app.runtime.shell.ShellExecutor
+import top.tianyan.app.runtime.shell.ForegroundCommandAdmission
 import java.io.File
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.CancellationException
@@ -45,41 +46,37 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-@Singleton
-class LinuxRuntimeImpl @Inject constructor(
+class LinuxRuntimeImpl(
     private val pathManager: RuntimePathManager,
     private val prootInstaller: ProotInstaller,
     private val rootfsInstaller: RootfsInstaller,
-    private val prootCommandBuilder: ProotCommandBuilder,
+    private val backendSelector: BackendSelector,
     private val ptyManager: PtyManager,
     private val shellExecutor: ShellExecutor,
     private val healthChecker: RuntimeHealthChecker,
     private val processRegistry: ProcessRegistry,
-    private val settingsDataStore: top.tianyan.app.core.datastore.RuntimePreferences,
-    private val storageMountBindingRepository: top.tianyan.app.core.database.StorageMountBindingRepository,
+    private val settingsDataStore: RuntimePreferences,
+    private val storageMountBindingRepository: StorageMountBindingRepository,
     private val hostBridge: HostBridge,
-    private val assetSynchronizer: top.tianyan.app.runtime.scripts.RuntimeAssetSynchronizer,
+    private val sandboxCredentials: SandboxCredentialStore,
+    private val distroConfigurator: DistroConfigurator,
     private val logger: AppLogger,
 ) : LinuxRuntime {
 
     private val _state = MutableStateFlow<RuntimeState>(RuntimeState.NotInitialized)
     override val state: StateFlow<RuntimeState> = _state.asStateFlow()
 
-    /** 镜像后台验证（三层策略第 2 层）：独立 scope，失败不影响运行时状态机。 */
-    private val mirrorVerifyScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private var mirrorVerifyJob: Job? = null
-
     private val _activeDistroId = MutableStateFlow("ubuntu")
     override val activeDistroId: StateFlow<String> = _activeDistroId.asStateFlow()
 
-    private val _installedDistros = MutableStateFlow<List<top.tianyan.app.core.model.InstalledDistro>>(emptyList())
-    override val installedDistros: StateFlow<List<top.tianyan.app.core.model.InstalledDistro>> = _installedDistros.asStateFlow()
+    private val _installedDistros = MutableStateFlow<List<InstalledDistro>>(emptyList())
+    override val installedDistros: StateFlow<List<InstalledDistro>> = _installedDistros.asStateFlow()
 
     private val initializeMutex = Mutex()
-    private val interactiveSessions = ConcurrentHashMap<LinuxSession, String>()
-
+    private val storageActivities = StorageActivityGate()
+    private val interactiveSessions = InteractiveSessionRegistry()
+    private val commandAdmission = ForegroundCommandAdmission()
     override fun refreshInstalledDistros() {
-        // 兑现“刷新”语义：结构性变更后由各调用方走到这里，统一失效路径管理器缓存
         pathManager.invalidateInstalledDistrosCache()
         val ids = pathManager.listInstalledDistroIds()
         val active = _activeDistroId.value
@@ -88,7 +85,7 @@ class LinuxRuntimeImpl @Inject constructor(
             val size = pathManager.distroSizeBytes(id)
             val marker = pathManager.rootfsInstalledMarker(id)
             val installedTime = if (marker.exists()) marker.lastModified() else System.currentTimeMillis()
-            top.tianyan.app.core.model.InstalledDistro(
+            InstalledDistro(
                 id = id,
                 displayName = spec.displayName,
                 sizeBytes = size,
@@ -135,9 +132,9 @@ class LinuxRuntimeImpl @Inject constructor(
             if (error != null) {
                 return@withContext AppResult.Failure(error)
             }
-            configureRootfs(distroId)
-            configureDns(distroId)
-            configureEnvironment(distroId)
+            distroConfigurator.configureRootfs(distroId)
+            distroConfigurator.configureDns(distroId)
+            distroConfigurator.configureEnvironment(distroId)
             refreshInstalledDistros()
             logger.i("Distro $distroId installed successfully")
             AppResult.Success(Unit)
@@ -172,9 +169,9 @@ class LinuxRuntimeImpl @Inject constructor(
                     return@withContext AppResult.Failure(error)
                 }
                 updateInitializing("配置 Linux 系统", 0.65f)
-                configureRootfs(distroId)
-                configureDns(distroId)
-                configureEnvironment(distroId)
+                distroConfigurator.configureRootfs(distroId)
+                distroConfigurator.configureDns(distroId)
+                distroConfigurator.configureEnvironment(distroId)
                 createWorkspace()
                 val health = healthChecker.check()
                 if (!health.isHealthy) {
@@ -199,16 +196,16 @@ class LinuxRuntimeImpl @Inject constructor(
     }
 
     override suspend fun uninstallDistro(distroId: String): AppResult<Unit> = initializeMutex.withLock {
-        withContext(Dispatchers.IO) {
+        withRuntimeMaintenance {
             val safeId = distroId.lowercase().trim()
             val installed = pathManager.listInstalledDistroIds()
             if (installed.size <= 1) {
-                return@withContext AppResult.Failure(
+                return@withRuntimeMaintenance AppResult.Failure(
                     AppError(ErrorCode.INSTALLATION_FAILED, "不能卸载唯一的 Linux 系统，请先安装其他系统后再卸载"),
                 )
             }
-            closeInteractiveSessions(safeId)
-            processRegistry.stopAll()
+            closeRuntimeProcesses(safeId)
+            sandboxCredentials.revoke(safeId)
             val wasActive = _activeDistroId.value == safeId
             if (wasActive) {
                 hostBridge.stop()
@@ -230,21 +227,21 @@ class LinuxRuntimeImpl @Inject constructor(
     }
 
     override suspend fun resetSandbox(distroId: String?): AppResult<Unit> = initializeMutex.withLock {
-        withContext(Dispatchers.IO) {
+        withRuntimeMaintenance {
             val safeId = (distroId ?: _activeDistroId.value).lowercase().trim()
             val wasActive = _activeDistroId.value == safeId
             try {
-                closeInteractiveSessions(safeId)
-                processRegistry.stopAll()
+                closeRuntimeProcesses(safeId)
+                sandboxCredentials.revoke(safeId)
                 if (wasActive) {
                     hostBridge.stop()
                 }
                 val distribution = DistributionCatalog.require(safeId)
                 val result = rootfsInstaller.resetDistro(distribution)
                 if (result is AppResult.Success) {
-                    configureRootfs(safeId)
-                    configureDns(safeId)
-                    configureEnvironment(safeId)
+                    distroConfigurator.configureRootfs(safeId)
+                    distroConfigurator.configureDns(safeId)
+                    distroConfigurator.configureEnvironment(safeId)
                     refreshInstalledDistros()
                     if (wasActive) {
                         if (!hostBridge.isRunning.value) {
@@ -304,7 +301,7 @@ class LinuxRuntimeImpl @Inject constructor(
 
                 val distroId = request.distributionId.lowercase().trim()
                 val distribution = DistributionCatalog.require(distroId)
-                updateInitializing("下载 ${distribution.displayName}", 0.2f, "通过 proot-distro 5.8.0 OCI 机制下载 linux/arm64 镜像")
+                updateInitializing("下载 ${distribution.displayName}", 0.2f, "通过 proot-distro 5.10.0 OCI 机制下载 linux/arm64 镜像")
                 val rootfsResult = rootfsInstaller.installOci(
                     distribution,
                     request.registryRoute,
@@ -316,13 +313,13 @@ class LinuxRuntimeImpl @Inject constructor(
                 }
 
                 updateInitializing("configureRootfs", 0.75f)
-                configureRootfs(distroId)
+                distroConfigurator.configureRootfs(distroId)
 
                 updateInitializing("configureDns", 0.8f)
-                configureDns(distroId)
+                distroConfigurator.configureDns(distroId)
 
                 updateInitializing("configureEnvironment", 0.85f)
-                configureEnvironment(distroId)
+                distroConfigurator.configureEnvironment(distroId)
 
                 updateInitializing("createWorkspace", 0.9f)
                 createWorkspace()
@@ -404,11 +401,11 @@ class LinuxRuntimeImpl @Inject constructor(
             _state.value = RuntimeState.Error(IllegalStateException(message))
             return@withContext false
         }
-        runCatching { configureChinaMirrors(effectiveDistro) }
-        runCatching { configureEnvironment(effectiveDistro) }
+        runCatching { distroConfigurator.configureChinaMirrors(effectiveDistro) }
+        runCatching { distroConfigurator.configureEnvironment(effectiveDistro) }
         // APK 升级可能新增或替换内置 MCP/构建脚本。已有 rootfs 不会再走 configureRootfs，
         // 因此恢复时必须幂等同步一次，避免数据库预设已切换到新脚本而沙箱内文件仍是旧版本。
-        runCatching { assetSynchronizer.syncAssetsToDistro(effectiveDistro) }
+        runCatching { distroConfigurator.syncAssets(effectiveDistro) }
             .onFailure { logger.w("Restore asset synchronization failed for $effectiveDistro: ${it.message}", it) }
         hostBridge.start()
         _state.value = RuntimeState.Ready
@@ -418,15 +415,15 @@ class LinuxRuntimeImpl @Inject constructor(
     }
 
     override suspend fun updateRootfs(distroId: String?): AppResult<Unit> = initializeMutex.withLock {
-        withContext(Dispatchers.IO) {
+        withRuntimeMaintenance {
             if (_state.value !is RuntimeState.Ready) {
-                return@withContext AppResult.Failure(
+                return@withRuntimeMaintenance AppResult.Failure(
                     AppError(ErrorCode.INSTALLATION_FAILED, "只有已就绪的 Linux Runtime 才能更新"),
                 )
             }
             try {
                 val targetDistro = distroId?.lowercase()?.trim() ?: _activeDistroId.value
-                processRegistry.stopAll()
+                closeRuntimeProcesses(targetDistro)
                 updateInitializing("更新 RootFS", 0.05f, "保留 /root 和 /opt/tianyan 用户数据")
                 val distribution = DistributionCatalog.require(targetDistro)
                 val result = rootfsInstaller.updateOci(
@@ -435,13 +432,13 @@ class LinuxRuntimeImpl @Inject constructor(
                 ) { progress -> updateDownloadProgress("更新 ${distribution.displayName}", 0.1f, 0.65f, progress) }
                 result.errorOrNull()?.let { error ->
                     _state.value = RuntimeState.Error(error.cause ?: IllegalStateException(error.message))
-                    return@withContext AppResult.Failure(error)
+                    return@withRuntimeMaintenance AppResult.Failure(error)
                 }
 
                 updateInitializing("configureRootfs", 0.75f)
-                configureRootfs(targetDistro)
-                configureDns(targetDistro)
-                configureEnvironment(targetDistro)
+                distroConfigurator.configureRootfs(targetDistro)
+                distroConfigurator.configureDns(targetDistro)
+                distroConfigurator.configureEnvironment(targetDistro)
                 updateInitializing("runHealthCheck", 0.9f)
                 val health = healthChecker.check()
                 if (!health.isHealthy) {
@@ -449,7 +446,7 @@ class LinuxRuntimeImpl @Inject constructor(
                     _state.value = RuntimeState.Error(
                         IllegalStateException("更新后健康检查失败：${health.detail.orEmpty()}"),
                     )
-                    return@withContext AppResult.Failure(
+                    return@withRuntimeMaintenance AppResult.Failure(
                         AppError(
                             ErrorCode.INSTALLATION_FAILED,
                             "RootFS 更新后的健康检查失败，已恢复旧版本",
@@ -499,13 +496,13 @@ class LinuxRuntimeImpl @Inject constructor(
         healthChecker.check()
     }
 
-    override suspend fun execute(command: ShellCommand, distroId: String?): CommandResult {
+    override suspend fun execute(command: ShellCommand, distroId: String?): CommandResult = storageActivities.activity {
         ensureReady()
-        val safeDistro = distroId?.lowercase()?.trim()?.takeIf { it.isNotBlank() } ?: _activeDistroId.value
+        val safeDistro = boundLocalDistribution(distroId, _activeDistroId.value)
         val mounts = storageMounts()
         val execution = resolveExecutionLayout(safeDistro, command.useQemuCompatibility)
-        return shellExecutor.execute(
-            command = prootCommandBuilder.build(
+        commandAdmission.execute(command, shellExecutor) { shellExecutor.execute(
+            command = backendSelector.active().build(
                 prootBinary = pathManager.activeProotFile(),
                 rootfsDir = execution.rootfsDir,
                 workspaceDir = pathManager.workspaceDir,
@@ -516,13 +513,13 @@ class LinuxRuntimeImpl @Inject constructor(
                 command = command,
                 mounts = mounts,
                 emulatorBinary = execution.emulatorBinary,
+                hostCredential = sandboxCredentials.environment(safeDistro, command.pluginIdentity?.pluginId ?: "sandbox", command.pluginIdentity?.version ?: "sandbox"),
             ),
             environment = pathManager.hostProcessEnvironment(safeDistro, execution.rootfsDir),
             timeoutMs = command.timeoutMs,
             onOutput = command.onOutput,
-        )
+        ) }
     }
-
     private suspend fun resolveExecutionLayout(
         distroId: String,
         useQemuCompatibility: Boolean,
@@ -550,29 +547,72 @@ class LinuxRuntimeImpl @Inject constructor(
         val optDir: File,
     )
 
-    /**
-     * App 进程在宿主上携带的补充组列表（含 inet/everybody/OEM 组等）。
-     * android.system.Os 未暴露 getgroups，改从 /proc/self/status 的 Groups 行解析。
-     */
-    private fun hostSupplementaryGroupIds(): List<Int> =
-        runCatching {
-            File("/proc/self/status").useLines { lines ->
-                lines.firstOrNull { it.startsWith("Groups:") }
-                    ?.removePrefix("Groups:")
-                    ?.split(' ', '\t')
-                    ?.mapNotNullTo(mutableListOf()) { it.trim().toIntOrNull() }
-                    .orEmpty()
-            }
-        }.getOrElse { emptyList() }
+    override suspend fun startSession(config: SessionConfig, distroId: String?): LinuxSession = storageActivities.activity {
+        val prepared = prepareInteractiveSession(config, distroId)
+        try {
+            val session = top.tianyan.app.runtime.shell.launchRuntimeSession(
+                ptyManager, prepared.effectiveConfig, prepared.command, prepared.fallbackCommand, prepared.hostEnvironment,
+                resize = { columns, rows -> resizePty(prepared.markerPath, columns, rows, prepared.distroId) },
+                cleanup = { check(!prepared.markerFile.exists() || prepared.markerFile.delete()) { "Session marker cleanup failed" } },
+            )
+            interactiveSessions.track(session, prepared.distroId)
+        } catch (throwable: Throwable) {
+            prepared.markerFile.delete()
+            throw throwable
+        }
+    }
 
-    override suspend fun startSession(config: SessionConfig, distroId: String?): LinuxSession {
+    override suspend fun buildInteractiveLaunch(
+        config: SessionConfig,
+        distroId: String?,
+    ): InteractiveLaunchSpec = storageActivities.activity {
+        val prepared = prepareInteractiveSession(config, distroId)
+        // Termux JNI owns the PTY; marker file is unused for this path.
+        prepared.markerFile.delete()
+        // JNI 会整表替换环境。登录壳 source /etc/profile 早于 -c 里的 export PATH，
+        // 因此这里就要盖掉宿主 PATH；su 仍保留 Android PATH 以便在宿主上解析。
+        val mergedEnv = GuestProcessEnvironment.interactiveLaunchEnvironment(
+            androidEnvironment = System.getenv(),
+            hostEnvironment = prepared.hostEnvironment,
+            executable = prepared.command.first(),
+            fallbackHome = pathManager.baseDir.parentFile?.absolutePath ?: "/",
+        )
+        InteractiveLaunchSpec(
+            executable = prepared.command.first(),
+            arguments = prepared.command.toTypedArray(),
+            workingDirectory = pathManager.baseDir.parentFile?.absolutePath
+                ?: pathManager.baseDir.absolutePath,
+            environment = mergedEnv.map { "${it.key}=${it.value}" }.toTypedArray(),
+        )
+    }
+
+    private data class PreparedInteractive(
+        val distroId: String,
+        val effectiveConfig: SessionConfig,
+        val command: List<String>,
+        val fallbackCommand: List<String>,
+        val hostEnvironment: Map<String, String>,
+        val markerFile: File,
+        val markerPath: String,
+    )
+
+    private suspend fun prepareInteractiveSession(
+        config: SessionConfig,
+        distroId: String?,
+    ): PreparedInteractive {
         ensureReady()
-        val safeDistro = distroId?.lowercase()?.trim()?.takeIf { it.isNotBlank() } ?: _activeDistroId.value
+        val safeDistro = boundLocalDistribution(distroId, _activeDistroId.value)
+        val effectiveConfig = if (config.commandLine == "/bin/bash -i") {
+            val rootfs = pathManager.rootfsDir(safeDistro)
+            val hasBash = File(rootfs, "bin/bash").exists() || File(rootfs, "usr/bin/bash").exists()
+            if (hasBash) config else config.copy(commandLine = "/bin/sh -i", allowSttyResize = true)
+        } else {
+            config
+        }
         val markerId = UUID.randomUUID().toString()
         val markerFile = File(pathManager.tianyanRootDir(safeDistro), ".pty-$markerId")
         val markerPath = "/opt/tianyan/.pty-$markerId"
         val mounts = storageMounts()
-        // 宿主补充 GID 不在 guest /etc/group 里会导致登录 shell 打 groups 警告，会话启动前幂等补齐。
         runCatching {
             syncGuestGroups(
                 rootfsDir = pathManager.rootfsDir(safeDistro),
@@ -581,81 +621,61 @@ class LinuxRuntimeImpl @Inject constructor(
         }.onFailure {
             logger.w("同步宿主补充组到 /etc/group 失败，登录时可能出现 groups 警告", it)
         }
-        if (config.showBanner) {
+        if (effectiveConfig.showBanner) {
             runCatching {
                 File(pathManager.tianyanRootDir(safeDistro), "motd").writeText(terminalBanner())
             }.onFailure {
                 logger.w("写入终端横幅失败，本次会话将无横幅", it)
             }
         }
-        return try {
-            val session = if (ptyManager.nativeAvailable) {
-                ptyManager.openNative(
-                    command = prootCommandBuilder.buildInteractive(
-                        prootBinary = pathManager.activeProotFile(),
-                        rootfsDir = pathManager.rootfsDir(safeDistro),
-                        workspaceDir = pathManager.workspaceDir,
-                        homeDir = pathManager.homeDir(safeDistro),
-                        optDir = pathManager.tianyanRootDir(safeDistro),
-                        tmpDir = pathManager.tmpDir,
-                        attachmentsDir = pathManager.attachmentsDir,
-                        config = config,
-                        nativePty = true,
-                        mounts = mounts,
-                    ),
-                    hostEnvironment = pathManager.hostProcessEnvironment(safeDistro),
-                    config = config,
-                    cleanup = { markerFile.delete() },
-                )
-            } else {
-                ptyManager.open(
-                    command = prootCommandBuilder.buildInteractive(
-                        prootBinary = pathManager.activeProotFile(),
-                        rootfsDir = pathManager.rootfsDir(safeDistro),
-                        workspaceDir = pathManager.workspaceDir,
-                        homeDir = pathManager.homeDir(safeDistro),
-                        optDir = pathManager.tianyanRootDir(safeDistro),
-                        tmpDir = pathManager.tmpDir,
-                        attachmentsDir = pathManager.attachmentsDir,
-                        config = config,
-                        ptyMarker = markerPath,
-                        mounts = mounts,
-                    ),
-                    hostEnvironment = pathManager.hostProcessEnvironment(safeDistro),
-                    config = config,
-                    resize = { columns, rows ->
-                        resizePty(markerPath, columns, rows, safeDistro)
-                    },
-                    cleanup = { markerFile.delete() },
-                )
-            }
-            trackInteractiveSession(session, safeDistro)
-        } catch (throwable: Throwable) {
-            markerFile.delete()
-            throw throwable
-        }
+        // 会话在其整个生命周期内固定使用同一个后端：只解析一次，主/回退命令共用。
+        val builder = backendSelector.active()
+        val command = builder.buildInteractive(
+            prootBinary = pathManager.activeProotFile(),
+            rootfsDir = pathManager.rootfsDir(safeDistro),
+            workspaceDir = pathManager.workspaceDir,
+            homeDir = pathManager.homeDir(safeDistro),
+            optDir = pathManager.tianyanRootDir(safeDistro),
+            tmpDir = pathManager.tmpDir,
+            attachmentsDir = pathManager.attachmentsDir,
+            config = effectiveConfig,
+            nativePty = true,
+            mounts = mounts,
+            hostCredential = sandboxCredentials.environment(safeDistro, effectiveConfig.pluginIdentity?.pluginId ?: "sandbox", effectiveConfig.pluginIdentity?.version ?: "sandbox"),
+        )
+        val fallbackCommand = builder.buildInteractive(
+            prootBinary = pathManager.activeProotFile(),
+            rootfsDir = pathManager.rootfsDir(safeDistro),
+            workspaceDir = pathManager.workspaceDir,
+            homeDir = pathManager.homeDir(safeDistro),
+            optDir = pathManager.tianyanRootDir(safeDistro),
+            tmpDir = pathManager.tmpDir,
+            attachmentsDir = pathManager.attachmentsDir,
+            config = effectiveConfig,
+            ptyMarker = markerPath,
+            mounts = mounts,
+            hostCredential = sandboxCredentials.environment(safeDistro, effectiveConfig.pluginIdentity?.pluginId ?: "sandbox", effectiveConfig.pluginIdentity?.version ?: "sandbox"),
+        )
+        return PreparedInteractive(
+            distroId = safeDistro,
+            effectiveConfig = effectiveConfig,
+            command = command,
+            fallbackCommand = fallbackCommand,
+            hostEnvironment = pathManager.hostProcessEnvironment(safeDistro),
+            markerFile = markerFile,
+            markerPath = markerPath,
+        )
     }
 
-    private suspend fun storageMounts(): List<StorageMountBinding> = buildList {
-        val sharedEnabled = settingsDataStore.mountSharedStorageEnabled.first()
-        if (sharedEnabled && File("/storage/emulated/0").isDirectory) {
-            add(StorageMountBinding("system-shared", "共享存储", "/storage/emulated/0", "/sdcard", true, true))
-        }
-        if (!sharedEnabled && settingsDataStore.mountDownloadEnabled.first() && File("/storage/emulated/0/Download").isDirectory) {
-            add(StorageMountBinding("system-download", "下载", "/storage/emulated/0/Download", "/sdcard/Download", true, true))
-        }
-        if (!sharedEnabled && settingsDataStore.mountDocumentsEnabled.first() && File("/storage/emulated/0/Documents").isDirectory) {
-            add(StorageMountBinding("system-documents", "文档", "/storage/emulated/0/Documents", "/sdcard/Documents", true, true))
-        }
-        addAll(storageMountBindingRepository.bindings.first().filter { it.enabled })
-    }
+    private suspend fun storageMounts(): List<StorageMountBinding> =
+        resolveStorageMounts(settingsDataStore, storageMountBindingRepository, logger)
 
     private suspend fun resizePty(markerPath: String, columns: Int, rows: Int, distroId: String = "ubuntu") {
         val safeColumns = columns.coerceIn(20, 400)
         val safeRows = rows.coerceIn(5, 200)
         runCatching {
             shellExecutor.execute(
-                command = prootCommandBuilder.build(
+                command = backendSelector.active().build(
                     prootBinary = pathManager.activeProotFile(),
                     rootfsDir = pathManager.rootfsDir(distroId),
                     workspaceDir = pathManager.workspaceDir,
@@ -682,74 +702,67 @@ class LinuxRuntimeImpl @Inject constructor(
         toolId: String?,
         type: ProcessType,
         distroId: String?,
-    ): ManagedProcess {
+    ): ManagedProcess = storageActivities.activity {
         ensureReady()
         val mounts = storageMounts()
-        return processRegistry.start(
+        processRegistry.start(
             id = id,
             command = command,
             toolId = toolId,
             type = type,
-            distroId = distroId ?: _activeDistroId.value,
+            distroId = boundLocalDistribution(distroId, _activeDistroId.value),
             mounts = mounts,
         )
     }
 
     override suspend fun stopBackground(id: String): Boolean = processRegistry.stop(id)
+    override val supportsBackgroundInstanceStop = true
+    override suspend fun stopBackgroundInstance(process: ManagedProcess): Boolean = processRegistry.stopInstance(process)
 
     override fun listBackground(): List<ManagedProcess> = processRegistry.list()
 
     override suspend fun cleanupDeadBackground(): Int = processRegistry.cleanupDeadProcesses()
+    override suspend fun reclaimListeningPort(port: Int, protectedSessions: Set<Long>): Int =
+        processRegistry.reclaimListeningPort(port, protectedSessions + interactiveSessions.rootPids() + shellExecutor.pendingRootPids())
 
-    override fun observeBackgroundLogs(idOrToolId: String): kotlinx.coroutines.flow.Flow<List<String>> =
+    override fun observeBackgroundLogs(idOrToolId: String): Flow<List<String>> =
         processRegistry.observeLogs(idOrToolId)
 
     override fun getBackgroundLogs(idOrToolId: String): List<String> =
         processRegistry.getLogs(idOrToolId)
 
-    override fun clearBackgroundLogs(idOrToolId: String) {
-        processRegistry.clearLogs(idOrToolId)
-    }
+    override fun clearBackgroundLogs(idOrToolId: String) = processRegistry.clearLogs(idOrToolId)
 
-    override suspend fun shutdown() {
-        closeInteractiveSessions()
-        processRegistry.stopAll()
+    override suspend fun shutdown() = initializeMutex.withLock { withRuntimeMaintenance {
+        closeRuntimeProcesses()
         hostBridge.stop()
         _state.value = RuntimeState.NotInitialized
         logger.i("Linux runtime shut down")
-    }
+    } }
 
-    private fun trackInteractiveSession(session: LinuxSession, distroId: String): LinuxSession {
-        val tracked = object : LinuxSession {
-            override val pid: Long? get() = session.pid
-            override val isAlive: Boolean get() = session.isAlive
-            override val output = session.output
+    private suspend fun <T> withRuntimeMaintenance(block: suspend () -> T): T =
+        withContext(Dispatchers.IO) { storageActivities.cleanup(block) }
 
-            override suspend fun write(data: ByteArray) = session.write(data)
-            override suspend fun resize(columns: Int, rows: Int) = session.resize(columns, rows)
-            override suspend fun interrupt() = session.interrupt()
-
-            override suspend fun close() {
-                try {
-                    session.close()
-                } finally {
-                    interactiveSessions.remove(this)
+    override suspend fun withStorageCleanup(block: suspend () -> Unit) {
+        check(initializeMutex.tryLock()) { "正在安装、更新或管理环境，请完成后再清理" }
+        try {
+            storageActivities.cleanup {
+                check(!interactiveSessions.hasSessions() && processRegistry.list().isEmpty() && !shellExecutor.hasPending()) {
+                    "请先关闭终端并停止后台服务，再清理存储"
                 }
+                check(_state.value !is RuntimeState.Initializing) { "环境正在初始化，请稍后再清理" }
+                block()
             }
+        } finally {
+            initializeMutex.unlock()
         }
-        interactiveSessions[tracked] = distroId
-        return tracked
     }
 
-    private suspend fun closeInteractiveSessions(distroId: String? = null) {
-        val sessions = interactiveSessions.entries
-            .filter { distroId == null || it.value == distroId }
-            .map { it.key }
-        sessions.forEach { session ->
-            runCatching { session.close() }
-                .onFailure { logger.w("Failed to close interactive session before runtime cleanup: ${it.message}") }
-        }
-    }
+    private suspend fun closeRuntimeProcesses(distroId: String? = null) = closeRuntimeResources(listOf(
+        { interactiveSessions.closeAll(distroId) },
+        { processRegistry.stopAll() },
+        { shellExecutor.closePending() },
+    ))
 
     override fun rootfsPath(distroId: String?): File =
         pathManager.rootfsDir(distroId?.lowercase()?.trim() ?: _activeDistroId.value)
@@ -759,10 +772,8 @@ class LinuxRuntimeImpl @Inject constructor(
 
     override fun workspacePath(): File = pathManager.workspaceDir
 
-    private fun detectArchitecture(): CpuArch {
-        val abi = Build.SUPPORTED_ABIS.firstOrNull().orEmpty()
-        return CpuArch.fromBuildAbi(abi)
-    }
+    private fun detectArchitecture(): CpuArch =
+        CpuArch.fromBuildAbi(Build.SUPPORTED_ABIS.firstOrNull().orEmpty())
 
     private fun checkStorage() {
         val filesPath = pathManager.baseDir.parentFile?.absolutePath
@@ -775,480 +786,6 @@ class LinuxRuntimeImpl @Inject constructor(
                     "available ${availableBytes / (1024 * 1024)} MB",
             )
         }
-    }
-
-    private fun configureRootfs(distroId: String = "ubuntu") {
-        val rootfs = pathManager.rootfsDir(distroId)
-        val etcDir = File(rootfs, "etc")
-        etcDir.mkdirs()
-        File(etcDir, "tianyan-runtime").writeText("tianyan-runtime=0.3.0\n")
-        File(rootfs, "opt/tianyan").mkdirs()
-        pathManager.ensureDistroDirectories(distroId)
-        stripSetuidBits(distroId)
-        configureDpkgStatoverride(distroId)
-        configureDpkgNoDoc(distroId)
-        configureAptSettings(distroId)
-        configureChinaMirrors(distroId)
-        configurePipMirror(distroId)
-        installAptStripSetuidHook(distroId)
-        installPerlFixScript(distroId)
-        runCatching {
-            kotlinx.coroutines.runBlocking {
-                assetSynchronizer.syncAssetsToDistro(distroId)
-            }
-        }
-    }
-
-    /**
-     * 在 PRoot 沙箱中排除文档/手册页/区域语言包解包：
-     * 1. 降低 50%~60% 的磁盘 I/O 和解包时间，极大避免 300s 安装超时；
-     * 2. 规避 man 手册硬链接（如 perlthanks.1.gz 等）在 PRoot 下的 chown 报错。
-     */
-    private fun configureDpkgNoDoc(distroId: String = "ubuntu") {
-        val dpkgCfgDir = File(pathManager.rootfsDir(distroId), "etc/dpkg/dpkg.cfg.d")
-        dpkgCfgDir.mkdirs()
-        File(dpkgCfgDir, "01_tianyan_nodoc").writeText(
-            """
-            # PRoot 性能与稳定性优化：跳过文档与手册文件以减少 I/O 并避免硬链接解包异常
-            path-exclude /usr/share/doc/*
-            path-exclude /usr/share/man/*
-            path-exclude /usr/share/groff/*
-            path-exclude /usr/share/info/*
-            path-exclude /usr/share/locale/*
-            path-exclude /usr/share/lintian/*
-            path-exclude /usr/share/linda/*
-            """.trimIndent() + "\n",
-        )
-    }
-
-    /**
-     * 配置 apt 超时重试以及非交互默认选项，避免后台安装任务被挂起。
-     */
-    private fun configureAptSettings(distroId: String = "ubuntu") {
-        val hookDir = File(pathManager.rootfsDir(distroId), "etc/apt/apt.conf.d")
-        hookDir.mkdirs()
-        File(hookDir, "99tianyan-apt-config").writeText(
-            """
-            // 提高网络波动环境下的安装鲁棒性并默认使用非交互配置
-            Acquire::Retries "3";
-            Acquire::http::Timeout "60";
-            Acquire::https::Timeout "60";
-            DPkg::Options {
-               "--force-confdef";
-               "--force-confold";
-            };
-            """.trimIndent() + "\n",
-        )
-    }
-
-    /**
-     * 三层镜像策略之第 1 层「乐观默认直写」+ 第 2 层「后台验证」：
-     *
-     * 1. 预装/启动时**不探测**：源文件缺失或没有 deb 行 → 直写默认镜像（国内用户实测最稳的
-     *    阿里云/清华 debian/阿里 kali），fresh 用户 0 秒就绪；已有源文件（可能被自愈换过）
-     *    一律保留不动。
-     * 2. 随后调度后台验证协程：单个 InRelease GET（6s）校验当前源，不通则按序探测备用源
-     *    静默换源——用户在第一次 apt 操作前就被悄悄修好，全程无感。
-     * 3. 被动修复（体检黄牌 + 一键修复逐个实测）在 EnvironmentDoctor/Repairer，兜底怪网络。
-     *
-     * 历史：旧版启动同步探测（TUNA 被运营商 NAT 拉黑返回 403 → "not signed" 全链失败），
-     * 探测本身又给启动加 6-36s，故改为乐观直写 + 后台自愈。
-     */
-    private fun configureChinaMirrors(distroId: String = "ubuntu") {
-        val osRelease = readOsRelease(distroId)
-        if (osRelease.isEmpty()) {
-            logger.i("China mirrors skipped: os-release not found for $distroId")
-            return
-        }
-        val id = osRelease["ID"] ?: osRelease["ID_LIKE"]
-        val codename = osRelease["VERSION_CODENAME"]
-        val sourcesListDir = File(pathManager.rootfsDir(distroId), "etc/apt/sources.list.d")
-        val mirrorsFile = File(sourcesListDir, "tianyan-mirrors.list")
-
-        val hasUsableSources = mirrorsFile.isFile &&
-            mirrorsFile.readLines().any { it.startsWith("deb ") }
-        if (!hasUsableSources) {
-            // 第 1 层：零探测直写默认源（顺序=后台验证的备用顺序，保持一致）
-            val defaultSources = when (id) {
-                "debian" -> codename?.let { cn ->
-                    debianMirrorPairs().first().let { (main, security) -> debianSources(main, security, cn) }
-                }
-                "ubuntu" -> codename?.let { cn ->
-                    ubuntuPortsSources(ubuntuPortsCandidates().first(), cn)
-                }
-                "kali" -> kaliSources(kaliCandidates().first())
-                else -> null
-            }
-            if (defaultSources != null) {
-                sourcesListDir.mkdirs()
-                disableStockAptSources(sourcesListDir, distroId)
-                runCatching {
-                    mirrorsFile.writeText(defaultSources + "\n")
-                    logger.i("China mirrors: 乐观直写默认源 for $id ($codename) in $distroId（零探测零等待）")
-                }
-            } else {
-                logger.i("China mirrors skipped for distro id=$id codename=$codename (unsupported)")
-                return
-            }
-        }
-        // 第 2 层：后台验证（不阻塞启动/就绪），失败自动换备用源
-        scheduleMirrorBackgroundVerify(distroId)
-    }
-
-    /** 后台镜像验证协程：现源不通 → 按序探测备用源静默重写。全挂则保留现源交给第 3 层（体检/自愈）。 */
-    private fun scheduleMirrorBackgroundVerify(distroId: String) {
-        mirrorVerifyJob?.cancel()
-        mirrorVerifyJob = mirrorVerifyScope.launch {
-            delay(3_000) // 等网络栈/代理环境稳定
-            val osRelease = readOsRelease(distroId)
-            val id = osRelease["ID"] ?: osRelease["ID_LIKE"]
-            val codename = osRelease["VERSION_CODENAME"]
-            val mirrorsFile = File(File(pathManager.rootfsDir(distroId), "etc/apt/sources.list.d"), "tianyan-mirrors.list")
-            val firstDeb = mirrorsFile.takeIf { it.isFile }?.readLines()?.firstOrNull { it.startsWith("deb ") }?.trim()?.split(" ")
-            val currentBase = firstDeb?.getOrNull(1).orEmpty()
-            val dist = firstDeb?.getOrNull(2).orEmpty()
-            if (currentBase.isNullOrBlank() || dist.isBlank()) return@launch
-            if (probeInRelease(currentBase, dist)) {
-                logger.i("镜像后台验证通过: $currentBase")
-                return@launch
-            }
-            logger.w("镜像后台验证不通: $currentBase → 按序探测备用源")
-            val candidates: List<String> = when (id) {
-                "ubuntu" -> ubuntuPortsCandidates()
-                "debian" -> debianMirrorPairs().map { it.first }
-                "kali" -> kaliCandidates()
-                else -> return@launch
-            }
-            for (alt in candidates.filterNot { it == currentBase }) {
-                if (!probeInRelease(alt, dist)) continue
-                val newSources = when (id) {
-                    "debian" -> debianMirrorPairs().firstOrNull { it.first == alt }
-                        ?.let { (main, security) -> debianSources(main, security, codename.orEmpty()) }
-                    "kali" -> kaliSources(alt)
-                    else -> ubuntuPortsSources(alt, codename.orEmpty())
-                } ?: continue
-                runCatching {
-                    mirrorsFile.writeText(newSources + "\n")
-                    saveStickyMirror(distroId, alt)
-                    logger.i("镜像后台自动切换完成: $currentBase → $alt（用户无感）")
-                }
-                return@launch
-            }
-            logger.w("镜像后台验证：全部备用源不可达（可能离线），保留 $currentBase —— 体检/一键修复仍可纠正")
-        }
-    }
-
-    /** HEAD 不了就用 GET：200 才算可用镜像。 */
-    private fun probeInRelease(base: String, dist: String): Boolean = runCatching {
-        (java.net.URL("$base/dists/$dist/InRelease").openConnection() as java.net.HttpURLConnection).run {
-            connectTimeout = 6000
-            readTimeout = 6000
-            requestMethod = "GET"
-            instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "Tianyan-apt-mirror-probe")
-            val code = responseCode
-            disconnect()
-            code == 200
-        }
-    }.getOrDefault(false)
-
-    /** 记录验证成功的镜像（自愈与后台验证共用，rootfs 内状态文件），供自愈候选优先。 */
-    private fun saveStickyMirror(distroId: String, base: String) {
-        runCatching {
-            val f = File(pathManager.rootfsDir(distroId), "opt/tianyan/state/apt_mirror.txt")
-            f.parentFile?.mkdirs()
-            f.writeText(base)
-        }
-    }
-
-    private fun ubuntuPortsCandidates(): List<String> = listOf(
-        "https://mirrors.aliyun.com/ubuntu-ports",
-        "https://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports",
-        "https://mirrors.ustc.edu.cn/ubuntu-ports",
-        "https://mirrors.sjtug.sjtu.edu.cn/ubuntu-ports",
-        "https://ports.ubuntu.com/ubuntu-ports",
-    )
-
-    private fun debianMirrorPairs(): List<Pair<String, String>> = listOf(
-        "https://mirrors.tuna.tsinghua.edu.cn/debian" to "https://mirrors.tuna.tsinghua.edu.cn/debian-security",
-        "https://mirrors.aliyun.com/debian" to "https://mirrors.aliyun.com/debian-security",
-        "https://mirrors.ustc.edu.cn/debian" to "https://mirrors.ustc.edu.cn/debian-security",
-        "https://deb.debian.org/debian" to "https://security.debian.org/debian-security",
-    )
-
-    private fun kaliCandidates(): List<String> = listOf(
-        "https://mirrors.tuna.tsinghua.edu.cn/kali",
-        "https://mirrors.aliyun.com/kali",
-        "https://mirrors.ustc.edu.cn/kali",
-        "https://mirrors.sjtug.sjtu.edu.cn/kali",
-    )
-
-    private fun debianSources(main: String, security: String, codename: String): String = """
-        # Tianyan: 国内镜像（启动探测自动选择，$main）
-        deb $main $codename main contrib non-free non-free-firmware
-        deb $main $codename-updates main contrib non-free non-free-firmware
-        deb $security $codename-security main contrib non-free non-free-firmware
-    """.trimIndent()
-
-    private fun ubuntuPortsSources(base: String, codename: String): String = """
-        # Tianyan: 国内镜像（启动探测自动选择，$base）
-        deb $base $codename main restricted universe multiverse
-        deb $base $codename-updates main restricted universe multiverse
-        deb $base $codename-security main restricted universe multiverse
-        deb $base $codename-backports main restricted universe multiverse
-    """.trimIndent()
-
-    private fun kaliSources(base: String): String = """
-        # Tianyan: 国内镜像（启动探测自动选择，$base）
-        deb $base kali-rolling main contrib non-free
-    """.trimIndent()
-
-    private fun disableStockAptSources(sourcesListDir: File, distroId: String = "ubuntu") {
-        File(pathManager.rootfsDir(distroId), "etc/apt/sources.list").takeIf { it.isFile }
-            ?.let { stock -> renameToDisabled(stock) }
-        sourcesListDir.listFiles()?.forEach { entry ->
-            val name = entry.name
-            if (entry.isFile && (name.endsWith(".list") || name.endsWith(".sources")) &&
-                name != "tianyan-mirrors.list"
-            ) {
-                renameToDisabled(entry)
-            }
-        }
-    }
-
-    private fun renameToDisabled(file: File) {
-        val disabled = File(file.parentFile, "${file.name}.tianyan-disabled")
-        if (!file.renameTo(disabled)) {
-            logger.w("Failed to disable stock apt source: ${file.path}")
-        }
-    }
-
-    private fun configurePipMirror(distroId: String = "ubuntu") {
-        val config = File(pathManager.rootfsDir(distroId), "etc/pip.conf")
-        config.parentFile?.mkdirs()
-        config.writeText(
-            """
-            # Tianyan: 清华大学 TUNA PyPI 镜像
-            [global]
-            index-url = https://pypi.tuna.tsinghua.edu.cn/simple
-            """.trimIndent() + "\n",
-        )
-    }
-
-    private fun readOsRelease(distroId: String = "ubuntu"): Map<String, String> {
-        val rootfs = pathManager.rootfsDir(distroId)
-        val file = File(rootfs, "etc/os-release")
-            .takeIf { it.isFile }
-            ?: File(rootfs, "usr/lib/os-release").takeIf { it.isFile }
-            ?: return emptyMap()
-        return runCatching {
-            file.readLines().mapNotNull { line ->
-                val index = line.indexOf('=')
-                if (index <= 0) return@mapNotNull null
-                val key = line.substring(0, index).trim()
-                val value = line.substring(index + 1).trim().trim('"', '\'')
-                key to value
-            }.toMap()
-        }.onFailure { logger.w("Failed to parse os-release for $distroId", it) }
-            .getOrDefault(emptyMap())
-    }
-
-    private fun installPerlFixScript(distroId: String = "ubuntu") {
-        val binDir = File(pathManager.rootfsDir(distroId), "usr/local/sbin")
-        binDir.mkdirs()
-        val script = File(binDir, "tianyan-fix-perl")
-        script.writeText(
-            """
-            #!/bin/sh
-            set -e
-            echo "[Tianyan] Scanning for perl deb packages to patch hardlinks..."
-            TMPDIR="${'$'}(mktemp -d /tmp/tianyan-perl-fix.XXXXXX)"
-            trap 'rm -rf "${'$'}TMPDIR"' EXIT INT TERM
-
-            # 优先从 apt 缓存寻找 perl deb 包，若无则尝试下载
-            PERL_DEB="${'$'}(ls -1 /var/cache/apt/archives/perl_*.deb 2>/dev/null | head -n 1 || true)"
-            if [ -z "${'$'}PERL_DEB" ]; then
-                echo "[Tianyan] Downloading perl package..."
-                cd "${'$'}TMPDIR" && apt-get download perl || true
-                PERL_DEB="${'$'}(ls -1 "${'$'}TMPDIR"/perl_*.deb 2>/dev/null | head -n 1 || true)"
-            fi
-
-            if [ -z "${'$'}PERL_DEB" ] || [ ! -f "${'$'}PERL_DEB" ]; then
-                echo "[Tianyan] Perl deb package not found, attempting apt --fix-broken install..."
-                apt-get --fix-broken install -y || true
-                exit 0
-            fi
-
-            echo "[Tianyan] Patching ${'$'}PERL_DEB..."
-            WORKDIR="${'$'}TMPDIR/repack"
-            mkdir -p "${'$'}WORKDIR/DEBIAN"
-            dpkg-deb -e "${'$'}PERL_DEB" "${'$'}WORKDIR/DEBIAN"
-            dpkg-deb --fsys-tarfile "${'$'}PERL_DEB" | tar -C "${'$'}WORKDIR" -xf -
-
-            # 将 usr/bin/perlthanks 等硬链接转换为符号链接
-            if [ -f "${'$'}WORKDIR/usr/bin/perlthanks" ]; then
-                rm -f "${'$'}WORKDIR/usr/bin/perlthanks"
-                ln -s perlbug "${'$'}WORKDIR/usr/bin/perlthanks"
-                echo "[Tianyan] Converted /usr/bin/perlthanks to symlink"
-            fi
-
-            dpkg-deb -b "${'$'}WORKDIR" "${'$'}TMPDIR/perl-patched.deb"
-            dpkg -i --force-overwrite "${'$'}TMPDIR/perl-patched.deb"
-            echo "[Tianyan] Perl patch installed successfully."
-            """.trimIndent() + "\n",
-        )
-        runCatching {
-            android.system.Os.chmod(script.absolutePath, 0x1ED) // 0755
-        }
-    }
-
-    private fun stripSetuidBits(distroId: String = "ubuntu") {
-        var stripped = 0
-        var failed = 0
-        pathManager.rootfsDir(distroId).walkTopDown()
-            .forEach { file ->
-                if (file.name.endsWith(".dpkg-tmp")) {
-                    file.delete()
-                } else if (file.isFile) {
-                    runCatching {
-                        val mode = android.system.Os.lstat(file.absolutePath).st_mode
-                        if (mode and 0xC00 != 0) {
-                            android.system.Os.chmod(file.absolutePath, mode and 0x3FF)
-                            stripped++
-                        }
-                    }.onFailure { failed++ }
-                }
-            }
-        logger.i("stripSetuidBits ($distroId): cleared $stripped setuid/setgid bits, $failed failures")
-    }
-
-    private fun configureDpkgStatoverride(distroId: String = "ubuntu") {
-        val dpkgDir = File(pathManager.rootfsDir(distroId), "var/lib/dpkg")
-        dpkgDir.mkdirs()
-        val statoverrideFile = File(dpkgDir, "statoverride")
-        val overrides = listOf(
-            "/usr/bin/su",
-            "/usr/bin/mount",
-            "/usr/bin/umount",
-            "/usr/bin/newgrp",
-            "/usr/bin/gpasswd",
-            "/usr/bin/passwd",
-            "/usr/bin/chfn",
-            "/usr/bin/chsh",
-            "/usr/bin/expiry",
-        )
-        val existingLines = if (statoverrideFile.exists()) {
-            statoverrideFile.readLines().map { it.trim() }.filter { it.isNotEmpty() }.toMutableSet()
-        } else {
-            mutableSetOf()
-        }
-        overrides.forEach { path ->
-            val entry = "root root 0755 $path"
-            val pathSuffix = " $path"
-            if (existingLines.none { it.endsWith(pathSuffix) }) {
-                existingLines.add(entry)
-            }
-        }
-        statoverrideFile.writeText(existingLines.sorted().joinToString("\n", postfix = "\n"))
-    }
-
-    private fun installAptStripSetuidHook(distroId: String = "ubuntu") {
-        val hookDir = File(pathManager.rootfsDir(distroId), "etc/apt/apt.conf.d")
-        hookDir.mkdirs()
-        val findCommand = "find /usr /bin /sbin -xdev -type f -perm /6000 -exec chmod ug-s {} +"
-        val cleanupTmp = "rm -f /bin/*.dpkg-tmp /usr/bin/*.dpkg-tmp /usr/sbin/*.dpkg-tmp /sbin/*.dpkg-tmp 2>/dev/null || true"
-        File(hookDir, "99tianyan-strip-setuid").writeText(
-            "// PRoot 沙箱：setuid 不生效，保留会导致 dpkg 升级卡死（见 tianyan-runtime 文档）。\n" +
-                "DPkg::Pre-Invoke { \"$cleanupTmp\"; };\n" +
-                "DPkg::Post-Invoke { \"$findCommand\"; };\n",
-        )
-    }
-
-    private fun configureDns(distroId: String = "ubuntu") {
-        val etcDir = File(pathManager.rootfsDir(distroId), "etc")
-        etcDir.mkdirs()
-        val resolvConf = File(etcDir, "resolv.conf")
-        // Ubuntu/Debian OCI 镜像里 /etc/resolv.conf 通常是指向 /run/systemd/resolve/... 的符号链接，
-        // PRoot 沙箱无 systemd 运行导致链接悬空，直接写入会抛 FileNotFoundException: ENOENT，
-        // 必须先移除该链接（普通文件/悬空链接两种情况都要处理）再写入。
-        try {
-            val resolvPath = resolvConf.toPath()
-            if (java.nio.file.Files.isSymbolicLink(resolvPath) || resolvConf.exists()) {
-                resolvConf.delete()
-            }
-        } catch (_: Exception) {
-            // 删除失败不阻塞后续写入尝试（writeText 会给出最终错误）
-        }
-        resolvConf.writeText("nameserver 1.1.1.1\nnameserver 8.8.8.8\n")
-    }
-
-    private fun configureEnvironment(distroId: String = "ubuntu") {
-        val profileDir = File(pathManager.rootfsDir(distroId), "etc/profile.d")
-        profileDir.mkdirs()
-        File(profileDir, "tianyan-env.sh").writeText(
-            """
-            export LANG=C.UTF-8
-            export PATH=/root/.local/bin:/opt/tianyan/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-            export HOME=/root
-            # HostBridge — 沙箱通过 localhost HTTP 桥接触发宿主侧操作
-            export TIANYAN_BRIDGE_URL="http://127.0.0.1:7980"
-            export TIANYAN_BRIDGE_PORT=7980
-            # Android 二进制参考路径（用 tianyan-android-exec 包装器执行）
-            export ANDROID_BIN_PATH="/system/bin:/system/xbin"
-            export ANDROID_LIB_PATH="/system/lib64:/system/lib:/vendor/lib64:/vendor/lib"
-            """.trimIndent() + "\n",
-        )
-        val home = pathManager.homeDir(distroId)
-        home.mkdirs()
-        // .gitconfig 合并式写入：writeText 全量覆盖会抹掉用户 [user] 署名段（E2E 实锤：
-        // 用户配好署名→重启 App→git 提交报"未配置署名"）。保留用户已有 section，只确保
-        // 天衍管理的 safe.directory / http.version 两个键存在。credential.helper 由
-        // GitCredentialIpcBootstrap 自己用 git config 追加（天然合并，不碰这里）。
-        val gitconfig = File(home, ".gitconfig")
-        val existing = runCatching { if (gitconfig.isFile) gitconfig.readText() else "" }.getOrDefault("")
-        val merged = buildString {
-            append(existing.trimEnd())
-            if (!existing.contains("[safe]")) {
-                append(if (existing.isNotBlank()) "\n" else "")
-                append("[safe]\n\tdirectory = *\n")
-            }
-            if (!existing.contains("[http]")) {
-                append("\n[http]\n\tversion = HTTP/1.1\n")
-            }
-        }
-        runCatching { gitconfig.writeText(merged) }
-            .onFailure { logger.w("写 .gitconfig 失败（不影响启动）: ${it.message}") }
-        // 安装 HostBridge 沙箱脚本与密钥
-        installHostBridgeScripts(distroId)
-    }
-
-    /**
-     * 安装宿主桥接沙箱端脚本与 API 密钥。
-     *
-     * 写入三个文件到 /opt/tianyan/（bind-mounted 到沙箱）：
-     * - bin/tianyan-host        — 桥接 CLI（install-apk / shell / health）
-     * - bin/tianyan-android-exec — Android 二进制执行包装器（设置正确的 linker 环境）
-     * - .bridge-key           — API 认证密钥
-     */
-    private fun installHostBridgeScripts(distroId: String) {
-        val binDir = pathManager.tianyanBinDir(distroId)
-        binDir.mkdirs()
-        val rootDir = pathManager.tianyanRootDir(distroId)
-
-        // tianyan-host — 宿主桥接 CLI
-        val hostScript = File(binDir, "tianyan-host")
-        hostScript.writeText(TIANYAN_HOST_SCRIPT)
-        runCatching { android.system.Os.chmod(hostScript.absolutePath, 0x1ED) } // 0755
-
-        // tianyan-android-exec — Android 二进制执行包装器
-        val androidExecScript = File(binDir, "tianyan-android-exec")
-        androidExecScript.writeText(TIANYAN_ANDROID_EXEC_SCRIPT)
-        runCatching { android.system.Os.chmod(androidExecScript.absolutePath, 0x1ED) }
-
-        // API 密钥 — 每次配置时刷新（确保 app 重启后密钥同步）
-        File(rootDir, ".bridge-key").writeText(hostBridge.bridgeKey)
-
-        logger.i("HostBridge scripts installed for distro: $distroId")
     }
 
     private fun createWorkspace() {
@@ -1297,100 +834,5 @@ class LinuxRuntimeImpl @Inject constructor(
 
     companion object {
         const val MIN_FREE_BYTES = 600L * 1024L * 1024L
-
-        val TIANYAN_HOST_SCRIPT = listOf(
-            "#!/bin/sh",
-            "# Tianyan Host Bridge CLI",
-            "# Usage: tianyan-host install-apk <path> | tianyan-host shell <cmd> | tianyan-host health",
-            "",
-            "BRIDGE_URL=\"http://127.0.0.1:7980\"",
-            "KEY_FILE=\"/opt/tianyan/.bridge-key\"",
-            "",
-            "if [ -f \"\${KEY_FILE}\" ]; then",
-            "  BRIDGE_KEY=\$(cat \"\${KEY_FILE}\" 2>/dev/null | tr -d '[:space:]')",
-            "else",
-            "  BRIDGE_KEY=\"\"",
-            "fi",
-            "",
-            "if ! command -v curl >/dev/null 2>&1; then",
-            "  echo '{\"success\":false,\"error\":\"curl not installed\"}' >&2; exit 1",
-            "fi",
-            "",
-            "AUTH=\"\"",
-            "if [ -n \"\${BRIDGE_KEY}\" ]; then AUTH=\"Authorization: Bearer \${BRIDGE_KEY}\"; fi",
-            "",
-            "case \"\$1\" in",
-            "  install-apk)",
-            "    [ -z \"\$2\" ] && { echo 'Usage: tianyan-host install-apk <path>' >&2; exit 1; }",
-            "    [ ! -f \"\$2\" ] && { echo \"{\\\"success\\\":false,\\\"error\\\":\\\"Not found: \$2\\\"}\" >&2; exit 1; }",
-            "    if [ -n \"\${AUTH}\" ]; then",
-            "      curl -s -X POST \"\${BRIDGE_URL}/api/install-apk\" -H 'Content-Type: application/json' -H \"\${AUTH}\" -d \"{\\\"path\\\":\\\"\$2\\\"}\"",
-            "    else",
-            "      curl -s -X POST \"\${BRIDGE_URL}/api/install-apk\" -H 'Content-Type: application/json' -d \"{\\\"path\\\":\\\"\$2\\\"}\"",
-            "    fi",
-            "    echo \"\"",
-            "    ;;",
-            "  shell)",
-            "    [ -z \"\$2\" ] && { echo 'Usage: tianyan-host shell <command>' >&2; exit 1; }",
-            "    shift; CMD=\"\$*\"",
-            "    if command -v jq >/dev/null 2>&1; then",
-            "      BODY=\$(jq -nc --arg c \"\${CMD}\" '{command:\$c}')",
-            "    else",
-            "      ESC=\$(printf '%s' \"\${CMD}\" | sed 's/\\\\/\\\\\\\\/g; s/\"/\\\\\"/g' | tr '\\n' ' ')",
-            "      BODY=\"{\\\"command\\\":\\\"\${ESC}\\\"}\"",
-            "    fi",
-            "    if [ -n \"\${AUTH}\" ]; then",
-            "      curl -s -X POST \"\${BRIDGE_URL}/api/shell\" -H 'Content-Type: application/json' -H \"\${AUTH}\" -d \"\${BODY}\"",
-            "    else",
-            "      curl -s -X POST \"\${BRIDGE_URL}/api/shell\" -H 'Content-Type: application/json' -d \"\${BODY}\"",
-            "    fi",
-            "    echo \"\"",
-            "    ;;",
-            "  logcat)",
-            "    shift",
-            "    PKG=\"\${1:-}\"",
-            "    TAG=\"\${2:-}\"",
-            "    PRIO=\"\${3:-V}\"",
-            "    KW=\"\${4:-}\"",
-            "    LINES=\"\${5:-200}\"",
-            "    if command -v jq >/dev/null 2>&1; then",
-            "      BODY=\$(jq -nc --arg p \"\$PKG\" --arg t \"\$TAG\" --arg pr \"\$PRIO\" --arg k \"\$KW\" --arg l \"\$LINES\" '{package:\$p, tag:\$t, priority:\$pr, keyword:\$k, lines:(\$l|tonumber)}')",
-            "    else",
-            "      BODY=\"{\\\"package\\\":\\\"\$PKG\\\",\\\"tag\\\":\\\"\$TAG\\\",\\\"priority\\\":\\\"\$PRIO\\\",\\\"keyword\\\":\\\"\$KW\\\",\\\"lines\\\":\$LINES}\"",
-            "    fi",
-            "    if [ -n \"\${AUTH}\" ]; then",
-            "      curl -s -X POST \"\${BRIDGE_URL}/api/logcat\" -H 'Content-Type: application/json' -H \"\${AUTH}\" -d \"\${BODY}\"",
-            "    else",
-            "      curl -s -X POST \"\${BRIDGE_URL}/api/logcat\" -H 'Content-Type: application/json' -d \"\${BODY}\"",
-            "    fi",
-            "    echo \"\"",
-            "    ;;",
-            "  health|status)",
-            "    if [ -n \"\${AUTH}\" ]; then curl -s \"\${BRIDGE_URL}/api/health\" -H \"\${AUTH}\"; else curl -s \"\${BRIDGE_URL}/api/health\"; fi",
-            "    echo \"\"",
-            "    ;;",
-            "  *)",
-            "    echo \"Tianyan Host Bridge CLI\"",
-            "    echo \"  tianyan-host install-apk <path>   Install APK on host (wireless ADB or system dialog)\"",
-            "    echo \"  tianyan-host shell <command>      Run host shell (wireless ADB or Shizuku/root)\"",
-            "    echo \"  tianyan-host logcat [pkg] [tag] [prio] [kw] [lines] Capture logcat via wireless ADB\"",
-            "    echo \"  tianyan-host health               Bridge health and ADB status\"",
-            "    exit 1;;",
-            "esac",
-        ).joinToString("\n") + "\n"
-
-        val TIANYAN_ANDROID_EXEC_SCRIPT = listOf(
-            "#!/bin/sh",
-            "# Tianyan Android Binary Executor",
-            "# Sets up correct linker env for Android system binaries in PRoot sandbox.",
-            "# Usage: tianyan-android-exec /system/bin/settings put global captive_portal_http_url ''",
-            "",
-            "[ -z \"\$1\" ] && { echo 'Usage: tianyan-android-exec <binary> [args...]' >&2; exit 1; }",
-            "export LD_LIBRARY_PATH=/system/lib64:/system/lib:/vendor/lib64:/vendor/lib",
-            "export ANDROID_DATA=/data",
-            "export ANDROID_ROOT=/system",
-            "unset LD_PRELOAD",
-            "exec \"\$@\"",
-        ).joinToString("\n") + "\n"
     }
 }

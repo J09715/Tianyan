@@ -80,7 +80,7 @@ fun StatsRankSection(
             title = {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.titleMedium,
                 )
             },
             text = {
@@ -194,7 +194,7 @@ private fun RankRow(
                 modifier = Modifier
                     .fillMaxWidth(widthFactor)
                     .fillMaxHeight()
-                    .clip(RoundedCornerShape(17.dp))
+                    .clip(RoundedCornerShape(16.dp))
                     .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
             )
 

@@ -7,27 +7,24 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import top.tianyan.app.core.common.shell.ShellQuote
 import top.tianyan.app.runtime.privilege.PrivilegeManager
 
 /**
  * Unified GUI action toolkit with failure degradation:
- * 1) With Shizuku/Root: auto-enable TaiXu accessibility service (no manual toggle)
+ * 1) With Shizuku/Root: auto-enable Tianyan accessibility service (no manual toggle)
  * 2) Accessibility global gestures
  * 3) Privileged `cmd input`
  * 4) Privileged `/system/bin/input`
  * Paste prefers clipboard + KEYCODE_PASTE / Ctrl+V (CJK-safe).
  */
-@Singleton
-class HostGuiToolkit @Inject constructor(
-    @ApplicationContext private val context: Context,
+class HostGuiToolkit(
+    private val context: Context,
     private val privilegeManager: PrivilegeManager,
     private val accessibilityEnabler: GuiAccessibilityEnabler,
 ) {
@@ -140,8 +137,6 @@ class HostGuiToolkit @Inject constructor(
             if (!AccessibilityGestureBridge.isAvailable()) {
                 accessibilityEnabler.ensureEnabled()
             }
-            // 外层 if 已把 key 收窄到 BACK/HOME/RECENTS 三者，when 因此是穷尽的、
-            // 结果非空（原来的 `else -> null` 与随后的 `global != null` 都成了死代码）。
             val global = when (key) {
                 GuiKey.BACK -> AccessibilityService.GLOBAL_ACTION_BACK
                 GuiKey.HOME -> AccessibilityService.GLOBAL_ACTION_HOME
@@ -168,12 +163,19 @@ class HostGuiToolkit @Inject constructor(
     }
 
     private suspend fun pasteText(text: String): GuiExecResult {
+        return GuiClipboardLock.use { pasteTextLocked(text) }
+    }
+
+    private suspend fun pasteTextLocked(text: String): GuiExecResult {
         val attempts = mutableListOf<GuiAttempt>()
         if (text.isEmpty()) {
             return GuiExecResult(false, "粘贴文本为空")
         }
 
-        // 1) 优先剪贴板粘贴（快且稳），失败不中断，继续 input text
+        // 0) 首选无障碍直接设值：支持任意 Unicode，且能读回校验，不依赖剪贴板与键盘快捷键
+        trySetFocusedText(text, attempts)?.let { return it }
+
+        // 1) 剪贴板粘贴（快且稳），失败不中断，继续 input text
         val clipOk = writeClipboard(text)
         attempts += GuiAttempt(
             GuiBackendId.CLIPBOARD,
@@ -183,7 +185,7 @@ class HostGuiToolkit @Inject constructor(
         if (clipOk) {
             runCatching {
                 privilegeManager.executeShellCommand(
-                    "cmd clipboard set-primary-clip text/plain ${shellQuote(text)} >/dev/null 2>&1 || true",
+                    "cmd clipboard set-primary-clip text/plain ${ShellQuote.of(text)} >/dev/null 2>&1 || true",
                 )
             }
             delay(180)
@@ -214,6 +216,51 @@ class HostGuiToolkit @Inject constructor(
         if (typed != null) return typed
 
         return GuiExecResult(false, "粘贴与 input text 均失败", attempts = attempts)
+    }
+
+    /**
+     * 首选后端：对焦点输入框执行 ACTION_SET_TEXT，并读回文本校验是否真的写入。
+     * ACTION_SET_TEXT 是幂等设值（覆盖而非追加），因此校验不通过可以安全重试。
+     * 降级链（剪贴板 / input text）是追加式的，只有在从未被接受（可确认没写入）时才降级，
+     * 否则会造成文本重复——对发消息这类场景，重复比失败更糟。
+     */
+    private suspend fun trySetFocusedText(text: String, attempts: MutableList<GuiAttempt>): GuiExecResult? {
+        if (!AccessibilityGestureBridge.isAvailable()) return null
+        var accepted = false
+        repeat(2) { round ->
+            if (!TianyanGuiAccessibilityService.setFocusedText(text)) {
+                attempts += GuiAttempt(GuiBackendId.ACCESSIBILITY, false, "ACTION_SET_TEXT 不被当前输入框接受")
+                return if (accepted) {
+                    GuiExecResult(true, "已设置文本（${text.length} 字，未通过读回校验）：$text", GuiBackendId.ACCESSIBILITY, attempts)
+                } else {
+                    null
+                }
+            }
+            accepted = true
+            delay(120)
+            val actual = TianyanGuiAccessibilityService.focusedText()
+            when {
+                actual == null -> {
+                    attempts += GuiAttempt(
+                        GuiBackendId.ACCESSIBILITY,
+                        true,
+                        "第 ${round + 1} 次设值成功，焦点节点未暴露 text，无法读回校验",
+                    )
+                    return GuiExecResult(true, "已设置文本（${text.length} 字，无法读回校验）：$text", GuiBackendId.ACCESSIBILITY, attempts)
+                }
+                actual.contains(text) -> {
+                    attempts += GuiAttempt(GuiBackendId.ACCESSIBILITY, true, "第 ${round + 1} 次设值并读回校验通过")
+                    return GuiExecResult(true, "已设置文本并校验通过（${text.length} 字）：$text", GuiBackendId.ACCESSIBILITY, attempts)
+                }
+                else -> attempts += GuiAttempt(
+                    GuiBackendId.ACCESSIBILITY,
+                    false,
+                    "第 ${round + 1} 次读回不匹配：$actual",
+                )
+            }
+        }
+        // 曾被接受但始终读不回目标文本：不再降级，避免追加式后端写出重复内容
+        return GuiExecResult(true, "已设置文本（${text.length} 字，读回校验未通过）：$text", GuiBackendId.ACCESSIBILITY, attempts)
     }
 
     /**
@@ -305,7 +352,7 @@ class HostGuiToolkit @Inject constructor(
         Handler(Looper.getMainLooper()).post {
             try {
                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                clipboard.setPrimaryClip(ClipData.newPlainText("taixu-gui", text))
+                clipboard.setPrimaryClip(ClipData.newPlainText("tianyan-gui", text))
             } catch (t: Throwable) {
                 error = t
             } finally {
@@ -316,10 +363,8 @@ class HostGuiToolkit @Inject constructor(
         return error == null
     }
 
-    private fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
-
     private companion object {
-        const val TAG = "TaiXu-GuiToolkit"
+        const val TAG = "Tianyan-GuiToolkit"
         val TOUCH_BACKENDS = listOf(
             GuiBackendId.ACCESSIBILITY,
             GuiBackendId.CMD_INPUT,

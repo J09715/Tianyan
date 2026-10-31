@@ -1,4 +1,4 @@
-package top.tianyan.app.core.common.result
+﻿package top.tianyan.app.core.common.result
 
 data class AppError(
     val code: ErrorCode,
@@ -18,4 +18,6 @@ enum class ErrorCode {
     INSTALLATION_FAILED,
     DATABASE,
     SECURITY,
+    /** 写入前的版本校验失败：目标已被外部修改（如编辑器草稿与磁盘版本不一致）。 */
+    CONFLICT,
 }

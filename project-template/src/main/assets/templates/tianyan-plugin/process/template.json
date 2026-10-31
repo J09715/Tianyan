@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "builtin.tianyan-local-plugin",
+  "name": "天衍本地进程插件",
+  "version": "1.0.0",
+  "description": "预置 v2 插件清单、Shell 示例、离线打包脚本与开发说明",
+  "projectType": "TIANYAN_PLUGIN",
+  "category": { "id": "process", "name": "本地进程插件", "sortOrder": 0 },
+  "variables": [
+    { "name": "toolId", "label": "工具 ID", "description": "2–64 位小写字母、数字或连字符，用作命令和安装目录名", "prompt": true, "defaultValue": "hello-plugin", "validationRegex": "^[a-z0-9][a-z0-9-]{1,63}$" },
+    { "name": "pluginId", "label": "插件身份", "description": "点分身份，例如 example.hello；不能使用 tianyan. 或 legacy. 前缀", "prompt": true, "defaultValue": "example.hello", "validationRegex": "^(?=.{1,128}$)(?!tianyan\\.|legacy\\.)[a-z][a-z0-9]*(?:\\.[a-z][a-z0-9-]*)+$" },
+    { "name": "pluginName", "label": "插件名称", "prompt": true, "defaultValue": "Hello Plugin", "validationRegex": "^[A-Za-z0-9一-鿿 _-]{1,64}$" },
+    { "name": "pluginVersion", "label": "初始版本", "description": "使用主版本.次版本.修订版本，例如 1.0.0", "prompt": true, "defaultValue": "1.0.0", "validationRegex": "^(?=.{1,128}$)(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$" }
+  ],
+  "validation": {
+    "requiredFiles": ["manifest.json", "payload/bin/{{toolId}}", "payload/lib/plugin_server.py", "tools/package_plugin.py", "README.md", "AGENTS.md"],
+    "contentRules": [{ "path": "manifest.json", "contains": ["\"schemaVersion\": 2", "{{pluginId}}"] }]
+  }
+}

@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="harness_first_response_timeout">⏱ Still waiting for the model\'s first response after %1$d seconds. This is a local time limit, not an upstream error. Raise or turn off “First model response” under Agent execution, then try again.</string>
+</resources>

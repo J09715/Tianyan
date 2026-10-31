@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_tool_status_style">Tool status style</string>
+    <string name="settings_tool_status_icons">Tool icons</string>
+    <string name="settings_tool_status_icons_description">Tool icons show the type; colors show execution status</string>
+    <string name="settings_tool_status_dots">Classic status dots</string>
+    <string name="settings_tool_status_dots_description">Green for success, yellow while running, red for failure</string>
+</resources>

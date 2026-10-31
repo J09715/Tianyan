@@ -8,6 +8,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -25,6 +26,16 @@ import top.tianyan.app.harness.PendingMessage
 import top.tianyan.app.harness.UserMessage
 import top.tianyan.app.harness.queue.PromptQueue
 import top.tianyan.app.harness.queue.PromptQueueManager
+import top.tianyan.app.core.common.logging.AppLogger
+import top.tianyan.app.core.common.logging.SensitiveDataRedactor
+import top.tianyan.app.core.database.HarnessEntryEntity
+import top.tianyan.app.core.database.HarnessRuntimeRepository
+import top.tianyan.app.harness.HarnessMessage
+import top.tianyan.app.harness.ContextMemoryToolBackend
+import top.tianyan.app.harness.HarnessTool
+import top.tianyan.app.harness.ToolCall
+import top.tianyan.app.harness.ToolResult
+import top.tianyan.app.harness.session.SessionTreeStore
 
 /**
  * Compaction 与持久化队列的集成测试（真实 Room）：
@@ -36,7 +47,8 @@ import top.tianyan.app.harness.queue.PromptQueueManager
 class HarnessCompactionAndQueueIntegrationTest {
 
     private lateinit var database: AppDatabase
-    private lateinit var repository: top.tianyan.app.core.database.HarnessRuntimeRepository
+    private lateinit var repository: HarnessRuntimeRepository
+    private lateinit var store: SessionTreeStore
     private lateinit var compaction: CompactionManager
     private lateinit var queues: PromptQueueManager
 
@@ -47,8 +59,13 @@ class HarnessCompactionAndQueueIntegrationTest {
             .allowMainThreadQueries()
             .build()
         repository = RoomHarnessRuntimeRepository(database.harnessRuntimeDao())
-        compaction = CompactionManager(repository, Json)
-        queues = PromptQueueManager(repository, Json)
+        store = SessionTreeStore(
+            repository,
+            Json,
+            AppLogger(context, SensitiveDataRedactor { it }),
+        )
+        compaction = CompactionManager(repository, Json, store)
+        queues = PromptQueueManager(repository, Json, store)
     }
 
     @After
@@ -61,13 +78,40 @@ class HarnessCompactionAndQueueIntegrationTest {
         else AssistantText(id = "m-$index", createdAt = index.toLong(), text = "回复内容 $index")
 
     @Test
+    fun `manual compact retains active tool turn and keeps original history readable`() = runBlocking {
+        val sessionId = "manual-tool-turn"
+        val messages = listOf(
+            UserMessage("old-user", 0, "Old request"), AssistantText("old-answer", 1, "Old answer"),
+            UserMessage("current-user", 2, "Current request"),
+            ToolCall("call-a", 3, HarnessTool.READ, JsonObject(emptyMap())),
+            ToolResult("result-a", 4, "call-a", true, "First output"),
+            ToolCall("call-b", 5, HarnessTool.READ, JsonObject(emptyMap())),
+            ToolResult("result-b", 6, "call-b", true, "Second output"),
+            AssistantText("answer", 7, "Completed"),
+        )
+        repository.ensureLane(sessionId, "main")
+        for (message in messages) repository.appendToLane(sessionId, "main", HarnessEntryEntity(
+            id = message.id, sessionId = sessionId,
+            parentId = repository.findLane(sessionId, "main")!!.leafId, createdAt = message.createdAt,
+            entryType = "message", customType = null,
+            payloadJson = Json.encodeToString(HarnessMessage.serializer(), message),
+        ))
+        val backend = ContextMemoryToolBackend(store, compaction)
+        assertTrue(backend.manualCompact(sessionId).first)
+        assertEquals(messages.drop(2), compaction.project(sessionId).messages)
+        assertTrue(store.readWithRelated(sessionId, messageId = "old-user").isNotEmpty())
+        assertTrue(!backend.manualCompact(sessionId).first)
+        assertEquals(messages.drop(2), compaction.project(sessionId).messages)
+    }
+
+    @Test
     fun `compaction projects summary plus retained tail`() = runBlocking {
         val sessionId = "s-compaction"
         repository.ensureLane(sessionId, "main")
         for (index in 0 until 10) {
             repository.appendToLane(
                 sessionId, "main",
-                top.tianyan.app.core.database.HarnessEntryEntity(
+                HarnessEntryEntity(
                     id = "m-$index",
                     sessionId = sessionId,
                     parentId = repository.findLane(sessionId, "main")!!.leafId,
@@ -75,7 +119,7 @@ class HarnessCompactionAndQueueIntegrationTest {
                     entryType = "message",
                     customType = if (index % 2 == 0) "user" else "assistant",
                     payloadJson = Json.encodeToString(
-                        top.tianyan.app.harness.HarnessMessage.serializer(),
+                        HarnessMessage.serializer(),
                         message(index),
                     ),
                 ),
@@ -113,7 +157,7 @@ class HarnessCompactionAndQueueIntegrationTest {
         for (index in 0 until 8) {
             repository.appendToLane(
                 sessionId, "main",
-                top.tianyan.app.core.database.HarnessEntryEntity(
+                HarnessEntryEntity(
                     id = "m-$index",
                     sessionId = sessionId,
                     parentId = repository.findLane(sessionId, "main")!!.leafId,
@@ -121,7 +165,7 @@ class HarnessCompactionAndQueueIntegrationTest {
                     entryType = "message",
                     customType = "user",
                     payloadJson = Json.encodeToString(
-                        top.tianyan.app.harness.HarnessMessage.serializer(),
+                        HarnessMessage.serializer(),
                         message(index),
                     ),
                 ),
@@ -134,7 +178,7 @@ class HarnessCompactionAndQueueIntegrationTest {
         for (index in 8 until 10) {
             repository.appendToLane(
                 sessionId, "main",
-                top.tianyan.app.core.database.HarnessEntryEntity(
+                HarnessEntryEntity(
                     id = "m-$index",
                     sessionId = sessionId,
                     parentId = repository.findLane(sessionId, "main")!!.leafId,
@@ -142,7 +186,7 @@ class HarnessCompactionAndQueueIntegrationTest {
                     entryType = "message",
                     customType = "assistant",
                     payloadJson = Json.encodeToString(
-                        top.tianyan.app.harness.HarnessMessage.serializer(),
+                        HarnessMessage.serializer(),
                         message(index),
                     ),
                 ),
@@ -157,6 +201,101 @@ class HarnessCompactionAndQueueIntegrationTest {
         assertEquals("m-9", second.messages.last().id)
     }
 
+    private suspend fun appendMessageEntry(sessionId: String, id: String, text: String, createdAt: Long) {
+        repository.appendToLane(
+            sessionId, "main",
+            HarnessEntryEntity(
+                id = id,
+                sessionId = sessionId,
+                parentId = repository.findLane(sessionId, "main")!!.leafId,
+                createdAt = createdAt,
+                entryType = "message",
+                customType = "user",
+                payloadJson = Json.encodeToString(
+                    HarnessMessage.serializer(),
+                    UserMessage(id = id, createdAt = createdAt, text = text),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `messages appended after the caller snapshot are retained, not lost`() = runBlocking {
+        val sessionId = "s-stale"
+        repository.ensureLane(sessionId, "main")
+        repeat(10) { index -> appendMessageEntry(sessionId, "m-$index", "消息 $index", index.toLong()) }
+        val context = compaction.project(sessionId)
+
+        // 模拟摘要生成期间（压缩临界区之外）新消息落库：调用方快照已过期。
+        // 旧实现直接折叠过期快照，迟到的两条因 sequence 小于压缩 entry 被投影永久丢弃。
+        appendMessageEntry(sessionId, "m-10", "迟到消息 A", 100L)
+        appendMessageEntry(sessionId, "m-11", "迟到消息 B", 101L)
+
+        val compacted = compaction.compact(sessionId, context, keepFromIndex = 6)
+        assertEquals(
+            "保留窗口必须来自锁内重读快照，覆盖迟到的两条",
+            listOf("m-6", "m-7", "m-8", "m-9", "m-10", "m-11"),
+            compacted.messages.map { it.id },
+        )
+        val projected = compaction.project(sessionId)
+        assertEquals(
+            listOf("m-6", "m-7", "m-8", "m-9", "m-10", "m-11"),
+            projected.messages.map { it.id },
+        )
+    }
+
+    @Test
+    fun `messages landing between the re-read and the compaction write are healed on projection`() = runBlocking {
+        val sessionId = "s-heal"
+        repository.ensureLane(sessionId, "main")
+        repeat(10) { index -> appendMessageEntry(sessionId, "m-$index", "消息 $index", index.toLong()) }
+        val context = compaction.project(sessionId)
+
+        // 模拟 acceptRun 直写（不经 laneLock）：发生在锁内重读之后、压缩 entry 落库之前。
+        // 这些消息不在 retainedMessagesJson 里，只能靠 sourceWatermarkSequence 水位线在投影时补回。
+        compaction.beforeCompactionWriteForTest = {
+            appendMessageEntry(sessionId, "m-late-1", "重读后落库的消息 A", 200L)
+            appendMessageEntry(sessionId, "m-late-2", "重读后落库的消息 B", 201L)
+            // 分支摘要落在同一窗口同样会被 afterSequence 过滤排除，须一并自愈补回
+            repository.appendToLane(
+                sessionId, "main",
+                HarnessEntryEntity(
+                    id = "bs-late",
+                    sessionId = sessionId,
+                    parentId = repository.findLane(sessionId, "main")!!.leafId,
+                    createdAt = 202L,
+                    entryType = CompactionManager.BRANCH_SUMMARY_ENTRY_TYPE,
+                    customType = null,
+                    payloadJson = Json.encodeToString(
+                        BranchSummaryPayload.serializer(),
+                        BranchSummaryPayload(
+                            summary = "被放弃分支的关键结论",
+                            fromLeafId = null,
+                            summarizedMessageCount = 3,
+                            createdAt = 202L,
+                        ),
+                    ),
+                ),
+            )
+        }
+        try {
+            compaction.compact(sessionId, context, keepFromIndex = 6)
+        } finally {
+            compaction.beforeCompactionWriteForTest = null
+        }
+
+        val projected = compaction.project(sessionId)
+        assertEquals(
+            "水位线自愈必须补回重读与落库之间被直写的消息",
+            listOf("m-6", "m-7", "m-8", "m-9", "m-late-1", "m-late-2"),
+            projected.messages.map { it.id },
+        )
+        assertTrue(
+            "窗口内的分支摘要须一并自愈注入",
+            projected.branchSummaries.contains("被放弃分支的关键结论"),
+        )
+    }
+
     @Test
     fun `queued prompts survive runtime recreation in order`() = runBlocking {
         val sessionId = "s-queue"
@@ -165,7 +304,7 @@ class HarnessCompactionAndQueueIntegrationTest {
         queues.enqueue(sessionId, PromptQueue.STEER, PendingMessage("插队", createdAt = 3L))
 
         // 模拟进程重启：仅从数据库重建队列管理器
-        val revived = PromptQueueManager(repository, Json)
+        val revived = PromptQueueManager(repository, Json, store)
 
         val nextRun = revived.list(sessionId, PromptQueue.NEXT_RUN)
         assertEquals(listOf("第一条", "第二条"), nextRun.map { it.second.text })
@@ -178,7 +317,7 @@ class HarnessCompactionAndQueueIntegrationTest {
         assertEquals(2, repository.listEntries(sessionId).size)
         assertEquals("第二条", repository.findLane(sessionId, "main")!!.leafId?.let { leafId ->
             repository.listEntries(sessionId).first { it.id == leafId }
-                .let { entry -> Json.decodeFromString(top.tianyan.app.harness.HarnessMessage.serializer(), entry.payloadJson) }
+                .let { entry -> Json.decodeFromString(HarnessMessage.serializer(), entry.payloadJson) }
                 .let { (it as UserMessage).text }
         })
     }
@@ -217,7 +356,7 @@ class HarnessCompactionAndQueueIntegrationTest {
         assertEquals(listOf("子 lane 消息"), consumed.map { it.text })
         assertEquals("子 lane 消息", repository.findLane(sessionId, "subagent:test:1")!!.leafId?.let { leafId ->
             repository.listEntries(sessionId).first { it.id == leafId }
-                .let { entry -> Json.decodeFromString(top.tianyan.app.harness.HarnessMessage.serializer(), entry.payloadJson) }
+                .let { entry -> Json.decodeFromString(HarnessMessage.serializer(), entry.payloadJson) }
                 .let { (it as UserMessage).text }
         })
         // 主 lane 队列不受影响

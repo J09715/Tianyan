@@ -106,6 +106,8 @@ fun WorkflowCanvas2D(
     onRemoveNode: (String) -> Unit = {},
     onConfigureNode: (String) -> Unit = {},
 ) {
+    val expandedRun = !editable && state?.baseDefinition != null && state.definition == definition
+    val renderedDefinition = remember(definition, expandedRun) { workflowRunGraphPresentation(definition, expandedRun) }
     val density = LocalDensity.current
     val nodeWidthPx = with(density) { NodeWidth.toPx() }
     val nodeHeightPx = with(density) { NodeHeight.toPx() }
@@ -113,24 +115,9 @@ fun WorkflowCanvas2D(
     val fitPaddingPx = with(density) { 40.dp.toPx() }
     val viewConfiguration = LocalViewConfiguration.current
     val touchSlop = viewConfiguration.touchSlop
-    val positions = remember(definition.id, density) {
-        mutableStateMapOf<String, Offset>().apply {
-            definition.nodes.forEachIndexed { index, node ->
-                this[node.id] = nodePosition(node, index, density.density)
-            }
-        }
-    }
-    // 同步保证 positions 包含当前 definition 中的所有节点（无需等待异步 LaunchedEffect）
-    definition.nodes.forEachIndexed { index, node ->
-        if (!positions.containsKey(node.id)) {
-            positions[node.id] = nodePosition(node, index, density.density)
-        }
-    }
-    LaunchedEffect(definition.nodes, density) {
-        positions.keys.retainAll(definition.nodes.mapTo(mutableSetOf()) { it.id })
-    }
+    val positions = rememberWorkflowCanvasPositions(renderedDefinition, density.density)
 
-    val resolvedPositions = resolveNodePositions(definition.nodes, positions, density.density)
+    val resolvedPositions = resolveNodePositions(renderedDefinition.nodes, positions, density.density)
     val bounds = contentBounds(resolvedPositions.values, nodeWidthPx, nodeHeightPx)
 
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
@@ -207,7 +194,7 @@ fun WorkflowCanvas2D(
 
         // 连线层：在视口屏幕坐标系中渲染，绝无纹理尺寸超限问题
         WorkflowEdges(
-            definition = definition,
+            definition = renderedDefinition,
             state = state,
             positions = resolvedPositions,
             scale = scale,
@@ -221,7 +208,7 @@ fun WorkflowCanvas2D(
         )
 
         // 节点层：卡片在视口屏幕坐标系中精确定位与缩放
-        definition.nodes.forEachIndexed { index, node ->
+        renderedDefinition.nodes.forEachIndexed { index, node ->
             key(node.id) {
                 val run = state?.nodeStates?.get(node.id)
                 WorkflowNodeCard(
@@ -430,75 +417,6 @@ private fun WorkflowEdges(
     }
 }
 
-data class NodeVisualTheme(
-    val accentColor: Color,
-    val icon: RuntimeIconName,
-    val tag: String,
-)
-
-fun WorkflowNodeType.visualTheme(): NodeVisualTheme = when (this) {
-    WorkflowNodeType.TRIGGER -> NodeVisualTheme(
-        accentColor = Color(0xFF10B981), // 翡翠绿
-        icon = RuntimeIconName.Play,
-        tag = "触发器",
-    )
-    WorkflowNodeType.BASH_COMMAND -> NodeVisualTheme(
-        accentColor = Color(0xFF06B6D4), // 终端青
-        icon = RuntimeIconName.Terminal,
-        tag = "Shell 命令",
-    )
-    WorkflowNodeType.PROCESS_SERVICE -> NodeVisualTheme(
-        accentColor = Color(0xFF818CF8), // 守护紫
-        icon = RuntimeIconName.Settings,
-        tag = "常驻服务",
-    )
-    WorkflowNodeType.AGENT_INFERENCE -> NodeVisualTheme(
-        accentColor = Color(0xFFA855F7), // 智能紫
-        icon = RuntimeIconName.Sparkles,
-        tag = "AI 推理",
-    )
-    WorkflowNodeType.SUBAGENT_DELEGATE -> NodeVisualTheme(
-        accentColor = Color(0xFF3B82F6), // 协同蓝
-        icon = RuntimeIconName.Hub,
-        tag = "子智能体",
-    )
-    WorkflowNodeType.TAIXU_BUILD -> NodeVisualTheme(
-        accentColor = Color(0xFFF59E0B), // 构建琥珀
-        icon = RuntimeIconName.Package,
-        tag = "离线构建",
-    )
-    WorkflowNodeType.CONDITION_BRANCH -> NodeVisualTheme(
-        accentColor = Color(0xFFEAB308), // 分支黄
-        icon = RuntimeIconName.Link,
-        tag = "条件分支",
-    )
-    WorkflowNodeType.HUMAN_APPROVAL -> NodeVisualTheme(
-        accentColor = Color(0xFFF43F5E), // 审批红
-        icon = RuntimeIconName.Alert,
-        tag = "人工把关",
-    )
-    WorkflowNodeType.HOST_ACTION -> NodeVisualTheme(
-        accentColor = Color(0xFF14B8A6), // 宿主青
-        icon = RuntimeIconName.Android,
-        tag = "宿主系统",
-    )
-    WorkflowNodeType.DELAY -> NodeVisualTheme(
-        accentColor = Color(0xFF94A3B8),
-        icon = RuntimeIconName.Speed,
-        tag = "延时等待",
-    )
-    WorkflowNodeType.SET_VARIABLE -> NodeVisualTheme(
-        accentColor = Color(0xFF2DD4BF),
-        icon = RuntimeIconName.Tune,
-        tag = "设置变量",
-    )
-    WorkflowNodeType.TERMINAL_OUTPUT -> NodeVisualTheme(
-        accentColor = Color(0xFF0EA5E9), // 归档天蓝
-        icon = RuntimeIconName.Check,
-        tag = "结果输出",
-    )
-}
-
 /**
  * 节点卡片：专属色彩识别系统、左侧色彩状态条、动态代码/分流胶囊预览，
  * 并在选中时呈现 [调参 / 连线 / 删除] 快捷操作条。
@@ -643,7 +561,7 @@ private fun WorkflowNodeCard(
                             WorkflowNodeType.BASH_COMMAND -> ">_ ${node.config["command"]?.trim() ?: "待配置命令"}"
                             WorkflowNodeType.CONDITION_BRANCH -> "🔀 ${node.config["expression"]?.trim() ?: "exitCode == 0"}"
                             WorkflowNodeType.AGENT_INFERENCE -> "✨ ${node.config["prompt"]?.trim()?.take(20) ?: "AI 提示词"}"
-                            WorkflowNodeType.TAIXU_BUILD -> "📦 ${node.config["projectType"] ?: "android"} · ${node.config["task"] ?: "assemble"}"
+                            WorkflowNodeType.TIANYAN_BUILD -> "📦 ${node.config["projectType"] ?: "android"} · ${node.config["task"] ?: "assemble"}"
                             WorkflowNodeType.HUMAN_APPROVAL -> "🛡️ 需要人工确认"
                             WorkflowNodeType.HOST_ACTION -> "📱 ${node.config["action"] ?: "status"}"
                             WorkflowNodeType.DELAY -> "⏱ ${node.config["seconds"] ?: "1"}s"
@@ -796,12 +714,13 @@ internal fun resolveNodePositions(
 }.toMap()
 
 private fun WorkflowNodeType.displayName(): String = when (this) {
+    WorkflowNodeType.PLUGIN_ACTION -> "插件动作"
     WorkflowNodeType.TRIGGER -> "触发器"
     WorkflowNodeType.BASH_COMMAND -> "命令"
     WorkflowNodeType.PROCESS_SERVICE -> "后台服务"
     WorkflowNodeType.AGENT_INFERENCE -> "智能体推理"
     WorkflowNodeType.SUBAGENT_DELEGATE -> "子智能体"
-    WorkflowNodeType.TAIXU_BUILD -> "天衍构建"
+    WorkflowNodeType.TIANYAN_BUILD -> "天衍构建"
     WorkflowNodeType.CONDITION_BRANCH -> "条件分支"
     WorkflowNodeType.HUMAN_APPROVAL -> "人工审批"
     WorkflowNodeType.HOST_ACTION -> "宿主动作"

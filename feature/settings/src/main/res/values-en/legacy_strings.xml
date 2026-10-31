@@ -13,8 +13,8 @@
     <string name="settings_legacy_0011" formatted="false">Base URL</string>
     <string name="settings_legacy_0012" formatted="false">Later</string>
     <string name="settings_legacy_0013" formatted="false">Downloading…</string>
-    <string name="settings_legacy_0014" formatted="false">Tianyan · Settings</string>
-    <string name="settings_legacy_0015" formatted="false">Tianyan</string>
+    <string name="settings_legacy_0014" formatted="false">天衍 · Settings</string>
+    <string name="settings_legacy_0015" formatted="false">天衍</string>
     <string name="settings_legacy_0016" formatted="false">System settings and control center</string>
     <string name="settings_legacy_0017" formatted="false">System &amp; configuration</string>
     <string name="settings_legacy_0018" formatted="false">Agent &amp; AI models</string>
@@ -78,7 +78,7 @@
     <string name="settings_legacy_0077" formatted="false">Background reliability &amp; diagnostics</string>
     <string name="settings_legacy_0078" formatted="false">Background reliability &amp; diagnostics</string>
     <string name="settings_legacy_0079" formatted="false">Battery optimization &amp; background operation</string>
-    <string name="settings_legacy_0080" formatted="false">Exempt Tianyan from battery restrictions so the agent can keep running</string>
+    <string name="settings_legacy_0080" formatted="false">Exempt 天衍 from battery restrictions so the agent can keep running</string>
     <string name="settings_legacy_0081" formatted="false">Android 12 child-process limit</string>
     <string name="settings_legacy_0082" formatted="false">Remove the 32 phantom-process background limit</string>
     <string name="settings_legacy_0083" formatted="false">Removed</string>
@@ -103,7 +103,7 @@
     <string name="settings_legacy_0102" formatted="false">Developer debugging &amp; console</string>
     <string name="settings_legacy_0103" formatted="false">Inspect PRoot processes and command traces in real time</string>
     <string name="settings_legacy_0104" formatted="false">About &amp; community</string>
-    <string name="settings_legacy_0105" formatted="false">About Tianyan</string>
+    <string name="settings_legacy_0105" formatted="false">About 天衍</string>
     <string name="settings_legacy_0106" formatted="false">About, updates, and community</string>
     <string name="settings_legacy_0107" formatted="false">App version &amp; updates</string>
     <string name="settings_legacy_0108" formatted="false">Check for updates</string>
@@ -114,7 +114,7 @@
     <string name="settings_legacy_0113" formatted="false">Silently check for new versions when the app starts</string>
     <string name="settings_legacy_0114" formatted="false">Community &amp; open source</string>
     <string name="settings_legacy_0115" formatted="false">Open-source project on GitHub</string>
-    <string name="settings_legacy_0116" formatted="false">Tianyan community</string>
+    <string name="settings_legacy_0116" formatted="false">天衍 community</string>
     <string name="settings_legacy_0117" formatted="false">Official QQ group</string>
     <string name="settings_legacy_0118" formatted="false">Download from GitHub</string>
     <string name="settings_legacy_0119" formatted="false">Running normally</string>
@@ -209,7 +209,7 @@
     <string name="settings_text_0061" formatted="false">Delete Subagent</string>
     <string name="settings_text_0062" formatted="false">Delete service</string>
     <string name="settings_text_0063" formatted="false">Failed to delete model</string>
-    <string name="settings_text_0064" formatted="false">Join the QQ group (905971993)</string>
+    <string name="settings_text_0064" formatted="false">Join the QQ group (964382207)</string>
     <string name="settings_text_0065" formatted="false">Assistant Name</string>
     <string name="settings_text_0066" formatted="false">Protocol: Apache-2.0 License</string>
     <string name="settings_text_0067" formatted="false">Single Key rpm needs to be a non-negative integer</string>
@@ -218,7 +218,6 @@
     <string name="settings_text_0070" formatted="false">Uninstall</string>
     <string name="settings_text_0071" formatted="false">Uninstall Tool</string>
     <string name="settings_text_0072" formatted="false">Compression Strategy</string>
-    <string name="settings_text_0073" formatted="false">Compression Trigger Threshold (User Round)</string>
     <string name="settings_text_0074" formatted="false">Parameters (space delimited)</string>
     <string name="settings_text_0075" formatted="false">You can call Taihui Agent to independently troubleshoot and self-heal in the PRoot sandbox</string>
     <string name="settings_text_0076" formatted="false">Updatable</string>
@@ -240,7 +239,7 @@
     <string name="settings_text_0092" formatted="false">Copy JSON</string>
     <string name="settings_text_0093" formatted="false">Complex and parallel tasks will be dispatched at the discretion of the master agent</string>
     <string name="settings_text_0094" formatted="false">Multi-sandbox coexistence and dynamic switching</string>
-    <string name="settings_text_0095" formatted="false">Automatically compress the history intermediate tool output log when multiple rounds of tool calls exceed the threshold, preserving the start and end of the task and the critical state</string>
+    <string name="settings_text_0095" formatted="false">Generate a structured summary when history crosses the token folding line, preserving recent messages, task state, and key file activity</string>
     <string name="settings_text_0096" formatted="false">e.g. sqlite/github/fetch</string>
     <string name="settings_text_0097" formatted="false">Install</string>
     <string name="settings_text_0098" formatted="false">Installing</string>
@@ -284,13 +283,10 @@
     <string name="settings_text_0136" formatted="false">Start download</string>
     <string name="settings_text_0137" formatted="false">Start Installation</string>
     <string name="settings_text_0138" formatted="false">Exceptions</string>
-    <string name="settings_text_0139" formatted="false">Mandatory Chinese (recommended)</string>
-    <string name="settings_text_0140" formatted="false">Mandatory model thinking process in English throughout</string>
     <string name="settings_text_0141" formatted="false">When a session is associated with a workspace, the base command defaults to the directory as the working path (cwd)</string>
     <string name="settings_text_0142" formatted="false">When the session history exceeds the number of rounds, smart trimming is started, and the last 4 rounds remain lossless</string>
     <string name="settings_text_0143" formatted="false">Currently Active</string>
     <string name="settings_text_0144" formatted="false">Mandatory pedestal</string>
-    <string name="settings_text_0145" formatted="false">Thinking and Reasoning Language Preferences</string>
     <string name="settings_text_0146" formatted="false">Reflection Presentation</string>
     <string name="settings_text_0147" formatted="false">Think Stream, Subagents, Skills and Plugins</string>
     <string name="settings_text_0148" formatted="false">Thinking Flow and Execution Performance</string>
@@ -395,7 +391,6 @@
     <string name="settings_text_0247" formatted="false">Version: v0.3.0 (Material 3 Expressive)</string>
     <string name="settings_text_0248" formatted="false">Generate security token</string>
     <string name="settings_text_0249" formatted="false">User Name</string>
-    <string name="settings_text_0250" formatted="false">The thinking language is autonomously determined by the model based on the context or underlying default policy</string>
     <string name="settings_text_0251" formatted="false">Claim an exemption for battery optimization</string>
     <string name="settings_text_0252" formatted="false">Battery optimization and background keepalives</string>
     <string name="settings_text_0253" formatted="false">Battery level</string>
@@ -417,7 +412,7 @@
     <string name="settings_text_0269" formatted="false">Gateway Services</string>
     <string name="settings_text_0270" formatted="false">Network Downloads</string>
     <string name="settings_text_0271" formatted="false">Download GGUF online</string>
-    <string name="settings_text_0272" formatted="false">Group number: 905971993 · Click to add group/copy group number</string>
+    <string name="settings_text_0272" formatted="false">Group number: 964382207 · Click to add group/copy group number</string>
     <string name="settings_text_0273" formatted="false">The newly generated thought process in the chat interface will be rendered by default</string>
     <string name="settings_text_0274" formatted="false">Introduction to Responsibilities</string>
     <string name="settings_text_0275" formatted="false">Auto</string>
@@ -482,17 +477,30 @@
     <string name="settings_text_0334" formatted="false">📋 JSON Import</string>
     <string name="settings_text_0335" formatted="false">📝 Form Mode</string>
     <string name="settings_text_0336" formatted="false">🧠 AI self-healing</string>
+    <string name="settings_text_0337" formatted="false">Prevents the model from looping in complex tasks; when the round budget is used up, it enters the auto-continue checkpoint below</string>
+    <string name="settings_text_0338" formatted="false">Auto-continue after round budget is used up</string>
+    <string name="settings_text_0339" formatted="false">Stop and wait for confirmation when the round budget is used up; useful when you want to review each segment</string>
+    <string name="settings_text_0340" formatted="false">When the round budget is used up, the model first checkpoints progress, then continues automatically without a tap; total budget cap is %1$s rounds</string>
+    <string name="settings_text_0341" formatted="false">%1$s times</string>
+    <string name="settings_text_0342" formatted="false">Naming &amp; Persona</string>
+    <string name="settings_text_0343" formatted="false">View default system prompt</string>
+    <string name="settings_text_0344" formatted="false">Assistant name</string>
+    <string name="settings_text_0345" formatted="false">天衍 Agent</string>
+    <string name="settings_text_0346" formatted="false">How to address you</string>
+    <string name="settings_text_0347" formatted="false">User</string>
+    <string name="settings_text_0348" formatted="false">Applies to all conversations immediately (leave blank to restore defaults); the {{char}} / {{user}} macro variables in a custom prompt will also use these values.</string>
+    <string name="settings_text_0349" formatted="false">Default system prompt (core.md)</string>
+    <string name="settings_text_0350" formatted="false">(Failed to load the default system prompt)</string>
     <string name="settings_long_001" formatted="false">, target.sizeBytes.toDouble ()/(1024 * 1024)} MB space). The code file in the/workspace workspace will not be affected in any way.</string>
     <string name="settings_long_002" formatted="false">1. Analyze the above PRoot sandbox for failures and errors (such as dpkg dependency corruption, lock residuals, blocked network downloads, missing commandLinks softlinks, or missing environment);</string>
     <string name="settings_long_003" formatted="false">2. Directly call the base tool to execute targeted repair commands (such as cleaning up the/var/lib/dpkg lock, dpkg --configure -a, apt-get --fix-broken install, manually pulling or patching soft links from alternate sources);</string>
     <string name="settings_long_004" formatted="false">Android 12 + monitors app-derived subprocesses and may terminate PRoot, compiler, or Agent tasks after the system limit is exceeded.The child process limit is lifted here, not the number of Java/Kotlin threads.</string>
     <string name="settings_long_005" formatted="false">MCP is an open standard model context protocol.After opening, Taihui will start the corresponding Stdio service or connect the local SSE endpoint in the PRoot sandbox, and dynamically inject professional tool capabilities into the intelligent agent.</string>
-    <string name="settings_long_006" formatted="false">https://github.com/J09715/Tianyan · Welcome Star Support</string>
+    <string name="settings_long_006" formatted="false">https://github.com/tianyan-lab/tianyan · Welcome Star Support</string>
     <string name="settings_long_007" formatted="false">Taihui will start the front desk service and hold the CPU process lock during Agent execution, but the system battery optimization may still be behind the screen.</string>
-    <string name="settings_long_008" formatted="false">Tianyan supports multiple Linux systems side by side. Every system automatically mounts the /workspace projects; /sdcard external storage is injected according to the toggles in Storage Mounts &amp; Sharing. Each distro keeps its own package manager and software ecosystem fully isolated.</string>
+    <string name="settings_long_008" formatted="false">天衍 supports multiple Linux systems side by side. Every system automatically mounts the /workspace projects; /sdcard external storage is injected according to the toggles in Storage Mounts &amp; Sharing. Each distro keeps its own package manager and software ecosystem fully isolated.</string>
     <string name="settings_long_009" formatted="false">You have not configured any model archives, you can add Claude, OpenAI or DeepSeek → models by going to [Setting up model archive management]</string>
     <string name="settings_long_010" formatted="false">Mounts only affect processes inside the Linux sandbox (terminal, agent, builds and background services), not the file explorer, which always accesses host storage directly. Mounts are injected at session startup; only new terminals and builds pick up changes. Full read-write access additionally requires the "All files access" permission in system settings.</string>
-    <string name="settings_long_011" formatted="false">Use Chinese throughout the strongly constrained model thinking process (solve the problem of DeepSeek/Claude thinking about running English)</string>
     <string name="settings_long_012" formatted="false">Tip: Xiaomi/Huawei/OPPO and other vendor systems also need to manually allow "autostart" and "background operation" in the application details.</string>
     <string name="settings_long_013" formatted="false">The service has not been started yet. Please click Start in the [Gateway Service] card first. After the startup is successful, the accessible link will be displayed here.Tokens can be generated in advance and injected automatically at startup.</string>
     <string name="settings_long_014" formatted="false">Architecture: aarch64 · chroot-less user-space virtualization</string>

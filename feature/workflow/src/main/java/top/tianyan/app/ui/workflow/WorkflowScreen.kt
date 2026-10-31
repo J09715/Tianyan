@@ -1,5 +1,7 @@
 package top.tianyan.app.ui.workflow
-
+import top.tianyan.app.ui.components.previewOrNull
+import top.tianyan.app.ui.components.previewStateOf
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -23,30 +25,31 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import top.tianyan.app.ui.components.RuntimeSwitch as Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import top.tianyan.app.core.model.workflow.NodeRunStatus
-import top.tianyan.app.core.model.workflow.WorkflowApprovalRequest
+import top.tianyan.app.core.database.WorkflowScheduleEntity
 import top.tianyan.app.core.model.workflow.WorkflowDefinition
 import top.tianyan.app.core.model.workflow.WorkflowRunStatus
 import top.tianyan.app.core.model.workflow.WorkflowRuntimeState
@@ -57,26 +60,38 @@ import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeOutlinedButton
 import top.tianyan.app.ui.components.RuntimeTopBar
-
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun WorkflowScreen(
     projectName: String = "",
     initialWorkflowId: String? = null,
     initialVariables: Map<String, String> = emptyMap(),
+    initialExecutionId: String? = null,
     onBack: () -> Unit,
-    viewModel: WorkflowViewModel = hiltViewModel(),
+    viewModel: WorkflowViewModel? = previewOrNull { koinViewModel() },
 ) {
-    val definitions by viewModel.definitions.collectAsStateWithLifecycle()
-    val history by viewModel.history.collectAsStateWithLifecycle()
-    val models by viewModel.models.collectAsStateWithLifecycle()
-    val error by viewModel.error.collectAsStateWithLifecycle()
+    val definitions by viewModel?.definitions?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val history by viewModel?.history?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val models by viewModel?.models?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val schedules by viewModel?.schedules?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val backgroundRuns by viewModel?.backgroundActiveRuns?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val error by viewModel?.error?.collectAsStateWithLifecycle() ?: previewStateOf(null)
     val snackbar = remember { SnackbarHostState() }
-    LaunchedEffect(error) { error?.let { snackbar.showSnackbar(it); viewModel.clearError() } }
+    LaunchedEffect(error) { error?.let { snackbar.showSnackbar(it); viewModel?.clearError() } }
     var pendingRun by remember { mutableStateOf<WorkflowDefinition?>(null) }
-    val activeState by viewModel.activeState.collectAsStateWithLifecycle()
-    val approval by viewModel.approvalRequest.collectAsStateWithLifecycle()
-    val editorState by viewModel.editorState.collectAsStateWithLifecycle()
+    var scheduleEditor by remember { mutableStateOf<WorkflowScheduleEntity?>(null) }
+    var scheduleEditorIsNew by remember { mutableStateOf(false) }
+    val activeState by viewModel?.activeState?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val approval by viewModel?.approvalRequest?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val editorState by viewModel?.editorState?.collectAsStateWithLifecycle() ?: previewStateOf<WorkflowEditorUiState?>(null)
     var discardRequested by rememberSaveable { mutableStateOf(false) }
+    // 通知深链：进入页面即定位到指定执行（活跃运行或历史回看）
+    LaunchedEffect(initialExecutionId) {
+        if (initialExecutionId != null) viewModel?.viewRun(initialExecutionId)
+    }
     var autoStarted by rememberSaveable(initialWorkflowId) { mutableStateOf(false) }
     LaunchedEffect(initialWorkflowId, definitions, autoStarted) {
         if (!autoStarted && initialWorkflowId != null) {
@@ -86,17 +101,22 @@ fun WorkflowScreen(
             }
         }
     }
+    val catalogVisible = activeState == null && editorState == null
+    val scrollBehavior = androidx.compose.material3.TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
+        modifier = if (catalogVisible) Modifier.nestedScroll(scrollBehavior.nestedScrollConnection) else Modifier,
+        containerColor = MaterialTheme.colorScheme.surface,
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
-            RuntimeTopBar(
+            if (catalogVisible) RuntimeTopBar(title = "天衍工作流", onBack = onBack, scrollBehavior = scrollBehavior)
+            else RuntimeTopBar(
                 title = activeState?.definition?.name ?: editorState?.definition?.name ?: "天衍工作流",
                 statusText = projectName.takeIf(String::isNotBlank)?.let { "工作区 · $it" },
                 onBack = {
                     when {
-                        activeState != null -> viewModel.closeRun()
+                        activeState != null -> viewModel?.closeRun()
                         editorState?.isDirty == true -> discardRequested = true
-                        editorState != null -> viewModel.closeEditor()
+                        editorState != null -> viewModel?.closeEditor()
                         else -> onBack()
                     }
                 },
@@ -109,66 +129,84 @@ fun WorkflowScreen(
                 activeRunState = activeState,
                 onRun = {
                     if (editorState!!.isDirty) {
-                        viewModel.saveEditor()
+                        viewModel?.saveEditor()
                     }
                     pendingRun = editorState!!.definition
                 },
-                onCancelRun = viewModel::cancel,
-                onSelectNode = viewModel::selectNode,
-                onMoveNode = viewModel::moveNode,
-                onBeginConnection = viewModel::beginConnection,
-                onCancelConnection = viewModel::cancelConnection,
-                onConnect = viewModel::connectTo,
-                onAddNode = viewModel::addNode,
-                onUpdateNode = viewModel::updateNode,
-                onUpdateMetadata = viewModel::updateMetadata,
-                onRemoveNode = viewModel::removeSelectedNode,
-                onRemoveNodeById = viewModel::removeNode,
-                onConnectNodes = viewModel::connectNodes,
-                onDisconnectNodes = viewModel::disconnectNodes,
-                onDisconnectAllForNode = viewModel::disconnectAllForNode,
-                onUpdateEdge = viewModel::updateEdge,
-                onRemoveEdge = viewModel::removeEdge,
-                onUndo = viewModel::undoEdit,
-                onRedo = viewModel::redoEdit,
-                onSave = viewModel::saveEditor,
-                onAutoLayout = viewModel::autoLayout,
+                onCancelRun = { viewModel?.cancel() },
+                onSelectNode = { arg0 -> viewModel?.selectNode(arg0) },
+                onMoveNode = { arg0, arg1, arg2 -> viewModel?.moveNode(arg0, arg1, arg2) },
+                onBeginConnection = { arg0 -> viewModel?.beginConnection(arg0) },
+                onCancelConnection = { viewModel?.cancelConnection() },
+                onConnect = { arg0 -> viewModel?.connectTo(arg0) },
+                onAddNode = { arg0 -> viewModel?.addNode(arg0) },
+                onUpdateNode = { arg0 -> viewModel?.updateNode(arg0) },
+                onUpdateMetadata = { arg0, arg1, arg2, arg3 -> viewModel?.updateMetadata(arg0, arg1, arg2, arg3) },
+                onRemoveNode = { viewModel?.removeSelectedNode() },
+                onRemoveNodeById = { arg0 -> viewModel?.removeNode(arg0) },
+                onConnectNodes = { arg0, arg1, arg2, arg3 -> viewModel?.connectNodes(arg0, arg1, arg2, arg3) },
+                onDisconnectNodes = { arg0, arg1 -> viewModel?.disconnectNodes(arg0, arg1) },
+                onDisconnectAllForNode = { arg0 -> viewModel?.disconnectAllForNode(arg0) },
+                onUpdateEdge = { arg0 -> viewModel?.updateEdge(arg0) },
+                onRemoveEdge = { arg0 -> viewModel?.removeEdge(arg0) },
+                onUndo = { viewModel?.undoEdit() },
+                onRedo = { viewModel?.redoEdit() },
+                onSave = { viewModel?.saveEditor() },
+                onAutoLayout = { viewModel?.autoLayout() },
                 modifier = Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()),
             )
             activeState == null -> WorkflowCatalog(
                 definitions = definitions,
                 onRun = { pendingRun = it },
                 history = history,
-                onHistory = viewModel::showHistory,
-                onEdit = viewModel::edit,
-                onDelete = viewModel::deleteWorkflow,
-                onCreate = viewModel::createWorkflow,
-                modifier = Modifier.fillMaxSize().padding(padding),
+                onHistory = { arg0 -> viewModel?.showHistory(arg0) },
+                onRerun = { arg0 -> viewModel?.rerun(arg0) },
+                onResume = { arg0, arg1 -> viewModel?.resume(arg0, arg1) },
+                onEdit = { arg0 -> viewModel?.edit(arg0) },
+                onDelete = { arg0 -> viewModel?.deleteWorkflow(arg0) },
+                onCreate = { viewModel?.createWorkflow() },
+                onImport = { arg0 -> viewModel?.importWorkflow(arg0) },
+                backgroundRuns = backgroundRuns,
+                onViewBackgroundRun = { arg0 -> viewModel?.viewRun(arg0) },
+                schedules = schedules,
+                onNewSchedule = {
+                    scheduleEditor = null
+                    scheduleEditorIsNew = true
+                },
+                onEditSchedule = { scheduleEditor = it },
+                onToggleSchedule = { arg0, arg1 -> viewModel?.toggleSchedule(arg0, arg1) },
+                onDeleteSchedule = { arg0 -> viewModel?.deleteSchedule(arg0) },
+                modifier = Modifier.fillMaxSize().then(top.tianyan.app.ui.components.runtimeScrollViewport(padding)), bottomPadding = padding.calculateBottomPadding(),
             )
             else -> WorkflowRunView(
                 state = activeState!!,
-                onCancel = viewModel::cancel,
-                modifier = Modifier.fillMaxSize().padding(padding),
+                onCancel = { viewModel?.cancel() },
+                modifier = Modifier.fillMaxSize().then(top.tianyan.app.ui.components.runtimeScrollViewport(padding)), bottomPadding = padding.calculateBottomPadding(),
             )
         }
     }
     approval?.let { request ->
-        ApprovalDialog(request, onDecision = { approved, variables -> viewModel.decide(request.nodeId, approved, variables) })
+        ApprovalDialog(request, onDecision = { approved, variables -> viewModel?.decide(request.nodeId, approved, variables, request.reviewToken) })
     }
     pendingRun?.let { definition ->
-        var apks by remember(definition.id, projectName) {
-            mutableStateOf(viewModel.scanWorkspaceApks(projectName))
+        // APK 扫描是全盘 walkTopDown，必须在协程里异步加载，禁止在组合期间同步执行
+        var apks by remember(definition.id, projectName) { mutableStateOf<List<DiscoveredApk>>(emptyList()) }
+        val apkScope = rememberCoroutineScope()
+        LaunchedEffect(definition.id, projectName) {
+            apks = viewModel?.scanWorkspaceApks(projectName).orEmpty()
         }
         WorkflowStartDialog(
             definition = definition,
             supplied = initialVariables,
             models = models,
             availableApks = apks,
-            onRefreshApks = { apks = viewModel.scanWorkspaceApks(projectName) },
+            onRefreshApks = {
+                apkScope.launch { apks = viewModel?.scanWorkspaceApks(projectName).orEmpty() }
+            },
             onDismiss = { pendingRun = null },
         ) { variables ->
             pendingRun = null
-            viewModel.start(definition, projectName, variables)
+            viewModel?.start(definition, projectName, variables)
         }
     }
     if (discardRequested) {
@@ -178,94 +216,23 @@ fun WorkflowScreen(
             text = { Text("当前工作流还有未保存的编辑。") },
             dismissButton = { RuntimeOutlinedButton(onClick = { discardRequested = false }) { Text("继续编辑") } },
             confirmButton = {
-                RuntimeButton(onClick = { discardRequested = false; viewModel.closeEditor() }) { Text("放弃更改") }
+                RuntimeButton(onClick = { discardRequested = false; viewModel?.closeEditor() }) { Text("放弃更改") }
             },
         )
     }
-}
-
-@Composable
-private fun WorkflowCatalog(
-    definitions: List<WorkflowDefinition>,
-    onRun: (WorkflowDefinition) -> Unit,
-    onEdit: (WorkflowDefinition) -> Unit,
-    onDelete: (WorkflowDefinition) -> Unit,
-    onCreate: () -> Unit,
-    history: List<WorkflowRuntimeState>,
-    onHistory: (WorkflowRuntimeState) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var deleteRequested by remember { mutableStateOf<WorkflowDefinition?>(null) }
-    LazyColumn(
-        modifier = modifier,
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        item {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "把构建、诊断、逆向与 Git 操作编排成可观察、可暂停的 DAG。",
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.width(12.dp))
-                RuntimeButton(onClick = onCreate, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)) {
-                    RuntimeIcon(RuntimeIconName.Plus, Modifier.size(16.dp))
-                    Text("新建", maxLines = 1)
-                }
-            }
-        }
-        items(definitions, key = { it.id }) { workflow ->
-            RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(16.dp)) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        RuntimeIcon(RuntimeIconName.Hub, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.width(10.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(workflow.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text("${workflow.category} · ${workflow.nodes.size} 个节点", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                    Text(workflow.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Row(Modifier.align(Alignment.End), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (!workflow.isBuiltin) {
-                            RuntimeOutlinedButton(onClick = { deleteRequested = workflow }, contentPadding = PaddingValues(9.dp)) {
-                                RuntimeIcon(RuntimeIconName.Trash, Modifier.size(16.dp))
-                            }
-                        }
-                        RuntimeOutlinedButton(onClick = { onEdit(workflow) }, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)) {
-                            RuntimeIcon(RuntimeIconName.Edit, Modifier.size(16.dp))
-                            Text(if (workflow.isBuiltin) "创建副本" else "编辑", maxLines = 1)
-                        }
-                        RuntimeButton(onClick = { onRun(workflow) }, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)) {
-                            RuntimeIcon(RuntimeIconName.Play, Modifier.size(16.dp))
-                            Text("运行", maxLines = 1)
-                        }
-                    }
-                }
-            }
-        }
-        if (history.isNotEmpty()) item { Text("最近运行（最近 ${history.size} 条，只读）", style = MaterialTheme.typography.titleMedium) }
-        items(history, key = { "history:${it.executionId}" }) { run ->
-            RuntimeOutlinedButton(onClick = { onHistory(run) }, modifier = Modifier.fillMaxWidth()) {
-                Text("${run.definition.name} · ${runStatusLabel(run.status)} · ${java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(run.startedAt ?: 0))}", maxLines = 2, overflow = TextOverflow.Ellipsis)
-            }
-        }
-    }
-    deleteRequested?.let { workflow ->
-        RuntimeAlertDialog(
-            onDismissRequest = { deleteRequested = null },
-            title = { Text("删除工作流？") },
-            text = { Text("“${workflow.name}”及其运行历史将被永久删除，无法撤销。") },
-            dismissButton = { RuntimeOutlinedButton(onClick = { deleteRequested = null }) { Text("取消") } },
-            confirmButton = {
-                RuntimeButton(
-                    onClick = {
-                        deleteRequested = null
-                        onDelete(workflow)
-                    },
-                ) { Text("删除") }
+    if (scheduleEditorIsNew || scheduleEditor != null) {
+        WorkflowScheduleEditDialog(
+            definitions = definitions,
+            models = models,
+            existing = scheduleEditor.takeIf { !scheduleEditorIsNew },
+            onDismiss = {
+                scheduleEditor = null
+                scheduleEditorIsNew = false
+            },
+            onSave = { entity ->
+                viewModel?.saveSchedule(entity)
+                scheduleEditor = null
+                scheduleEditorIsNew = false
             },
         )
     }
@@ -275,14 +242,14 @@ private fun WorkflowCatalog(
 private fun WorkflowRunView(
     state: WorkflowRuntimeState,
     onCancel: () -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier, bottomPadding: androidx.compose.ui.unit.Dp = 0.dp,
 ) {
     BoxWithConstraints(modifier) {
         var selectedNode by remember(state.executionId) { mutableStateOf<String?>(null) }
-        if (maxWidth >= 760.dp) {
+        if (top.tianyan.app.ui.components.widthClassOf(maxWidth.value) == top.tianyan.app.ui.components.RuntimeWidthClass.Expanded) {
             Row(Modifier.fillMaxSize()) {
                 WorkflowCanvas2D(state.definition, state, Modifier.weight(1f).fillMaxSize(), selectedNodeId = selectedNode, onNodeSelected = { selectedNode = it })
-                Column(Modifier.width(320.dp).verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(Modifier.width(320.dp).verticalScroll(rememberScrollState()).padding(12.dp).padding(bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     RunSummary(state)
                     val node = state.definition.nodes.firstOrNull { it.id == selectedNode }
                     if (node == null) Text("点选节点查看日志、错误与产物")
@@ -293,12 +260,12 @@ private fun WorkflowRunView(
                 }
             }
         } else {
-            WorkflowTimelineView(state, Modifier.fillMaxSize())
+            WorkflowTimelineView(state, Modifier.fillMaxSize(), bottomPadding)
         }
         if (state.status in setOf(WorkflowRunStatus.RUNNING, WorkflowRunStatus.WAITING_APPROVAL)) {
             RuntimeOutlinedButton(
                 onClick = onCancel,
-                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp).padding(bottom = bottomPadding),
                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
             ) { Text("取消", maxLines = 1) }
         }
@@ -306,8 +273,8 @@ private fun WorkflowRunView(
 }
 
 @Composable
-fun WorkflowTimelineView(state: WorkflowRuntimeState, modifier: Modifier = Modifier) {
-    LazyColumn(modifier, contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+fun WorkflowTimelineView(state: WorkflowRuntimeState, modifier: Modifier = Modifier, bottomPadding: androidx.compose.ui.unit.Dp = 0.dp) {
+    LazyColumn(modifier, contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp + bottomPadding), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
             RunSummary(state)
         }
@@ -384,35 +351,12 @@ private fun RunSummary(state: WorkflowRuntimeState) {
             RuntimeIcon(statusIcon(state.nodeStates.values.lastOrNull()?.status ?: NodeRunStatus.PENDING), Modifier.size(20.dp), tint = color)
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(runStatusLabel(state.status), fontWeight = FontWeight.SemiBold)
+                Text(workflowStatusLabel(state.status), fontWeight = FontWeight.SemiBold)
                 WorkflowElapsed(state)
                 state.error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, maxLines = 2, overflow = TextOverflow.Ellipsis) }
             }
         }
     }
-}
-
-@Composable
-private fun ApprovalDialog(request: WorkflowApprovalRequest, onDecision: (Boolean, Map<String, String>) -> Unit) {
-    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
-    LaunchedEffect(request.executionId, request.nodeId) {
-        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-    }
-    val values = remember(request) { mutableStateMapOf<String, String>().apply { request.requestedVariables.forEach { put(it, "") } } }
-    RuntimeAlertDialog(
-        onDismissRequest = { onDecision(false, emptyMap()) },
-        title = { Text(request.title) },
-        text = {
-            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (request.description.isNotBlank()) Text(request.description, style = MaterialTheme.typography.bodyMedium)
-                request.requestedVariables.forEach { key ->
-                    OutlinedTextField(value = values[key].orEmpty(), onValueChange = { values[key] = it }, label = { Text(key, maxLines = 1, overflow = TextOverflow.Ellipsis) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-                }
-            }
-        },
-        dismissButton = { RuntimeOutlinedButton(onClick = { onDecision(false, emptyMap()) }) { Text("拒绝", maxLines = 1) } },
-        confirmButton = { RuntimeButton(onClick = { onDecision(true, values.toMap()) }) { Text("确认执行", maxLines = 1) } },
-    )
 }
 
 @Composable
@@ -445,7 +389,7 @@ internal fun statusLabel(status: NodeRunStatus) = when (status) {
     NodeRunStatus.CANCELLED -> "已取消"
 }
 
-private fun runStatusLabel(status: WorkflowRunStatus) = when (status) {
+internal fun workflowStatusLabel(status: WorkflowRunStatus) = when (status) {
     WorkflowRunStatus.IDLE -> "准备执行"
     WorkflowRunStatus.RUNNING -> "工作流运行中"
     WorkflowRunStatus.WAITING_APPROVAL -> "等待人工确认"

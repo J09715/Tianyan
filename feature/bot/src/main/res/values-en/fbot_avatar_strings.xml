@@ -1,0 +1,6 @@
+<resources>
+    <string name="fbot_avatar_choose">Choose avatar</string>
+    <string name="fbot_avatar_reset">Reset avatar</string>
+    <string name="fbot_avatar_loading">Processing image…</string>
+    <string name="fbot_avatar_failed">Could not read the image. Please choose another.</string>
+</resources>

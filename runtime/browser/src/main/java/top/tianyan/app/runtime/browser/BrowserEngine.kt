@@ -3,6 +3,7 @@ package top.tianyan.app.runtime.browser
 import top.tianyan.app.core.browser.BrowserFamily
 import top.tianyan.app.core.browser.BrowserPreferences
 import top.tianyan.app.core.browser.PageSnapshot
+import top.tianyan.app.core.browser.BrowserDescriptor
 import top.tianyan.app.core.model.ToolImageRef
 import top.tianyan.app.runtime.browser.cdp.DebugBreakpoint
 import top.tianyan.app.runtime.browser.cdp.DebugStep
@@ -20,7 +21,7 @@ import android.webkit.WebView
  * - `click/type/press` 接收的 `refResolver` 回调用于回查 ref → selector；RefResolver 由宿主注入。
  */
 interface BrowserEngine {
-    val descriptor: top.tianyan.app.core.browser.BrowserDescriptor
+    val descriptor: BrowserDescriptor
     val eventBus: BrowserEventBus
     val family: BrowserFamily get() = descriptor.family
 

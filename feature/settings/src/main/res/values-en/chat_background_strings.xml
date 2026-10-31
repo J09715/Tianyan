@@ -1,0 +1,14 @@
+<resources>
+    <string name="settings_chat_background">Chat background</string>
+    <string name="settings_chat_background_description">Shown on the home chat page. Preview visibility and blur changes as you adjust them.</string>
+    <string name="settings_chat_background_choose">Change image</string>
+    <string name="settings_chat_background_remove">Remove</string>
+    <string name="settings_chat_background_loading">Processing</string>
+    <string name="settings_chat_background_error">Could not update the background. Try a valid image smaller than 25 MB.</string>
+    <string name="settings_chat_background_visibility">Background visibility %1$d%%</string>
+    <string name="settings_chat_background_blur">Background blur %1$d dp</string>
+    <string name="settings_chat_background_preview">Chat background preview</string>
+    <string name="settings_chat_background_preview_title">Tianyan · Chat</string>
+    <string name="settings_chat_background_preview_user">Help me organize my ideas for today.</string>
+    <string name="settings_chat_background_preview_assistant">Sure. Let’s start with what matters most.</string>
+</resources>

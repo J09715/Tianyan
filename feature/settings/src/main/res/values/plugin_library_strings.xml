@@ -1,0 +1,11 @@
+<resources>
+    <string name="plugin_library_title">插件仓库</string>
+    <string name="plugin_library_summary">下载插件、检查更新 · GitHub / Gitee 源切换</string>
+    <string name="plugin_library_stop_download">停止下载</string>
+    <string name="plugin_library_download_percent">%1$d%%</string>
+    <string name="plugin_library_installed">已安装</string>
+    <string name="plugin_library_installed_version">已安装 · %1$s</string>
+    <string name="plugin_library_not_installed">尚未安装</string>
+    <string name="plugin_library_installing">正在安装…</string>
+    <string name="plugin_library_update_available">可更新至 %1$s</string>
+</resources>

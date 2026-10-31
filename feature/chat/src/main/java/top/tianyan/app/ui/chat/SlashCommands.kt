@@ -3,6 +3,8 @@ package top.tianyan.app.ui.chat
 import top.tianyan.app.ui.components.RuntimeIconName
 import android.content.Context
 import top.tianyan.app.feature.chat.R
+import top.tianyan.app.core.model.AgentSkill
+import top.tianyan.app.core.model.workflow.WorkflowDefinition
 
 data class SlashCommandItem(
     val command: String,
@@ -78,7 +80,15 @@ object SlashCommands {
             template = "/help",
             icon = RuntimeIconName.Alert,
         ),
+        Preset(
+            command = "/btw",
+            labelRes = R.string.chat_command_btw,
+            descriptionRes = R.string.chat_command_btw_description,
+            template = "/btw ",
+            icon = RuntimeIconName.Chat,
+        ),
     )
+
 
     /** Resource-independent command metadata for filtering and JVM tests. */
     val presetCommands: List<SlashCommandItem> = presets.map { preset ->
@@ -97,15 +107,15 @@ object SlashCommands {
 
     fun filterCommands(
         query: String,
-        activeSkills: List<top.tianyan.app.core.model.AgentSkill> = emptyList(),
-        workflows: List<top.tianyan.app.core.model.workflow.WorkflowDefinition> = emptyList(),
+        activeSkills: List<AgentSkill> = emptyList(),
+        workflows: List<WorkflowDefinition> = emptyList(),
     ): List<SlashCommandItem> = filterCommands(presetCommands, query, activeSkills, workflows)
 
     fun filterCommands(
         context: Context,
         query: String,
-        activeSkills: List<top.tianyan.app.core.model.AgentSkill> = emptyList(),
-        workflows: List<top.tianyan.app.core.model.workflow.WorkflowDefinition> = emptyList(),
+        activeSkills: List<AgentSkill> = emptyList(),
+        workflows: List<WorkflowDefinition> = emptyList(),
     ): List<SlashCommandItem> {
         return filterCommands(presetCommands(context), query, activeSkills, workflows)
     }
@@ -113,8 +123,8 @@ object SlashCommands {
     private fun filterCommands(
         presetItems: List<SlashCommandItem>,
         query: String,
-        activeSkills: List<top.tianyan.app.core.model.AgentSkill>,
-        workflows: List<top.tianyan.app.core.model.workflow.WorkflowDefinition>,
+        activeSkills: List<AgentSkill>,
+        workflows: List<WorkflowDefinition> = emptyList(),
     ): List<SlashCommandItem> {
         val skillItems = activeSkills.mapNotNull { skill ->
             val cmd = skill.triggerCommand ?: return@mapNotNull null

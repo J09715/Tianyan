@@ -1,4 +1,4 @@
-package top.tianyan.app.core.security
+﻿package top.tianyan.app.core.security
 
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
@@ -9,11 +9,8 @@ import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class SecretManager @Inject constructor() {
+class SecretManager() {
     fun encrypt(value: String): String {
         if (value.isEmpty()) return ""
         val cipher = Cipher.getInstance(TRANSFORMATION)
@@ -32,6 +29,10 @@ class SecretManager @Inject constructor() {
         String(cipher.doFinal(encrypted), StandardCharsets.UTF_8)
     }.getOrNull()
 
+    // check-then-generate 必须串行：并发首调会双双看到 alias 不存在而各自
+    // generateKey()，AndroidKeyStore 对同名 alias 是覆盖写——后写者覆盖前写者，
+    // 前者刚加密的数据将永久无法解密。
+    @Synchronized
     private fun key(): SecretKey {
         val store = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
         val alias = when {

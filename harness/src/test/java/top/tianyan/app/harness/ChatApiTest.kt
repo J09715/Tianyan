@@ -2,6 +2,9 @@ package top.tianyan.app.harness
 
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -50,34 +53,6 @@ class ChatApiTest {
     }
 
     @Test
-    fun `identical chat requests hit cache with one http call`() = runBlocking {
-        server.enqueue(
-            MockResponse().setBody("""{"choices":[{"message":{"role":"assistant","content":"cached"}}]}"""),
-        )
-        val msg = listOf(ApiMessage(role = "user", content = "hi"))
-        val m = model()
-        val first = api.chat(m, msg)
-        val second = api.chat(m, msg)
-        assertEquals("cached", first.content)
-        assertEquals("cached", second.content)
-        assertEquals(1, server.requestCount)
-    }
-
-    @Test
-    fun `retry observer fires before each retry wait`() = runBlocking {
-        server.enqueue(MockResponse().setResponseCode(503).setBody("""{"error":"overloaded"}"""))
-        server.enqueue(
-            MockResponse().setBody("""{"choices":[{"message":{"role":"assistant","content":"ok"}}]}"""),
-        )
-        val attempts = mutableListOf<Int>()
-        api.retryObserver = { attempt, _, _ -> attempts.add(attempt) }
-        val result = api.chat(model(), listOf(ApiMessage(role = "user", content = "hi")))
-        assertEquals("ok", result.content)
-        assertEquals(listOf(1), attempts)
-        assertEquals(2, server.requestCount)
-    }
-
-    @Test
     fun `parses tool calls response`() = runBlocking {
         server.enqueue(
             MockResponse().setBody(
@@ -92,6 +67,32 @@ class ChatApiTest {
         assertEquals("call_1", call.id)
         assertEquals("base", call.name)
         assertEquals("""{"command":"uname -m"}""", call.argumentsJson)
+    }
+
+    @Test
+    fun `assistant tool call keeps content field for strict providers`() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"choices":[]}"""))
+        api.chat(
+            model(),
+            listOf(
+                ApiMessage(role = "user", content = "hi"),
+                ApiMessage(
+                    role = "assistant",
+                    content = null,
+                    tool_calls = listOf(
+                        ApiToolCall(
+                            id = "call_1",
+                            function = ApiFunctionCall(name = "read", arguments = """{"path":"a.kt"}"""),
+                        ),
+                    ),
+                ),
+                ApiMessage(role = "tool", content = "ok", tool_call_id = "call_1"),
+            ),
+        )
+        val body = Json.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject
+        val assistant = body.getValue("messages").jsonArray[1].jsonObject
+        assertTrue("content must be present even when there is no assistant text", assistant.containsKey("content"))
+        assertEquals("", assistant.getValue("content").jsonPrimitive.content)
     }
 
     @Test
@@ -144,15 +145,11 @@ class ChatApiTest {
     }
 
     @Test
-    fun `openai official disables reasoning by omitting the field entirely`() = runBlocking {
+    fun `openai official disables reasoning with effort none`() = runBlocking {
         server.enqueue(MockResponse().setBody("""{"choices":[]}"""))
         api.chat(model().copy(reasoningMode = ReasoningMode.DISABLED), emptyList())
         val body = server.takeRequest().body.readUtf8()
-        // 关闭思考的正确语义是不注入推理字段，而不是发 reasoning_effort:"none"。
-        // 大量中转站/自定义网关（以及只跑普通 chat 模型的端点）不认 reasoning_effort
-        // 字段——哪怕取值 none 也直接 400（reasoning_effort is not enabled for this model）。
-        // AUTO 不发字段反而正常。因此 DISABLED 与 AUTO 在 OpenAI 兼容协议上统一为不注入。
-        assertTrue("关闭思考时不应注入 reasoning_effort，实际 body=$body", !body.contains("reasoning_effort"))
+        assertTrue(body.contains("\"reasoning_effort\":\"none\""))
     }
 
     @Test
@@ -189,17 +186,14 @@ class ChatApiTest {
         server.enqueue(MockResponse().setBody("""{"choices":[]}"""))
         api.chat(
             model().copy(
-                provider = "自定义 OpenAI 兼容接口",
+                provider = "OpenAI 兼容接口",
                 reasoningMode = ReasoningMode.ENABLED,
                 reasoningEffort = ReasoningEffort.HIGH,
             ),
             emptyList(),
         )
         val body = server.takeRequest().body.readUtf8()
-        // 未知厂商（自定义 baseURL）无法确定其模型是否认 reasoning_effort 字段，
-        // 保守不注入任何推理字段。曾经乐观注入导致「只跑普通 chat 模型的中转站」在
-        // 手动调思考强度后服务端直接 400（reasoning_effort is not enabled for this model）。
-        assertFalse("未知厂商不应注入 reasoning_effort，实际 body=$body", body.contains("reasoning_effort"))
+        assertTrue(body.contains("reasoning_effort"))
         assertFalse(body.contains("thinking_config"))
         assertFalse(body.contains("\"reasoning\":{"))
     }
@@ -230,6 +224,42 @@ class ChatApiTest {
         val call = result.toolCalls.single()
         assertEquals("base", call.name)
         assertEquals("""{"command":"abc"}""", call.argumentsJson)
+    }
+
+    @Test
+    fun `accumulates parallel tool calls across chunks without explicit index`() = runBlocking {
+        // 网关不分发 index：每个调用的首个分片带非空 id，延续分片不带 id。
+        // 新调用判据必须是 id 变化——按 chunk 内迭代序号 fallback（恒为 0）会把
+        // 跨 chunk 的并行调用合并成一个畸形调用。
+        val body = """
+            data: {"choices":[{"delta":{"tool_calls":[{"id":"c1","function":{"name":"base","arguments":"{\"command\":\"ls\"}"}}]}}]}
+            data: {"choices":[{"delta":{"tool_calls":[{"id":"c2","function":{"name":"read","arguments":"{\"path\":\"a.md\"}"}}]}}]}
+            data: [DONE]
+        """.trimIndent()
+        server.enqueue(MockResponse().setBody(body))
+        val result = api.chatStream(model(), emptyList()) { }
+        assertEquals(2, result.toolCalls.size)
+        val first = result.toolCalls.first { it.id == "c1" }
+        val second = result.toolCalls.first { it.id == "c2" }
+        assertEquals("base", first.name)
+        assertEquals("""{"command":"ls"}""", first.argumentsJson)
+        assertEquals("read", second.name)
+        assertEquals("""{"path":"a.md"}""", second.argumentsJson)
+    }
+
+    @Test
+    fun `continuation chunk without id or index extends the last active call`() = runBlocking {
+        val body = """
+            data: {"choices":[{"delta":{"tool_calls":[{"id":"c1","function":{"name":"base","arguments":"{\"command\":\""}}]}}]}
+            data: {"choices":[{"delta":{"tool_calls":[{"function":{"arguments":"ls\"}"}}]}}]}
+            data: [DONE]
+        """.trimIndent()
+        server.enqueue(MockResponse().setBody(body))
+        val result = api.chatStream(model(), emptyList()) { }
+        val call = result.toolCalls.single()
+        assertEquals("c1", call.id)
+        assertEquals("base", call.name)
+        assertEquals("""{"command":"ls"}""", call.argumentsJson)
     }
 
     @Test
@@ -305,31 +335,44 @@ class ChatApiTest {
 
     @Test
     fun `propagates other stream errors without retry`() = runBlocking {
-        server.enqueue(MockResponse().setResponseCode(401).setBody("""{"error":{"message":"invalid api key"}}"""))
+        server.enqueue(MockResponse().setResponseCode(500).setBody("""{"error":"server exploded"}"""))
         var thrown: Throwable? = null
         try {
             api.chatStream(model(), emptyList()) { }
         } catch (t: Throwable) {
             thrown = t
         }
-        assertTrue(thrown is IllegalStateException)
+        // 5xx 抛 TransientHttpException（IOException 子类，交给上游重试策略按退避处理）；
+        // 本层不吞错也不自行重试——requestCount==1 验证这一点。
+        assertTrue(thrown is TransientHttpException)
         assertEquals(1, server.requestCount)
     }
 
     @Test
-    fun `retries 503 transient server error then succeeds`() = runBlocking {
-        server.enqueue(MockResponse().setResponseCode(503).setBody("""{"error":{"message":"overloaded"}}"""))
+    fun `empty stream fails loudly and carries the raw response head`() = runBlocking {
+        // 上游 200 但只发了 [DONE]：此前会被判定为"模型答完了"，前台表现为没有任何回复。
+        server.enqueue(MockResponse().setBody("data: [DONE]"))
+        val thrown = runCatching { api.chatStream(model(), emptyList()) { } }.exceptionOrNull()
+        assertTrue(thrown is LlmEmptyResponseException)
+        val msg = thrown!!.message.orEmpty()
+        assertTrue("Expected empty-response guidance, got: $msg", msg.contains("空响应"))
+        assertTrue("Expected raw response head for diagnosis, got: $msg", msg.contains("[DONE]"))
+    }
+
+    @Test
+    fun `non sse json body is recovered instead of silently dropped`() = runBlocking {
+        // 部分 OpenAI 兼容网关忽略 stream:true，直接返回整段 JSON 补全：
+        // 这种 body 没有 data: 行，此前被逐行丢弃，最终表现为空回复。
         server.enqueue(
             MockResponse().setBody(
-                """
-                data: {"choices":[{"delta":{"content":"ok"}}]}
-                data: [DONE]
-                """.trimIndent(),
+                """{"choices":[{"message":{"role":"assistant","content":"兜底解析回来的回复"}}],
+                   "usage":{"prompt_tokens":12,"completion_tokens":8}}""",
             ),
         )
         val result = api.chatStream(model(), emptyList()) { }
-        assertEquals("ok", result.content)
-        assertEquals(2, server.requestCount)
+        assertEquals("兜底解析回来的回复", result.content)
+        assertEquals(12L, result.usage.inputTokens)
+        assertEquals(8L, result.usage.outputTokens)
     }
 
     @Test

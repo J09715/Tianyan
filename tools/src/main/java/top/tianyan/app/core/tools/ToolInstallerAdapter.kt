@@ -1,4 +1,4 @@
-package top.tianyan.app.core.tools
+﻿package top.tianyan.app.core.tools
 
 import top.tianyan.app.runtime.tools.InstallEvent
 import kotlinx.coroutines.flow.Flow

@@ -1,25 +1,10 @@
 plugins {
-    alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.serialization)
-    alias(libs.plugins.ksp)
-    alias(libs.plugins.hilt)
+    alias(libs.plugins.tianyan.android.library)
 }
 
 android {
     namespace = "top.tianyan.app.runtime.browser"
     resourcePrefix = "rtbrowser_"
-    compileSdk = 37
-    defaultConfig { minSdk = 29 }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_25
-        targetCompatibility = JavaVersion.VERSION_25
-    }
-}
-
-kotlin {
-    compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_25)
-    }
 }
 
 dependencies {
@@ -32,12 +17,9 @@ dependencies {
     implementation(libs.androidx.webkit)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.core)
-    implementation(libs.hilt.android)
-    ksp(libs.hilt.compiler)
-    testImplementation(libs.junit)
+    implementation(libs.koin.core)
+    testImplementation(libs.bundles.test.robolectric)
     testImplementation(libs.kotlinx.coroutines.core)
-    testImplementation(libs.androidx.test.core)
-    testImplementation(libs.robolectric)
     // CDP WebSocket 会话测试：MockWebServer 的 withWebSocketUpgrade 提供真实 WS 服务端
     testImplementation(libs.okhttp.mockwebserver)
 }

@@ -1,4 +1,4 @@
-package top.tianyan.app.runtime.proot
+﻿package top.tianyan.app.runtime.proot
 
 import top.tianyan.app.core.common.logging.AppLogger
 import top.tianyan.app.core.common.result.AppError
@@ -7,8 +7,6 @@ import top.tianyan.app.core.common.result.ErrorCode
 import top.tianyan.app.runtime.ElfInspector
 import top.tianyan.app.runtime.RuntimePathManager
 import java.io.File
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -20,8 +18,7 @@ import kotlinx.coroutines.withContext
  * into filesDir. Both the tracer and its external loader therefore have to be
  * packaged as extracted native libraries; the selected Linux RootFS is downloaded through OCI.
  */
-@Singleton
-class ProotInstaller @Inject constructor(
+class ProotInstaller(
     private val pathManager: RuntimePathManager,
     private val elfInspector: ElfInspector,
     private val logger: AppLogger,
@@ -92,6 +89,6 @@ class ProotInstaller @Inject constructor(
     private companion object {
         const val MIN_RUNTIME_COMPONENT_BYTES = 4096L
         const val MAX_LOADER_BYTES = 4L * 1024L * 1024L
-        const val EXPECTED_PROOT_VERSION = "5.1.107.92"
+        const val EXPECTED_PROOT_VERSION = "5.1.107.101"
     }
 }

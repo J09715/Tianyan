@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="service_panel_title">服务管理面板</string>
+    <string name="service_panel_auth">登录凭据和 API Key 由服务自身管理。首次使用请按面板提示创建管理员；已创建时使用原账号密码。天衍 Token 不用于此面板登录。</string>
+    <string name="service_panel_loopback">仅监听本机，不提供局域网访问。关闭管理页面不会停止服务。</string>
+    <string name="service_recovery_title">自启动与持续运行</string>
+    <string name="service_recovery_summary">Linux 环境就绪后启动 %1$s，异常停止后自动重试；手动停止会关闭此开关</string>
+    <string name="service_browser_open">外部浏览器打开</string>
+    <string name="service_panel_open">打开插件管理页面</string>
+    <string name="service_panel_upgrade">升级后端插件后可使用专用管理页；当前可通过外部浏览器访问原版面板。</string>
+    <string name="service_browser_unavailable">无法打开浏览器，请手动访问本机服务地址</string>
+</resources>

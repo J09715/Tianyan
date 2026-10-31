@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_first_response_timeout_title">First model response</string>
+    <string name="settings_first_response_timeout_summary">Default is 90 seconds. Raise it or turn it off. A timeout means this device stopped waiting, not that the provider returned an error.</string>
+    <string name="settings_first_response_timeout_value">%1$d s</string>
+    <string name="settings_first_response_timeout_off">Off</string>
+</resources>

@@ -1,11 +1,8 @@
 package top.tianyan.app.runtime.scripts
 
 import android.content.Context
-import dagger.hilt.android.qualifiers.ApplicationContext
 import top.tianyan.app.runtime.RuntimePathManager
 import java.io.File
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -14,9 +11,8 @@ import kotlinx.coroutines.withContext
  * 将 APK 内置 assets/scripts/ 下的标准化 Shell 脚本与 tools 自动提取并同步到
  * Linux 沙箱隔离目录 (/opt/tianyan/scripts/ 与 /opt/tianyan/tools/)，并赋予执行权限。
  */
-@Singleton
-class RuntimeAssetSynchronizer @Inject constructor(
-    @ApplicationContext private val context: Context,
+class RuntimeAssetSynchronizer(
+    private val context: Context,
     private val pathManager: RuntimePathManager,
 ) {
     suspend fun syncWorkshopScript(distroId: String, fileName: String, content: String): String = withContext(Dispatchers.IO) {

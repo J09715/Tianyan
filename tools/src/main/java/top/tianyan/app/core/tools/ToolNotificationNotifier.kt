@@ -14,20 +14,16 @@ import androidx.core.content.FileProvider
 import java.io.File
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import dagger.hilt.android.qualifiers.ApplicationContext
 import top.tianyan.app.tools.R
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * 插件与工具安装系统通知栏控制器
  * 实时同步并发安装进度、完成与失败状态到 Android 系统通知栏。
  */
 @SuppressLint("MissingPermission")
-@Singleton
-class ToolNotificationNotifier @Inject constructor(
-    @ApplicationContext private val context: Context,
-) {
+class ToolNotificationNotifier(
+    private val context: Context,
+) : ServiceNotificationSink {
     private val notificationManager = NotificationManagerCompat.from(context)
     private val channelId = "tianyan_tool_install"
     private val appLogo: Bitmap? by lazy {
@@ -264,5 +260,95 @@ class ToolNotificationNotifier @Inject constructor(
         apk.inputStream().use { input -> staged.outputStream().use { output -> input.copyTo(output) } }
         check(staged.isFile && staged.length() == apk.length()) { "APK 临时副本不完整" }
         return staged
+    }
+
+    // ==================== 插件网关服务常驻通知 ====================
+    private val serviceChannelId = "tianyan_tool_service"
+
+    init {
+        createServiceChannel()
+    }
+
+    private fun createServiceChannel() {
+        val channel = NotificationChannel(
+            serviceChannelId,
+            "插件网关服务",
+            NotificationManager.IMPORTANCE_LOW,
+        ).apply {
+            description = "展示沙箱内插件本地网关的运行状态；停止服务后自动消失"
+            setShowBadge(false)
+            enableVibration(false)
+            setSound(null, null)
+        }
+        val systemManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+        systemManager?.createNotificationChannel(channel)
+    }
+
+    /** 网关启动后贴一条常驻通知；停止时由 [hideService] 撤销。内容不含 Token 或任何凭据。 */
+    override fun showService(distroId: String, toolId: String, toolName: String, detail: String) {
+        rememberService(distroId, toolId)
+        val stop = PendingIntent.getBroadcast(
+            context,
+            serviceNotificationId(distroId, toolId),
+            Intent(ToolServiceNotificationContract.ACTION_STOP)
+                .setPackage(context.packageName)
+                .putExtra(ToolServiceNotificationContract.EXTRA_TOOL_ID, toolId),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val builder = NotificationCompat.Builder(context, serviceChannelId)
+            .setSmallIcon(context.applicationInfo.icon)
+            .setContentTitle("$toolName 网关运行中")
+            .setContentText(detail)
+            .setLargeIcon(appLogo)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setAutoCancel(false)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setContentIntent(getLaunchIntent())
+            .addAction(context.applicationInfo.icon, "停止", stop)
+        try {
+            notificationManager.notify(serviceNotificationId(distroId, toolId), builder.build())
+        } catch (_: SecurityException) {
+        }
+    }
+
+    override fun hideService(distroId: String, toolId: String) {
+        forgetService(distroId, toolId)
+        try {
+            notificationManager.cancel(serviceNotificationId(distroId, toolId))
+        } catch (_: Exception) {
+        }
+    }
+
+    override fun hideAllServices() = serviceNotifications().forEach { (distroId, toolId) -> hideService(distroId, toolId) }
+
+    /**
+     * 已贴出但尚未撤销的服务通知，以 `distro:toolId` 记账。通知在 App 进程死后仍留在通知栏，
+     * 因此跨进程用 SharedPreferences 保留，供崩溃/换代/切发行版后的对账。
+     */
+    override fun serviceNotifications(): Set<Pair<String, String>> = servicePreferences()
+        .getStringSet(SERVICE_KEY, emptySet()).orEmpty()
+        .mapNotNull { entry -> entry.split(':', limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }
+        .toSet()
+
+    private fun rememberService(distroId: String, toolId: String) {
+        val current = servicePreferences().getStringSet(SERVICE_KEY, emptySet()).orEmpty().toMutableSet()
+        if (current.add("$distroId:$toolId")) servicePreferences().edit().putStringSet(SERVICE_KEY, current).apply()
+    }
+
+    private fun forgetService(distroId: String, toolId: String) {
+        val current = servicePreferences().getStringSet(SERVICE_KEY, emptySet()).orEmpty().toMutableSet()
+        if (current.remove("$distroId:$toolId")) servicePreferences().edit().putStringSet(SERVICE_KEY, current).apply()
+    }
+
+    private fun servicePreferences() = context.getSharedPreferences(SERVICE_PREFS, Context.MODE_PRIVATE)
+
+    private fun serviceNotificationId(distroId: String, toolId: String): Int =
+        50000 + ("$distroId:$toolId".hashCode() and 0x7FFF)
+
+    private companion object {
+        const val SERVICE_PREFS = "tianyan_tool_service_notifications"
+        const val SERVICE_KEY = "posted"
     }
 }

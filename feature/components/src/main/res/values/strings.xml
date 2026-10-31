@@ -3,6 +3,7 @@
     <string name="components_nav_home">天衍</string>
     <string name="components_nav_agent">智枢</string>
     <string name="components_nav_workspace">工坊</string>
+    <string name="components_nav_bots">群英</string>
     <string name="components_nav_settings">乾坤</string>
     <string name="components_back">返回</string>
     <string name="components_tianyan_logo">天衍 Logo</string>
@@ -12,5 +13,18 @@
     <string name="components_nav_subtitle_home">创世</string>
     <string name="components_nav_subtitle_agent">智能体</string>
     <string name="components_nav_subtitle_workspace">工作区</string>
+    <string name="components_nav_subtitle_bots">Bot 团队</string>
     <string name="components_nav_subtitle_settings">设置</string>
+    <!-- Markdown 渲染组件 -->
+    <string name="components_md_web_content">网络图片</string>
+    <string name="components_md_image_preview">图片预览</string>
+    <string name="components_md_image_load_failed">图片加载失败</string>
+    <string name="components_md_image_saved">图片已保存到相册</string>
+    <string name="components_md_image_save_failed">保存图片失败</string>
+    <string name="components_md_save_image">保存图片</string>
+    <string name="components_md_code_clipboard_label">代码</string>
+    <string name="components_md_code_copied">代码已复制到剪贴板</string>
+    <string name="components_md_code_badge">代码</string>
+    <string name="components_md_copy">复制</string>
+    <string name="components_clear_search">清空搜索</string>
 </resources>

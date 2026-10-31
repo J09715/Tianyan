@@ -12,7 +12,7 @@ import org.junit.Test
  * 类与方法纳入安装时预编译范围，消除首次启动的 JIT 编译开销。
  *
  * 采集场景保持保守稳健——只做 launch + 短暂交互，避免 UI 抖动导致生成失败：
- * 1. 冷启动主 Activity（覆盖 Application/Hilt/Compose/首页组合的全部热点）
+ * 1. 冷启动主 Activity（覆盖 Application/Koin/Compose/首页组合的全部热点）
  * 2. 主界面轻量滑动一屏，覆盖首帧滚动路径
  *
  * 运行方式见 docs/BASELINE_PROFILE.md；产物 app/src/main/baseline-prof.txt 随库提交。

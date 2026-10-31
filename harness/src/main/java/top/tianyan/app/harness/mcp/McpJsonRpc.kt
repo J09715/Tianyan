@@ -3,6 +3,7 @@ package top.tianyan.app.harness.mcp
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import top.tianyan.app.core.model.McpToolAnnotations
 
 /** Latest MCP protocol version implemented by this client. It is a spec identifier, not today's date. */
 internal const val MCP_PROTOCOL_VERSION = "2025-06-18"
@@ -60,6 +61,7 @@ data class McpToolDto(
     val name: String,
     val description: String = "",
     val inputSchema: JsonObject = JsonObject(emptyMap()),
+    val annotations: McpToolAnnotations? = null,
 )
 
 @Serializable

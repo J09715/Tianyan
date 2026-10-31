@@ -1,63 +1,105 @@
 package top.tianyan.app
 
+import org.koin.android.ext.android.inject
+import org.koin.android.ext.koin.androidContext
+import org.koin.androidx.workmanager.factory.KoinWorkerFactory
+import org.koin.core.context.startKoin
+import top.tianyan.app.di.tianyanModule
+import android.annotation.SuppressLint
 import android.app.Application
+import android.database.CursorWindow
+import android.util.Log
+import androidx.work.Configuration
 import top.tianyan.app.core.common.logging.CrashReporter
+import top.tianyan.app.core.common.logging.AppLogger
+import top.tianyan.app.core.common.memory.MemoryWatchdog
 import top.tianyan.app.harness.HarnessLoop
-import top.tianyan.app.core.datastore.SettingsDataStore
+import top.tianyan.app.core.datastore.AppStatsPreferences
 import top.tianyan.app.core.database.AgentSkillRepository
 import top.tianyan.app.core.database.McpServerRepository
-import top.tianyan.app.core.database.SkillScanRoot
 import top.tianyan.app.service.AgentForegroundService
+import top.tianyan.app.service.NOTIFIABLE_AGENT_STATES
+import top.tianyan.app.service.WorkflowForegroundService
 import top.tianyan.app.runtime.privilege.PrivilegeManager
 import top.tianyan.app.harness.browser.BrowserMcpBootstrap
-import dagger.hilt.android.HiltAndroidApp
-import dagger.Lazy
-import javax.inject.Inject
+import top.tianyan.app.bot.BotSchedulePlanner
+import top.tianyan.app.harness.agent.AgentMcpBootstrap
+import top.tianyan.app.harness.groupchat.GroupChatDispatcher
+import top.tianyan.app.harness.bot.BotAssignmentTracker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
-import top.tianyan.app.core.network.TianyanCloudClient
+import top.tianyan.app.harness.workflow.WorkflowRunManager
+import top.tianyan.app.runtime.RuntimePathManager
+import top.tianyan.app.runtime.virtualdisplay.VirtualDisplayCoordinator
+import top.tianyan.app.workflow.AppForegroundTracker
+import top.tianyan.app.workflow.WorkflowApprovalNotifier
+import top.tianyan.app.workflow.WorkflowRunUiController
+import java.io.File
 
-@HiltAndroidApp
-class TianyanApplication : Application() {
-    @Inject lateinit var crashReporter: CrashReporter
-    // Lazy 是必须的：BackupManager 依赖 AppDatabase，eager 注入会在 onCreate 之前
-    // 把 Room 对象构造出来，从而挤掉下面那次「先落盘再开库」的时机。
-    @Inject lateinit var backupManagerLazy: Lazy<top.tianyan.app.runtime.BackupManager>
+class TianyanApplication : Application(), Configuration.Provider {
+
+    companion object {
+        private const val TAG = "TianyanApp"
+    }
+    val crashReporter: CrashReporter by inject()
+
+    // WorkManager 按需初始化 + KoinWorkerFactory：定时计划 Worker 靠它注入
+    // harness 单例（WorkflowRunManager / WorkflowScheduleRepository）
+    private val workerFactory: KoinWorkerFactory by lazy { KoinWorkerFactory() }
+
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder()
+            .setWorkerFactory(workerFactory)
+            .build()
 
     // 启动性能：HarnessLoop / Room 仓储的构造图很重（DAO、DataStore、Agent 引擎全家桶），
-    // eager 注入会拖慢第一帧。改为 dagger.Lazy，把实际构建推迟到首个 IO 协程内。
-    @Inject lateinit var harnessLoopLazy: Lazy<HarnessLoop>
-    @Inject lateinit var settingsDataStore: SettingsDataStore
-    @Inject lateinit var agentSkillRepositoryLazy: Lazy<AgentSkillRepository>
-    @Inject lateinit var mcpServerRepositoryLazy: Lazy<McpServerRepository>
-    @Inject lateinit var pathManagerLazy: Lazy<top.tianyan.app.runtime.RuntimePathManager>
-    @Inject lateinit var privilegeManager: PrivilegeManager
-    @Inject lateinit var browserMcpBootstrap: BrowserMcpBootstrap
-    @Inject lateinit var tianyanCloudClient: TianyanCloudClient
-    @Inject lateinit var gitCredentialIpcBootstrap: top.tianyan.app.runtime.credentials.GitCredentialIpcBootstrap
-    @Inject lateinit var sandboxProxySync: top.tianyan.app.runtime.sandbox.SandboxProxySync
+    // eager 注入会拖慢第一帧。改为 Kotlin Lazy，把实际构建推迟到首个 IO 协程内。
+    val harnessLoopLazy: Lazy<HarnessLoop> = inject()
+    val workflowRunManagerLazy: Lazy<WorkflowRunManager> = inject()
+    val workflowRunUiController: WorkflowRunUiController by inject()
+    val workflowApprovalNotifier: WorkflowApprovalNotifier by inject()
+    val appForegroundTracker: AppForegroundTracker by inject()
+    val appStatsPreferences: AppStatsPreferences by inject()
+    val agentSkillRepositoryLazy: Lazy<AgentSkillRepository> = inject()
+    val mcpServerRepositoryLazy: Lazy<McpServerRepository> = inject()
+    val pathManagerLazy: Lazy<RuntimePathManager> = inject()
+    val privilegeManager: PrivilegeManager by inject()
+    val browserMcpBootstrap: BrowserMcpBootstrap by inject()
+    val agentMcpBootstrap: AgentMcpBootstrap by inject()
+    val botSchedulePlannerLazy: Lazy<BotSchedulePlanner> = inject()
+    private val botAssignmentRuntimeLazy: Lazy<top.tianyan.app.harness.bot.BotAssignmentRuntime> = inject()
+    private val groupChatDispatcherLazy: Lazy<GroupChatDispatcher> = inject()
+    private val botAssignmentTrackerLazy: Lazy<BotAssignmentTracker> = inject()
+
+    private val appLoggerLazy: Lazy<AppLogger> = inject()
+    private val virtualDisplayCoordinatorLazy: Lazy<VirtualDisplayCoordinator> = inject()
+
+    /**
+     * 内存水位哨兵：低频采样堆水位，越过 85% 时先释放"可再生数据"（视频等待缓冲等）
+     * 并写运行日志留痕，把慢性内存增长拦截在 OOM 闪退之前。释放钩子必须是丢了能自动重建的数据。
+     */
+    private val memoryWatchdog = MemoryWatchdog(log = { message -> appLoggerLazy.value.w(message) })
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override fun onCreate() {
         super.onCreate()
+        startKoin {
+            allowOverride(false)
+            androidContext(this@TianyanApplication)
+            modules(tianyanModule)
+        }
         configureCursorWindowSize()
         crashReporter.install()
-        // 待恢复的备份必须在任何 DAO / Room / DataStore 打开真实文件之前落盘：
-        // 运行中直接覆盖会让 SQLite 与 DataStore 继续写进已被替换的旧 inode，
-        // 用户看到的是「恢复成功但重启后又变回去」。
-        when (val outcome = backupManagerLazy.get().applyPendingRestore()) {
-            is top.tianyan.app.runtime.PendingRestoreOutcome.Applied ->
-                android.util.Log.i("TianyanApp", "已恢复备份分区：${outcome.sections.joinToString(", ")}")
-            is top.tianyan.app.runtime.PendingRestoreOutcome.Failed ->
-                android.util.Log.e("TianyanApp", "备份恢复失败：${outcome.reason}")
-            top.tianyan.app.runtime.PendingRestoreOutcome.None -> Unit
-        }
+        recoverPendingDataBackup()
+        installMemoryWatchdog()
         appScope.launch(Dispatchers.IO) {
             // 并发执行互不依赖的启动任务（crash 导出 / 特权恢复 / 浏览器 MCP bootstrap /
             // 技能入库 / MCP 预设入库），单任务失败不拖垮其他任务。
@@ -68,57 +110,49 @@ class TianyanApplication : Application() {
                 launch { runCatching { privilegeManager.reconcilePersistedMode() } }
                 // 启动进程内 MCP HTTP server（loopback 127.0.0.1:8787）供 harness / 外部 IDE 接入浏览器工具
                 launch { runCatching { browserMcpBootstrap.bootstrap() } }
-                // Git 凭证 IPC 桥：从 assets 装 helper、注册 git config、启动 FileObserver + 兜底轮询、
-                // 镜像已存凭据到 git-credentials 文件（UI/AI Bash/终端三端 git 缺凭据都走同一弹窗）
-                launch { runCatching { gitCredentialIpcBootstrap.start() } }
-                // 沙箱内置代理同步：把用户在设置里填的 sandbox_http_proxy 持续注入到 EnvironmentResolver
-                launch { runCatching { sandboxProxySync.start() } }
+                // 被控端：默认关闭，仅按偏好启用；start() 内部自持协程监听偏好，改配置无需重启 App
+                launch { runCatching { agentMcpBootstrap.start() } }
                 launch {
                     runCatching {
-                        val skillRepository = agentSkillRepositoryLazy.get()
+                        val skillRepository = agentSkillRepositoryLazy.value
                         skillRepository.ensureInitialized()
                         // 批量自动发现：把 rikkahub / aicode 等工具的 skills 目录整体复制到
                         // attachments/skills 或工作区 skills 目录后，重启即可全部导入；
                         // 按 resourcePath 去重，重复扫描安全。
-                        val pathManager = pathManagerLazy.get()
+                        val pathManager = pathManagerLazy.value
                         val imported = skillRepository.syncFromDirectories(
-                            listOf(
-                                SkillScanRoot(java.io.File(pathManager.attachmentsDir, "skills"), "/attachments/skills"),
-                                SkillScanRoot(java.io.File(pathManager.workspaceDir, "skills"), "/workspace/skills"),
+                            AgentSkillRepository.standardScanRoots(
+                                attachmentsDir = pathManager.attachmentsDir,
+                                workspaceDir = pathManager.workspaceDir,
                             )
                         )
                         if (imported.isNotEmpty()) {
-                            android.util.Log.i("TianyanApp", "Skill 目录自动发现并导入 ${imported.size} 个：${imported.joinToString { it.name }}")
+                            Log.i(TAG, "Skill 目录自动发现并导入 ${imported.size} 个：${imported.joinToString { it.name }}")
                         }
                     }
                 }
-                launch { runCatching { mcpServerRepositoryLazy.get().ensureInitialized() } }
-                // 启动静默拉取云端远程配置（版本 + 镜像列表），成功写 DataStore 缓存；
-                // 失败无感，下次启动重试——绝不能让云端故障影响 App 可用性。
-                launch {
-                    runCatching {
-                        val config = tianyanCloudClient.getAllConfig().getOrThrow()
-                        settingsDataStore.setCloudConfig(tianyanCloudClient.encodeConfig(config))
-                        android.util.Log.i("TianyanApp", "云端配置拉取成功：${config.size} 项")
-                    }.onFailure {
-                        android.util.Log.w("TianyanApp", "云端配置拉取失败（静默降级）", it)
-                    }
-                }
+                launch { runCatching { mcpServerRepositoryLazy.value.ensureInitialized() } }
+                // 上次进程被杀时仍在 RUNNING 的委派无法恢复执行，收敛为失败以免工作面板永久转圈。
+                launch { runCatching { botAssignmentTrackerLazy.value.recoverOrphaned() } }
             }
-            settingsDataStore.incrementLaunchCount()
+            appStatsPreferences.incrementLaunchCount()
+            // Bot 定时排期：进程重启后收敛旧唤醒链，只保留最近一次触发。
+            launch { runCatching { botSchedulePlannerLazy.value.start() } }
             // 时序门：上面的任务全部就绪后才构造 HarnessLoop——
             //  1) MCP 预设已入库：McpManager 预热（构造时触发）能读到完整 server 列表，
             //     否则首启预热读到空表，第一轮对话缺工具；
             //  2) 浏览器 HTTP server 已监听 + 引擎已注册：内置 browser server 的自环发现
             //     不会撞"连接拒绝 → 5 分钟冷却"；
-            //  3) 构造不再由前台服务监听协程在主线程提前触发（重 Hilt 图主线程构造即启动 jank，
+            //  3) 构造不再由前台服务监听协程在主线程提前触发（重 依赖图主线程构造即启动 jank，
             //     且预热时机不受控）。即使页面抢先注入触发构造，预热失败也按轮自愈，此处只是尽量保证顺序。
-            val harnessLoop = harnessLoopLazy.get()
+            val harnessLoop = harnessLoopLazy.value
             // Agent 开始执行时拉起前台服务，保证后台存活 + 通知进度；结束后由服务发带回复框的通知。
             // 并入本协程：构造完成后才开始监听，不再单独开协程抢构造。
             launch {
-                harnessLoop.running.collectLatest { running ->
-                    if (running) {
+                harnessLoop.sessionRunStates.map { states ->
+                    states.filterValues { it in NOTIFIABLE_AGENT_STATES }.keys
+                }.distinctUntilChanged().collectLatest { active ->
+                    if (active.isNotEmpty()) {
                         runCatching { AgentForegroundService.start(this@TianyanApplication) }
                     }
                 }
@@ -129,30 +163,71 @@ class TianyanApplication : Application() {
             runCatching {
                 val recovered = harnessLoop.recoverAllInterruptedSessions()
                 if (recovered > 0) {
-                    android.util.Log.i("TianyanApp", "已恢复 $recovered 个被中断的 Agent 会话/任务")
+                    Log.i(TAG, "已恢复 $recovered 个被中断的 Agent 会话/任务")
                 }
             }.onFailure {
-                android.util.Log.w("TianyanApp", "恢复中断会话失败", it)
+                Log.w(TAG, "恢复中断会话失败", it)
+            }
+            runCatching { botAssignmentRuntimeLazy.value.start() }
+                .onFailure { Log.w(TAG, "恢复独立委派失败", it) }
+            runCatching { groupChatDispatcherLazy.value.startDeliveryProcessing() }
+                .onFailure { Log.w(TAG, "恢复群消息分发失败", it) }
+            // 工作流后台化：启动对账（把进程死亡遗留的非终态运行标为已中断）+ 通知/HUD
+            // 控制器 + FGS 联动。工作流 agent 会话由工作流体系自管，已在恢复中排除。
+            val workflowRunManager = workflowRunManagerLazy.value
+            appForegroundTracker.register(this@TianyanApplication)
+            workflowRunUiController.start()
+            workflowApprovalNotifier.start(this@TianyanApplication)
+            runCatching { workflowRunManager.reconcileInterruptedRuns() }
+                .onFailure { Log.w(TAG, "工作流启动对账失败", it) }
+            launch {
+                workflowRunManager.running.collectLatest { running ->
+                    if (running) {
+                        runCatching { WorkflowForegroundService.start(this@TianyanApplication) }
+                    }
+                }
             }
         }
     }
 
     override fun onTerminate() {
+        memoryWatchdog.stop()
         appScope.cancel()
         super.onTerminate()
+    }
+
+    /** Retry after notification permission is granted, without forcing early Harness construction. */
+    fun refreshAgentNotifications() {
+        if (harnessLoopLazy.isInitialized() && harnessLoopLazy.value.sessionRunStates.value.values.any {
+                it in NOTIFIABLE_AGENT_STATES
+            }) AgentForegroundService.start(this)
+    }
+
+    /**
+     * 🌟 内存水位哨兵装配：注册"可再生数据"释放钩子并启动低频采样（30s 一次，85% 触发）。
+     * - shower-video-pending-frames：虚拟屏视频流等待 SPS/PPS 的包缓冲（历史 OOM 根因），
+     *   丢弃后画面随下一个 IDR 自动恢复；
+     * 触发与释放效果统一写入 AppLogger（runtime.log，磁盘轮转），崩溃时可对照时间线定位增长源。
+     */
+    private fun installMemoryWatchdog() {
+        memoryWatchdog.registerReleaser("shower-video-pending-frames") {
+            virtualDisplayCoordinatorLazy.value.trimVideoBuffers()
+        }
+        memoryWatchdog.start()
     }
 
     /**
      * 🌟 全局 CursorWindow 缓冲扩容：将 Android SQLite 原生游标窗口由默认 2MB 扩容至 100MB，
      * 彻底解决已有会话中超大单行记录在 Room 查询时报 `Row too big to fit into CursorWindow` 的问题。
      */
+    @SuppressLint("DiscouragedPrivateApi")
     private fun configureCursorWindowSize() {
         runCatching {
-            val field = android.database.CursorWindow::class.java.getDeclaredField("sCursorWindowSize")
+            val field = CursorWindow::class.java.getDeclaredField("sCursorWindowSize")
             field.isAccessible = true
             field.set(null, 100 * 1024 * 1024) // 100MB
         }.onFailure {
-            android.util.Log.w("TianyanApp", "Failed to configure CursorWindow size", it)
+            Log.w(TAG, "Failed to configure CursorWindow size", it)
         }
     }
 }

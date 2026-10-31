@@ -21,9 +21,6 @@ class NetworkInterceptor(
     private val scope: CoroutineScope,
 ) {
     fun onRequestStart(request: WebResourceRequest) {
-        // 内置起始页（file://）与 about/data/blob 等非网络资源不进网络时间线
-        val scheme = request.url.scheme?.lowercase() ?: ""
-        if (scheme == "file" || scheme == "about") return
         val startedAt = System.currentTimeMillis()
         val req = CapturedRequest(
             id = UUID.randomUUID().toString(),

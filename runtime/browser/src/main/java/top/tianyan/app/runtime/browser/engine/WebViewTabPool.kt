@@ -20,8 +20,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonPrimitive
-import top.tianyan.app.core.browser.BROWSER_HOME_URL
 import top.tianyan.app.core.browser.BrowserFamily
+import top.tianyan.app.core.browser.TianyanNewTab
 import top.tianyan.app.runtime.browser.BrowserEvent
 import top.tianyan.app.runtime.browser.BrowserEventBus
 import top.tianyan.app.runtime.browser.BrowserSessionToken
@@ -30,6 +30,8 @@ import top.tianyan.app.runtime.browser.hook.HookEventPipeline
 import top.tianyan.app.runtime.browser.hook.HookInstaller
 import top.tianyan.app.runtime.browser.hook.HookRuleStore
 import top.tianyan.app.runtime.browser.hook.NetworkBodyStore
+import top.tianyan.app.runtime.browser.inject.PageScriptInstaller
+import top.tianyan.app.runtime.browser.inject.VConsoleInstaller
 import top.tianyan.app.runtime.browser.snapshot.SnapshotBuilder
 
 /**
@@ -47,6 +49,9 @@ import top.tianyan.app.runtime.browser.snapshot.SnapshotBuilder
  * [hookStore]（规则）+ [hookPipeline]（页内事件管道）+ [hookBodies]（网络 body）+ [hookInstaller]（注入器）。
  * 与 desktopUserAgent 一样，切换开关需新 tab 或重启生效。
  *
+ * vConsole 调试面板（[vConsoleEnabled]=true 时注入，独立于 hooksEnabled）：
+ * 经 [scriptInstallers] 与 hook 注入器走同一套生命周期（创建注册 / 降级补种 / 验证 / 销毁摘除）。
+ *
  * CDP 栈（[cdpEnabled]=true 时创建）：[cdpManager]（断点 + Worker 级 Fetch 拦截）。
  * 规则存储与 body 存储在 hooksEnabled||cdpEnabled 任一开启时创建（同一规则双层生效）；
  * hookPipeline / hookInstaller 仍仅 hooksEnabled 创建。
@@ -59,9 +64,8 @@ class WebViewTabPool(
     private val desktopUserAgent: Boolean = false,
     hooksEnabled: Boolean = false,
     cdpEnabled: Boolean = false,
+    vConsoleEnabled: Boolean = false,
     maxCaptureBytes: Long = 6L * 1024 * 1024,
-    /** 起始页跟随软件主题：每次新建 tab 时读取当前深色态，注入 home.html。默认浅色。 */
-    private val themeDark: suspend () -> Boolean = { false },
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val mutex = Mutex()
@@ -83,15 +87,21 @@ class WebViewTabPool(
             HookInstaller(context, hookPipeline, hookStore).also { hookPipeline.start() }
         } else null
 
+    /**
+     * 启用中的 per-tab 脚本注入器（hook 运行时 + vConsole 面板），
+     * WebView 创建 / 导航 / 销毁时机统一经此列表分发生命周期。
+     */
+    val scriptInstallers: List<PageScriptInstaller> = buildList {
+        hookInstaller?.let { add(it) }
+        if (vConsoleEnabled) add(VConsoleInstaller(context))
+    }
+
     // ===== CDP 引擎栈（仅 cdpEnabled；真断点 + Worker 级 Fetch 拦截） =====
     val cdpManager: CdpManager? =
         if (cdpEnabled && hookStore != null && hookBodies != null) CdpManager(hookStore, hookBodies, eventBus) else null
 
     /** __tianyanTabId marker 的 document-start 句柄（仅 cdpEnabled 时注册）。 */
     private val markerHandles = ConcurrentHashMap<String, ScriptHandler>()
-
-    /** __tianyanTheme 主题注入的 document-start 句柄（每个 tab 均注册，供起始页跟随软件主题）。 */
-    private val themeHandles = ConcurrentHashMap<String, ScriptHandler>()
 
     private data class Slot(
         val token: BrowserSessionToken,
@@ -110,6 +120,7 @@ class WebViewTabPool(
     /**
      * 创建 tab。`activate=false`（agent 后台 tab）不抢占当前活跃 tab；
      * 超过 [maxTabs] 时抛出带说明的异常（错误信息直达 agent 工具调用方）。
+     * initialUrl 为空时加载品牌起始页（[TianyanNewTab.URL]，本地拦截不出网）。
      */
     suspend fun create(initialUrl: String?, activate: Boolean = true): BrowserSessionToken = mutex.withLock {
         if (byToken.size >= maxTabs) {
@@ -117,28 +128,25 @@ class WebViewTabPool(
                 "browser tab limit reached ($maxTabs): close existing tabs with browser.close_tab first"
             )
         }
+        val effectiveUrl = initialUrl ?: TianyanNewTab.URL
         val token = BrowserSessionToken(
             tabId = "t:" + System.nanoTime().toString(36),
             family = BrowserFamily.IN_APP,
             title = "",
-            url = initialUrl ?: BROWSER_HOME_URL,
+            url = effectiveUrl,
         )
         // per-tab scope 与该 tab 唯一的 SnapshotBuilder 由池统一创建持有
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         // isAlive：builder 扫描前确认 tab 仍在池中（closeTab / 崩溃 / shutdown 后变 false）
         val builder = SnapshotBuilder(token, eventBus, scope) { byToken[token.tabId] != null }
-        // 起始页主题：在切主线程前读取（themeDark 可能读 DataStore，挂起 IO，不阻塞主线程）
-        val dark = themeDark()
         withContext(Dispatchers.Main.immediate) {
             val view = AndroidWebViewFactory.create(context, desktopUserAgent)
-            WebViewClients.attach(view, eventBus, token, this@WebViewTabPool, builder, scope, hookInstaller)
+            WebViewClients.attach(context, view, eventBus, token, this@WebViewTabPool, builder, scope, scriptInstallers)
             // 桥与 document-start 脚本必须在首个 loadUrl 之前装好，最早的请求才不会漏
-            hookInstaller?.onWebViewCreated(token.tabId, view)
+            scriptInstallers.forEach { it.onWebViewCreated(token.tabId, view) }
             if (cdpManager != null) installTabMarker(token.tabId, view)
-            installThemeScript(token.tabId, view, dark)
             byToken[token.tabId] = Slot(token, view, scope, builder)
-            // 无初始 URL（agent 打开空 tab）时加载内置起始页，而非空白页
-            view.loadUrl(initialUrl ?: BROWSER_HOME_URL)
+            view.loadUrl(effectiveUrl)
         }
         if (activate) {
             _activeTab.value = token
@@ -171,10 +179,9 @@ class WebViewTabPool(
         slot?.scope?.cancel()
         slot?.builder?.clear(token.tabId)
         slot?.let { s ->
-            hookInstaller?.onWebViewDestroyed(token.tabId, s.view)
+            scriptInstallers.forEach { it.onWebViewDestroyed(token.tabId, s.view) }
             hookPipeline?.clearForTab(token.tabId)
             removeTabMarker(token.tabId)
-            removeThemeScript(token.tabId)
         }
         cdpManager?.onTabClosed(token.tabId)
         if (_activeTab.value?.tabId == token.tabId) {
@@ -193,10 +200,9 @@ class WebViewTabPool(
         slot?.scope?.cancel()
         slot?.builder?.clear(token.tabId)
         slot?.let { s ->
-            hookInstaller?.onWebViewDestroyed(token.tabId, s.view)
+            scriptInstallers.forEach { it.onWebViewDestroyed(token.tabId, s.view) }
             hookPipeline?.clearForTab(token.tabId)
             removeTabMarker(token.tabId)
-            removeThemeScript(token.tabId)
         }
         cdpManager?.onTabClosed(token.tabId)
         if (_activeTab.value?.tabId == token.tabId) {
@@ -216,9 +222,8 @@ class WebViewTabPool(
             slot.scope.cancel()
             slot.builder.clear(slot.token.tabId)
             mainHandler.post {
-                hookInstaller?.onWebViewDestroyed(slot.token.tabId, slot.view)
+                scriptInstallers.forEach { it.onWebViewDestroyed(slot.token.tabId, slot.view) }
                 removeTabMarker(slot.token.tabId)
-                removeThemeScript(slot.token.tabId)
                 AndroidWebViewFactory.destroy(slot.view)
             }
         }
@@ -236,7 +241,7 @@ class WebViewTabPool(
 
     /**
      * 注入 `window.__tianyanTabId` marker（仅 cdpEnabled）：document-start 覆盖后续导航，
-     * 即时求值覆盖当前文档（about:blank 初始页不走 document-start）。
+     * 即时求值覆盖当前文档（兜底不走 document-start 的 about:blank 等初始页）。
      * 必须主线程调用。
      */
     private fun installTabMarker(tabId: String, view: WebView) {
@@ -257,33 +262,6 @@ class WebViewTabPool(
         } else {
             mainHandler.post {
                 markerHandles.remove(tabId)?.let { runCatching { it.remove() } }
-            }
-        }
-    }
-
-    /**
-     * 注入 `window.__tianyanTheme={dark:Boolean}`：起始页据此跟随软件深/浅主题。
-     * document-start 覆盖后续导航，即时求值覆盖当前文档（about:blank 不走 document-start）。
-     * 必须主线程调用。
-     */
-    private fun installThemeScript(tabId: String, view: WebView, dark: Boolean) {
-        val script = "window.__tianyanTheme={dark:${dark}};"
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
-            runCatching {
-                themeHandles[tabId] =
-                    WebViewCompat.addDocumentStartJavaScript(view, script, setOf("*"))
-            }
-        }
-        runCatching { view.evaluateJavascript(script, null) }
-    }
-
-    /** 移除主题注入句柄；任意线程可调（内部保证主线程执行）。 */
-    private fun removeThemeScript(tabId: String) {
-        if (Looper.myLooper() == Looper.getMainLooper()) {
-            themeHandles.remove(tabId)?.let { runCatching { it.remove() } }
-        } else {
-            mainHandler.post {
-                themeHandles.remove(tabId)?.let { runCatching { it.remove() } }
             }
         }
     }

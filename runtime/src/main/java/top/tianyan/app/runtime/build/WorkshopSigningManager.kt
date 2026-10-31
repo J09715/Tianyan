@@ -2,11 +2,8 @@ package top.tianyan.app.runtime.build
 
 import android.content.Context
 import android.net.Uri
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.util.UUID
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -36,9 +33,8 @@ enum class WorkshopBuildType(val displayName: String) {
  * - Release 构建前由 [prepareReleaseSigning] 把密钥库同步进当前沙箱
  *   /opt/tianyan/keystores/，并安装 Gradle init 签名策略 + 注入环境变量。
  */
-@Singleton
-class WorkshopSigningManager @Inject constructor(
-    @ApplicationContext private val context: Context,
+class WorkshopSigningManager(
+    private val context: Context,
     private val linuxRuntime: LinuxRuntime,
     private val pathManager: RuntimePathManager,
     private val preferences: WorkshopPreferences,

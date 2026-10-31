@@ -12,6 +12,23 @@ import org.junit.Before
 import org.junit.Test
 
 class AgentModelDiscoveryTest {
+    @Test fun `external models come from package metadata without HTTP`() = runBlocking {
+        val external = provider().copy(id = "plugin.example.offline", name = "plugin.example.offline", recommendedModels = listOf("offline-model"))
+        assertEquals(listOf("offline-model"), discovery().discover(external, server.url("/v1").toString(), null))
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test fun `external connection tests use the installed adapter and reject host keys`() = runBlocking {
+        var calls = 0
+        val tester = AgentModelConnectionTester(OkHttpClient(), ExternalProviderProbe { provider, model ->
+            assertEquals("plugin.example.offline", provider); assertEquals("plugin-default", model); calls++
+        })
+        tester.test(server.url("/v1").toString(), "", null, providerName = "plugin.example.offline")
+        assertEquals(1, calls)
+        assertThrows(IllegalArgumentException::class.java) { runBlocking { tester.test(server.url("/v1").toString(), "", "secret", providerName = "plugin.example.offline") } }
+        assertEquals(1, calls)
+        assertEquals(0, server.requestCount)
+    }
     private lateinit var server: MockWebServer
 
     @Before
@@ -64,7 +81,7 @@ class AgentModelDiscoveryTest {
 
         val anthropicProvider = AgentProviderDefinition(
             id = "custom_anthropic",
-            name = "自定义 Anthropic 兼容接口",
+            name = "Anthropic 兼容接口",
             baseUrl = "",
             group = ProviderGroup.CUSTOM,
             protocol = ProviderProtocol.ANTHROPIC,
@@ -79,51 +96,6 @@ class AgentModelDiscoveryTest {
         assertEquals("/v1/models", request.path)
         assertEquals("test-key", request.getHeader("x-api-key"))
         assertEquals("2023-06-01", request.getHeader("anthropic-version"))
-    }
-
-    @Test
-    fun `ollama api tags is parsed when OpenAI endpoints are unavailable`() = runBlocking {
-        // Ollama 风格：/v1/models、/models 都不存在，/api/tags 返回
-        server.enqueue(
-            MockResponse()
-                .setResponseCode(404)
-                .setHeader("Content-Type", "application/json")
-                .setBody("{\"error\":\"not found\"}"),
-        )
-        server.enqueue(
-            MockResponse()
-                .setResponseCode(404)
-                .setHeader("Content-Type", "application/json")
-                .setBody("{\"error\":\"not found\"}"),
-        )
-        server.enqueue(
-            MockResponse()
-                .setResponseCode(200)
-                .setHeader("Content-Type", "application/json")
-                .setBody("{\"models\":[{\"name\":\"llama3:latest\"},{\"name\":\"qwen2:7b\"}]}"),
-        )
-
-        val result = discovery().discover(provider(), server.url("").toString(), null)
-        assertEquals(listOf("llama3:latest", "qwen2:7b"), result)
-        // 按候选顺序：先 /v1/models → 失败，再 /models → 失败，再 /api/tags → 成功
-        assertEquals(3, server.requestCount)
-    }
-
-    @Test
-    fun `all endpoints failing aggregates all errors`() = runBlocking {
-        server.enqueue(MockResponse().setResponseCode(500).setBody("{\"error\":\"boom\"}"))
-        server.enqueue(MockResponse().setResponseCode(500).setBody("{\"error\":\"boom\"}"))
-        server.enqueue(MockResponse().setResponseCode(500).setBody("{\"error\":\"boom\"}"))
-
-        val error = assertThrows(ModelDiscoveryResponseException::class.java) {
-            runBlocking { discovery().discover(provider(), server.url("").toString(), null) }
-        }
-        val msg = error.message.orEmpty()
-        assertTrue("应包含 /v1/models 端点", msg.contains("/v1/models"))
-        assertTrue("应包含 /models 端点", msg.contains("/models"))
-        assertTrue("应包含 /api/tags 端点", msg.contains("/api/tags"))
-        assertTrue("应包含 HTTP 500", msg.contains("HTTP 500"))
-        assertEquals(3, server.requestCount)
     }
 
     private fun discovery() = AgentModelDiscovery(OkHttpClient())

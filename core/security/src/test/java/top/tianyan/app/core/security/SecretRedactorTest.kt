@@ -1,4 +1,4 @@
-package top.tianyan.app.core.security
+﻿package top.tianyan.app.core.security
 
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -6,6 +6,20 @@ import org.junit.Test
 
 class SecretRedactorTest {
     private val redactor = SecretRedactor()
+
+    @Test
+    fun `redacts escaped commands config prefixes and repeated secrets`() {
+        val secret = "synthetic-test-credential"
+        for (entry in listOf(
+            """Args={"command":"password = \"$secret\"\nprint('$secret')"}""",
+            """mail_smtp_pass: "$secret"""",
+            "mail_smtp_pass: $secret",
+            """--auth-password "$secret"""",
+            """{"mail_smtp_pass":"$secret"}""",
+        )) {
+            assertFalse(redactor.redact(entry).contains(secret))
+        }
+    }
 
     @Test
     fun `redacts openai api key`() {

@@ -84,6 +84,18 @@ class WorkflowRepositoryIntegrationTest {
     }
 
     @Test
+    fun `expanded execution recreates catalog parent from original definition`() = runBlocking {
+        val original = WorkflowDefinition("expanded", "original", maxParallelNodes = 2, nodes = listOf(WorkflowNode("start", WorkflowNodeType.TRIGGER, "start")))
+        val expanded = original.copy(nodes = original.nodes + WorkflowNode("added", WorkflowNodeType.DELAY, "added"))
+        repository.saveExecution(WorkflowRuntimeState.initial("expanded-run", expanded).copy(baseDefinition = original))
+        assertEquals(original.nodes, repository.findById(original.id)?.nodes)
+        assertEquals(2, repository.findById(original.id)?.maxParallelNodes)
+        val restored = repository.observeHistory().first().single()
+        assertEquals(expanded, restored.definition)
+        assertEquals(original, restored.baseDefinition)
+    }
+
+    @Test
     fun `custom workflow can be saved updated and deleted`() = runBlocking {
         val original = WorkflowDefinition(
             id = "custom-editor-test",

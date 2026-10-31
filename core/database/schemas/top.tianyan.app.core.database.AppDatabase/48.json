@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 48,
-    "identityHash": "0175f0b4cd83509b0975a98ff32b08c4",
+    "identityHash": "2b0a9112bf368e2004f7f4bccfbb34a8",
     "entities": [
       {
         "tableName": "tools",
@@ -275,7 +275,7 @@
       },
       {
         "tableName": "harness_sessions",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `title` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `modelId` TEXT, `modelVariant` TEXT, `workspace` TEXT NOT NULL, `projectType` TEXT NOT NULL, `approvalMode` TEXT NOT NULL, `redTeamMode` TEXT NOT NULL, `redTeamTarget` TEXT, `redTeamScope` TEXT NOT NULL, `redTeamPhase` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `title` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `modelId` TEXT, `modelVariant` TEXT, `workspace` TEXT NOT NULL, `projectType` TEXT NOT NULL, `approvalMode` TEXT NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -328,29 +328,6 @@
             "columnName": "approvalMode",
             "affinity": "TEXT",
             "notNull": true
-          },
-          {
-            "fieldPath": "redTeamMode",
-            "columnName": "redTeamMode",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "redTeamTarget",
-            "columnName": "redTeamTarget",
-            "affinity": "TEXT"
-          },
-          {
-            "fieldPath": "redTeamScope",
-            "columnName": "redTeamScope",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "redTeamPhase",
-            "columnName": "redTeamPhase",
-            "affinity": "TEXT",
-            "notNull": true
           }
         ],
         "primaryKey": {
@@ -373,7 +350,7 @@
       },
       {
         "tableName": "harness_models",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `provider` TEXT NOT NULL, `model` TEXT NOT NULL, `baseUrl` TEXT NOT NULL, `secretRef` TEXT NOT NULL, `isActive` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `temperature` REAL, `maxTokens` INTEGER, `topP` REAL, `reasoningMode` TEXT, `reasoningEffort` TEXT, `toolCallMode` TEXT, `contextTokens` INTEGER, `customHeaders` TEXT NOT NULL, `pureChatMode` INTEGER NOT NULL, `visionEnabled` INTEGER NOT NULL, `imageGenerationEnabled` INTEGER NOT NULL, `responseApiEnabled` INTEGER NOT NULL, `apiKeyCount` INTEGER NOT NULL, `requestsPerMinutePerKey` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `provider` TEXT NOT NULL, `model` TEXT NOT NULL, `baseUrl` TEXT NOT NULL, `secretRef` TEXT NOT NULL, `isActive` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `temperature` REAL, `maxTokens` INTEGER, `topP` REAL, `reasoningMode` TEXT, `reasoningEffort` TEXT, `toolCallMode` TEXT, `contextTokens` INTEGER, `customHeaders` TEXT NOT NULL, `pureChatMode` INTEGER NOT NULL, `visionEnabled` INTEGER NOT NULL, `imageGenerationEnabled` INTEGER NOT NULL, `responseApiEnabled` INTEGER NOT NULL, `apiKeyCount` INTEGER NOT NULL, `requestsPerMinutePerKey` INTEGER NOT NULL, `compactionKeepRecentTokens` INTEGER, `compactionReserveTokens` INTEGER, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -499,6 +476,16 @@
             "columnName": "requestsPerMinutePerKey",
             "affinity": "INTEGER",
             "notNull": true
+          },
+          {
+            "fieldPath": "compactionKeepRecentTokens",
+            "columnName": "compactionKeepRecentTokens",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "compactionReserveTokens",
+            "columnName": "compactionReserveTokens",
+            "affinity": "INTEGER"
           }
         ],
         "primaryKey": {
@@ -2379,7 +2366,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '0175f0b4cd83509b0975a98ff32b08c4')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '2b0a9112bf368e2004f7f4bccfbb34a8')"
     ]
   }
 }

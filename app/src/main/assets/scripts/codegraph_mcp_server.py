@@ -38,6 +38,8 @@ MAX_EXPLORE_LINES = 120
 MAX_SNIPPET_LINES = 35
 # 超过该大小的源文件直接跳过索引（minified JS / 生成产物 / 数据转储）
 MAX_INDEX_FILE_BYTES = 1_000_000
+# 触达图谱 DB 的工具在后台初始索引期间的最长等待秒数（超过则返回非失败进度提示）
+GUARDED_WAIT_SECONDS = 120.0
 STDOUT_WRITE_LOCK = threading.Lock()
 
 # ==============================================================================
@@ -799,6 +801,12 @@ def main():
                         raise ValueError(f"未知工具: {tool_name}")
 
                     result = {"content": [{"type": "text", "text": res_text}], "isError": False}
+                except IndexNotReady as exc:
+                    # 索引未就绪 ≠ 工具失败：以正常结果返回进度与降级建议，
+                    # 不计入 agent 侧失败轮次，防止首次大仓库查询触发熔断。
+                    hint = ("本次调用不计为失败。可选择：① 稍后重试本工具（索引完成后自动可用）；"
+                            "② 先用内置终端 ripgrep/grep 完成等价检索。")
+                    result = {"content": [{"type": "text", "text": f"⏳ {str(exc)}\n{hint}"}], "isError": False}
                 except Exception as exc:
                     result = {"content": [{"type": "text", "text": f"CodeGraph 工具执行异常: {str(exc)}"}], "isError": True}
 
@@ -821,11 +829,19 @@ def to_json_text(data, empty_hint):
     return json.dumps(data, ensure_ascii=False, indent=2) if data else empty_hint
 
 
+class IndexNotReady(RuntimeError):
+    """后台初始索引尚未完成，查询无法立即服务。
+    调用方（tools/call 处理器）应将其转为非失败的进度提示返回，避免 agent 侧
+    把首次查询计为工具失败、连锁触发连续失败熔断。"""
+
+
 def guarded_call(indexer, fn):
-    """所有触达图谱 DB 的工具共用非阻塞锁：后台初始索引进行中时立即返回进度状态，
-    而不是让请求排队数分钟无响应。"""
-    if not indexer.lock.acquire(blocking=False):
-        raise RuntimeError(indexer.status_text())
+    """触达图谱 DB 的工具共用锁：后台初始索引时等待其完成（默认 120s）。
+    客户端 tools/call 超时为 10 分钟，等待窗口远小于此；典型仓库索引可在窗口
+    内完成，等待后直接返回真实结果，避免首次查询硬失败。超时则抛 IndexNotReady，
+    由调用方转为「非失败」的进度提示（提示先用 grep 规避或稍后重试）。"""
+    if not indexer.lock.acquire(blocking=True, timeout=GUARDED_WAIT_SECONDS):
+        raise IndexNotReady(indexer.status_text())
     try:
         return fn()
     finally:

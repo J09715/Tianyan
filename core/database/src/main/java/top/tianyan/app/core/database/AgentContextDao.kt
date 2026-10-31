@@ -24,14 +24,24 @@ interface AgentContextDao {
     @Query("SELECT * FROM agent_memories WHERE subjectKey = :subjectKey AND scope = :scope AND ownerId = :ownerId LIMIT 1")
     suspend fun getMemoryBySubjectKey(subjectKey: String, scope: String, ownerId: String): AgentMemoryEntity?
 
-    /** 钉选记忆：总是注入 system prompt 稳定前缀，绕过检索与新鲜度过滤。 */
+    /**
+     * 钉选记忆：总是注入 system prompt 稳定前缀，绕过检索与新鲜度过滤。
+     *
+     * 排序必须是**内容确定**的：本结果直接决定 system prompt 的字节，而 saveMemory 每次覆盖
+     * 都会刷新 updatedAt（哪怕 value 一字未改）。若按 updatedAt 排序，「模型重复保存同一条
+     * pinned 记忆」这类无实质变化的行为也会重排列表、改变提示词字节，击穿其后全部对话的
+     * prefix cache。按 (scope 权威序, createdAt, id) 排序时，重写既有条目不会移动位置
+     * （createdAt 在覆盖时保持不变，见 AgentContextExecutor）。
+     */
     @Query("""
         SELECT * FROM agent_memories
         WHERE pinned = 1
           AND ((scope = 'global' AND ownerId = '')
             OR (:projectOwnerId != '' AND scope = 'project' AND ownerId = :projectOwnerId)
             OR (:sessionId != '' AND scope = 'session' AND ownerId = :sessionId))
-        ORDER BY updatedAt DESC
+        ORDER BY CASE scope WHEN 'global' THEN 0 WHEN 'project' THEN 1 ELSE 2 END,
+                 createdAt ASC,
+                 id ASC
     """)
     suspend fun getPinnedMemories(projectOwnerId: String, sessionId: String): List<AgentMemoryEntity>
 
@@ -57,7 +67,7 @@ interface AgentContextDao {
         WHERE (scope = 'global' AND ownerId = '')
            OR (:projectOwnerId != '' AND scope = 'project' AND ownerId = :projectOwnerId)
            OR (:sessionId != '' AND scope = 'session' AND ownerId = :sessionId)
-        ORDER BY updatedAt DESC
+        ORDER BY updatedAt DESC, id ASC
         LIMIT :limit
     """)
     suspend fun getMemoriesForContext(projectOwnerId: String, sessionId: String, limit: Int): List<AgentMemoryEntity>
@@ -74,7 +84,7 @@ interface AgentContextDao {
             OR (:projectOwnerId != '' AND scope = 'project' AND ownerId = :projectOwnerId)
             OR (:sessionId != '' AND scope = 'session' AND ownerId = :sessionId))
           AND (`key` LIKE '%' || :query || '%' OR `value` LIKE '%' || :query || '%')
-        ORDER BY updatedAt DESC
+        ORDER BY updatedAt DESC, id ASC
         LIMIT :limit
     """)
     suspend fun searchMemories(query: String, projectOwnerId: String, sessionId: String, limit: Int): List<AgentMemoryEntity>

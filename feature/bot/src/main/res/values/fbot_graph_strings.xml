@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="fbot_graph_title">团队架构</string>
+    <string name="fbot_graph_open">全屏查看架构图</string>
+    <string name="fbot_graph_editable">团队草稿 · 点击成员调整关系</string>
+    <string name="fbot_graph_readonly">只读 · 组织配置在团队组中维护</string>
+    <string name="fbot_graph_edit_hint">滑动查看，使用按钮缩放；点击成员调整上级。</string>
+    <string name="fbot_graph_view_hint">滑动查看，使用按钮缩放；全图可显示所有管理与审议连线。</string>
+    <string name="fbot_graph_runtime_hint">点击成员查看任务，点击高亮连线查看方案与审核依据；支持滚动与缩放。</string>
+</resources>

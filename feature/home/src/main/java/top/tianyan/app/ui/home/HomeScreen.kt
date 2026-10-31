@@ -1,5 +1,7 @@
 package top.tianyan.app.ui.home
-
+import top.tianyan.app.ui.components.previewOrNull
+import top.tianyan.app.ui.components.previewStateOf
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -18,14 +20,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -35,7 +38,6 @@ import top.tianyan.app.ui.components.RuntimeButton as Button
 import androidx.compose.material3.ButtonDefaults
 import top.tianyan.app.ui.components.RuntimeCircularProgressIndicator
 import top.tianyan.app.ui.components.RuntimeFilledTonalButton as FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
 import top.tianyan.app.ui.components.RuntimeIconButton as IconButton
 import top.tianyan.app.ui.components.RuntimeLinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -53,9 +55,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -80,7 +82,6 @@ import top.tianyan.app.ui.components.RuntimeSwitch
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
 import top.tianyan.app.feature.home.R
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.tianyan.app.core.model.DoctorItem
 import top.tianyan.app.core.model.DoctorReport
@@ -88,9 +89,8 @@ import top.tianyan.app.core.model.DoctorStatus
 import top.tianyan.app.core.model.RepairProgress
 import top.tianyan.app.core.model.RuntimeState
 import top.tianyan.app.ui.components.MainDestination
+import top.tianyan.app.ui.components.IconTile
 import top.tianyan.app.ui.components.NoticeBanner
-import top.tianyan.app.ui.components.RuntimeBottomBar
-import top.tianyan.app.ui.components.liquidGlassContent
 import top.tianyan.app.ui.components.RuntimeCard
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
@@ -98,58 +98,59 @@ import top.tianyan.app.ui.components.RuntimeTopBar
 import top.tianyan.app.ui.components.RuntimeButton
 import top.tianyan.app.ui.components.distroIconFor
 import top.tianyan.app.ui.components.StatusBadge
-import top.tianyan.app.ui.components.isLiquidGlassThemeActive
-
+import android.os.SystemClock
+import top.tianyan.app.core.model.InstalledDistro
 /** 自动体检防抖间隔：ON_RESUME 触发时距上次不足该间隔则跳过。 */
 private const val DOCTOR_CHECK_MIN_INTERVAL_MS = 30_000L
 
 /**
- * 主题感知的健康绿 / 警告橙：替代硬编码深色，暗色主题下自动换用高亮度变体保证对比。
+ * 健康与警告色统一跟随主题的谐调语义色板。
  */
 @Composable
 private fun healthyStatusColor(): Color =
-    if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color(0xFF81C784) else Color(0xFF2E7D32)
+    top.tianyan.app.ui.theme.semanticColors().success
 
 @Composable
 private fun warningStatusColor(): Color =
-    if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color(0xFFFFB74D) else Color(0xFFE65100)
+    top.tianyan.app.ui.theme.semanticColors().warning
 
 /**
  * 天衍 · 运行仪表盘 (Tianyan Linux Runtime Dashboard)
  * 集成沙箱引擎状态、运行环境体检自愈中心、实时内存/存储监控与规格信息
  */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(
+internal fun LocalHomeScreen(
     onNavigate: (MainDestination) -> Unit,
     onOpenTerminal: () -> Unit,
     onOpenToolCenter: () -> Unit = {},
-    viewModel: HomeViewModel = hiltViewModel(),
+    viewModel: HomeViewModel? = previewOrNull { koinViewModel() }, onBack: () -> Unit = { onNavigate(MainDestination.Agent) },
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var lastAutoDoctorCheckAt by remember { mutableLongStateOf(0L) }
 
-    val state by viewModel.runtimeState.collectAsStateWithLifecycle()
-    val metrics by viewModel.metrics.collectAsStateWithLifecycle()
-    val doctorReport by viewModel.doctorReport.collectAsStateWithLifecycle()
-    val isCheckingDoctor by viewModel.isCheckingDoctor.collectAsStateWithLifecycle()
-    val repairProgress by viewModel.repairProgress.collectAsStateWithLifecycle()
-    val isRepairing by viewModel.isRepairing.collectAsStateWithLifecycle()
-    val installedDistros by viewModel.installedDistros.collectAsStateWithLifecycle()
-    val activeDistroId by viewModel.activeDistroId.collectAsStateWithLifecycle()
-    val switchingDistro by viewModel.switchingDistro.collectAsStateWithLifecycle()
-    val modeStatus by viewModel.executionModeStatus.collectAsStateWithLifecycle()
-    val webChatStatus by viewModel.webChatStatus.collectAsStateWithLifecycle()
+    val state by viewModel?.runtimeState?.collectAsStateWithLifecycle() ?: previewStateOf(top.tianyan.app.core.model.RuntimeState.Ready)
+    val metrics by viewModel?.metrics?.collectAsStateWithLifecycle() ?: previewStateOf(SystemResourceMetrics())
+    val doctorReport by viewModel?.doctorReport?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val isCheckingDoctor by viewModel?.isCheckingDoctor?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val repairProgress by viewModel?.repairProgress?.collectAsStateWithLifecycle() ?: previewStateOf(null)
+    val isRepairing by viewModel?.isRepairing?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val installedDistros by viewModel?.installedDistros?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
+    val activeDistroId by viewModel?.activeDistroId?.collectAsStateWithLifecycle() ?: previewStateOf("ubuntu")
+    val switchingDistro by viewModel?.switchingDistro?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val modeStatus by viewModel?.executionModeStatus?.collectAsStateWithLifecycle() ?: previewStateOf(ExecutionModeStatus())
+    val webChatStatus by viewModel?.webChatStatus?.collectAsStateWithLifecycle() ?: previewStateOf(top.tianyan.app.runtime.webchat.WebChatServerStatus())
 
     val allFilesPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
-        viewModel.runDoctorCheck()
+        viewModel?.runDoctorCheck()
     }
     val legacyStoragePermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) {
-        viewModel.runDoctorCheck()
+        viewModel?.runDoctorCheck()
     }
 
     val requestAllFilesAccess: () -> Unit = remember(context) {
@@ -187,10 +188,10 @@ fun HomeScreen(
             if (event == Lifecycle.Event.ON_RESUME) {
                 // 防抖：间隔过短（如切 Tab / 亮灭屏）时跳过自动体检，避免每次切回都闪检查态。
                 // 用户点顶栏刷新仍无条件执行。
-                val now = android.os.SystemClock.elapsedRealtime()
+                val now = SystemClock.elapsedRealtime()
                 if (now - lastAutoDoctorCheckAt > DOCTOR_CHECK_MIN_INTERVAL_MS) {
                     lastAutoDoctorCheckAt = now
-                    viewModel.runDoctorCheck()
+                    viewModel?.runDoctorCheck()
                 }
             }
         }
@@ -200,26 +201,20 @@ fun HomeScreen(
         }
     }
 
-    // 首页可见性联动：进入时恢复指标轮询，切走（离开组合）即暂停，避免后台空转。
-    DisposableEffect(Unit) {
-        viewModel.onScreenVisible()
-        onDispose { viewModel.onScreenHidden() }
-    }
-
-    val isLiquidGlassTheme = isLiquidGlassThemeActive()
-
+    val scrollBehavior = androidx.compose.material3.TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             RuntimeTopBar(
-                title = stringResource(R.string.home_dashboard_title),
-                statusText = "${metrics.linuxDistro} · ${metrics.cpuArch}",
+                title = stringResource(R.string.home_dashboard_title), onBack = onBack,
+                scrollBehavior = scrollBehavior,
                 actions = {
                     IconButton(
                         onClick = {
-                            viewModel.refreshMetrics()
-                            viewModel.runDoctorCheck()
-                            viewModel.refreshExecutionModeStatus()
+                            viewModel?.refreshMetrics()
+                            viewModel?.runDoctorCheck()
+                            viewModel?.refreshExecutionModeStatus()
                         },
                         enabled = !isCheckingDoctor,
                         contentDescription = stringResource(R.string.home_refresh),
@@ -242,21 +237,15 @@ fun HomeScreen(
                 },
             )
         },
-        bottomBar = {
-            if (!isLiquidGlassTheme) {
-                RuntimeBottomBar(MainDestination.Home, onNavigate)
-            }
-        },
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .liquidGlassContent()
                 .padding(top = innerPadding.calculateTopPadding())
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-                .padding(bottom = if (isLiquidGlassTheme) 104.dp else innerPadding.calculateBottomPadding() + 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(top.tianyan.app.ui.components.runtimeContentPadding(horizontal = 16.dp, top = 12.dp, bottom = 12.dp))
+                .padding(bottom = innerPadding.calculateBottomPadding() + 16.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp),
         ) {
             // 1. 运行时引擎主状态卡片 (Status Banner)
             RuntimeEngineStatusCard(
@@ -266,45 +255,42 @@ fun HomeScreen(
                 activeDistroId = activeDistroId,
                 switchingDistro = switchingDistro,
                 modeStatus = modeStatus,
-                onSwitchDistro = viewModel::switchDistro,
-                onInitialize = viewModel::initializeRuntime,
-                onCancel = viewModel::cancelInitialization,
+                onSwitchDistro = { arg0 -> viewModel?.switchDistro(arg0) },
+                onInitialize = { viewModel?.initializeRuntime() },
+                onCancel = { viewModel?.cancelInitialization() },
                 onOpenTerminal = onOpenTerminal,
                 onOpenModeSettings = { onNavigate(MainDestination.Settings) },
             )
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = stringResource(R.string.home_system_resources),
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-                Text(
-                    text = "${metrics.cpuArch} · ${metrics.linuxDistro}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+            // 2. 运行与开发环境体检自愈中心 (Tianyan Doctor & Auto-Fix)
+            EnvironmentDoctorCard(
+                report = doctorReport,
+                isChecking = isCheckingDoctor,
+                isRepairing = isRepairing,
+                repairProgress = repairProgress,
+                runtimeReady = state is RuntimeState.Ready,
+                onStartAutoRepair = {
+                    if (doctorReport?.items?.any { it.id == "host_all_files_access" && it.status != DoctorStatus.HEALTHY } == true) {
+                        requestAllFilesAccess()
+                    }
+                    viewModel?.startAutoRepair()
+                },
+                onCancelRepair = { viewModel?.cancelAutoRepair() },
+                onRequestAllFilesAccess = requestAllFilesAccess,
+                onOpenToolCenter = onOpenToolCenter,
+            )
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    // 两张卡强制等高：内容长度不同（如「总空间 0.0 GB」换行）时，
-                    // Row 默认按各自内容高度排布，会出现「一张高一张矮」的不对称，
-                    // 而指标加载完成后文本变短又会自己对齐——用户看到的是先歪一下再正。
-                    // IntrinsicSize.Min + fillMaxHeight 让两卡取同一高度，从首帧就对称。
-                    .height(IntrinsicSize.Min),
+            androidx.compose.foundation.layout.FlowRow(
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                maxItemsInEachRow = 2,
             ) {
                 // 内存指标
                 ResourceMetricCard(
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    modifier = Modifier
+                        .weight(1f)
+                        .widthIn(min = 144.dp * androidx.compose.ui.platform.LocalDensity.current.fontScale.coerceAtLeast(1f)),
                     title = stringResource(R.string.home_memory),
                     primaryValue = "${metrics.memoryUsedMb} MB",
                     secondaryValue = stringResource(R.string.home_memory_total, metrics.memoryTotalMb),
@@ -317,59 +303,32 @@ fun HomeScreen(
 
                 // 存储指标
                 ResourceMetricCard(
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    modifier = Modifier
+                        .weight(1f)
+                        .widthIn(min = 144.dp * androidx.compose.ui.platform.LocalDensity.current.fontScale.coerceAtLeast(1f)),
                     title = stringResource(R.string.home_storage),
                     primaryValue = "${metrics.storageUsedGb} GB",
                     secondaryValue = stringResource(R.string.home_storage_total, metrics.storageTotalGb),
                     progress = (metrics.storageUsagePercent / 100f).coerceIn(0f, 1f),
                     progressText = stringResource(R.string.home_storage_used, metrics.storageUsagePercent),
-                    extraInfo = stringResource(R.string.home_rootfs_healthy),
+                    extraInfo = stringResource(R.string.home_device_storage_note),
                     accentColor = MaterialTheme.colorScheme.secondary,
                     icon = RuntimeIconName.Storage,
                 )
             }
 
-
-            // 3. 运行与开发环境体检自愈中心 (Tianyan Doctor & Auto-Fix)
-            EnvironmentDoctorCard(
-                report = doctorReport,
-                isChecking = isCheckingDoctor,
-                isRepairing = isRepairing,
-                repairProgress = repairProgress,
-                runtimeReady = state is RuntimeState.Ready,
-                onRunCheck = viewModel::runDoctorCheck,
-                onStartAutoRepair = {
-                    if (doctorReport?.items?.any { it.id == "host_all_files_access" && it.status != DoctorStatus.HEALTHY } == true) {
-                        requestAllFilesAccess()
-                    }
-                    viewModel.startAutoRepair()
-                },
-                onCancelRepair = viewModel::cancelAutoRepair,
-                onRequestAllFilesAccess = requestAllFilesAccess,
-                onOpenToolCenter = onOpenToolCenter,
-            )
-
+            // 3. WebChat 电脑大屏协作卡片 (Dashboard Bridge Card)
             WebChatDashboardCard(
                 status = webChatStatus,
-                onToggle = viewModel::toggleWebChat,
+                onToggle = { arg0 -> viewModel?.toggleWebChat(arg0) },
             )
 
-            // 4. 活跃任务与服务监控卡片
-            ActiveTasksStatusCard(
-                metrics = metrics,
-                onOpenTerminal = onOpenTerminal,
-            )
-
-            // 5. 运行环境与规格详情
+            // 4. 运行环境与规格详情（低频信息，默认折叠）
             SystemSpecsCard(metrics = metrics, modeStatus = modeStatus)
-
-            Spacer(Modifier.height(16.dp))
         }
     }
 }
-/**
- * 运行与开发环境体检自愈卡片 (Tianyan Doctor & Auto-Fix)
- */
+/** 运行与开发环境体检自愈卡片 (Tianyan Doctor & Auto-Fix) */
 @Composable
 private fun EnvironmentDoctorCard(
     report: DoctorReport?,
@@ -377,7 +336,6 @@ private fun EnvironmentDoctorCard(
     isRepairing: Boolean,
     repairProgress: RepairProgress?,
     runtimeReady: Boolean,
-    onRunCheck: () -> Unit,
     onStartAutoRepair: () -> Unit,
     onCancelRepair: () -> Unit,
     onRequestAllFilesAccess: () -> Unit = {},
@@ -395,6 +353,7 @@ private fun EnvironmentDoctorCard(
 
     RuntimeCard(
         modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge,
         onClick = { isCardExpanded = !isCardExpanded },
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
@@ -413,26 +372,15 @@ private fun EnvironmentDoctorCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(
-                                if (report?.isAllHealthy == true) healthyStatusColor().copy(alpha = 0.15f)
-                                else MaterialTheme.colorScheme.primaryContainer,
-                            ),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        RuntimeIcon(
-                            name = if (report?.isAllHealthy == true) RuntimeIconName.Check else RuntimeIconName.Shield,
-                            modifier = Modifier.size(20.dp),
-                            tint = if (report?.isAllHealthy == true) healthyStatusColor() else MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                    }
+                    IconTile(
+                        icon = if (report?.isAllHealthy == true) RuntimeIconName.Check else RuntimeIconName.Shield,
+                        size = 36.dp,
+                        color = if (report?.isAllHealthy == true) healthyStatusColor() else MaterialTheme.colorScheme.primary,
+                    )
                     Column(Modifier.weight(1f)) {
                         Text(
                             text = stringResource(R.string.home_doctor_title),
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                            style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                         Text(
@@ -462,18 +410,6 @@ private fun EnvironmentDoctorCard(
                             strokeWidth = 2.dp,
                             color = MaterialTheme.colorScheme.primary,
                         )
-                    } else if (runtimeReady) {
-                        IconButton(
-                            onClick = { onRunCheck() },
-                            enabled = !isRepairing,
-                            modifier = Modifier.size(32.dp),
-                        ) {
-                            RuntimeIcon(
-                                name = RuntimeIconName.Refresh,
-                                modifier = Modifier.size(18.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
                     }
 
                     RuntimeIcon(
@@ -495,12 +431,14 @@ private fun EnvironmentDoctorCard(
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     // 修复中状态展示
                     if (isRepairing && repairProgress != null) {
-                        RuntimeCard(
+                        // 去嵌套：卡内区块改用平面 Surface，避免玻璃主题下多层卡片材质冲突
+                        Surface(
                             modifier = Modifier.fillMaxWidth(),
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                            contentPadding = PaddingValues(14.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerHighest,
                         ) {
                             Column(
+                                modifier = Modifier.padding(14.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 Row(
@@ -528,11 +466,9 @@ private fun EnvironmentDoctorCard(
 
                                 RuntimeLinearProgressIndicator(
                                     progress = { repairProgress.progress },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(6.dp)
-                                        .clip(RoundedCornerShape(3.dp)),
+                                    modifier = Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(4.dp)),
                                     color = MaterialTheme.colorScheme.primary,
+                                    wavy = true,
                                 )
 
                                 Row(
@@ -592,7 +528,8 @@ private fun EnvironmentDoctorCard(
                     // 体检报告列表展示
                     if (report != null && !isRepairing) {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            val displayedItems = if (expandedDetails || report.needsFix) report.items else report.items.take(3)
+                            val attentionItems = report.items.filter { it.status != DoctorStatus.HEALTHY }
+                            val displayedItems = if (expandedDetails) report.items else attentionItems
                             displayedItems.forEach { item ->
                                 DoctorItemRow(
                                     item = item,
@@ -600,7 +537,7 @@ private fun EnvironmentDoctorCard(
                                 )
                             }
 
-                            if (report.items.size > 3) {
+                            if (report.items.size > attentionItems.size) {
                                 TextButton(
                                     onClick = { expandedDetails = !expandedDetails },
                                     modifier = Modifier.align(Alignment.CenterHorizontally),
@@ -612,15 +549,15 @@ private fun EnvironmentDoctorCard(
                                 }
                             }
 
-                            // Android 环境未安装：直接引导到插件中心在线安装。
-                            // 原来这里还并排一个「进群取离线包」按钮，指向 QQ 群——
-                            // 环境体检是排障路径，把用户支去加群解决不了任何问题，
-                            // 而且群链接失效时那个按钮就是个死路。
+                            // Android 环境未安装：展示离线包 / 在线插件两条获取路径
+                            // UNKNOWN（沙箱正忙探测不可达）不算未安装，不弹引导卡
                             val missingAndroidEnv = report.items.any {
-                                it.id == "android_environment" && it.status != DoctorStatus.HEALTHY
+                                it.id == "android_environment" &&
+                                    (it.status == DoctorStatus.WARNING || it.status == DoctorStatus.ERROR)
                             }
                             if (missingAndroidEnv) {
                                 AndroidEnvAcquisitionCard(
+                                    onJoinQqGroup = { joinQqGroup(context) },
                                     onOpenToolCenter = onOpenToolCenter,
                                 )
                             }
@@ -677,9 +614,7 @@ private fun EnvironmentDoctorCard(
         }
     }
 }
-/**
- * 体检条目单行展示
- */
+/** 体检条目单行展示 */
 @Composable
 private fun DoctorItemRow(
     item: DoctorItem,
@@ -690,16 +625,16 @@ private fun DoctorItemRow(
         DoctorStatus.HEALTHY -> healthyStatusColor()
         DoctorStatus.WARNING -> warningStatusColor()
         DoctorStatus.ERROR -> MaterialTheme.colorScheme.error
+        DoctorStatus.UNKNOWN -> MaterialTheme.colorScheme.onSurfaceVariant
         DoctorStatus.CHECKING -> MaterialTheme.colorScheme.tertiary
-        DoctorStatus.UNKNOWN -> MaterialTheme.colorScheme.outline
     }
 
     val statusIcon = when (item.status) {
         DoctorStatus.HEALTHY -> RuntimeIconName.Check
         DoctorStatus.WARNING -> RuntimeIconName.Alert
         DoctorStatus.ERROR -> RuntimeIconName.Alert
-        DoctorStatus.CHECKING -> RuntimeIconName.Refresh
         DoctorStatus.UNKNOWN -> RuntimeIconName.Info
+        DoctorStatus.CHECKING -> RuntimeIconName.Refresh
     }
 
     Row(
@@ -743,17 +678,24 @@ private fun DoctorItemRow(
                         text = item.title,
                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                         color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f, fill = false),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         text = "· ${item.category.displayName}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        softWrap = false,
                     )
                 }
                 Text(
                     text = item.summary,
                     style = MaterialTheme.typography.bodySmall,
                     color = if (item.status != DoctorStatus.HEALTHY) statusColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 val detail = item.detail
                 if (!detail.isNullOrBlank() && item.status != DoctorStatus.HEALTHY) {
@@ -781,45 +723,35 @@ private fun DoctorItemRow(
     }
 }
 
-/**
- * Android 环境未安装引导卡：引导到插件中心在线安装。
- *
- * 只留一条路径：环境缺失是排障场景，需要的是「点一下就去装」，
- * 而不是把用户支去加群领离线包——群链接会失效，且多一层跳转解决不了环境问题。
- */
+/** Android 环境未安装引导卡：提供「QQ 群全量离线插件包」与「插件中心在线安装」两条获取路径。 */
 @Composable
 private fun AndroidEnvAcquisitionCard(
+    onJoinQqGroup: () -> Unit,
     onOpenToolCenter: () -> Unit,
 ) {
-    RuntimeCard(
+    // 去嵌套：本卡嵌在体检卡展开区内，改用平面 Surface + 淡主色底，去掉描边
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
-        borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
-        contentPadding = PaddingValues(14.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
     ) {
         Column(
+            modifier = Modifier.padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    RuntimeIcon(
-                        name = RuntimeIconName.Android,
-                        modifier = Modifier.size(22.dp),
-                    )
-                }
+                IconTile(
+                    icon = RuntimeIconName.Android,
+                    size = 36.dp,
+                    color = MaterialTheme.colorScheme.primary,
+                )
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
                         text = stringResource(R.string.home_android_env_title),
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                        style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     Text(
@@ -830,33 +762,69 @@ private fun AndroidEnvAcquisitionCard(
                 }
             }
 
-            RuntimeButton(
-                onClick = onOpenToolCenter,
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                RuntimeIcon(RuntimeIconName.Extension, Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = stringResource(R.string.home_android_env_tool_center),
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                RuntimeButton(
+                    onClick = onJoinQqGroup,
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                ) {
+                    RuntimeIcon(RuntimeIconName.Qq, Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(R.string.home_android_env_qq),
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                FilledTonalButton(
+                    onClick = onOpenToolCenter,
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                ) {
+                    RuntimeIcon(RuntimeIconName.Extension, Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(R.string.home_android_env_tool_center),
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
     }
 }
 
-/**
- * 运行时引擎主状态卡片
- */
+private const val TIANYAN_QQ_GROUP_ID = "964382207"
+
+/** 跳转 QQ 加群；未安装 QQ 时兜底复制群号并提示。 */
+private fun joinQqGroup(context: Context) {
+    val uri = Uri.parse(
+        "mqqapi://card/show_pslcard?src_type=internal&version=1&uin=$TIANYAN_QQ_GROUP_ID&card_type=group&source=qrcode",
+    )
+    val intent = Intent(Intent.ACTION_VIEW, uri).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+    runCatching {
+        context.startActivity(intent)
+    }.onFailure {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+        clipboard?.setPrimaryClip(
+            ClipData.newPlainText(context.getString(R.string.home_qq_clipboard_label), TIANYAN_QQ_GROUP_ID),
+        )
+        Toast.makeText(context, context.getString(R.string.home_qq_copied, TIANYAN_QQ_GROUP_ID), Toast.LENGTH_LONG).show()
+    }
+}
+
+/** 运行时引擎主状态卡片 */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun RuntimeEngineStatusCard(
     state: RuntimeState,
     metrics: SystemResourceMetrics,
-    installedDistros: List<top.tianyan.app.core.model.InstalledDistro> = emptyList(),
+    installedDistros: List<InstalledDistro> = emptyList(),
     activeDistroId: String = "ubuntu",
     switchingDistro: Boolean = false,
     modeStatus: ExecutionModeStatus = ExecutionModeStatus(),
@@ -877,17 +845,10 @@ private fun RuntimeEngineStatusCard(
         else -> MaterialTheme.colorScheme.outline
     }
 
-    val statusContainerColor = when {
-        error -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.28f)
-        ready -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.22f)
-        initializing != null -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.24f)
-        else -> MaterialTheme.colorScheme.surfaceContainer
-    }
-
     RuntimeCard(
         modifier = Modifier.fillMaxWidth(),
-        containerColor = statusContainerColor,
-        borderColor = statusColor.copy(alpha = if (ready || error || initializing != null) 0.34f else 0f),
+        shape = MaterialTheme.shapes.extraLarge,
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
         contentPadding = PaddingValues(18.dp),
     ) {
         Column(
@@ -912,11 +873,13 @@ private fun RuntimeEngineStatusCard(
                                 initializing != null -> stringResource(R.string.home_runtime_initializing)
                                 else -> stringResource(R.string.home_runtime_uninitialized)
                             },
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                            style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                         Text(
-                            text = "${metrics.linuxDistro} · ${metrics.engineVersion}",
+                            text = metrics.linuxDistro,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -943,6 +906,26 @@ private fun RuntimeEngineStatusCard(
                 modeStatus = modeStatus,
                 onClick = onOpenModeSettings,
             )
+
+            // 活跃进程与运行时长（并入主状态卡，替代原独立卡片，避免与下方"打开控制台"按钮重复）
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                RuntimeIcon(
+                    name = RuntimeIconName.List,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = "${stringResource(R.string.home_active_processes, metrics.activeProcessCount)} · ${stringResource(R.string.home_uptime, metrics.uptimeFormatted)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
 
             // 多系统快速切换 Chips（安装了 2 套及以上时展示，自动换行，避免横向滚动）
             if (ready && installedDistros.size > 1) {
@@ -1002,11 +985,9 @@ private fun RuntimeEngineStatusCard(
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     RuntimeLinearProgressIndicator(
                         progress = { initializing.progress },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(6.dp)
-                            .clip(RoundedCornerShape(3.dp)),
+                        modifier = Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(4.dp)),
                         color = MaterialTheme.colorScheme.primary,
+                        wavy = true,
                     )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1032,16 +1013,9 @@ private fun RuntimeEngineStatusCard(
             }
 
             if (state is RuntimeState.Error) {
-                val context = LocalContext.current
-                val errMsg = state.throwable.message ?: stringResource(R.string.home_runtime_error_fallback)
                 NoticeBanner(
-                    text = errMsg,
+                    text = state.throwable.message ?: stringResource(R.string.home_runtime_error_fallback),
                     isError = true,
-                    onCopy = {
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                        clipboard?.setPrimaryClip(ClipData.newPlainText("Tianyan Error", errMsg))
-                        Toast.makeText(context, "错误信息已复制", Toast.LENGTH_SHORT).show()
-                    },
                 )
             }
 
@@ -1171,199 +1145,54 @@ private fun ExecutionModeBadge(
     }
 }
 
-/**
- * 资源监控指标卡片
- */
-@Composable
-private fun ResourceMetricCard(
-    modifier: Modifier = Modifier,
-    title: String,
-    primaryValue: String,
-    secondaryValue: String,
-    progress: Float,
-    progressText: String,
-    extraInfo: String,
-    accentColor: Color,
-    icon: RuntimeIconName,
-) {
-    val effectiveAccent = when {
-        progress >= 0.9f -> MaterialTheme.colorScheme.error
-        progress >= 0.8f -> MaterialTheme.colorScheme.tertiary
-        else -> accentColor
-    }
-    RuntimeCard(
-        modifier = modifier,
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        contentPadding = PaddingValues(14.dp),
-    ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                RuntimeIcon(
-                    name = icon,
-                    modifier = Modifier.size(16.dp),
-                    tint = effectiveAccent,
-                )
-            }
-
-            Text(
-                text = primaryValue,
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                ),
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-
-            RuntimeLinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp)),
-                color = effectiveAccent,
-                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = progressText,
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = if (progress >= 0.8f) effectiveAccent else MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    modifier = Modifier.weight(1f),
-                )
-                Text(
-                    text = secondaryValue,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    // 单行 + 省略号：允许换行会让两张卡内容行数不同，高度随之不等，
-                    // 而 Row 里的卡片本该永远对齐。指标文本（如「总空间 0.0 GB」）足够短，
-                    // 真放不下时省略比换行更整齐。
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.End,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-
-            Text(
-                text = if (progress >= 0.9f) stringResource(R.string.home_cleanup_recommended, extraInfo) else extraInfo,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
-}
-
-/**
- * 活跃任务与后台服务卡片
- */
-@Composable
-private fun ActiveTasksStatusCard(
-    metrics: SystemResourceMetrics,
-    onOpenTerminal: () -> Unit,
-) {
-    RuntimeCard(
-        modifier = Modifier.fillMaxWidth(),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        contentPadding = PaddingValues(16.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.weight(1f),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.tertiaryContainer),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    RuntimeIcon(
-                        name = RuntimeIconName.List,
-                        modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                    )
-                }
-
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        text = stringResource(R.string.home_active_processes, metrics.activeProcessCount),
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = stringResource(R.string.home_uptime, metrics.uptimeFormatted),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            Spacer(Modifier.width(8.dp))
-
-            RuntimeButton(
-                onClick = onOpenTerminal,
-                tonal = true,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-            ) {
-                Text(stringResource(R.string.home_view), style = MaterialTheme.typography.labelSmall)
-            }
-        }
-    }
-}
-
-/**
- * 宿主与运行环境规格卡片
- */
+/** 资源监控指标卡片 */
+/** 宿主与运行环境规格卡片（低频信息，默认折叠） */
 @Composable
 private fun SystemSpecsCard(metrics: SystemResourceMetrics, modeStatus: ExecutionModeStatus) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
     RuntimeCard(
         modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         contentPadding = PaddingValues(16.dp),
     ) {
         Column(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(
-                text = stringResource(R.string.home_environment_details),
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface,
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.home_environment_details),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                RuntimeIcon(
+                    name = RuntimeIconName.ChevronDown,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .rotate(if (expanded) 180f else 0f),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                )
+            }
 
-            SpecRow(label = stringResource(R.string.home_cpu_architecture), value = metrics.cpuArch)
-            SpecRow(label = stringResource(R.string.home_host_os), value = metrics.hostAndroidVersion)
-            SpecRow(label = stringResource(R.string.home_runtime_engine), value = metrics.engineVersion)
-            SpecRow(label = stringResource(R.string.home_guest_os), value = metrics.linuxDistro)
-            SpecRow(
-                label = stringResource(R.string.home_privilege_mode),
-                value = modeStatus.mode.shortLabel +
-                    if (modeStatus.active || modeStatus.checking) "" else " · ${stringResource(R.string.home_mode_inactive)}",
-            )
+            AnimatedVisibility(visible = expanded) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SpecRow(label = stringResource(R.string.home_cpu_architecture), value = metrics.cpuArch)
+                    SpecRow(label = stringResource(R.string.home_host_os), value = metrics.hostAndroidVersion)
+                    SpecRow(label = stringResource(R.string.home_runtime_engine), value = metrics.engineVersion)
+                    SpecRow(label = stringResource(R.string.home_guest_os), value = metrics.linuxDistro)
+                    SpecRow(
+                        label = stringResource(R.string.home_privilege_mode),
+                        value = modeStatus.mode.shortLabel +
+                            if (modeStatus.active || modeStatus.checking) "" else " · ${stringResource(R.string.home_mode_inactive)}",
+                    )
+                }
+            }
         }
     }
 }
@@ -1399,14 +1228,11 @@ private fun SpecRow(label: String, value: String) {
     }
 }
 
-/**
- * 状态呼吸灯圆点
- */
+/** 状态呼吸灯圆点 */
 @Composable
 private fun PulsingStatusDot(color: Color, isPulsing: Boolean) {
-    // 仅在需要脉冲时才创建无限动画，非脉冲状态不驱动每帧重组
+    val transition = rememberInfiniteTransition(label = "status_dot_pulse")
     val alpha by if (isPulsing) {
-        val transition = rememberInfiniteTransition(label = "status_dot_pulse")
         transition.animateFloat(
             initialValue = 0.4f,
             targetValue = 1f,
@@ -1435,137 +1261,3 @@ private fun PulsingStatusDot(color: Color, isPulsing: Boolean) {
         )
     }
 }
-
-/**
- * WebChat 电脑大屏协作卡片 (Dashboard Bridge Card)
- */
-@Composable
-private fun WebChatDashboardCard(
-    status: top.tianyan.app.runtime.webchat.WebChatServerStatus,
-    onToggle: (Boolean) -> Unit,
-) {
-    val context = LocalContext.current
-    val directUrl = "${status.accessUrl}?token=${status.pinCode}"
-
-    RuntimeCard(
-        modifier = Modifier.fillMaxWidth(),
-        containerColor = if (status.isRunning) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.40f) else MaterialTheme.colorScheme.surfaceContainer,
-        borderColor = if (status.isRunning) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f) else Color.Transparent,
-        contentPadding = PaddingValues(16.dp),
-    ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(if (status.isRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        RuntimeIcon(
-                            name = RuntimeIconName.Globe,
-                            modifier = Modifier.size(20.dp),
-                            tint = if (status.isRunning) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Column {
-                        Text(
-                            text = stringResource(R.string.home_webchat_title),
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Text(
-                            text = if (status.isRunning) stringResource(R.string.home_webchat_running) else stringResource(R.string.home_webchat_idle),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (status.isRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-
-                RuntimeSwitch(
-                    checked = status.isRunning,
-                    onCheckedChange = onToggle,
-                )
-            }
-
-            if (status.isRunning) {
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-                // 访问地址独立成行：统一 Monospace 等宽字体、颜色与大小
-                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(
-                        text = stringResource(R.string.home_webchat_url_label),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = status.accessUrl,
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                        ),
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-
-                // 配对码独立成行显示
-                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(
-                        text = stringResource(R.string.home_webchat_pin_label),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = status.pinCode,
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.ExtraBold,
-                            fontFamily = FontFamily.Monospace,
-                            letterSpacing = 2.sp,
-                        ),
-                        color = MaterialTheme.colorScheme.secondary,
-                    )
-                }
-
-                Button(
-                    onClick = {
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        clipboard.setPrimaryClip(ClipData.newPlainText("WebChat Direct URL", directUrl))
-                        Toast.makeText(context, context.getString(R.string.home_webchat_copied), Toast.LENGTH_SHORT).show()
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    contentPadding = PaddingValues(vertical = 10.dp),
-                ) {
-                    RuntimeIcon(RuntimeIconName.Copy, Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(stringResource(R.string.home_webchat_copy), fontWeight = FontWeight.SemiBold)
-                }
-
-                Text(
-                    text = stringResource(R.string.home_webchat_hint, status.activeConnections),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else {
-                Text(
-                    text = stringResource(R.string.home_webchat_intro),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-}
-

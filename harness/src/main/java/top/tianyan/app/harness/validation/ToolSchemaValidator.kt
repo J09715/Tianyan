@@ -10,7 +10,9 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import top.tianyan.app.core.model.McpToolInfo
 import top.tianyan.app.harness.ProviderClient
+import top.tianyan.app.harness.directory.HostCapabilityDirectory
 import top.tianyan.app.harness.mcp.McpToolApiName
+import kotlinx.serialization.json.buildJsonObject
 
 /**
  * 工具参数执行前 JSON Schema 校验（模型参数 → 校验 → 审批 → 执行 链路的第二环）。
@@ -24,6 +26,8 @@ import top.tianyan.app.harness.mcp.McpToolApiName
  */
 object ToolSchemaValidator {
     private val json = Json { ignoreUnknownKeys = true }
+    private const val MAX_PATTERN_LENGTH = 256
+    private const val MAX_PATTERN_INPUT_LENGTH = 512
 
     /**
      * 智能参数解包、键扁平化还原与别名规整：
@@ -31,15 +35,28 @@ object ToolSchemaValidator {
      * 2. 自动把双下划线 `__` 或点号 `.` 分隔的扁平化键（例如 options__timeout 或 config.port）
      *    还原为标准嵌套 JsonObject，兼容小参数量或特定模型打平输出对象的习惯（DeepSeek-Reasonix 规范）；
      * 3. 映射常用字段别名（path/command/oldText/newText/timeout_seconds）。
+     *
+     * [isMcpTool] = true 时 1、2 全部跳过：MCP 工具的参数名由远端 schema 定义，
+     * 可能真有名为 params/arguments/input 的单参数、或含 `__`/`.` 的合法参数名，
+     * 解包与拆分都会把参数改写成远端不认识的结构。
      */
-    fun normalizeArgs(raw: JsonObject): JsonObject {
-        val base = if (raw.size == 1 && (raw.containsKey("params") || raw.containsKey("arguments") || raw.containsKey("input"))) {
-            (raw["params"] as? JsonObject) ?: (raw["arguments"] as? JsonObject) ?: (raw["input"] as? JsonObject) ?: raw
-        } else raw
+    fun normalizeArgs(raw: JsonObject, applyAliases: Boolean = true, isMcpTool: Boolean = false): JsonObject {
+        if (isMcpTool) return raw
+        // Unwrap multi-level params/arguments/input wrappers (up to 8 levels).
+        var base = raw
+        var wrapDepth = 0
+        while (wrapDepth < 8 && base.size == 1) {
+            val inner = base["params"] ?: base["arguments"] ?: base["input"]
+            val innerObj = inner as? JsonObject ?: break
+            base = innerObj
+            wrapDepth++
+        }
 
         val unflattened = unflattenObject(base)
+        // MCP 的 target/script/timeout 有自己的协议语义，不能套用内置文件/命令工具别名。
+        if (!applyAliases) return unflattened
 
-        return kotlinx.serialization.json.buildJsonObject {
+        return buildJsonObject {
             unflattened.forEach { (k, v) -> put(k, v) }
             if (!unflattened.containsKey("path")) {
                 val alias = unflattened["file_path"] ?: unflattened["filePath"] ?: unflattened["file"] ?: unflattened["target"]
@@ -77,6 +94,11 @@ object ToolSchemaValidator {
                 val part = path[i]
                 val existing = current[part]
                 val nextMap = when (existing) {
+                    null -> {
+                        val m = mutableMapOf<String, Any?>()
+                        current[part] = m
+                        m
+                    }
                     is MutableMap<*, *> -> @Suppress("UNCHECKED_CAST") (existing as MutableMap<String, Any?>)
                     is JsonObject -> {
                         val m = mutableMapOf<String, Any?>()
@@ -84,17 +106,19 @@ object ToolSchemaValidator {
                         current[part] = m
                         m
                     }
-                    else -> {
-                        val m = mutableMapOf<String, Any?>()
-                        current[part] = m
-                        m
-                    }
+                    // 冲突：扁平键的中间路径撞上既有标量/数组值。保留既有值、丢弃该扁平键，
+                    // 不再用空对象静默覆盖（否则 {"a":"x","a__b":1} 的 "a" 会被覆盖成 {"b":1}）。
+                    else -> return
                 }
                 current = nextMap
             }
             val leaf = path.last()
             val finalValue = if (value is JsonObject) unflattenObject(value) else value
             val existing = current[leaf]
+            if (existing != null && existing !is MutableMap<*, *> && existing !is JsonObject) {
+                // 叶层冲突：目标位置已有标量/数组值，保留既有值、丢弃冲突扁平键的值
+                return
+            }
             if (existing is MutableMap<*, *> && finalValue is JsonObject) {
                 @Suppress("UNCHECKED_CAST")
                 val m = existing as MutableMap<String, Any?>
@@ -138,14 +162,14 @@ object ToolSchemaValidator {
     }
 
     private fun toJsonElement(value: Any?): JsonElement = when (value) {
-        null -> kotlinx.serialization.json.JsonNull
+        null -> JsonNull
         is JsonElement -> value
-        is Map<*, *> -> kotlinx.serialization.json.buildJsonObject {
+        is Map<*, *> -> buildJsonObject {
             value.forEach { (k, v) ->
                 put(k.toString(), toJsonElement(v))
             }
         }
-        else -> kotlinx.serialization.json.JsonNull
+        else -> JsonNull
     }
 
 
@@ -155,14 +179,17 @@ object ToolSchemaValidator {
         args: JsonObject,
         mcpTools: List<McpToolInfo> = emptyList(),
     ): List<String> {
-        val normalized = normalizeArgs(args)
-        val schema = resolveSchema(toolName, mcpTools) ?: return emptyList()
+        val name = toolName.trim()
+        val schema = resolveSchema(name, mcpTools) ?: return emptyList()
+        val isMcp = name.startsWith("mcp__") || name.equals("use_capability", ignoreCase = true)
+        // MCP 工具：既不套用内置别名，也不做单键解包/扁平键还原（见 normalizeArgs 注释）
+        val normalized = normalizeArgs(args, applyAliases = !isMcp, isMcpTool = isMcp)
         return validateObject(schema, normalized, prefix = "")
     }
 
     /** 直接对给定 schema 校验（供自定义 schema 场景与测试使用）。 */
     fun validate(schema: JsonObject, args: JsonObject): List<String> =
-        validateObject(schema, normalizeArgs(args), prefix = "")
+        validateObject(schema, normalizeArgs(args, applyAliases = false), prefix = "")
 
     private fun resolveSchema(toolName: String, mcpTools: List<McpToolInfo>): JsonObject? {
         if (toolName.startsWith("mcp__")) {
@@ -170,25 +197,39 @@ object ToolSchemaValidator {
             if (tool.parametersJson.isBlank()) return null
             return runCatching { json.parseToJsonElement(tool.parametersJson) as? JsonObject }.getOrNull()
         }
-        val apiName = when (toolName) {
+        val apiName = when (val name = toolName.lowercase()) {
             "history.search" -> "history_search"
             "history.read" -> "history_read"
-            else -> toolName
+            "subagent" -> "invoke_subagent"
+            else -> name
         }
+        // host 的校验面 = 执行器接受面（direct ∪ deferred 并集）：provider 声明面只宣告
+        // direct 高频动作（prompt 减负），deferred 动作经 use_capability 或旧式直接调用
+        // 进入时必须仍然可校验、可执行，否则旧会话重放与模型历史模仿会被 enum 硬拒。
+        if (apiName == "host") return HostCapabilityDirectory.validationSchema()
         return ProviderClient.TOOLS.firstOrNull { it.function.name == apiName }?.function?.parameters
     }
 
-    private fun validateObject(schema: JsonObject, obj: JsonObject, prefix: String): List<String> {
+    private fun validateObject(
+        schema: JsonObject,
+        obj: JsonObject,
+        prefix: String,
+        inheritedProperties: Set<String> = emptySet(),
+    ): List<String> {
         val problems = mutableListOf<String>()
+        val alternatives = (schema["anyOf"] as? JsonArray).orEmpty()
+        val allowedProperties = inheritedProperties +
+            (schema["properties"] as? JsonObject).orEmpty().keys +
+            alternatives.filterIsInstance<JsonObject>().flatMap { (it["properties"] as? JsonObject).orEmpty().keys }
 
         (schema["required"] as? JsonArray)?.forEach { element ->
             val name = (element as? JsonPrimitive)?.contentOrNull ?: return@forEach
             if (!obj.containsKey(name)) problems += "缺少必填参数 ${prefix}${name}"
         }
 
-        (schema["anyOf"] as? JsonArray)?.takeIf { it.isNotEmpty() }?.let { alternatives ->
+        alternatives.takeIf { it.isNotEmpty() }?.let { alternatives ->
             val satisfied = alternatives.any { alternative ->
-                (alternative as? JsonObject)?.let { validateObject(it, obj, prefix).isEmpty() } == true
+                (alternative as? JsonObject)?.let { validateObject(it, obj, prefix, allowedProperties).isEmpty() } == true
             }
             if (!satisfied) {
                 val combos = alternatives.mapNotNull { alternative ->
@@ -220,7 +261,7 @@ object ToolSchemaValidator {
         // 本工具接受哪些参数，让模型一次修正到位，而不是反复以错误参数重试。
         val allowExtra = (schema["additionalProperties"] as? JsonPrimitive)?.contentOrNull == "true"
         (schema["properties"] as? JsonObject)?.let { properties ->
-            val unknown = obj.keys.filter { it !in properties.keys }
+            val unknown = obj.keys.filter { it !in allowedProperties }
             if (unknown.isNotEmpty() && !allowExtra) {
                 val at = if (prefix.isEmpty()) "" else "（位于 $prefix 层）"
                 problems += "不接受参数 ${unknown.joinToString("、")}$at" +
@@ -264,7 +305,13 @@ object ToolSchemaValidator {
 
         if (value is JsonPrimitive && value.isString) {
             schema["pattern"]?.jsonPrimitive?.contentOrNull?.let { pattern ->
-                val matches = runCatching { Regex(pattern).containsMatchIn(value.content) }.getOrDefault(true)
+                // Java regex has no timeout. Avoid known exponential shapes and huge inputs;
+                // unsupported remote patterns are ignored like other unknown schema keywords.
+                val safe = pattern.length <= MAX_PATTERN_LENGTH &&
+                    value.content.length <= MAX_PATTERN_INPUT_LENGTH &&
+                    pattern.none { it == '(' || it == ')' || it == '|' } &&
+                    pattern.count { it == '*' || it == '+' || it == '?' || it == '{' } <= 2
+                val matches = if (safe) runCatching { Regex(pattern).containsMatchIn(value.content) }.getOrDefault(true) else true
                 if (!matches) problems += "参数 $label 格式不符合要求（需匹配 $pattern）"
             }
         }

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="runtime_notice_title">免责声明与使用须知</string>
+    <string name="runtime_notice_summary">了解 AI、命令执行、数据与权限的使用边界</string>
+    <string name="runtime_notice_close">知道了</string>
+    <string name="runtime_notice_actions_title">操作前，请确认影响</string>
+    <string name="runtime_notice_actions_body">终端、AI 工具与插件可能修改或删除文件、安装软件或访问网络。请只在你有权操作的设备和项目中使用，重要数据先备份，并逐项检查命令与审批内容。</string>
+    <string name="runtime_notice_ai_title">AI 输出需要核验</string>
+    <string name="runtime_notice_ai_body">AI 可能生成不准确的信息、不安全的命令或存在缺陷的代码。请自行核验结果，涉及重要决策时寻求相应专业帮助。天衍不保证生成内容或第三方工具始终正确、可靠。</string>
+    <string name="runtime_notice_data_title">留意第三方服务与费用</string>
+    <string name="runtime_notice_data_body">使用在线模型或联网插件时，你提交的内容及相关工具结果可能发送给所选服务商。请确认接口地址、服务条款和计费规则，不要提交无权分享的个人信息或机密资料。</string>
+    <string name="runtime_notice_access_title">授权由你决定</string>
+    <string name="runtime_notice_access_body">通知、悬浮窗、共享存储、自启动和电池优化等权限均按需申请；可拒绝或稍后配置。PRoot 用于运行 Linux 环境，不是隔离恶意代码的安全边界。Shizuku、Root 和全部放行模式会扩大操作范围，请谨慎启用。</string>
+</resources>

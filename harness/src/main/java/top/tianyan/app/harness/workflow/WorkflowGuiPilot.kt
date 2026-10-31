@@ -1,8 +1,6 @@
 package top.tianyan.app.harness.workflow
 
 import android.util.Log
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -23,13 +21,13 @@ import top.tianyan.app.runtime.privilege.PrivilegeManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ensureActive
 import kotlin.coroutines.coroutineContext
+import top.tianyan.app.runtime.gui.GuiNode
 
 /**
  * Workflow-native GUI loop: observe → LLM returns one JSON action → execute.
  * Avoids SubagentLaneRunner (MCP discovery + approval dead-ends) so progress shows in the workflow UI.
  */
-@Singleton
-class WorkflowGuiPilot @Inject constructor(
+class WorkflowGuiPilot(
     private val gui: HostGuiController,
     private val privilegeManager: PrivilegeManager,
     private val providerClient: ProviderClient,
@@ -165,7 +163,7 @@ class WorkflowGuiPilot @Inject constructor(
                                 .any { it.contains(needle, ignoreCase = true) }
                         }
                         .sortedWith(
-                            compareByDescending<top.tianyan.app.runtime.gui.GuiNode> { it.text.equals(needle, true) }
+                            compareByDescending<GuiNode> { it.text.equals(needle, true) }
                                 .thenByDescending { it.clickable }
                                 .thenByDescending { it.text.length.coerceAtMost(needle.length * 2) },
                         )
@@ -301,22 +299,28 @@ class WorkflowGuiPilot @Inject constructor(
                 }
                 else -> appendLog("未知动作：$kind")
             }
-            delay(900)
+            // 不再固定等待：无障碍服务可用时按窗口变化事件判断界面是否已稳定，无服务则回退 900ms
+            gui.awaitUiSettled()
         }
 
-        val success = failedReason == null && (doneReason != null || steps >= maxSteps)
+        // 步数耗尽且模型未宣布 done：目标未达成，必须判 FAILED（exitCode 非零），
+        // 不得以 SUCCESS/exitCode 0 返回误导调用方（步数上限与循环一致取 1..40 收敛值）
+        val stepBudget = maxSteps.coerceIn(1, 40)
+        val exhausted = failedReason == null && doneReason == null && steps >= stepBudget
+        val effectiveFailure = failedReason
+            ?: if (exhausted) "步数耗尽未达成目标（${stepBudget} 步内模型未宣布完成）" else null
+        val success = effectiveFailure == null
         val summary = buildString {
-            appendLine(if (doneReason != null) "✔ $doneReason" else if (failedReason != null) "✘ $failedReason" else "达到最大步数 $maxSteps")
+            appendLine(if (doneReason != null) "✔ $doneReason" else if (effectiveFailure != null) "✘ $effectiveFailure" else "达到最大步数 $maxSteps")
             appendLine()
             append(log.toString().trimEnd())
         }
-        // success 的定义里已含 failedReason == null，这里不再重复判断（编译器也提示恒真）。
         onProgress(if (success) "GUI 试飞结束" else "GUI 试飞未完成")
         return NodeExecutionOutput(
-            status = if (failedReason == null) NodeRunStatus.SUCCESS else NodeRunStatus.FAILED,
-            exitCode = if (failedReason == null) 0 else 1,
+            status = if (success) NodeRunStatus.SUCCESS else NodeRunStatus.FAILED,
+            exitCode = if (success) 0 else 1,
             textOutput = summary,
-            error = failedReason,
+            error = effectiveFailure,
             variables = mapOf(
                 "GUI_PILOT_STEPS" to steps.toString(),
                 "GUI_PILOT_DONE" to (doneReason != null).toString(),
@@ -359,7 +363,7 @@ class WorkflowGuiPilot @Inject constructor(
     }
 
     private companion object {
-        const val TAG = "TaiXu-GuiPilot"
+        const val TAG = "Tianyan-GuiPilot"
         val SYSTEM_PROMPT = """
 你是 Android GUI 驾驶员。根据屏幕控件树推进用户目标。
 只输出一个 JSON 对象，字段：

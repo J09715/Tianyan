@@ -15,12 +15,24 @@ menuToggle?.addEventListener('click', () => {
   document.body.style.overflow = open ? 'hidden' : '';
 });
 
-nav?.querySelectorAll('a').forEach((link) => link.addEventListener('click', () => {
+const closeMenu = () => {
+  const wasOpen = nav?.classList.contains('open');
+  if (!wasOpen) return;
   nav.classList.remove('open');
   menuToggle?.classList.remove('active');
   menuToggle?.setAttribute('aria-expanded', 'false');
+  menuToggle?.setAttribute('aria-label', '打开导航');
   document.body.style.overflow = '';
-}));
+};
+
+nav?.querySelectorAll('a').forEach((link) => link.addEventListener('click', closeMenu));
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && nav?.classList.contains('open')) {
+    closeMenu();
+    menuToggle?.focus();
+  }
+});
+window.matchMedia('(max-width: 780px)').addEventListener('change', closeMenu);
 
 const observer = new IntersectionObserver((entries) => {
   entries.forEach((entry) => {

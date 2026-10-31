@@ -8,7 +8,7 @@ import top.tianyan.app.core.browser.BrowserPreferences
 /**
  * 浏览器注册中心：浏览器家族的注册表 + 选择策略入口。
  *
- * - 单例（@Singleton），由 [di.BrowserModule] 提供；
+ * - 单例（），由 [di.BrowserModule] 提供；
  * - 启动时由 [start] 拉起所有"可启动"的引擎（当前 MVP 仅 [BrowserFamily.IN_APP]）；
  * - 由 [getDefault] / [get] / [getForUrl] 三种入口暴露给 harness 与 UI；
  * - 全局事件总线：[eventBus]；多引擎共用。

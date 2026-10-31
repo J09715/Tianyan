@@ -38,7 +38,7 @@ class RtkCommandOptimizerTest {
         val prepared = RtkCommandOptimizer.prepare(command, enabled = true)
 
         // 通配符不再阻止改写：rewrite 输出保留原引号，eval 只做一次展开。
-        assertTrue(prepared.commandLine.contains("rewrite 'rg -n '\"'\"'fun '\"'\"' --glob '\"'\"'*.kt'\"'\"' .'"))
+        assertTrue(prepared.commandLine.contains("rewrite 'rg -n '\\''fun '\\'' --glob '\\''*.kt'\\'' .'"))
         assertTrue(prepared.commandLine.contains("else\n        $command"))
     }
 
@@ -47,7 +47,7 @@ class RtkCommandOptimizerTest {
         val command = "find . -name '*.kt'"
         val prepared = RtkCommandOptimizer.prepare(command, enabled = true)
 
-        assertTrue(prepared.commandLine.contains("rewrite 'find . -name '\"'\"'*.kt'\"'\"''"))
+        assertTrue(prepared.commandLine.contains("rewrite 'find . -name '\\''*.kt'\\'''"))
     }
 
     @Test

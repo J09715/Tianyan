@@ -12,6 +12,8 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 import top.tianyan.app.core.browser.PageSnapshot
 import top.tianyan.app.core.browser.SnapshotRef
 import top.tianyan.app.runtime.browser.BrowserEvent
@@ -81,7 +83,7 @@ class SnapshotBuilder(
     private fun fingerprintOf(refs: Map<String, SnapshotRef>): String {
         val canonical = refs.entries.sortedBy { it.key }
             .joinToString("|") { (k, v) -> "$k:${v.tag}:${v.type.orEmpty()}:${v.text.orEmpty()}" }
-        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        val digest = MessageDigest.getInstance("SHA-256")
             .digest(canonical.toByteArray())
         return digest.joinToString("") { "%02x".format(it) }.take(16)
     }
@@ -112,10 +114,10 @@ class SnapshotBuilder(
     /** tabId → (ref → selector). 跨协程并发读写，使用并发容器。 */
     private object ResolverRegistry {
         private val map =
-            java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.ConcurrentHashMap<String, String>>()
+            ConcurrentHashMap<String, ConcurrentHashMap<String, String>>()
         fun put(tabId: String, ref: String, selector: String) {
             // ConcurrentHashMap 的 getOrPut 并非原子：并发扫描会互相覆盖，必须用 computeIfAbsent
-            map.computeIfAbsent(tabId) { java.util.concurrent.ConcurrentHashMap() }[ref] = selector
+            map.computeIfAbsent(tabId) { ConcurrentHashMap() }[ref] = selector
         }
         fun selector(tabId: String, ref: String): String? = map[tabId]?.get(ref)
         fun clear(tabId: String) { map.remove(tabId) }

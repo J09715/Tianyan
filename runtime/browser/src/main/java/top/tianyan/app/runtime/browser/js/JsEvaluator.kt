@@ -2,7 +2,9 @@ package top.tianyan.app.runtime.browser.js
 
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.webkit.WebView
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeoutOrNull
@@ -34,14 +36,14 @@ object JsEvaluator {
         } catch (e: TimeoutCancellationException) {
             // #12：超时放弃等待；WebView 无法中止已派发的 evaluateJavascript，页面内副作用可能仍执行，
             // 回调结果因 deferred 已超时而被丢弃（不写回任何共享状态）。
-            android.util.Log.w("JsEvaluator", "evaluateJavascript 超时(${timeoutMs}ms)，页面内脚本可能仍在执行")
+            Log.w("JsEvaluator", "evaluateJavascript 超时(${timeoutMs}ms)，页面内脚本可能仍在执行")
             null
-        } catch (e: kotlinx.coroutines.CancellationException) {
+        } catch (e: CancellationException) {
             // 调用方协程被取消：正常传播，不得吞掉
             throw e
         } catch (t: Throwable) {
             // 视图已销毁 / WebView 内部异常：返回 null（调用方各自按"不可用"处理）
-            android.util.Log.w("JsEvaluator", "evaluateJavascript 失败: ${t.message}")
+            Log.w("JsEvaluator", "evaluateJavascript 失败: ${t.message}")
             null
         }
     }

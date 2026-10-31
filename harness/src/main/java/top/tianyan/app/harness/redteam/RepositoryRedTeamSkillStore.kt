@@ -1,8 +1,6 @@
 package top.tianyan.app.harness.redteam
 
 import java.util.UUID
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.flow.first
 import top.tianyan.app.core.database.AgentSkillRepository
 import top.tianyan.app.core.model.AgentSkill
@@ -17,8 +15,7 @@ import top.tianyan.app.core.model.AgentSkill
  * 正文按上游 SKILL.md 的 frontmatter 语义渲染，`whenToUse` / `role` 写在头部，
  * 与目录自动发现读取的元数据键保持一致。
  */
-@Singleton
-class RepositoryRedTeamSkillStore @Inject constructor(
+class RepositoryRedTeamSkillStore(
     private val repository: AgentSkillRepository,
 ) : RedTeamSkillStore {
 

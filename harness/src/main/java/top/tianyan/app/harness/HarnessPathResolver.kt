@@ -1,11 +1,8 @@
 package top.tianyan.app.harness
-import javax.inject.Inject
-import javax.inject.Singleton
 /**
  * Single source of truth for Harness path semantics.
  */
-@Singleton
-class HarnessPathResolver @Inject constructor() {
+class HarnessPathResolver() {
     fun resolveWorkingDirectory(explicitCwd: String?, workspace: String): String {
         val candidate = explicitCwd?.takeIf { it.isNotBlank() }
         if (candidate != null) return normalize(candidate)

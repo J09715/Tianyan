@@ -19,7 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.LinearProgressIndicator
+import top.tianyan.app.ui.components.RuntimeLinearProgressIndicator as LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -195,7 +195,12 @@ internal fun SessionPlanBoardCard(
                 modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape),
             )
             AnimatedVisibility(visible = expanded) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 240.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
                     steps.forEach { step ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -224,6 +229,9 @@ internal fun SessionPlanBoardCard(
                             Text(
                                 step.title,
                                 style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.weight(1f),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
                                 textDecoration = if (step.isCompleted) TextDecoration.LineThrough else null,
                                 color = when {
                                     step.isCompleted -> MaterialTheme.colorScheme.onSurfaceVariant
@@ -261,13 +269,13 @@ internal fun StickyPlanBar(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp))
+            .clip(MaterialTheme.shapes.medium)
             .clickable {
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 expanded = !expanded
             },
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp),
+        shape = MaterialTheme.shapes.medium,
         border = BorderStroke(
             1.dp,
             if (allDone) MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
@@ -275,7 +283,7 @@ internal fun StickyPlanBar(
         ),
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp).animateContentSize(),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp).animateContentSize(),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             // ── 标题行 ──
@@ -358,6 +366,9 @@ internal fun StickyPlanBar(
                             Text(
                                 step.title,
                                 style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.weight(1f),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
                                 textDecoration = if (step.isCompleted) TextDecoration.LineThrough else null,
                                 color = when {
                                     step.isCompleted -> MaterialTheme.colorScheme.onSurfaceVariant

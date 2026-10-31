@@ -2,8 +2,6 @@ package top.tianyan.app.runtime.gui
 
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,8 +13,7 @@ import kotlinx.coroutines.flow.update
  * Hide the overlay while touching / dumping the screen so uiautomator does not
  * include floating-window nodes; show again while the model thinks or the node waits.
  */
-@Singleton
-class WorkflowGuiHudBridge @Inject constructor() {
+class WorkflowGuiHudBridge() {
     enum class Phase {
         IDLE,
         THINKING,

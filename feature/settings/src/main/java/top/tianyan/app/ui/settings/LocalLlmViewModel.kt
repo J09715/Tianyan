@@ -6,9 +6,6 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +22,7 @@ import top.tianyan.app.core.tools.ToolManager
 import top.tianyan.app.runtime.LinuxRuntime
 import top.tianyan.app.runtime.LocalLlmManager
 import top.tianyan.app.runtime.LocalModelTransfer
+import kotlinx.coroutines.flow.Flow
 
 data class LocalModelTransferUiState(
     val running: Boolean = false,
@@ -48,9 +46,8 @@ data class MobileModelPreset(
     val sha256: String? = null,
 )
 
-@HiltViewModel
-class LocalLlmViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
+class LocalLlmViewModel(
+    private val context: Context,
     private val localLlmManager: LocalLlmManager,
     private val toolManager: ToolManager,
     private val linuxRuntime: LinuxRuntime,
@@ -133,11 +130,8 @@ class LocalLlmViewModel @Inject constructor(
         val displayName = metadata?.first ?: uri.lastPathSegment?.substringAfterLast('/') ?: "model.gguf"
         val size = metadata?.second
         startTransfer("正在导入模型") {
-            localLlmManager.import(
-                displayName,
-                { resolver.openInputStream(uri) ?: error("无法读取所选文件") },
-                size,
-            )
+            val input = resolver.openInputStream(uri) ?: error("无法读取所选文件")
+            localLlmManager.import(displayName, input, size)
         }
     }
 
@@ -160,13 +154,11 @@ class LocalLlmViewModel @Inject constructor(
             _message.value = null
             _messageIsError.value = false
             runCatching {
-                // 把档案里配置的上下文上限透传给服务端 --ctx-size。
-                // 不透传的话服务端固定按设备内存选 2048/4096，用户改了配置也不生效，
-                // 稍长的对话直接 400（request exceeds the available context size）。
-                val distroId = linuxRuntime.activeDistroId.value
-                val configuredContext = aiModelRepository.findById("local-llamacpp-$distroId")?.contextTokens
-                localLlmManager.start(fileName, contextTokens = configuredContext)
-                activateLocalProfile(fileName)
+                val profileId = "local-llamacpp-${linuxRuntime.activeDistroId.value}"
+                val contextTokens = aiModelRepository.findById(profileId)?.contextTokens
+                    ?: localLlmManager.defaultContextTokens
+                localLlmManager.start(fileName, contextTokens)
+                activateLocalProfile(fileName, contextTokens)
             }.onSuccess {
                 showMessage("模型服务已启动，并已设为当前对话模型", isError = false)
             }.onFailure { throwable ->
@@ -192,8 +184,9 @@ class LocalLlmViewModel @Inject constructor(
     }
 
     fun installEngine() {
-        toolManager.startInstall(LocalLlmManager.TOOL_ID)
-        showMessage("已提交 llama.cpp 推理引擎安装任务，可在工具中心查看进度", isError = false)
+        runCatching { toolManager.startInstall(LocalLlmManager.TOOL_ID) }
+            .onSuccess { showMessage("已提交 llama.cpp 推理引擎安装任务，可在工具中心查看进度", isError = false) }
+            .onFailure { showMessage(it.message ?: "当前环境不支持安装本机引擎", isError = true) }
     }
 
     fun consumeMessage() {
@@ -203,7 +196,7 @@ class LocalLlmViewModel @Inject constructor(
 
     private fun startTransfer(
         label: String,
-        source: () -> kotlinx.coroutines.flow.Flow<LocalModelTransfer>,
+        source: () -> Flow<LocalModelTransfer>,
     ) {
         if (transferJob?.isActive == true) {
             showMessage("已有模型传输任务正在进行", isError = true)
@@ -240,7 +233,7 @@ class LocalLlmViewModel @Inject constructor(
         }
     }
 
-    private suspend fun activateLocalProfile(fileName: String) {
+    private suspend fun activateLocalProfile(fileName: String, contextTokens: Int) {
         val distroId = linuxRuntime.activeDistroId.value
         val profileId = "local-llamacpp-$distroId"
         val existing = aiModelRepository.findById(profileId)
@@ -261,15 +254,7 @@ class LocalLlmViewModel @Inject constructor(
                 reasoningMode = existing?.reasoningMode,
                 reasoningEffort = existing?.reasoningEffort,
                 toolCallMode = existing?.toolCallMode,
-                // 与 LocalLlmContext 的默认值保持一致：以前这里写死 2048/4096，
-                // 比系统提示词本身还小，新建档案后开局即 400。
-                //
-                // 旧档案要一并抬升：升级前创建的本地档案里存的就是 2048/4096，
-                // 只改「新建默认值」救不了这些设备——用户装完新版仍会开局 400，
-                // 而且会以为是没修好。低于可用下限的值一律按设备能力重新推断。
-                contextTokens = existing?.contextTokens
-                    ?.takeIf { it >= top.tianyan.app.core.model.LocalLlmContext.MIN_CONTEXT }
-                    ?: top.tianyan.app.core.model.LocalLlmContext.resolve(null, deviceRamBytes),
+                contextTokens = contextTokens,
                 customHeaders = existing?.customHeaders.orEmpty(),
                 pureChatMode = existing?.pureChatMode ?: false,
                 visionEnabled = false,

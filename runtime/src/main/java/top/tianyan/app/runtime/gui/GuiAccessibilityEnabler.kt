@@ -3,10 +3,8 @@ package top.tianyan.app.runtime.gui
 import android.content.ComponentName
 import android.content.Context
 import android.util.Log
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.delay
+import top.tianyan.app.core.common.shell.ShellQuote
 import top.tianyan.app.core.model.ExecutionMode
 import top.tianyan.app.runtime.privilege.PrivilegeManager
 
@@ -14,9 +12,8 @@ import top.tianyan.app.runtime.privilege.PrivilegeManager
  * With Shizuku/Root, programmatically enable [TianyanGuiAccessibilityService]
  * via Secure settings — no manual trip to 无障碍 settings.
  */
-@Singleton
-class GuiAccessibilityEnabler @Inject constructor(
-    @ApplicationContext private val context: Context,
+class GuiAccessibilityEnabler(
+    private val context: Context,
     private val privilegeManager: PrivilegeManager,
 ) {
     @Volatile private var lastAttemptAt = 0L
@@ -57,7 +54,7 @@ class GuiAccessibilityEnabler @Inject constructor(
         }
         val joined = services.joinToString(":")
         val putServices = privilegeManager.executeShellCommand(
-            "settings put secure enabled_accessibility_services ${shellQuote(joined)}",
+            "settings put secure enabled_accessibility_services ${ShellQuote.of(joined)}",
         )
         val putFlag = privilegeManager.executeShellCommand("settings put secure accessibility_enabled 1")
         if (!putServices.success || !putFlag.success) {
@@ -85,10 +82,8 @@ class GuiAccessibilityEnabler @Inject constructor(
         return lastOk
     }
 
-    private fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
-
     private companion object {
-        const val TAG = "TaiXu-GuiA11yEnable"
+        const val TAG = "Tianyan-GuiA11yEnable"
         const val SUCCESS_COOLDOWN_MS = 30_000L
         const val FAIL_COOLDOWN_MS = 5_000L
     }
