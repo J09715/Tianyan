@@ -1,5 +1,6 @@
 package top.tianyan.app.ui.chat
 
+import top.tianyan.app.ui.components.StreamingMarkdownText
 import top.tianyan.app.harness.MessageAttachment
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -452,13 +453,13 @@ internal fun AssistantBubble(
                         message.text.substring(0, markdownStart).trim().take(8_000)
                     }
                     if (humanPrefix.isNotBlank()) {
-                        SelectionContainer {
-                            Text(
-                                text = humanPrefix,
-                                modifier = Modifier.fillMaxWidth(),
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                        }
+                        // 与流式正文同口径：图片占位之前的正文也用 Markdown，
+                        // 否则同一段回复在「有图/无图」两种情况下排版不一致。
+                        MarkdownText(
+                            markdown = humanPrefix,
+                            modifier = Modifier.fillMaxWidth(),
+                            contentCacheKey = "assistant-live-img:${message.id}",
+                        )
                     }
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -478,13 +479,12 @@ internal fun AssistantBubble(
                         }
                     }
                 } else {
-                    SelectionContainer {
-                        Text(
-                            text = message.text.take(MAX_LIVE_TEXT_CHARS),
-                            modifier = Modifier.fillMaxWidth(),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
+                    // 流式期间也用 Markdown（增量渲染）：之前流式走纯 Text、结束后才切 MarkdownText，收尾会整段重排跳动
+                    StreamingMarkdownText(
+                        text = message.textContent,
+                        modifier = Modifier.fillMaxWidth(),
+                        contentCacheKey = "assistant-live:${message.id}",
+                    )
                 }
             } else {
                 MarkdownText(

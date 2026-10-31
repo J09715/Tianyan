@@ -510,12 +510,6 @@ internal fun toolIcon(tool: HarnessTool): RuntimeIconName = when (tool) {
     HarnessTool.RED_TEAM -> RuntimeIconName.Shield
 }
 
-internal fun toolArgsSummary(call: ToolCall): String {
-    val entries = call.args.toMap().entries.take(3)
-        .joinToString(", ") { (key, value) -> "$key=${value.toString().take(40)}" }
-    return entries
-}
-
 /** 代码行数增减变更徽章：类似 GitHub 的 +27 -8。绿色展示增加行数，红色展示删除行数。 */
 @Composable
 internal fun DiffStatBadge(
