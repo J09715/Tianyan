@@ -53,7 +53,7 @@
     </queries>
 
     <application
-        android:name=".天衍Application"
+        android:name=".TianyanApplication"
         android:allowBackup="false"
         android:icon="@mipmap/tianyan_ic_launcher"
         android:label="${appLabel}"
