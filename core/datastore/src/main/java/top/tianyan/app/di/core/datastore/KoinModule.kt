@@ -22,9 +22,18 @@ import top.tianyan.app.core.datastore.WorkshopPreferences
 
 /** Dependency registrations owned by the core:datastore module. */
 val coreDatastoreModule = module {
+    single { top.tianyan.app.core.datastore.ChatIdentityPreferences(context = get()) }
+    single(org.koin.core.qualifier.named("chatIdentityImages")) {
+        val context = get<android.content.Context>().applicationContext
+        top.tianyan.app.core.datastore.ChatBackgroundImageStore(
+            java.io.File(context.filesDir, top.tianyan.app.core.model.ChatIdentityStyle.IMAGE_DIRECTORY),
+            { uri -> context.contentResolver.openInputStream(uri) }, maxBytes = 10L * 1024 * 1024,
+        )
+    }
     single { top.tianyan.app.core.datastore.ChatBackgroundPreferences(context = get()) }
     single { top.tianyan.app.core.datastore.ChatBackgroundImageStore(context = get()) }
     single { top.tianyan.app.core.datastore.PluginPreferences(context = get()) }
+    single { top.tianyan.app.core.datastore.PluginLibraryPreferences(context = get()) }
     single { top.tianyan.app.core.datastore.ContainerBackendPreferences(context = get()) }
     single<top.tianyan.app.core.datastore.RemoteServerRepository> {
         top.tianyan.app.core.datastore.EncryptedRemoteServerRepository(get(), get())

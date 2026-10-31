@@ -2,7 +2,7 @@ package top.tianyan.app.ui.developer
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -25,7 +25,7 @@ internal fun RemoteCommandPanel(serverId: String, service: RemoteSystemService) 
             Text("服务器命令", style = MaterialTheme.typography.titleMedium)
             Text("命令在当前服务器的工作目录执行，使用连接用户的实际权限。", style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
-            OutlinedTextField(command, { command = it }, modifier = Modifier.fillMaxWidth(), enabled = !busy,
+            RuntimeFilledTextField(command, { command = it }, modifier = Modifier.fillMaxWidth(), enabled = !busy,
                 label = { Text("命令") }, maxLines = 5, textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace))
             RuntimeButton(enabled = !busy && command.isNotBlank(), onClick = {
                 val snapshot = command

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="service_panel_title">Service management panel</string>
+    <string name="service_panel_auth">The service manages its own login and API keys. Follow the panel to create an administrator on first use, or sign in with an existing account. 天衍 tokens do not authenticate this panel.</string>
+    <string name="service_panel_loopback">Listens on this device only. Closing the panel keeps the service running.</string>
+    <string name="service_recovery_title">Auto-start and keep running</string>
+    <string name="service_recovery_summary">Start %1$s when Linux is ready and retry after failures. Stopping the service turns this off.</string>
+    <string name="service_browser_open">Open in external browser</string>
+    <string name="service_panel_open">Open plugin management page</string>
+    <string name="service_panel_upgrade">Upgrade the backend plugin to use the dedicated page. The original panel is available in an external browser.</string>
+    <string name="service_browser_unavailable">Cannot open browser. Open the local service address manually.</string>
+</resources>

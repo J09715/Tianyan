@@ -1,0 +1,14 @@
+<resources>
+    <string name="settings_chat_identity_title">Chat identity</string>
+    <string name="settings_chat_identity_description">Customize the name and avatar locally. Images must be 10 MB or smaller.</string>
+    <string name="settings_chat_identity_name">Name (up to 40 characters)</string>
+    <string name="settings_chat_identity_save">Save name</string>
+    <string name="settings_chat_identity_avatar">Choose avatar</string>
+    <string name="settings_chat_identity_reset">Restore default name and avatar</string>
+    <string name="settings_chat_identity_error">Could not save. Try again or choose another image.</string>
+    <string name="settings_avatar_crop_title">Crop avatar</string>
+    <string name="settings_avatar_crop_hint">Drag and pinch to adjust the square crop.</string>
+    <string name="settings_avatar_crop_zoom">Zoom</string>
+    <string name="settings_avatar_crop_confirm">Use avatar</string>
+    <string name="settings_avatar_crop_cancel">Cancel</string>
+</resources>

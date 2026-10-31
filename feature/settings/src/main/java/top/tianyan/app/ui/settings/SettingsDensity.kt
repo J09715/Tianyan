@@ -9,6 +9,11 @@ import androidx.compose.ui.unit.sp
 /** Default settings density; system font scaling still applies normally. */
 internal object SettingsDensity {
     val rowMinHeight = 80.dp
+
+    /** Home-page navigation entries: tonal icon tile, still above the M3 72dp two-line target. */
+    val navRowMinHeight = 88.dp
+    val navTileSize = 40.dp
+    val navIconSize = 20.dp
     val rowHorizontalPadding = 20.dp
     val rowVerticalPadding = 14.dp
     val iconSize = 24.dp
@@ -19,11 +24,11 @@ internal object SettingsDensity {
 }
 
 @Composable
-internal fun settingsTitleStyle(): TextStyle = MaterialTheme.typography.titleMedium.copy(
+internal fun settingsTitleStyle(): TextStyle = MaterialTheme.typography.bodyLarge.copy(
     lineHeight = 22.sp, letterSpacing = 0.sp,
 )
 
 @Composable
-internal fun settingsSupportingStyle(): TextStyle = MaterialTheme.typography.bodySmall.copy(
-    lineHeight = 18.sp, letterSpacing = 0.sp,
+internal fun settingsSupportingStyle(): TextStyle = MaterialTheme.typography.bodyMedium.copy(
+    lineHeight = 20.sp, letterSpacing = 0.sp,
 )

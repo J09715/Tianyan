@@ -1,0 +1,11 @@
+<resources>
+    <string name="plugin_center_title">插件中心</string>
+    <string name="plugin_center_summary">下载、导入和更新插件，管理已安装内容</string>
+    <string name="plugin_center_intro">从仓库下载插件，或导入手机上的插件包。安装后可在下方查看和管理。</string>
+    <string name="plugin_center_download">下载插件</string>
+    <string name="plugin_center_import">导入文件</string>
+    <string name="plugin_center_builtin">内置功能</string>
+    <string name="plugin_center_web">网页插件</string>
+    <string name="plugin_center_empty_title">还没有安装插件</string>
+    <string name="plugin_center_empty_summary">点击上方「下载插件」浏览仓库，或使用「导入文件」安装 .txplugin 插件包。</string>
+</resources>

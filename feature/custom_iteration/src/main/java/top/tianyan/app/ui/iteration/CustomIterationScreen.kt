@@ -42,7 +42,7 @@ import top.tianyan.app.ui.components.NoticeBanner
 import top.tianyan.app.ui.components.RuntimeButton
 import top.tianyan.app.ui.components.RuntimeCard
 import top.tianyan.app.ui.components.RuntimeCircularProgressIndicator
-import top.tianyan.app.ui.components.RuntimeOutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import top.tianyan.app.ui.components.RuntimeTopBar
 import top.tianyan.app.ui.components.SectionHeader
 @Composable
@@ -56,7 +56,7 @@ fun CustomIterationScreen(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = { RuntimeTopBar(title = "自定义迭代（实验）", onBack = onBack) }
+        topBar = { RuntimeTopBar(title = stringResource(R.string.iteration_title), onBack = onBack) }
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -70,13 +70,13 @@ fun CustomIterationScreen(
             RuntimeCard(modifier = Modifier.fillMaxWidth()) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = "全面自定义专属的 TianyanDev",
+                        text = stringResource(R.string.iteration_hero_title),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "天衍（Tianyan）是一款致力于构建手机端 Linux 运行时与自主 Agent 的开源基础设施。通过「自定义迭代」，你可以在掌中调用天衍 AI 修改天衍自身、通过云端 GitHub Actions 自动化编译出独立的 TianyanDev APK，并与社区开发者共同交流贡献。",
+                        text = stringResource(R.string.iteration_hero_body),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 22.sp
@@ -85,29 +85,32 @@ fun CustomIterationScreen(
             }
 
             // 特性清单
-            SectionHeader(title = "核心能力矩阵", subtitle = "一次准备，持续共建")
+            SectionHeader(
+                title = stringResource(R.string.iteration_features_title),
+                subtitle = stringResource(R.string.iteration_features_subtitle),
+            )
 
             IterationFeatureItem(
-                title = "隔离迭代工作区",
-                description = "独立路径 ~/custom_tianyan，所有修改与宿主环境完全物理隔离。",
+                title = stringResource(R.string.iteration_feature_workspace_title),
+                description = stringResource(R.string.iteration_feature_workspace_desc),
                 badgeColor = MaterialTheme.colorScheme.primary
             )
 
             IterationFeatureItem(
-                title = "专属 Agent 规范 Skill",
-                description = "内置 tianyan-custom-iteration Skill，严格遵循多模块、Compose 与安全规则。",
+                title = stringResource(R.string.iteration_feature_skill_title),
+                description = stringResource(R.string.iteration_feature_skill_desc),
                 badgeColor = MaterialTheme.colorScheme.secondary
             )
 
             IterationFeatureItem(
-                title = "GitHub Actions 云端 CI 构建",
-                description = "免去手机端繁琐编译，自动化生成 TianyanDev（top.tianyan.app.dev）独立 APK。",
+                title = stringResource(R.string.iteration_feature_ci_title),
+                description = stringResource(R.string.iteration_feature_ci_desc),
                 badgeColor = MaterialTheme.colorScheme.tertiary
             )
 
             IterationFeatureItem(
-                title = "双包共存与开源 PR 闭环",
-                description = "测试版与正式版完美共存，功能验证完毕后一键提交标准 PR 参与社区共建。",
+                title = stringResource(R.string.iteration_feature_dual_title),
+                description = stringResource(R.string.iteration_feature_dual_desc),
                 badgeColor = MaterialTheme.colorScheme.primary
             )
 
@@ -142,10 +145,10 @@ fun CustomIterationScreen(
                         strokeWidth = 2.dp,
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text("正在准备迭代工作区…")
+                    Text(stringResource(R.string.iteration_preparing_workspace))
                 } else {
                     Text(
-                        text = "开启自定义迭代",
+                        text = stringResource(R.string.iteration_start),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -164,7 +167,7 @@ fun CustomIterationScreen(
 
             RuntimeCard(modifier = Modifier.fillMaxWidth()) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    RuntimeOutlinedTextField(
+                    RuntimeFilledTextField(
                         value = branchText,
                         onValueChange = { branchText = it },
                         label = { Text(stringResource(R.string.iteration_build_branch_label)) },

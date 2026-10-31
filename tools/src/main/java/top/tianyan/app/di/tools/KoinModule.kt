@@ -28,6 +28,7 @@ import top.tianyan.app.core.tools.ToolNotificationNotifier
 import top.tianyan.app.core.tools.ToolRegistry
 import top.tianyan.app.core.tools.ToolRepository
 import top.tianyan.app.core.tools.ToolServiceController
+import top.tianyan.app.core.tools.ServiceNotificationSink
 import top.tianyan.app.runtime.tools.AuthUrlDetector
 import top.tianyan.app.runtime.tools.CodexToolInstaller
 import top.tianyan.app.runtime.tools.HelloToolInstaller
@@ -47,6 +48,7 @@ import org.koin.core.qualifier.named
 
 /** Dependency registrations owned by the tools module. */
 val toolsModule = module {
+    single { top.tianyan.app.core.tools.RemotePluginLibrary(get(), get()) }
     single { val local = get<top.tianyan.app.runtime.environment.LocalBackendAccess>()
         top.tianyan.app.core.tools.InstalledPluginCatalog(get(), get(), get(), local::requireLocal) }
         .onClose { it?.close() }
@@ -142,6 +144,7 @@ val toolsModule = module {
     single<ToolchainInstalls> { ToolManagerToolchainInstalls(toolManager = get()) }
 
     single<ToolNotificationNotifier> { ToolNotificationNotifier(context = get()) }
+    single<ServiceNotificationSink> { get<ToolNotificationNotifier>() }
 
     single<ToolRegistry> {
         ToolRegistry(
@@ -153,7 +156,8 @@ val toolsModule = module {
 
     single<ToolRepository> { ToolRepository(toolDao = get(), toolRegistry = get()) }
 
-    single<ToolServiceController> { ToolServiceController(linuxRuntime = get()) }
+    single<ToolServiceController> { ToolServiceController(linuxRuntime = get(), notifier = get()) }
+    single { top.tianyan.app.core.tools.PersistentToolServices(get(), get(), get(), get(), get(), get(), get(), get()) }
 
     /** MCP 能力仓库的「检查更新 / 一键升级」执行器：只依赖 Linux 运行时，联网都在装配脚本里。 */
     single<McpCatalogUpdater> { McpCatalogUpdater(linuxRuntime = get()) }

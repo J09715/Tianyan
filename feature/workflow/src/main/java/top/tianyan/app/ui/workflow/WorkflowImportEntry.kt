@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -97,7 +97,7 @@ private fun WorkflowImportDialog(onDismiss: () -> Unit, onImport: (WorkflowDefin
                 try { picker.launch(arrayOf("application/json", "text/*", "application/octet-stream")) }
                 catch (_: Exception) { reading = false; fileError = "无法打开系统文件选择窗口" }
             }) { Text(if (reading) "正在读取…" else "选择 JSON 文件", maxLines = 1) }
-            OutlinedTextField(value = raw, onValueChange = { if (!reading) { raw = it; preview = null; error = null; fileError = null; checking = it.isNotBlank() } },
+            RuntimeFilledTextField(value = raw, onValueChange = { if (!reading) { raw = it; preview = null; error = null; fileError = null; checking = it.isNotBlank() } },
                 enabled = !reading, label = { Text("工作流 JSON") }, minLines = 4, maxLines = 8, isError = error != null || fileError != null,
                 modifier = Modifier.fillMaxWidth())
             if (checking) Text("正在校验…", style = MaterialTheme.typography.bodySmall)

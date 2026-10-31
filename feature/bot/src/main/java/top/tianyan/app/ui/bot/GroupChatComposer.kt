@@ -1,6 +1,11 @@
 package top.tianyan.app.ui.bot
 
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextRange
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.*
+import top.tianyan.app.ui.components.*
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,8 +19,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -53,13 +56,11 @@ internal fun GroupChatComposer(
     val candidates = if (mention == null) emptyList() else members.filter {
         it.name.contains(mention.query, ignoreCase = true) || it.role.contains(mention.query, ignoreCase = true)
     }
-    Surface(color = MaterialTheme.colorScheme.surfaceContainerLow, tonalElevation = 3.dp) {
+    Column(Modifier.fillMaxWidth().navigationBarsPadding().imePadding()) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .navigationBarsPadding()
-                .imePadding()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(runtimeContentPadding(horizontal = 12.dp, top = 8.dp, bottom = 8.dp)),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             if (mention != null && candidates.isNotEmpty()) {
@@ -104,79 +105,53 @@ internal fun GroupChatComposer(
                     }
                 }
             }
-            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = value,
-                    onValueChange = onValueChange,
-                    placeholder = { Text(stringResource(R.string.fbot_input_hint)) },
-                    maxLines = 4,
-                    shape = RoundedCornerShape(16.dp),
-                    leadingIcon = {
-                        RuntimeIconButton(
-                            onClick = onAttach,
-                            modifier = Modifier.size(36.dp),
-                            contentDescription = stringResource(R.string.fbot_attach),
-                        ) {
-                            RuntimeIcon(
-                                RuntimeIconName.Attach,
-                                Modifier.size(18.dp),
-                                MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+            RuntimeCard(containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                borderColor = MaterialTheme.colorScheme.outlineVariant, shape = RoundedCornerShape(28.dp),
+                contentPadding = PaddingValues(12.dp)) {
+                BasicTextField(value = value, onValueChange = onValueChange, maxLines = 5,
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp, max = 160.dp).padding(horizontal = 8.dp, vertical = 6.dp),
+                    decorationBox = { field ->
+                        Box {
+                            if (value.text.isEmpty()) Text(stringResource(R.string.fbot_input_hint),
+                                style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            field()
                         }
-                    },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surface,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                    ),
-                    modifier = Modifier.weight(1f),
-                )
-                val hasContent = value.text.isNotBlank() || attachments.isNotEmpty()
-                val canSend = hasContent && !sending && !stopping
-                // 有输入时优先显示发送，允许在 Bot 执行期间追加消息；只有输入为空才显示停止。
-                val showStop = busy && !hasContent
-                val buttonEnabled = if (showStop) !stopping else canSend
-                val buttonColor = when {
-                    showStop -> MaterialTheme.colorScheme.error
-                    sending || canSend -> MaterialTheme.colorScheme.primary
-                    else -> MaterialTheme.colorScheme.surfaceContainerHigh
-                }
-                Surface(
-                    color = buttonColor,
-                    shape = CircleShape,
-                    modifier = Modifier.size(46.dp),
-                ) {
-                    RuntimeIconButton(
-                        onClick = if (showStop) onStop else onSend,
-                        enabled = buttonEnabled,
-                        modifier = Modifier.fillMaxSize(),
-                        contentDescription = stringResource(if (showStop) R.string.fbot_stop else R.string.fbot_send),
-                    ) {
-                        when {
-                            stopping -> RuntimeCircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                color = MaterialTheme.colorScheme.onError,
-                                trackColor = MaterialTheme.colorScheme.onError.copy(alpha = 0.25f),
-                                strokeWidth = 2.dp,
-                            )
-                            showStop -> RuntimeIcon(
-                                RuntimeIconName.Stop,
-                                Modifier.size(20.dp),
-                                tint = MaterialTheme.colorScheme.onError,
-                            )
-                            sending -> RuntimeCircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                trackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.25f),
-                                strokeWidth = 2.dp,
-                            )
-                            else -> RuntimeIcon(
-                                RuntimeIconName.ArrowUp,
-                                Modifier.size(20.dp),
-                                tint = if (canSend) MaterialTheme.colorScheme.onPrimary
-                                else MaterialTheme.colorScheme.outline,
-                            )
+                    })
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    RuntimeIconButton(onClick = onAttach, contentDescription = stringResource(R.string.fbot_attach)) {
+                        RuntimeIcon(RuntimeIconName.Plus, Modifier.size(22.dp), MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    RuntimeTextButton(onClick = {
+                        val start = value.selection.min
+                        onValueChange(TextFieldValue(value.text.replaceRange(start, value.selection.max, "@"), TextRange(start + 1)))
+                    }, contentPadding = PaddingValues(0.dp), modifier = Modifier.size(40.dp),
+                        enabled = members.isNotEmpty()) { Text("@", style = MaterialTheme.typography.titleLarge) }
+                    Text(stringResource(if (busy) R.string.fbot_process_composer_busy else R.string.fbot_process_composer_members, members.size),
+                        Modifier.weight(1f), style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    val hasContent = value.text.isNotBlank() || attachments.isNotEmpty()
+                    val canSend = hasContent && !sending && !stopping
+                    val showStop = busy && !hasContent
+                    val buttonEnabled = if (showStop) !stopping else canSend
+                    val buttonColor = when {
+                        showStop -> MaterialTheme.colorScheme.error
+                        sending || canSend -> MaterialTheme.colorScheme.primary
+                        else -> MaterialTheme.colorScheme.surfaceContainerHigh
+                    }
+                    Surface(color = buttonColor, shape = CircleShape, modifier = Modifier.size(44.dp)) {
+                        RuntimeIconButton(onClick = if (showStop) onStop else onSend, enabled = buttonEnabled,
+                            modifier = Modifier.fillMaxSize(),
+                            contentDescription = stringResource(if (showStop) R.string.fbot_stop else R.string.fbot_send)) {
+                            when {
+                                stopping || sending -> RuntimeCircularProgressIndicator(Modifier.size(18.dp),
+                                    color = if (stopping) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onPrimary)
+                                showStop -> RuntimeIcon(RuntimeIconName.Stop, Modifier.size(20.dp), MaterialTheme.colorScheme.onError)
+                                else -> RuntimeIcon(RuntimeIconName.ArrowUp, Modifier.size(20.dp),
+                                    if (canSend) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
                     }
                 }

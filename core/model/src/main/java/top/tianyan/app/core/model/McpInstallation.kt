@@ -6,6 +6,6 @@ fun McpServerConfig.withInstalledComponents(installed: Set<String>?): McpServerC
     val ready = installed?.contains(installComponentId)
     return copy(
         installationReady = ready,
-        isEnabled = ready == true && (!userToggled || isEnabled),
+        isEnabled = headersReadError == null && ready == true && (!userToggled || isEnabled),
     )
 }

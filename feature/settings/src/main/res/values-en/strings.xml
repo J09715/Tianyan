@@ -32,8 +32,8 @@
     <string name="settings_color_dark_description">An immersive Material 3 obsidian dark theme</string>
     <string name="settings_interface_scale">Interface scale</string>
     <string name="settings_scale">Scale</string>
-    <string name="settings_terminal_preview_command">tianyan@debian:~$ echo \"Tianyan sandbox is running normally 🚀\"</string>
-    <string name="settings_terminal_preview_output">Tianyan sandbox is running normally 🚀</string>
+    <string name="settings_terminal_preview_command">tianyan@debian:~$ echo \"天衍 sandbox is running normally 🚀\"</string>
+    <string name="settings_terminal_preview_output">天衍 sandbox is running normally 🚀</string>
     <string name="settings_tool_center_empty_category_title">No tools in this category</string>
     <string name="settings_tool_center_empty_category_subtitle">Try another category, or refresh the tool registry later</string>
     <string name="settings_component_reinstall">Reinstall</string>
@@ -65,7 +65,7 @@
     <string name="local_backup_error_busy">Agent tasks are unfinished, including paused tasks or tasks awaiting approval. End them and try again.</string>
     <string name="local_backup_error_version">The backup data version or fields are incompatible with this app. Check the app versions used to export and restore.</string>
     <string name="local_backup_error_changed">Data changed or the preview expired. Select the backup again and preview before restoring.</string>
-    <string name="local_backup_error_archive">Backup manifest or resource verification failed. Select a complete Tianyan backup ZIP or export it again.</string>
+    <string name="local_backup_error_archive">Backup manifest or resource verification failed. Select a complete 天衍 backup ZIP or export it again.</string>
     <string name="local_backup_error_access">Cannot access the selected file. Use the system file picker to select the file or destination again.</string>
     <string name="local_backup_error_io">Could not read or write the backup. Check available storage and confirm the file is downloaded and readable.</string>
     <string name="local_backup_title">Data backup and restore</string>
@@ -88,7 +88,7 @@
     <string name="model_integer_positive">Enter an integer from 1 to 2147483647; leave blank for the default</string>
     <string name="settings_feature_hub_title">Features</string>
     <string name="settings_feature_custom_iteration_title">One-Sentence App</string>
-    <string name="settings_feature_custom_iteration_subtitle">Describe the app you want — Tianyan builds and installs it on your phone</string>
+    <string name="settings_feature_custom_iteration_subtitle">Describe the app you want — 天衍 builds and installs it on your phone</string>
     <string name="settings_feature_roundtable_title">AI Roundtable</string>
     <string name="settings_feature_roundtable_subtitle">Architecture · Security · Performance review in parallel, with a judge-synthesized debate report</string>
     <string name="settings_feature_a2ui_title">A2UI interface</string>
@@ -116,4 +116,5 @@
     <string name="agent_running_send_mode_steer">Steer</string>
     <string name="agent_running_send_mode_queue_description">While the current turn is still running, new input waits and starts as the next turn after it finishes.</string>
     <string name="agent_running_send_mode_steer_description">While the current turn is still running, new input is injected after the current batch of tool calls finishes and before the next inference round.</string>
+    <string name="settings_local_network_permission_required">Local network is blocked. Allow Nearby devices / Local network. Android 17 blocks LAN access until this permission is granted.</string>
 </resources>

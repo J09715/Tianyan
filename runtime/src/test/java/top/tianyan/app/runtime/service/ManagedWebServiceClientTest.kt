@@ -7,6 +7,28 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ManagedWebServiceClientTest {
+    @Test fun approvedWritesUseOnlyTheNativeServiceAndNeverFollowRedirects() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("{\"saved\":true}"))
+            server.enqueue(MockResponse().setResponseCode(302).setHeader("Location", "https://example.com/"))
+            server.start()
+            val client = ManagedWebServiceClient(server.port, "/plugin/", available = { true })
+            try {
+                assertEquals("{\"saved\":true}", client.write("api/auth", "{\"token\":\"secret\"}"))
+                val request = server.takeRequest()
+                assertEquals("POST", request.method)
+                assertEquals("/plugin/api/auth", request.path)
+                assertEquals("1", request.getHeader("X-Taixu-Plugin-Write"))
+                assertEquals("{\"token\":\"secret\"}", request.body.readUtf8())
+                assertNull(client.write("api/auth", "{}"))
+                assertNull(client.write("../escape", "{}"))
+                assertNull(client.write("api/auth", "x".repeat(1025)))
+                assertEquals(2, server.requestCount)
+                client.close()
+                assertNull(client.write("api/auth", "{}"))
+            } finally { client.close() }
+        }
+    }
     @Test fun readsBoundedTextFromItsOwnBasePathWithItsNativeCredential() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setBody("""{"ok":true}"""))

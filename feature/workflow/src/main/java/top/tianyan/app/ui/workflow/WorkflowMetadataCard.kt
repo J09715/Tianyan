@@ -4,7 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -41,10 +41,10 @@ internal fun WorkflowMetadataCard(state: WorkflowEditorUiState, onApply: (String
             }
             WorkflowExportButton(state.definition, state.isDirty)
             if (expanded) {
-                OutlinedTextField(name, { name = it }, label = { Text("工作流名称") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(category, { category = it }, label = { Text("分类") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(description, { description = it }, label = { Text("说明") }, minLines = 2, maxLines = 3, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(parallel, { parallel = it }, label = { Text("最大执行并发（1–8）") },
+                RuntimeFilledTextField(name, { name = it }, label = { Text("工作流名称") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                RuntimeFilledTextField(category, { category = it }, label = { Text("分类") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                RuntimeFilledTextField(description, { description = it }, label = { Text("说明") }, minLines = 2, maxLines = 3, modifier = Modifier.fillMaxWidth())
+                RuntimeFilledTextField(parallel, { parallel = it }, label = { Text("最大执行并发（1–8）") },
                     supportingText = { Text(if (parallelValue == null) "请输入 1–8 的整数" else "人工审批节点不占名额；设为 1 可串行执行普通节点。") },
                     isError = parallelValue == null, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true, modifier = Modifier.fillMaxWidth())

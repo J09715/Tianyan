@@ -28,10 +28,10 @@ class AppUpdateManager(
 ) {
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
     companion object {
-        const val GITHUB_REPO = "J09715/Tianyan"
-        const val GITHUB_REPO_URL = "https://github.com/J09715/Tianyan"
+        const val GITHUB_REPO = "tianyan-lab/tianyan"
+        const val GITHUB_REPO_URL = "https://github.com/tianyan-lab/tianyan"
         const val QQ_GROUP_ID = "964382207"
-        private const val RELEASES_API = "https://api.github.com/repos/J09715/Tianyan/releases/latest"
+        private const val RELEASES_API = "https://api.github.com/repos/tianyan-lab/tianyan/releases/latest"
     }
 
     /**

@@ -216,7 +216,7 @@ internal fun LocalToolDetailContent(
                         onStop = { viewModel?.stopGateway() },
                     )
 
-                    // ── 2.5 服务实时控制台日志 ──
+                    if (!hasSelfManagedLoopbackPanel(manifest)) ServiceBrowserButton(state.servicePort, state.gatewayRunning)
                     ServiceLogsCard(
                         logs = state.serviceLogs,
                         running = state.gatewayRunning,
@@ -251,7 +251,7 @@ internal fun LocalToolDetailContent(
 
                 // ── 5. 带 Token 访问链接（仅 Web 类工具，支持局域网 IP / 0.0.0.0 / 127.0.0.1） ──
                 if (state.isWebService) {
-                    AccessLinkCard(
+                    if (hasSelfManagedLoopbackPanel(manifest)) SelfManagedServiceAccessCard(state.servicePort, state.gatewayRunning, hasAuthenticatedServicePanel(manifest), { onOpenPluginPage(toolId) }) else AccessLinkCard(
                         state = state,
                         running = state.gatewayRunning,
                         onGenerate = { viewModel?.generateToken() },
@@ -262,7 +262,7 @@ internal fun LocalToolDetailContent(
                             Toast.makeText(context, "链接已复制", Toast.LENGTH_SHORT).show()
                         },
                     )
-                    RuntimeCard(Modifier.fillMaxWidth()) {
+                    if (!hasSelfManagedLoopbackPanel(manifest)) RuntimeCard(Modifier.fillMaxWidth()) {
                         Text(
                             stringResource(SettingsR.string.web_tool_service_scope),
                             style = MaterialTheme.typography.bodySmall,
@@ -812,11 +812,11 @@ private fun AutoStartCard(
         ) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    text = "随应用自启动",
+                    text = stringResource(SettingsR.string.service_recovery_title),
                     style = MaterialTheme.typography.titleMedium,
                 )
                 Text(
-                    text = "Linux 环境就绪后自动启动 $toolName 网关服务",
+                    text = stringResource(SettingsR.string.service_recovery_summary, toolName),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -13,12 +13,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.PaddingValues
 import top.tianyan.app.ui.components.RuntimeCard
-import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import top.tianyan.app.ui.components.RuntimeCircularProgressIndicator as CircularProgressIndicator
 import top.tianyan.app.ui.components.RuntimeIconButton as IconButton
@@ -32,11 +30,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import top.tianyan.app.feature.chat.R
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
@@ -93,6 +90,7 @@ internal fun ChatComposer(
     pinnedCapabilities: List<MentionItem>,
     onUnpinMention: (String) -> Unit,
     onOpenSkillsMcp: () -> Unit,
+    onCompactContext: () -> Unit,
     onOpenModels: () -> Unit,
     activeModel: AiModelEntity?,
     approvalMode: ApprovalMode, onOpenApprovalModes: () -> Unit,
@@ -101,6 +99,9 @@ internal fun ChatComposer(
 ) {
 
     val focusRequester = remember { FocusRequester() }
+    val blurEnabled = rememberChatInputBlurEnabled()
+    val chatHazeState = LocalChatHazeState.current
+    var showAttachSheet by remember { mutableStateOf(false) }; var showSketchSheet by remember { mutableStateOf(false) }
     var textFieldValue by remember {
         mutableStateOf(TextFieldValue(input, TextRange(input.length)))
     }
@@ -115,18 +116,6 @@ internal fun ChatComposer(
                 runCatching { focusRequester.requestFocus() }
             }
         }
-    }
-
-    val imagePickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        contract = androidx.activity.result.contract.ActivityResultContracts.GetMultipleContents(),
-    ) { uris ->
-        onAttachmentsPicked(uris.toList(), true)
-    }
-
-    val filePickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        contract = androidx.activity.result.contract.ActivityResultContracts.GetMultipleContents(),
-    ) { uris ->
-        onAttachmentsPicked(uris.toList(), false)
     }
 
     val coroutineScope = rememberCoroutineScope()
@@ -192,16 +181,23 @@ internal fun ChatComposer(
         }
     }
     RuntimeCard(
-        modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp, bottom = 4.dp)
+            .clip(MaterialTheme.shapes.extraLarge)
+            .chatInputHaze(chatHazeState, blurEnabled),
         shape = MaterialTheme.shapes.extraLarge, contentPadding = PaddingValues(0.dp),
-        containerColor = top.tianyan.app.ui.theme.chatBackdropSurface(MaterialTheme.colorScheme.surfaceContainer),
+        // 毛玻璃开启时容器透明，铺底与着色由效果负责
+        containerColor = if (blurEnabled) Color.Transparent
+            else top.tianyan.app.ui.theme.chatBackdropSurface(MaterialTheme.colorScheme.surfaceContainer),
+        // 全包裹描边：常态 outlineVariant，运行中主色，参考 rikkahub ChatInput
         borderColor = if (running) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-            else Color.Transparent,
+            else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 6.dp),
+                .padding(horizontal = 8.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             // 显式挂载的能力才展示标签；常驻能力从 + 菜单管理。
@@ -301,24 +297,10 @@ internal fun ChatComposer(
                 }
             }
 
-            // 🌟 上排主体：弹性文本输入框
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 40.dp)
-                    .padding(horizontal = 4.dp, vertical = 4.dp),
-                contentAlignment = Alignment.CenterStart,
-            ) {
-                if (input.isEmpty()) {
-                    Text(
-                        text = stringResource(if (running) R.string.chat_input_running else R.string.chat_message_placeholder),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    )
-                }
-                BasicTextField(
+            top.tianyan.app.ui.components.RuntimeComposerTextField(
+                    placeholder = {
+                        Text(stringResource(if (running) R.string.chat_input_running else R.string.chat_message_placeholder))
+                    },
                     value = textFieldValue,
                     onValueChange = { newValue ->
                         val updatedValue = if (newValue.text.length < textFieldValue.text.length) {
@@ -357,15 +339,8 @@ internal fun ChatComposer(
                     modifier = Modifier
                         .fillMaxWidth()
                         .focusRequester(focusRequester),
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        color = MaterialTheme.colorScheme.onSurface,
-                    ),
-                    cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
-                    minLines = 1,
-                    maxLines = 5,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
                 )
-            }
 
             FlowRow(
                 modifier = Modifier
@@ -378,8 +353,7 @@ internal fun ChatComposer(
                     approvalMode = approvalMode, onOpenApprovalModes = onOpenApprovalModes,
                     activeModel = activeModel,
                     onOpenModels = onOpenModels,
-                    onPickImage = { imagePickerLauncher.launch("image/*") },
-                    onPickFile = { filePickerLauncher.launch("*/*") },
+                    onOpenAttachSheet = { showAttachSheet = true },
                 )
                 // 右侧发送 / 停止控制区。
                 val canSend = !initializing && (input.isNotBlank() || attachments.isNotEmpty())
@@ -390,33 +364,19 @@ internal fun ChatComposer(
                     ) {
                         ContextUsageRing(contextUsage)
                         if (canSend) {
-                            val sendTint = when (sendMode) {
-                                ComposerSendMode.STEER -> semanticColors().agent
-                                ComposerSendMode.NEXT_RUN -> MaterialTheme.colorScheme.secondary
+                            val (sendContainer, sendContent) = when (sendMode) {
+                                ComposerSendMode.STEER -> semanticColors().agent to semanticColors().onAgent
+                                ComposerSendMode.NEXT_RUN -> MaterialTheme.colorScheme.secondary to MaterialTheme.colorScheme.onSecondary
                             }
-                            ComposerSendButton(onClick = doSend, enabled = true, tint = sendTint)
+                            ComposerSendButton(
+                                onClick = doSend,
+                                enabled = true,
+                                containerColor = sendContainer,
+                                contentColor = sendContent,
+                            )
                         }
 
-                        run {
-                            val stopDesc = stringResource(R.string.chat_stop_generation)
-                            Surface(
-                                onClick = onStop,
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.error,
-                                modifier = Modifier
-                                    .minimumInteractiveComponentSize()
-                                    .size(48.dp)
-                                    .semantics { contentDescription = stopDesc },
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    RuntimeIcon(
-                                        name = RuntimeIconName.Stop,
-                                        modifier = Modifier.size(24.dp),
-                                        tint = MaterialTheme.colorScheme.onError,
-                                    )
-                                }
-                            }
-                        }
+                        ComposerStopButton(onClick = onStop)
                     }
                 } else {
                     Row(
@@ -424,10 +384,27 @@ internal fun ChatComposer(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         ContextUsageRing(contextUsage)
-                        ComposerSendButton(onClick = doSend, enabled = canSend, tint = MaterialTheme.colorScheme.primary)
+                        ComposerSendButton(
+                            onClick = doSend,
+                            enabled = canSend,
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                        )
                     }
                 }
             }
         }
     }
+
+    ComposerSheets(
+        showAttach = showAttachSheet,
+        showSketch = showSketchSheet,
+        canCompress = messages.isNotEmpty(),
+        onDismissAttach = { showAttachSheet = false },
+        onDismissSketch = { showSketchSheet = false },
+        onOpenSketch = { showSketchSheet = true },
+        onAttachmentsPicked = onAttachmentsPicked,
+        onOpenSkillsMcp = onOpenSkillsMcp,
+        onCompactContext = onCompactContext,
+    )
 }

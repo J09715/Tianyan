@@ -25,8 +25,23 @@ sealed interface ChatRenderItem {
          * 每个可见项一次 O(n)，多张工具卡同时可见时为 O(n²)，滚动/流式时明显掉帧。
          */
         val rawIndex: Int = -1,
+        /** 思考已拆成独立的 [ReasoningItem] 进入过程链时置 false，避免气泡内重复渲染。 */
+        val showReasoning: Boolean = true,
     ) : ChatRenderItem {
         override val stableKey: String get() = message.id
+    }
+
+    /**
+     * 助手思考过程：从 [AssistantText] 拆出后作为过程链的一步。
+     * 参与链的展开/收起，但不计入工具调用步数。
+     */
+    data class ReasoningItem(
+        val messageId: String,
+        val reasoning: String,
+        val durationMs: Long?,
+        val rawIndex: Int = -1,
+    ) : ChatRenderItem {
+        override val stableKey: String get() = "reasoning_$messageId"
     }
 
     data class CollapseButtonItem(

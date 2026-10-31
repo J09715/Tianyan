@@ -17,7 +17,7 @@ import top.tianyan.app.core.model.bot.GroupToolStep
 import top.tianyan.app.ui.theme.TianyanTheme
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
+@Config(sdk = [34], qualifiers = "zh-rCN")
 class GroupToolCallPanelTest {
     @get:Rule val compose = createComposeRule()
     private val steps = listOf(GroupToolStep("call", "read", true, 18))
@@ -29,15 +29,17 @@ class GroupToolCallPanelTest {
             GroupMessageRow(message, null, true, true, {})
         } }
         compose.onNodeWithText("正文回复").assertExists()
-        compose.onNodeWithTag("group-tools-details:reply").assertDoesNotExist()
-        compose.onNodeWithTag("group-tools-toggle:reply").performClick()
-        compose.onNodeWithText("read").assertExists()
-        compose.onNodeWithText("18ms").assertExists()
+        compose.onNodeWithTag("group-tools-details:reply").assertExists()
+        compose.onNodeWithText("读取文件").assertExists()
         val panel = compose.onNodeWithTag("group-tools:reply").fetchSemanticsNode().boundsInRoot
         val answer = compose.onNodeWithText("正文回复").fetchSemanticsNode().boundsInRoot
         assertTrue("Tool frame must end before the answer", panel.bottom <= answer.top)
         compose.onNodeWithTag("group-tools-toggle:reply").performClick()
         compose.onNodeWithTag("group-tools-details:reply").assertDoesNotExist()
+        compose.onNodeWithText("正文回复").assertExists()
+        compose.onNodeWithTag("group-tools-toggle:reply").performClick()
+        compose.onNodeWithTag("group-step:call").performClick()
+        compose.onNodeWithText("read").assertExists()
         compose.onNodeWithText("正文回复").assertExists()
     }
 
@@ -47,11 +49,12 @@ class GroupToolCallPanelTest {
             GroupToolCallPanel("two", listOf(GroupToolStep("pending", "base")), false)
         } } }
         compose.onNodeWithTag("group-tools-toggle:one").performClick()
-        compose.onNodeWithTag("group-tools-details:one").assertExists()
-        compose.onNodeWithTag("group-tools-details:two").assertDoesNotExist()
+        compose.onNodeWithTag("group-tools-details:one").assertDoesNotExist()
+        compose.onNodeWithTag("group-tools-details:two").assertExists()
         compose.onNodeWithText("1 项待核对").assertExists()
-        compose.onNodeWithTag("group-tools-toggle:two").performClick()
         compose.onNodeWithText("待核对").assertExists()
+        compose.onNodeWithTag("group-tools-toggle:two").performClick()
+        compose.onNodeWithTag("group-tools-details:two").assertDoesNotExist()
         compose.onNodeWithText("执行中").assertDoesNotExist()
     }
 }

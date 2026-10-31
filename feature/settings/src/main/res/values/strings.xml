@@ -116,4 +116,5 @@
     <string name="agent_running_send_mode_steer">引导</string>
     <string name="agent_running_send_mode_queue_description">当前轮仍在执行时，新输入排队等它结束后作为下一轮启动。</string>
     <string name="agent_running_send_mode_steer_description">当前轮仍在执行时，新输入在当前这批工具调用完成后、下一轮推理开始前注入。</string>
+    <string name="settings_local_network_permission_required">无法访问局域网：请允许「附近的设备 / 本地网络」权限。Android 17 及以上会拦截未授权应用的局域网连接。</string>
 </resources>

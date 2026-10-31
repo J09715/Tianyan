@@ -69,6 +69,7 @@ fun AppearanceSettingsScreen(
                 }
             }
         }
+        item("chat_identity") { ChatIdentitySettingsCard() }
         item("background") { ChatBackgroundSettingsCard() }
         item("tool_status_style") { ToolStatusStyleSettingsCard() }
         item("scale") {

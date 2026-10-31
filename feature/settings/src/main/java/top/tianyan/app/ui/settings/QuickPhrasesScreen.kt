@@ -31,7 +31,7 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -349,7 +349,7 @@ private fun QuickPhraseEditorDialog(
                     .padding(vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = title,
                     onValueChange = { title = it },
                     label = { Text("短语标题") },
@@ -358,7 +358,7 @@ private fun QuickPhraseEditorDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
 
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = description,
                     onValueChange = { description = it },
                     label = { Text("简短说明（可选）") },
@@ -367,7 +367,7 @@ private fun QuickPhraseEditorDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
 
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = content,
                     onValueChange = { content = it },
                     label = { Text("提示词 / 命令模板") },
@@ -382,7 +382,7 @@ private fun QuickPhraseEditorDialog(
                     expanded = projectTypeDropdownExpanded,
                     onExpandedChange = { projectTypeDropdownExpanded = !projectTypeDropdownExpanded },
                 ) {
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = projectTypeOptions.firstOrNull { it.first == targetProjectType }?.second ?: "通用",
                         onValueChange = {},
                         readOnly = true,

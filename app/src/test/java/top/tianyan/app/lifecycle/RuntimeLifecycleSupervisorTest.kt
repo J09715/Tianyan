@@ -16,6 +16,20 @@ import top.tianyan.app.testing.Aarch64AwareRobolectricTestRunner
 @RunWith(Aarch64AwareRobolectricTestRunner::class)
 @Config(sdk = [35], application = Application::class, manifest = Config.NONE)
 class RuntimeLifecycleSupervisorTest {
+    @Test fun activeForegroundLeaseRenewsPastTheOriginalEightHourTimeoutAndStillReleasesOnce() {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val supervisor = RuntimeLifecycleSupervisor(app)
+        val lease = supervisor.acquireLease("persistent-service")
+        val lock = org.robolectric.shadows.ShadowPowerManager.getLatestWakeLock()
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofHours(4))
+        supervisor.refreshActiveLeases()
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofHours(5))
+        assertTrue(lock.isHeld)
+        lease.close()
+        assertFalse(lock.isHeld)
+        supervisor.refreshActiveLeases()
+        assertFalse(lock.isHeld)
+    }
 
     @Test
     fun leaseLifecycle_singleLease() {

@@ -473,7 +473,7 @@ class McpHttpTransport(
             .getOrNull()?.takeIf { it.id == id }
 
     private fun readLimited(response: Response, requestId: String, isToolCall: Boolean = false): String {
-        return when (val payload = McpResponseSizeLimiter.readResponse(response, spillDirectory = spillDirectory)) {
+        return when (val payload = readMcpHttpPayload(response, isToolCall, spillDirectory)) {
             is McpResponseSizeLimiter.Payload.Inline -> payload.text
             is McpResponseSizeLimiter.Payload.Spilled -> {
                 if (isToolCall) {

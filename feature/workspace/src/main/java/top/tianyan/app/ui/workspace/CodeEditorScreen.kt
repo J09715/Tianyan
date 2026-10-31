@@ -10,9 +10,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -58,7 +55,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -108,6 +104,8 @@ fun CodeEditorScreen(
     val message by viewModel?.message?.collectAsStateWithLifecycle() ?: previewStateOf(null)
     val messageIsError by viewModel?.messageIsError?.collectAsStateWithLifecycle() ?: previewStateOf(false)
     val saveConflict by viewModel?.saveConflict?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+    val binaryFile by viewModel?.binaryFile?.collectAsStateWithLifecycle()
+        ?: previewStateOf<top.tianyan.app.runtime.WorkspaceFileInspection?>(null)
     val context = LocalContext.current
 
     var showUnsavedDialog by rememberSaveable(projectName, relativePath) { mutableStateOf(false) }
@@ -237,6 +235,12 @@ fun CodeEditorScreen(
                 Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(Modifier.size(36.dp), color = EditorAccent)
                 }
+            } else if (binaryFile != null) {
+                BinaryFileNotice(
+                    inspection = binaryFile!!,
+                    onOpen = { viewModel?.openCurrentFileExternally(share = false) },
+                    onShare = { viewModel?.openCurrentFileExternally(share = true) },
+                )
             } else {
                 // 代码编辑核心区域
                 val scrollState = rememberScrollState()
@@ -265,31 +269,8 @@ fun CodeEditorScreen(
                         // One vertical scroll owner keeps the gutter and editor on
                         // exactly the same content coordinate while dragging.
                         .verticalScroll(scrollState)
-                        .pointerInput(Unit) {
-                            awaitEachGesture {
-                                awaitFirstDown(requireUnconsumed = false)
-                                var zoomChanged = false
-                                do {
-                                    val event = awaitPointerEvent(PointerEventPass.Initial)
-                                    if (event.changes.count { it.pressed } >= 2) {
-                                        val zoom = event.calculateZoom()
-                                        if (zoom != 1f) {
-                                            editorFontSizeSp = (editorFontSizeSp * zoom).coerceIn(
-                                                MIN_EDITOR_FONT_SIZE_SP,
-                                                MAX_EDITOR_FONT_SIZE_SP,
-                                            )
-                                            zoomChanged = true
-                                        }
-                                        event.changes.forEach { it.consume() }
-                                    }
-                                } while (event.changes.any { it.pressed })
-                                if (zoomChanged) {
-                                    editorFontSizeSp = editorFontSizeSp.coerceIn(
-                                        MIN_EDITOR_FONT_SIZE_SP,
-                                        MAX_EDITOR_FONT_SIZE_SP,
-                                    )
-                                }
-                            }
+                        .editorPinchZoom { zoom ->
+                            editorFontSizeSp = (editorFontSizeSp * zoom).coerceIn(MIN_EDITOR_FONT_SIZE_SP, MAX_EDITOR_FONT_SIZE_SP)
                         },
                 ) {
                     // 行号列

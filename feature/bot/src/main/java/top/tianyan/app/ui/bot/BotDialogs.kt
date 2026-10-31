@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -54,7 +54,7 @@ fun CreateBotDialog(
             ) {
                 BotAvatarEditor(avatarSeed ?: name, name, "#3D5AFE", !busy,
                     onChange = { avatarSeed = it }, onLoading = { avatarLoading = it })
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = name,
                     onValueChange = { name = it.take(40) },
                     label = { Text(stringResource(R.string.fbot_name)) },
@@ -62,7 +62,7 @@ fun CreateBotDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = role,
                     onValueChange = { role = it.take(40) },
                     label = { Text(stringResource(R.string.fbot_role)) },
@@ -70,7 +70,7 @@ fun CreateBotDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = persona,
                     onValueChange = { persona = it },
                     label = { Text(stringResource(R.string.fbot_persona)) },
@@ -140,14 +140,14 @@ fun CreateGroupDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = name,
                     onValueChange = { name = it.take(40) },
                     label = { Text(stringResource(R.string.fbot_group_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = description,
                     onValueChange = { description = it.take(200) },
                     label = { Text(stringResource(R.string.fbot_group_desc)) },

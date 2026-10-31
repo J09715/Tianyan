@@ -50,6 +50,10 @@ object PluginPackageProtocol {
         }
         require(spec.webSource == WebPluginPackagePolicy.PACKAGE_SOURCE && spec.serviceToolId == null) { "PROCESS 不能声明 Web 页面来源或工具服务引用" }
         require(manifest.uninstallSteps.isEmpty()) { "v2 使用框架卸载，暂不接受任意卸载脚本" }
+        if (spec.capabilities.any { it.name == "LOCAL_WEB" && it.target == "authenticated-v1" }) {
+            require(manifest.servicePort != null && manifest.launchType in setOf("web", "service") &&
+                !manifest.launchCommand.isNullOrBlank()) { "认证服务需要服务端口与启动命令" }
+        }
         require(manifest.commandLinks.size <= 64 && manifest.commandLinks.distinct().size == manifest.commandLinks.size &&
             manifest.commandLinks.all { it.matches(Regex("[a-z0-9][a-z0-9._+-]{0,63}")) }) { "命令入口无效或重复" }
         PackageHarnessPolicy.validate(manifest)

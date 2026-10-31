@@ -56,6 +56,8 @@ import top.tianyan.app.ui.components.TianyanMemoryEmptyIllustration
 internal fun SessionMemorySheet(
     memories: List<AgentMemoryEntity>,
     scratchpads: List<AgentScratchpadEntity>,
+    sessionId: String,
+    failureMemoryAccess: top.tianyan.app.harness.operation.FailureMemoryAccess?,
     onDeleteMemory: (String) -> Unit,
     onDeleteScratchpad: (String) -> Unit,
     onClearScratchpads: () -> Unit,
@@ -86,6 +88,9 @@ internal fun SessionMemorySheet(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                if (failureMemoryAccess != null) {
+                    item(key = "failure_memories:$sessionId") { FailureMemoryPanel(sessionId, failureMemoryAccess) }
+                }
                 // —— 长期记忆 ——
                 item(key = "header_memories") {
                     SectionHeader(

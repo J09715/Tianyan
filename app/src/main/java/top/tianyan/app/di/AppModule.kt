@@ -49,7 +49,6 @@ import top.tianyan.app.core.database.MIGRATION_79_80
 import top.tianyan.app.core.database.MIGRATION_80_81
 import top.tianyan.app.core.database.MIGRATION_81_82
 import top.tianyan.app.core.database.MIGRATION_82_83
-import top.tianyan.app.core.database.MIGRATION_83_84
 import top.tianyan.app.core.database.MIGRATION_77_78
 import top.tianyan.app.core.database.MIGRATION_76_77
 import top.tianyan.app.core.database.MIGRATION_75_76
@@ -76,7 +75,6 @@ import top.tianyan.app.core.database.InstallLogDao
 import top.tianyan.app.core.database.InstallTaskDao
 import top.tianyan.app.core.database.RuntimeDao
 import top.tianyan.app.core.database.HarnessSessionDao
-import top.tianyan.app.core.database.RedTeamFactDao
 import top.tianyan.app.core.database.AiModelDao
 import top.tianyan.app.core.database.WorkspaceDao
 import top.tianyan.app.core.database.TerminalSessionDao
@@ -94,6 +92,7 @@ import top.tianyan.app.core.database.QuickPhraseDao
 import top.tianyan.app.core.database.HarnessRuntimeDao
 import top.tianyan.app.core.database.AndroidAppDao
 import top.tianyan.app.harness.WorkspaceFileAccess
+import top.tianyan.app.harness.model.ModelsDevUpdater
 import top.tianyan.app.harness.checkpoint.CheckpointStore
 import top.tianyan.app.harness.checkpoint.FileCheckpointPersistence
 import top.tianyan.app.core.database.AgentContextDao
@@ -135,7 +134,7 @@ object AppModule {
 
     fun provideDatabase(context: Context): AppDatabase {
         return Room.databaseBuilder(context, AppDatabase::class.java, "tianyan.db")
-            .addMigrations(MIGRATION_27_28, MIGRATION_28_29, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_33_34, MIGRATION_34_35, MIGRATION_35_36, MIGRATION_36_37, MIGRATION_37_38, MIGRATION_38_39, MIGRATION_39_40, MIGRATION_40_41, MIGRATION_41_42, MIGRATION_42_43, MIGRATION_43_44, MIGRATION_44_45, MIGRATION_45_46, MIGRATION_46_47, MIGRATION_47_48, MIGRATION_48_49, MIGRATION_49_50, MIGRATION_50_51, MIGRATION_51_52, MIGRATION_52_53, MIGRATION_53_54, MIGRATION_54_55, MIGRATION_55_56, MIGRATION_56_57, MIGRATION_57_58, MIGRATION_58_59, MIGRATION_59_60, MIGRATION_60_61, MIGRATION_61_62, MIGRATION_62_63, MIGRATION_63_64, MIGRATION_64_65, MIGRATION_65_66, MIGRATION_66_67, MIGRATION_67_68, MIGRATION_68_69, MIGRATION_69_70, MIGRATION_70_71, MIGRATION_71_72, MIGRATION_72_73, MIGRATION_73_74, MIGRATION_74_75, MIGRATION_75_76, MIGRATION_76_77, MIGRATION_77_78, MIGRATION_78_79, MIGRATION_79_80, MIGRATION_80_81, MIGRATION_81_82, MIGRATION_82_83, MIGRATION_83_84)
+            .addMigrations(MIGRATION_27_28, MIGRATION_28_29, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_33_34, MIGRATION_34_35, MIGRATION_35_36, MIGRATION_36_37, MIGRATION_37_38, MIGRATION_38_39, MIGRATION_39_40, MIGRATION_40_41, MIGRATION_41_42, MIGRATION_42_43, MIGRATION_43_44, MIGRATION_44_45, MIGRATION_45_46, MIGRATION_46_47, MIGRATION_47_48, MIGRATION_48_49, MIGRATION_49_50, MIGRATION_50_51, MIGRATION_51_52, MIGRATION_52_53, MIGRATION_53_54, MIGRATION_54_55, MIGRATION_55_56, MIGRATION_56_57, MIGRATION_57_58, MIGRATION_58_59, MIGRATION_59_60, MIGRATION_60_61, MIGRATION_61_62, MIGRATION_62_63, MIGRATION_63_64, MIGRATION_64_65, MIGRATION_65_66, MIGRATION_66_67, MIGRATION_67_68, MIGRATION_68_69, MIGRATION_69_70, MIGRATION_70_71, MIGRATION_71_72, MIGRATION_72_73, MIGRATION_73_74, MIGRATION_74_75, MIGRATION_75_76, MIGRATION_76_77, MIGRATION_77_78, MIGRATION_78_79, MIGRATION_79_80, MIGRATION_80_81, MIGRATION_81_82, MIGRATION_82_83)
             .build()
     }
 
@@ -170,8 +169,6 @@ object AppModule {
     fun provideRuntimeDao(database: AppDatabase): RuntimeDao = database.runtimeDao()
 
     fun provideHarnessSessionDao(database: AppDatabase): HarnessSessionDao = database.harnessSessionDao()
-
-    fun provideRedTeamFactDao(database: AppDatabase): RedTeamFactDao = database.redTeamFactDao()
 
     fun provideAiModelDao(database: AppDatabase): AiModelDao = database.aiModelDao()
 
@@ -231,6 +228,9 @@ object AppModule {
     fun provideProcessRegistry(impl: ProcessRegistryImpl): ProcessRegistry = impl
 
     fun provideOkHttpClient(provider: HttpClientProvider): OkHttpClient = provider.create()
+
+    fun provideModelsDevUpdater(context: Context, okHttpClient: OkHttpClient): ModelsDevUpdater =
+        ModelsDevUpdater(context, okHttpClient)
 
     fun provideKtorHttpClient(
         provider: HttpClientProvider,

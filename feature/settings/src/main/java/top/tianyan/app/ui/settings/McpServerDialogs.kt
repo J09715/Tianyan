@@ -6,6 +6,7 @@ import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,11 +15,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text as MaterialText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,13 +26,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import top.tianyan.app.core.model.McpAuthMode
 import top.tianyan.app.core.model.McpAuthState
@@ -41,7 +38,7 @@ import top.tianyan.app.core.model.McpServerConfig
 import top.tianyan.app.core.model.McpToolInfo
 import top.tianyan.app.core.model.McpToolPolicy
 import top.tianyan.app.core.model.McpTransportType
-import top.tianyan.app.ui.components.RuntimeAlertDialog
+import top.tianyan.app.ui.components.RuntimeSelectionSheet
 import top.tianyan.app.ui.components.RuntimeButton as Button
 import top.tianyan.app.ui.components.RuntimeCircularProgressIndicator as CircularProgressIndicator
 import top.tianyan.app.ui.components.RuntimeFilledTonalButton as FilledTonalButton
@@ -78,40 +75,18 @@ internal fun McpServerDetailDialog(
 
     val jsonConfig = remember(server) { server.toExportJsonConfig() }
 
-    RuntimeAlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    server.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f, fill = false),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                ) {
-                    MaterialText(
-                        server.transportType.name,
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Visible,
-                    )
-                }
+    RuntimeSelectionSheet(
+        title = server.name, subtitle = server.transportType.name, onDismissRequest = onDismiss,
+        actions = {
+            FlowRow(Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                onEdit?.let { action -> OutlinedButton(onClick = action) { Text("编辑") } }
+                if (!server.isBuiltin) TextButton(onClick = onDelete) { Text("删除服务", color = MaterialTheme.colorScheme.error) }
             }
         },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
+    ) {
+        Column(Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 if (server.description.isNotBlank()) {
                     Text(
                         server.description,
@@ -124,11 +99,11 @@ internal fun McpServerDetailDialog(
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
                         if (server.transportType == McpTransportType.STDIO) "启动命令" else "服务端点 URL",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                        style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.primary,
                     )
                     Surface(
-                        shape = RoundedCornerShape(8.dp),
+                        shape = MaterialTheme.shapes.small,
                         color = MaterialTheme.colorScheme.surfaceContainerHighest,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
@@ -144,7 +119,7 @@ internal fun McpServerDetailDialog(
                             }
                             Text(
                                 text = cmdText,
-                                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 11.sp),
+                                style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
                                 color = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.weight(1f),
                             )
@@ -154,7 +129,7 @@ internal fun McpServerDetailDialog(
                                     clipboard?.setPrimaryClip(ClipData.newPlainText("mcp_cmd", cmdText))
                                     Toast.makeText(context, "命令已复制", Toast.LENGTH_SHORT).show()
                                 },
-                                modifier = Modifier.size(24.dp),
+                                modifier = Modifier.size(48.dp),
                             ) {
                                 RuntimeIcon(RuntimeIconName.Copy, Modifier.size(14.dp), MaterialTheme.colorScheme.outline)
                             }
@@ -164,14 +139,14 @@ internal fun McpServerDetailDialog(
 
                 // JSON 配置代码块
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         Text(
                             "MCP JSON 配置 (Cursor / Claude 格式)",
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                            style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.primary,
                         )
                         TextButton(
@@ -186,18 +161,16 @@ internal fun McpServerDetailDialog(
                         }
                     }
                     Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFF1E1E1E),
+                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(
                             text = jsonConfig,
-                            style = MaterialTheme.typography.bodySmall.copy(
+                            style = MaterialTheme.typography.bodyMedium.copy(
                                 fontFamily = FontFamily.Monospace,
-                                fontSize = 11.sp,
-                                lineHeight = 15.sp,
                             ),
-                            color = Color(0xFFD4D4D4),
+                            color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.padding(10.dp),
                         )
                     }
@@ -208,7 +181,7 @@ internal fun McpServerDetailDialog(
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
                             "身份与授权",
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                            style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.primary,
                         )
                         Row(
@@ -239,14 +212,14 @@ internal fun McpServerDetailDialog(
 
                 // 测试与工具探测区域
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         Text(
                             "沙箱连通性与工具探测",
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                            style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.primary,
                         )
                         FilledTonalButton(
@@ -267,21 +240,21 @@ internal fun McpServerDetailDialog(
                                     }
                                 }
                             },
-                            shape = RoundedCornerShape(8.dp),
+                            shape = MaterialTheme.shapes.small,
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                         ) {
                             if (testing) {
                                 CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 2.dp)
                                 Spacer(Modifier.width(6.dp))
                             }
-                            Text("探测工具", style = MaterialTheme.typography.labelSmall)
+                            Text("探测工具", style = MaterialTheme.typography.labelLarge)
                         }
                     }
 
                     testError?.let {
                         Text(
                             "探测失败: $it",
-                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.error,
                         )
                     }
@@ -311,22 +284,6 @@ internal fun McpServerDetailDialog(
                         )
                     }
                 }
-            }
-        },
-        confirmButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                onEdit?.let {
-                    OutlinedButton(onClick = it) { Text("编辑") }
-                }
-                if (!server.isBuiltin) {
-                    TextButton(onClick = onDelete) {
-                        Text("删除服务", color = MaterialTheme.colorScheme.error)
-                    }
-                }
-                Button(onClick = onDismiss) {
-                    Text("完成")
-                }
-            }
-        },
-    )
+        }
+    }
 }

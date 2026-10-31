@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -71,6 +72,20 @@ internal fun ChatBackgroundSettingsCard(
             RuntimeSlider(value = blur, onValueChange = { blur = it.roundToInt().toFloat() }, valueRange = 0f..24f, steps = 23,
                 onValueChangeFinished = { viewModel?.setBlur(blur) },
                 modifier = Modifier.fillMaxWidth().semantics { contentDescription = blurLabel })
+
+            val inputBlurEnabled by viewModel?.inputBlurEnabled?.collectAsStateWithLifecycle() ?: previewStateOf(false)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column {
+                    Text("输入区毛玻璃", style = MaterialTheme.typography.titleSmall)
+                    Text("输入框背景实时模糊聊天内容", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked = inputBlurEnabled, onCheckedChange = { viewModel?.setInputBlurEnabled(it) })
+            }
         }
     }
 }

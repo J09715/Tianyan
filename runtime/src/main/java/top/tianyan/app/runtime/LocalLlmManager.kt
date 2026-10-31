@@ -80,6 +80,10 @@ class LocalLlmManager(
     private val serviceMutex = Mutex()
     private var serviceProcess: ManagedProcess? = null
     private var serviceMonitorJob: Job? = null
+    private var serviceContextTokens: Int? = null
+
+    val defaultContextTokens: Int
+        get() = if (deviceRamBytes() < SIX_GIB) LOW_MEMORY_CONTEXT_SIZE else DEFAULT_CONTEXT_SIZE
 
     init {
         managerScope.launch {
@@ -178,7 +182,9 @@ class LocalLlmManager(
         return import(source.name, FileInputStream(source), source.length())
     }
 
-    suspend fun start(fileName: String) = serviceMutex.withLock {
+    suspend fun start(fileName: String, contextTokens: Int? = null) = serviceMutex.withLock {
+        val contextSize = contextTokens ?: defaultContextTokens
+        require(contextSize > 0) { "上下文上限必须大于 0" }
         check(Build.SUPPORTED_ABIS.any { it.equals("arm64-v8a", ignoreCase = true) }) {
             "当前设备不是 ARM64，无法运行本地 llama.cpp 推理引擎"
         }
@@ -192,7 +198,9 @@ class LocalLlmManager(
             check(currentState.fileName == model.name) {
                 "已有本地模型正在运行，请先停止后再启动其他模型"
             }
-            return@withLock
+            if (serviceContextTokens == contextSize) return@withLock
+            // llama.cpp allocates its context at startup; changing the profile needs a new process.
+            serviceLauncher.stop(SERVICE_ID)
         }
 
         serviceMonitorJob?.cancel()
@@ -208,7 +216,6 @@ class LocalLlmManager(
             )
             check(probe.isSuccess) { "尚未安装 llama.cpp 推理引擎，请先在工具中心安装" }
             val guestModel = "$GUEST_MODEL_DIRECTORY/${model.name}"
-            val contextSize = if (deviceRamBytes() < SIX_GIB) LOW_MEMORY_CONTEXT_SIZE else DEFAULT_CONTEXT_SIZE
             val threads = Runtime.getRuntime().availableProcessors().coerceIn(MIN_INFERENCE_THREADS, MAX_INFERENCE_THREADS)
             val handle = serviceLauncher.start(
                 LocalServiceSpec(
@@ -232,6 +239,7 @@ class LocalLlmManager(
                 )
             }
             serviceProcess = handle.process
+            serviceContextTokens = contextSize
             _serviceState.value = LocalLlmServiceState.Running(model.name, handle.url)
             monitorService(handle.process)
         } catch (cancellation: CancellationException) {

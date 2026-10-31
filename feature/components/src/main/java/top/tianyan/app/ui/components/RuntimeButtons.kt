@@ -135,3 +135,20 @@ fun RuntimeIconButton(
     )
 }
 
+/** Filled icon action with a native 48dp touch target and Material disabled states. */
+@Composable
+fun RuntimeFilledIconButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    containerColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.primary,
+    contentColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onPrimary,
+    contentDescription: String? = null,
+    content: @Composable () -> Unit,
+) {
+    androidx.compose.material3.FilledIconButton(onClick = onClick, enabled = enabled,
+        modifier = modifier.semantics { contentDescription?.let { this.contentDescription = it } },
+        colors = IconButtonDefaults.filledIconButtonColors(containerColor = containerColor, contentColor = contentColor),
+        content = content)
+}
+

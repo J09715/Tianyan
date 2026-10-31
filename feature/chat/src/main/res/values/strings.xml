@@ -11,7 +11,7 @@
     <string name="chat_receiving_image">正在接收图片…</string>
     <string name="chat_image_preview">图片预览</string>
     <string name="chat_save_image">保存图片</string>
-    <string name="chat_image_saved">已保存到相册（Pictures/Tianyan）</string>
+    <string name="chat_image_saved">已保存到相册（Pictures/天衍）</string>
     <string name="chat_image_save_failed">图片保存失败</string>
     <string name="chat_code_clipboard_label">代码片段</string>
     <string name="chat_code_copied">已复制代码</string>
@@ -152,12 +152,12 @@
     <string name="chat_title_label">标题</string>
     <string name="chat_save">保存</string>
     <string name="chat_select_model">选择供应商</string>
-    <string name="chat_select_provider_hint">点档案可切换供应商；点「换模型」在同供应商内切换模型 ID</string>
+    <string name="chat_select_provider_hint">选择供应商档案，或切换其使用的模型</string>
     <string name="chat_no_models">还没有模型。添加一个后将用于 Agent 对话。</string>
     <string name="chat_add_model">添加模型</string>
     <string name="chat_switch_model">换模型</string>
     <string name="chat_switch_model_title">切换模型</string>
-    <string name="chat_switch_model_hint">通过 /v1/models 拉取当前端点可用模型，也可手动输入模型 ID</string>
+    <string name="chat_switch_model_hint">填写此接口支持的完整模型 ID</string>
     <string name="chat_model_discovering">正在发现模型…</string>
     <string name="chat_model_discovery_empty">端点未返回可用的 Agent 模型</string>
     <string name="chat_model_discovery_failed">模型发现失败</string>
@@ -602,4 +602,18 @@
     <string name="toolchain_confirm_large">Android 组件体积较大，下载可能需要较长时间。</string>
     <string name="toolchain_confirm_ok">开始安装</string>
     <string name="toolchain_confirm_cancel">取消</string>
+    <string name="chat_follow_reasoning">跟随</string>
+    <string name="chat_nerd_context">上下文 %1$s</string>
+    <string name="chat_nerd_cache">缓存 %1$d%%</string>
+    <string name="chat_nerd_output">输出 %1$s tok</string>
+    <string name="chat_nerd_turn">本轮 %1$s</string>
+    <string name="chat_nerd_cached">缓存命中</string>
+    <string name="chat_nerd_uncached">新输入</string>
+    <string name="chat_nerd_output_label">输出</string>
+    <string name="chat_nerd_remaining">剩余</string>
+    <string name="chat_search_provider">搜索供应商或模型</string>
+    <string name="chat_search_models">搜索模型</string>
+    <string name="chat_no_matching_models">没有匹配的模型</string>
+    <string name="chat_manual_model">手动输入</string>
+    <string name="chat_model_list">模型列表</string>
 </resources>

@@ -141,13 +141,11 @@ class ChatViewModel(
     private val approvalRepository: AgentApprovalRepository,
     private val agentContextDao: AgentContextRepository,
     private val compactionManager: CompactionManager,
+    private val contextMemoryBackend: top.tianyan.app.harness.ContextMemoryToolBackend,
     private val sessionModelSwitcher: SessionModelSwitcher,
     private val quickPhraseRepository: QuickPhraseRepository,
     private val laneManager: LaneManager,
-    internal val redTeamFactsSource: top.tianyan.app.core.database.RedTeamFactRepository,
-    /** 红队协调器；控制台的所有查询与写入都经它。 */
-    internal val redTeamCoordinatorRef: top.tianyan.app.harness.redteam.RedTeamCoordinator? = null,
-
+    private val operationCoordinator: top.tianyan.app.harness.operation.OperationCoordinator,
     private val eventBus: HarnessEventBus,
     private val proactiveWorkflowAdvisor: ProactiveWorkflowAdvisor,
     private val modelDiscovery: AgentModelDiscovery,
@@ -161,7 +159,14 @@ class ChatViewModel(
     val globalNavigationBus: GlobalNavigationBus? = null,
     private val workspaceCatalogSource: top.tianyan.app.runtime.SessionWorkspaceCatalog,
     val btwController: BtwChatController? = null,
+    /** 红队事实仓库：红队控制台与红队面板的数据源。 */
+    internal val redTeamFactsSource: top.tianyan.app.core.database.RedTeamFactRepository? = null,
+    /** 红队协调器：控制台的所有查询与写入都经它。 */
+    internal val redTeamCoordinatorRef: top.tianyan.app.harness.redteam.RedTeamCoordinator? = null,
 ) : ViewModel() {
+    val failureMemoryAccess get() = operationCoordinator.failureMemories
+    val redTeamFacts: kotlinx.coroutines.flow.Flow<List<top.tianyan.app.core.database.RedTeamFactEntity>> = redTeamFactStream(); fun bindRedTeamTarget(target: String, scope: String) = bindRedTeam(sessionDao, target, scope); internal val redTeamConsoleController by lazy { buildRedTeamConsoleController() }
+
     private val _workflowLaunchRequests = MutableSharedFlow<WorkflowLaunchRequest>(extraBufferCapacity = 2)
     val workflowLaunchRequests: SharedFlow<WorkflowLaunchRequest> = _workflowLaunchRequests
     private val _workflowSuggestions = MutableStateFlow<List<ProactiveWorkflowSuggestion>>(emptyList())
@@ -378,15 +383,7 @@ class ChatViewModel(
 
     /** 当前选中的会话 ID */
     val currentSessionId: StateFlow<String> = harnessLoop.currentSessionId
-
-    /** 红队事实流：逻辑见 RedTeamSession.kt（拆出以避免本文件越过行数棘轮）。 */
-    val redTeamFacts: kotlinx.coroutines.flow.Flow<List<top.tianyan.app.core.database.RedTeamFactEntity>> =
-        redTeamFactStream()
-
-    /** 绑定红队目标与授权范围。 */
-    fun bindRedTeamTarget(target: String, scope: String) = bindRedTeam(sessionDao, target, scope)
-    internal val redTeamConsoleController by lazy { buildRedTeamConsoleController() } // 红队控制台
-
+    /** 所有会话的多 Agent 并发运行状态映射 (IDLE / RUNNING / COMPLETED / FAILED) */
     val sessionRunStates: StateFlow<Map<String, SessionRunState>> = harnessLoop.sessionRunStates
     @OptIn(ExperimentalCoroutinesApi::class)
     val pendingApprovals: StateFlow<List<AgentApprovalRequestEntity>> = harnessLoop.currentSessionId.flatMapLatest { sessionId ->
@@ -986,6 +983,14 @@ class ChatViewModel(
     val attachmentsProcessing: StateFlow<Boolean> = _attachmentsProcessing.asStateFlow()
 
     /** 需要以 Toast 提示用户的轻量通知（附件失败、模型档案已存在等），展示后调用 clearNotice() */
+    /** 手动压缩当前会话历史为结构化摘要（"+" 附件弹窗入口）。 */
+    fun compactContextNow() {
+        viewModelScope.launch {
+            val (ok, message) = contextMemoryBackend.manualCompact(currentSessionId.value)
+            _notice.value = if (ok) message else "压缩失败：$message"
+        }
+    }
+
     private val _notice = MutableStateFlow<String?>(null)
     val notice: StateFlow<String?> = _notice.asStateFlow()
 
@@ -1009,17 +1014,18 @@ class ChatViewModel(
         AttachmentHelper.deleteHostFile(attachment.hostFilePath)
     }
 
-    /** 发送输入框内容与附件：正文只放用户输入，附件走结构化通道（组装见 ChatAttachmentSending.kt）。 */
+    /** 组装附件挂载说明并委托 send() 发送；View 只需在输入框非空或有附件时触发 */
     fun sendFromComposer() {
-        val attachments = _pendingAttachments.value
         val trimmedInput = _input.value.trim()
+        val attachments = _pendingAttachments.value
         if (trimmedInput.isBlank() && attachments.isEmpty()) return
-        val prepared = prepareComposerPayload(context, trimmedInput, attachments)
+        val imageUrls = attachments.mapNotNull { it.base64DataUrl }
+        val fullMessage = buildComposerMessage(context, trimmedInput, attachments)
         _pendingAttachments.value = emptyList()
-        send(prepared.text, prepared.imageUrls, prepared.attachments)
+        send(fullMessage, imageUrls)
     }
 
-    fun send(customText: String? = null, imageUrls: List<String> = emptyList(), attachments: List<top.tianyan.app.harness.MessageAttachment> = emptyList()) {
+    fun send(customText: String? = null, imageUrls: List<String> = emptyList()) {
         val rawText = (customText ?: _input.value).trim()
         if (rawText.isBlank() && imageUrls.isEmpty()) return
         WORKFLOW_COMMAND.matchEntire(rawText)?.let { match ->
@@ -1052,13 +1058,13 @@ class ChatViewModel(
         }
 
         if (!running.value) {
-            harnessLoop.send(effectiveText, imageUrls = imageUrls, attachments = attachments)
+            harnessLoop.send(effectiveText, imageUrls = imageUrls)
         } else {
             // 运行中投递语义跟随「运行中发送方式」偏好；send() 非挂起函数，故读 stateIn 快照。
             // STEER 在当前这批工具调用完成后、下一轮推理开始前注入，不打断正在执行的工具调用。
             when (runningSendModePref.value) {
-                RunningSendMode.STEER -> harnessLoop.steer(effectiveText, imageUrls = imageUrls, attachments = attachments)
-                RunningSendMode.QUEUE -> harnessLoop.send(effectiveText, imageUrls = imageUrls, attachments = attachments)
+                RunningSendMode.STEER -> harnessLoop.steer(effectiveText, imageUrls = imageUrls)
+                RunningSendMode.QUEUE -> harnessLoop.send(effectiveText, imageUrls = imageUrls)
             }
         }
     }
@@ -1540,13 +1546,7 @@ enum class MentionType {
     SKILL, MCP_SERVER
 }
 
-/**
- * 分支列表重投影的触发键。
- *
- * 用于把 combine 的多个上游流压缩成一个「可比较信号」，任一上游变化都会产生不同的 key，
- * 从而触发重新投影；配合 distinctUntilChanged 避免同一 key 重复拉取。
- * 取代此前 `{ sessionId, _, _, _ -> sessionId }` 丢弃上游的做法。
- */
+/** 分支列表重投影的触发键。 用于把 combine 的多个上游流压缩成一个「可比较信号」，任一上游变化都会产生不同的 key， 从而触发重新投影；配合 distinctUntilChanged 避免同一 key 重复拉取。 取代此前 `{ sessionId, _, _, _ -> sessionId }` 丢弃上游的做法。 / */
 private data class ProjectionKey(
     val sessionId: String,
     val messageRevision: Pair<Int, String?>,

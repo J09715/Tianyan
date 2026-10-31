@@ -19,6 +19,7 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.bundles.coil)
+    implementation(libs.bundles.haze)
 
     testImplementation(libs.bundles.test.robolectric)
 }

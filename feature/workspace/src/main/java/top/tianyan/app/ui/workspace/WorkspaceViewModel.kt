@@ -325,6 +325,8 @@ class WorkspaceViewModel(
     val isDirty: StateFlow<Boolean> = editor.isDirty
     val isSaving: StateFlow<Boolean> = editor.isSaving
     val saveConflict: StateFlow<Boolean> = editor.saveConflict
+    /** 非空表示当前文件是二进制：编辑器不载入，改由系统应用打开/分享。 */
+    val binaryFile: StateFlow<top.tianyan.app.runtime.WorkspaceFileInspection?> = editor.binaryFile
 
     init {
         refresh()
@@ -335,13 +337,9 @@ class WorkspaceViewModel(
         _messageIsError.value = false
     }
 
-    fun showBuildDialog() {
-        _isBuildDialogVisible.value = true
-    }
+    fun showBuildDialog() { _isBuildDialogVisible.value = true }
 
-    fun hideBuildDialog() {
-        _isBuildDialogVisible.value = false
-    }
+    fun hideBuildDialog() { _isBuildDialogVisible.value = false }
 
     fun dismissBuildProgress() {
         _isBuildDialogVisible.value = false
@@ -461,9 +459,7 @@ class WorkspaceViewModel(
     }
 
     /** 用户主动取消编译任务 */
-    fun cancelBuild() {
-        buildCoordinator.cancel()
-    }
+    fun cancelBuild() { buildCoordinator.cancel() }
 
     fun launchInstaller(apkPath: String) {
         buildCoordinator.launchPackageInstaller(apkPath)
@@ -640,4 +636,7 @@ class WorkspaceViewModel(
     fun reloadSaveConflict() = editor.reloadSaveConflict()
     fun dismissSaveConflict() = editor.dismissSaveConflict()
     fun closeFile() = editor.closeFile()
+
+    /** 用系统应用打开/分享当前二进制文件（APK、图片、压缩包等）。 */
+    fun openCurrentFileExternally(share: Boolean) = editor.openExternally(share)
 }

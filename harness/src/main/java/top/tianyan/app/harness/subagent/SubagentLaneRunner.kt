@@ -21,6 +21,7 @@ import top.tianyan.app.harness.R
 import kotlinx.coroutines.CancellationException
 import top.tianyan.app.harness.ApiToolCallSpec
 import top.tianyan.app.harness.ModelConfig
+import top.tianyan.app.harness.messagePromptTokens
 import top.tianyan.app.harness.UserMessage
 import top.tianyan.app.harness.session.ApiMessageProjector
 
@@ -150,7 +151,7 @@ class SubagentLaneRunner(
                         responsesTurn = result.responsesTurn,
                         modelId = model.model,
                         providerId = model.provider,
-                        promptTokens = result.usage.inputTokens.takeIf { it > 0 }?.toInt(),
+                        promptTokens = result.usage.messagePromptTokens(model.protocol),
                         completionTokens = result.usage.outputTokens.takeIf { it > 0 }?.toInt(),
                         cachedTokens = result.usage.cacheReadTokens.takeIf { it > 0 }?.toInt(),
                     )

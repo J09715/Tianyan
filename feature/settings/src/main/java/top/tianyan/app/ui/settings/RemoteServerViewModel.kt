@@ -10,6 +10,7 @@ import top.tianyan.app.core.datastore.RemoteServerRepository
 import top.tianyan.app.core.model.RemoteServer
 import top.tianyan.app.core.model.SshCredentials
 import top.tianyan.app.runtime.remote.HostKeyConfirmationRequired
+import top.tianyan.app.runtime.remote.SshConnectionException
 import top.tianyan.app.runtime.remote.SshConnectionTester
 
 data class RemoteConnectionState(val busy: Boolean = false, val fingerprint: String? = null, val message: String? = null, val saved: Boolean = false, val tested: Boolean = false)
@@ -59,6 +60,8 @@ class RemoteServerViewModel(private val repository: RemoteServerRepository, priv
             catch (e: HostKeyConfirmationRequired) {
                 pending = Pending(server, credentials, save)
                 state.value = RemoteConnectionState(fingerprint = e.fingerprint)
+            } catch (e: SshConnectionException) {
+                state.value = RemoteConnectionState(message = e.message ?: "连接失败：请检查网络、认证信息、主机指纹和远程目录。")
             } catch (e: IllegalArgumentException) {
                 state.value = RemoteConnectionState(message = e.message ?: "连接配置无效")
             } catch (e: Exception) {

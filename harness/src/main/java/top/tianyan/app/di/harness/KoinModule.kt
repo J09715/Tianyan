@@ -306,7 +306,7 @@ val harnessModule = module {
         )
     }
 
-    single<top.tianyan.app.harness.mcp.McpCatalogAvailability> { top.tianyan.app.harness.mcp.McpCatalogAvailability(get(), get(), get()) }
+    single<top.tianyan.app.harness.mcp.McpCatalogAvailability> { top.tianyan.app.harness.mcp.McpCatalogAvailability(get(), get(), get(), get()) }
     single<McpManager> {
         McpManager(
             repository = get(), stdio = get(), http = get(),

@@ -66,10 +66,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 
-/**
- * 工具调用卡的运行态配色：组合期读取 [semanticColors]，随明暗主题切换。
- * 原先的文件级十六进制常量在三套主题（标准 M3 / 动态取色 / 液态玻璃）下都固定为深色值，两头都不达标。
- */
+/** 工具调用卡的运行态配色：组合期读取 [semanticColors]，随明暗主题切换。 原先的文件级十六进制常量在三套主题（标准 M3 / 动态取色 / 液态玻璃）下都固定为深色值，两头都不达标。 / */
 private val DotRunning: Color @Composable get() = semanticColors().warning
 private val DotSuccess: Color @Composable get() = semanticColors().success
 private val DotFailed: Color @Composable get() = MaterialTheme.colorScheme.error
@@ -85,6 +82,13 @@ internal fun ToolCard(
     showReasoning: Boolean = false,
     defaultExpanded: Boolean = false,
     onRetry: () -> Unit = {},
+    /**
+     * 该工具是否仍在执行（由外层过程链传入）。
+     *
+     * 与 [running] 的区别：running 表示「整轮在跑」，executing 表示「这一条工具在跑」。
+     * 同一轮里前面已完成的工具不该显示转圈，只有当前这条要显示。
+     */
+    executing: Boolean = running,
 ) {
     var expanded by remember(call.id) { mutableStateOf(false) }
     val dotColor = when {

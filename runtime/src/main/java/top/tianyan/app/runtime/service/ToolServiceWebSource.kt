@@ -16,6 +16,7 @@ data class ToolServiceDescriptor(
     val ownerPluginId: String,
     val distroId: String,
     val authorization: String? = null,
+    val authentication: ToolServiceAuthentication? = null,
 ) {
     init {
         require(port in 1..65535) { "Tool service port invalid" }
@@ -42,12 +43,14 @@ class ToolServiceWebSource(
         port = descriptor.port,
         basePath = descriptor.basePath,
         authorization = descriptor.authorization,
+        authentication = descriptor.authentication,
         available = { isLocal() },
     )
     private val client = ManagedWebServiceClient(
         port = descriptor.port,
         basePath = descriptor.basePath,
         authorization = descriptor.authorization,
+        authentication = descriptor.authentication,
         available = { isAvailable },
     )
 
@@ -72,6 +75,8 @@ class ToolServiceWebSource(
 
     /** Bounded dynamic read of this service only; never another endpoint or credential. */
     suspend fun read(path: String): String? = client.read(path)
+
+    suspend fun write(path: String, body: String): String? = client.write(path, body)
 
     suspend fun stream(path: String, emit: suspend (String) -> Boolean): Boolean = client.stream(path, emit)
 

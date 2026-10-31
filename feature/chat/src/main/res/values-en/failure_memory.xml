@@ -1,0 +1,12 @@
+<resources>
+    <string name="chat_failure_memory_title">Failures in this task (%1$d)</string>
+    <string name="chat_failure_memory_hint">Reminders for the current main conversation task; expire after 30 minutes. Clearing removes these records from future requests. Requests already sent, chat history and actual execution results remain unchanged. New failures are still recorded.</string>
+    <string name="chat_failure_memory_empty">No active failure memories</string>
+    <string name="chat_failure_memory_error">Could not load or delete records. Close the panel and try again.</string>
+    <string name="chat_failure_memory_execution">Execution failed</string>
+    <string name="chat_failure_memory_policy">Blocked by execution policy</string>
+    <string name="chat_failure_memory_interrupted">Read interrupted</string>
+    <string name="chat_failure_memory_unknown">Outcome unknown; side effects still need verification</string>
+    <string name="chat_failure_memory_details">%1$s · %2$d failures with the same arguments · expires at %3$s</string>
+    <string name="chat_failure_memory_source">Argument fingerprint: %1$s\nCall source: %2$s\nResult source: %3$s</string>
+</resources>

@@ -35,32 +35,34 @@ internal fun SettingsRow(
     value: String? = null,
     onClick: (() -> Unit)? = null,
     tonalIcon: Boolean = false,
+    enabled: Boolean = true,
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
-    val interaction = if (onClick == null) Modifier else Modifier.clickable(onClick = onClick)
+    val interaction = if (onClick == null) Modifier else Modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick)
     Row(
-        interaction.fillMaxWidth().heightIn(min = if (tonalIcon) 96.dp else SettingsDensity.rowMinHeight)
+        interaction.fillMaxWidth()
+            .heightIn(min = if (tonalIcon) SettingsDensity.navRowMinHeight else SettingsDensity.rowMinHeight)
             .padding(horizontal = SettingsDensity.rowHorizontalPadding, vertical = SettingsDensity.rowVerticalPadding),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(SettingsDensity.iconGap),
     ) {
         if (tonalIcon) {
-            Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.secondaryContainer) {
-                Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                    RuntimeIcon(icon, Modifier.size(SettingsDensity.iconSize), MaterialTheme.colorScheme.onSecondaryContainer)
+            Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.secondaryContainer) {
+                Box(Modifier.size(SettingsDensity.navTileSize), contentAlignment = Alignment.Center) {
+                    RuntimeIcon(icon, Modifier.size(SettingsDensity.navIconSize), MaterialTheme.colorScheme.onSecondaryContainer)
                 }
             }
         } else RuntimeIcon(icon, Modifier.size(SettingsDensity.iconSize), MaterialTheme.colorScheme.primary)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(SettingsDensity.textGap)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(title, Modifier.weight(1f), style = settingsTitleStyle(), color = MaterialTheme.colorScheme.onSurface,
+            FlowRow(verticalArrangement = Arrangement.spacedBy(4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(title, style = settingsTitleStyle(), color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
                 value?.let {
-                    Text(it, Modifier.widthIn(max = 104.dp), style = MaterialTheme.typography.labelMedium,
+                    Text(it, style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-            Text(subtitle, style = if (tonalIcon) MaterialTheme.typography.bodyMedium else settingsSupportingStyle(), color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Text(subtitle, style = settingsSupportingStyle(), color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         trailing()

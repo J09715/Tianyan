@@ -131,7 +131,7 @@ internal fun ProjectSection(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(start = 12.dp, end = 4.dp),
+                                .padding(start = 24.dp, end = 4.dp),
                             verticalArrangement = Arrangement.spacedBy(2.dp),
                         ) {
                             if (group.sessions.isEmpty()) {

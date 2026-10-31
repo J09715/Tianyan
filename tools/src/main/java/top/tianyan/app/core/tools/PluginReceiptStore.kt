@@ -26,7 +26,17 @@ class PluginReceiptStore(private val root: File) {
 
     fun record(distro: String, manifest: ToolManifest, version: String = manifest.version) {
         val receipt = PluginPackageProtocol.receipt(manifest).copy(version = version, packageVersion = manifest.version)
-        val destination = file(distro, manifest.id, version)
+        write(distro, receipt)
+    }
+
+    /** Keep the old key valid until the DB switches; preserve the original grants and resources. */
+    internal fun bindToPackageVersion(distro: String, receipt: PluginInstallReceipt) {
+        require(receipt.pluginId.startsWith("legacy.tool-"))
+        write(distro, receipt.copy(version = requireNotNull(receipt.packageVersion)))
+    }
+
+    private fun write(distro: String, receipt: PluginInstallReceipt) {
+        val destination = file(distro, receipt.toolId, receipt.version)
         check(destination.parentFile!!.mkdirs() || destination.parentFile!!.isDirectory)
         val atomic = AtomicFile(destination)
         val stream = atomic.startWrite()

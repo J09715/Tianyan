@@ -85,11 +85,13 @@ class ToolDetailViewModel(
     val toolId: StateFlow<String> = _toolId.asStateFlow()
 
     private val _gatewayRunning = MutableStateFlow(false)
-    private val _gatewayOperating = MutableStateFlow(false)
     private val _error = MutableStateFlow<String?>(null)
     private val _appliedModelId = MutableStateFlow<String?>(null)
     private val _applyingModel = MutableStateFlow(false)
     private val _deviceLanIp = MutableStateFlow<String?>(null)
+
+    /** 所有网关操作（启停 / 生成 Token / 应用模型）串行执行，避免叠出多轮 stop→start。 */
+    private val gatewayGate = GatewayOperationGate()
 
     fun setToolId(id: String) {
         if (id.isNotBlank() && _toolId.value != id) {
@@ -117,7 +119,7 @@ class ToolDetailViewModel(
                 toolSettingsRepository.autoStart(distroId, id),
                 settingsDataStore.toolAccessToken(distroId, id),
                 _gatewayRunning,
-                _gatewayOperating,
+                gatewayGate.operating,
                 _error,
                 aiModelDao.observeAll(),
                 _appliedModelId,
@@ -184,18 +186,17 @@ class ToolDetailViewModel(
     fun startGateway() {
         val currentId = _toolId.value
         if (currentId.isBlank()) return
-        _gatewayOperating.value = true
         _error.value = null
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // startGateway 内部会等待服务端口就绪后才返回，避免"假运行中"
-                toolManager.startGateway(currentId)
+                gatewayGate.run {
+                    // 已运行则幂等返回同一实例；启动本身会等到端口就绪才返回，避免「假运行中」。
+                    if (!toolManager.isGatewayRunning(currentId)) toolManager.startGateway(currentId)
+                }
                 _gatewayRunning.value = toolManager.isGatewayRunning(currentId)
             } catch (e: Exception) {
                 logger.w("Failed to start gateway for $currentId: ${e.message}", e)
                 _error.value = "网关启动失败：${e.message}"
-            } finally {
-                _gatewayOperating.value = false
             }
         }
     }
@@ -203,20 +204,25 @@ class ToolDetailViewModel(
     fun stopGateway() {
         val currentId = _toolId.value
         if (currentId.isBlank()) return
-        _gatewayOperating.value = true
         _error.value = null
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                toolManager.stopGateway(currentId)
-                delay(500)
+                gatewayGate.run {
+                    if (toolManager.isGatewayRunning(currentId)) toolManager.stopGateway(currentId)
+                }
                 _gatewayRunning.value = toolManager.isGatewayRunning(currentId)
             } catch (e: Exception) {
                 logger.w("Failed to stop gateway for $currentId: ${e.message}", e)
                 _error.value = "网关停止失败：${e.message}"
-            } finally {
-                _gatewayOperating.value = false
             }
         }
+    }
+
+    /** 配置（Token / 模型）通过环境变量在启动时注入，运行中的实例必须重启才能生效。 */
+    private suspend fun restartGatewayForConfig(currentId: String) {
+        if (!toolManager.isGatewayRunning(currentId)) return
+        toolManager.restartGateway(currentId)
+        _gatewayRunning.value = toolManager.isGatewayRunning(currentId)
     }
 
     fun toggleAutoStart(enabled: Boolean) {
@@ -242,17 +248,8 @@ class ToolDetailViewModel(
             try {
                 val token = UUID.randomUUID().toString().replace("-", "").take(32)
                 settingsDataStore.setToolAccessToken(linuxRuntime.activeDistroId.value, currentId, token)
-                // 网关进程启动时通过环境变量注入 Token，运行中的实例必须重启才能应用新 Token
-                if (toolManager.isGatewayRunning(currentId)) {
-                    _gatewayOperating.value = true
-                    _error.value = null
-                    try {
-                        toolManager.restartGateway(currentId)
-                        _gatewayRunning.value = toolManager.isGatewayRunning(currentId)
-                    } finally {
-                        _gatewayOperating.value = false
-                    }
-                }
+                _error.value = null
+                gatewayGate.run { restartGatewayForConfig(currentId) }
             } catch (e: Exception) {
                 logger.w("Failed to generate token for $currentId: ${e.message}", e)
                 _error.value = "重新生成 Token 失败：${e.message}"
@@ -277,7 +274,7 @@ class ToolDetailViewModel(
         if (currentId.isBlank()) return
         _applyingModel.value = true
         _error.value = null
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
                 providerRepository.setProvider(model.provider)
                 if (model.baseUrl.isNotBlank()) {
@@ -293,11 +290,9 @@ class ToolDetailViewModel(
                     providerRepository.setApiKey(actualKey)
                 }
                 _appliedModelId.value = model.id
-                // 模型配置通过网关启动时的环境变量注入，运行中的实例必须重启才能生效
-                if (toolManager.isGatewayRunning(currentId)) {
-                    toolManager.restartGateway(currentId)
-                    _gatewayRunning.value = toolManager.isGatewayRunning(currentId)
-                }
+                // 模型配置通过网关启动时的环境变量注入，运行中的实例必须重启才能生效；
+                // 与启停/生成 Token 共用同一道闸门，避免叠出多轮 stop→start。
+                gatewayGate.run { restartGatewayForConfig(currentId) }
             } catch (e: Exception) {
                 logger.w("Failed to apply model ${model.name} for $currentId: ${e.message}", e)
                 _error.value = "应用模型失败：${e.message}"

@@ -14,7 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -181,7 +181,7 @@ private fun AddScheduleDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = cron,
                     onValueChange = { cron = it },
                     label = { Text(stringResource(R.string.fbot_schedule_cron)) },
@@ -191,7 +191,7 @@ private fun AddScheduleDialog(
                     supportingText = cronError?.let { { Text(it, color = MaterialTheme.colorScheme.error) } },
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = instruction,
                     onValueChange = { instruction = it },
                     label = { Text(stringResource(R.string.fbot_schedule_instruction)) },

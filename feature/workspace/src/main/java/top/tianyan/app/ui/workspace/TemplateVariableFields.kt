@@ -12,7 +12,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import top.tianyan.app.ui.components.RuntimeIconButton as IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -75,7 +75,7 @@ internal fun TemplateVariableFields(
             ProjectTemplateInputType.SELECT -> {
                 var expanded by remember(variable.name) { mutableStateOf(false) }
                 Column {
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = variable.options.firstOrNull { it.value == value }?.label ?: value,
                         onValueChange = {},
                         readOnly = true,
@@ -111,7 +111,7 @@ internal fun TemplateVariableFields(
                 }
             }
 
-            else -> OutlinedTextField(
+            else -> RuntimeFilledTextField(
                 value = value,
                 onValueChange = { onValueChange(variable.name, it) },
                 label = { VariableLabel(variable.label, variable.required) },

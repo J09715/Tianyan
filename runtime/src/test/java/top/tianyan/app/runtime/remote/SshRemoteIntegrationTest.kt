@@ -74,7 +74,7 @@ class SshRemoteIntegrationTest {
         connector.test(trusted, credentials)
         assertEquals(1, authentications.get())
         try { connector.test(trusted.copy(fingerprint = "SHA256:wrong"), credentials); fail() }
-        catch (e: IllegalStateException) { assertTrue(e.message!!.contains("指纹")) }
+        catch (e: SshConnectionException) { assertTrue(e.message!!.contains("指纹")) }
         assertEquals(1, authentications.get())
     }
     @Test fun `password connection reads writes edits and bounds remote paths`() = runBlocking {
@@ -150,8 +150,8 @@ class SshRemoteIntegrationTest {
             mapOf(
                 "FROM_SETTINGS" to "from-settings",
                 "KEEP" to "kept",
-                "TIANYAN_BRIDGE_TOKEN" to "bridge-secret",
-                "TIANYAN_BRIDGE_ACTIONS" to "host.shell",
+                "TAIXU_BRIDGE_TOKEN" to "bridge-secret",
+                "TAIXU_BRIDGE_ACTIONS" to "host.shell",
                 "tianyan_bridge_url" to "http://127.0.0.1:7980",
             )
         }
@@ -162,7 +162,7 @@ class SshRemoteIntegrationTest {
             assertEquals("from-command", executed["FROM_SETTINGS"])
             assertEquals("kept", executed["KEEP"])
             assertEquals("a'b", executed["EXTRA"])
-            assertTrue(executed.keys.none { it.startsWith("TIANYAN_BRIDGE", ignoreCase = true) })
+            assertTrue(executed.keys.none { it.startsWith("TAIXU_BRIDGE", ignoreCase = true) })
             assertFalse(lastCommand.contains("export "))
             assertFalse(lastCommand.contains("bridge-secret"))
             assertFalse(lastCommand.contains("/etc/profile"))
@@ -171,7 +171,7 @@ class SshRemoteIntegrationTest {
             withTimeout(5_000) { terminal.output.collect { } }
             assertEquals("term", observedEnvironment.get()["KEEP"])
             assertEquals("from-settings", observedEnvironment.get()["FROM_SETTINGS"])
-            assertFalse(observedEnvironment.get().containsKey("TIANYAN_BRIDGE_TOKEN"))
+            assertFalse(observedEnvironment.get().containsKey("TAIXU_BRIDGE_TOKEN"))
             val protocol = world.openSession(top.tianyan.app.runtime.shell.SessionConfig(
                 commandLine = "protocol", workingDirectory = "/workspace", environment = mapOf("KEEP" to "session")))
             withTimeout(5_000) { protocol.output.collect { } }
@@ -193,14 +193,14 @@ class SshRemoteIntegrationTest {
             mapOf(
                 "FROM_SETTINGS" to "user-value",
                 "SECRET_VALUE" to "a'b\$(bad)",
-                "TIANYAN_BRIDGE_TOKEN" to "bridge-secret",
-                "TIANYAN_BRIDGE_ACTIONS" to "host.shell",
+                "TAIXU_BRIDGE_TOKEN" to "bridge-secret",
+                "TAIXU_BRIDGE_ACTIONS" to "host.shell",
             )
         }
         val world = connector.openEnvironment(trusted, credentials, ExecutionEnvironmentId("ssh", trusted.distributionId, "/workspace", "export-fallback"))
         try {
             val start = channels.get()
-            world.execute(ShellCommand("fixture", world.workingDirectory(), mapOf("FROM_SETTINGS" to "from-command", "TIANYAN_BRIDGE_TOKEN" to "command-secret")))
+            world.execute(ShellCommand("fixture", world.workingDirectory(), mapOf("FROM_SETTINGS" to "from-command", "TAIXU_BRIDGE_TOKEN" to "command-secret")))
             val mid = channels.get()
             assertEquals(2, mid - start)
             assertTrue(lastCommand.contains("export FROM_SETTINGS='from-command';"))
@@ -210,7 +210,7 @@ class SshRemoteIntegrationTest {
             assertFalse(lastCommand.contains("/etc/profile"))
             assertFalse(lastCommand.contains("source "))
             assertFalse(observedEnvironment.get().containsKey("FROM_SETTINGS"))
-            assertFalse(observedEnvironment.get().containsKey("TIANYAN_BRIDGE_TOKEN"))
+            assertFalse(observedEnvironment.get().containsKey("TAIXU_BRIDGE_TOKEN"))
             world.execute(ShellCommand("fixture", world.workingDirectory(), mapOf("OTHER" to "z")))
             assertEquals(1, channels.get() - mid)
             assertTrue(lastCommand.contains("export FROM_SETTINGS='user-value';"))

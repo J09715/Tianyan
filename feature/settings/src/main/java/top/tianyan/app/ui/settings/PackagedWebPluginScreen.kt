@@ -22,6 +22,9 @@ import top.tianyan.app.plugin.runtime.PluginCapability
 import top.tianyan.app.plugin.ui.web.WebPagePlugin
 import top.tianyan.app.plugin.ui.web.WebPluginCapability
 import top.tianyan.app.plugin.ui.web.WebPluginHost
+import top.tianyan.app.plugin.ui.web.WebPluginAssetLease
+import top.tianyan.app.plugin.ui.web.WebPluginServiceCapabilities
+import java.util.concurrent.atomic.AtomicReference
 import top.tianyan.app.ui.components.RuntimeTopBar
 import top.tianyan.app.runtime.bridge.HostBridge
 import top.tianyan.app.runtime.bridge.PluginHostScope
@@ -42,6 +45,7 @@ fun PackagedWebPluginScreen(toolId: String, version: String, pluginId: String, o
             val spec = expected.plugin!!
             val proot = spec.webSource == "PROOT_STATIC"
             val service = spec.serviceToolId
+            val lease = AtomicReference<WebPluginAssetLease?>(null)
             WebPagePlugin(
                 id = spec.id, version = expected.version,
                 title = { expected.name }, description = {
@@ -52,7 +56,7 @@ fun PackagedWebPluginScreen(toolId: String, version: String, pluginId: String, o
                         else -> expected.description
                     }
                 },
-                capabilities = spec.capabilities.map { declared ->
+                capabilities = spec.capabilities.filter { it.name != "SERVICE_WRITE" }.map { declared ->
                     val host = requireNotNull(PACKAGE_HOST_ACTIONS.find { it.capability == declared.name && it.target == declared.target }) {
                         "不支持的 Web 插件能力"
                     }
@@ -75,11 +79,17 @@ fun PackagedWebPluginScreen(toolId: String, version: String, pluginId: String, o
                             else -> bridge.readPluginLogcat(scope, available)
                         }
                     }
-                },
+                } + if (service != null) listOf(
+                    WebPluginServiceCapabilities.request { lease.get() },
+                    WebPluginServiceCapabilities.stream { lease.get() },
+                ) + if (spec.capabilities.any { it.name == "SERVICE_WRITE" }) {
+                    listOf(WebPluginServiceCapabilities.write { lease.get() })
+                } else emptyList() else emptyList(),
                 isAvailable = { model.repository.isCurrent(expected) },
                 openSource = when {
                     proot -> { { _ -> sources.openProot(expected) } }
-                    service != null -> { { _ -> sources.openService(service, allowStart = spec.webSource == "PROOT_SERVICE") } }
+                    service != null -> { { _ -> sources.openService(service, allowStart = spec.webSource == "PROOT_SERVICE",
+                        requireWrites = spec.capabilities.any { it.name == "SERVICE_WRITE" }).also { lease.set(it) } } }
                     else -> null
                 },
                 loadAssets = { model.repository.snapshot(expected) },

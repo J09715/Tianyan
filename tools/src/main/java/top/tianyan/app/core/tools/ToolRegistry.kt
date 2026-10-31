@@ -20,9 +20,6 @@ import java.io.InputStream
 import java.io.IOException
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
-import java.security.KeyFactory
-import java.security.Signature
-import java.security.spec.X509EncodedKeySpec
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import kotlinx.coroutines.Dispatchers
@@ -300,15 +297,10 @@ class ToolRegistry(
         signatureBytes: ByteArray,
         publicKeyBase64: String,
     ) {
-        val publicKey = runCatching {
-            KeyFactory.getInstance("Ed25519")
-                .generatePublic(X509EncodedKeySpec(Base64.decode(publicKeyBase64, Base64.DEFAULT)))
-        }.getOrElse { throw RegistrySecurityException("工具清单公钥无效", it) }
-        Signature.getInstance("Ed25519").apply {
-            initVerify(publicKey)
-            update(payload)
-            if (!verify(signatureBytes)) throw RegistrySecurityException("工具清单签名校验失败")
-        }
+        val valid = runCatching {
+            PluginSignatureVerifier.verify(payload, signatureBytes, Base64.decode(publicKeyBase64, Base64.DEFAULT))
+        }.getOrElse { throw RegistrySecurityException("工具清单公钥或签名格式无效", it) }
+        if (!valid) throw RegistrySecurityException("工具清单签名校验失败")
     }
 
     private class RegistrySecurityException(

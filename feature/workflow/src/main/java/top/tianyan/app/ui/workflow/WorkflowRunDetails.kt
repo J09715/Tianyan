@@ -6,6 +6,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
@@ -202,7 +203,7 @@ internal fun WorkflowStartDialog(
                     )
                 }
                 required.filterNot { it == "APK_PATH" }.forEach { key ->
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = values[key].orEmpty(),
                         onValueChange = { values[key] = it },
                         label = { Text("$key（必填）") },
@@ -210,7 +211,7 @@ internal fun WorkflowStartDialog(
                     )
                 }
                 editableDefaults.forEach { key ->
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = values[key].orEmpty(),
                         onValueChange = { values[key] = it },
                         label = { Text(key) },
@@ -277,18 +278,12 @@ private fun ApkSelectorSection(
                 Surface(
                     onClick = { onSelectApk(apk.sandboxPath) },
                     shape = RoundedCornerShape(10.dp),
-                    color = if (isSelected) {
-                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
-                    } else {
-                        MaterialTheme.colorScheme.surfaceContainerHigh
-                    },
+                    color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                        else MaterialTheme.colorScheme.surfaceContainerHigh,
                     border = BorderStroke(
                         width = if (isSelected) 1.5.dp else 1.dp,
-                        color = if (isSelected) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.outlineVariant
-                        },
+                        color = if (isSelected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.outlineVariant,
                     ),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
@@ -385,7 +380,7 @@ private fun ApkSelectorSection(
         }
 
         if (availableApks.isEmpty() || showManualInput) {
-            OutlinedTextField(
+            RuntimeFilledTextField(
                 value = selectedPath,
                 onValueChange = onSelectApk,
                 label = { Text("APK 路径 (绝对路径或相对路径)") },

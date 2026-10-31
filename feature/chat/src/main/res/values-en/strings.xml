@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="chat_command_workflow">Run workflow</string>
-    <string name="chat_command_workflow_description">Run a Tianyan workflow with /wf &lt;workflow ID&gt;</string>
+    <string name="chat_command_workflow_description">Run a 天衍 workflow with /wf &lt;workflow ID&gt;</string>
     <string name="chat_web_image">Web image</string>
     <string name="chat_web_content">Web content</string>
     <string name="chat_open_link_failed">Unable to open this link</string>
@@ -71,7 +71,7 @@
     <string name="chat_conversation_messages">Conversation messages</string>
     <string name="chat_context_over_budget">Over budget; history will be compacted before the next request</string>
     <string name="chat_context_estimate">Estimate · Final usage is calculated by the harness before sending</string>
-    <string name="chat_agent_intro">Tianyan Agent can write code, manage Linux workspace files, run shell commands, and troubleshoot system issues.</string>
+    <string name="chat_agent_intro">天衍 Agent can write code, manage Linux workspace files, run shell commands, and troubleshoot system issues.</string>
     <string name="chat_quick_start">Quick start:</string>
     <string name="chat_capability_mount">🧠 Attach skills and MCP tools</string>
     <string name="chat_enabled_for_request">Enabled for this request</string>
@@ -539,4 +539,18 @@
     <string name="toolchain_confirm_large">Android components are large downloads and may take a while.</string>
     <string name="toolchain_confirm_ok">Install</string>
     <string name="toolchain_confirm_cancel">Cancel</string>
+    <string name="chat_follow_reasoning">Follow</string>
+    <string name="chat_nerd_context">Context %1$s</string>
+    <string name="chat_nerd_cache">Cached %1$d%%</string>
+    <string name="chat_nerd_output">Out %1$s tok</string>
+    <string name="chat_nerd_turn">Turn %1$s</string>
+    <string name="chat_nerd_cached">Cached</string>
+    <string name="chat_nerd_uncached">New input</string>
+    <string name="chat_nerd_output_label">Output</string>
+    <string name="chat_nerd_remaining">Free</string>
+    <string name="chat_search_provider">Search providers or models</string>
+    <string name="chat_search_models">Search models</string>
+    <string name="chat_no_matching_models">No matching models</string>
+    <string name="chat_manual_model">Enter model ID</string>
+    <string name="chat_model_list">Model list</string>
 </resources>

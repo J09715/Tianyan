@@ -26,13 +26,15 @@ internal fun ChatBottomSheet(
     confirmButton: @Composable () -> Unit = {},
     dismissButton: @Composable () -> Unit = {},
 ) {
-    PlainBackdropModalBottomSheet(onDismissRequest = onDismissRequest) {
+    top.tianyan.app.ui.components.RuntimeModalBottomSheet(onDismissRequest = onDismissRequest,
+        sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        shape = MaterialTheme.shapes.extraLarge) {
         Column(Modifier.fillMaxWidth().imePadding().padding(horizontal = 24.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            CompositionLocalProvider(LocalTextStyle provides MaterialTheme.typography.titleLarge) { title() }
+            CompositionLocalProvider(LocalTextStyle provides MaterialTheme.typography.headlineSmall) { title() }
             Box(Modifier.fillMaxWidth().weight(1f, fill = false)) { text() }
             FlowRow(Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                horizontalArrangement = Arrangement.spacedBy(8.dp, androidx.compose.ui.Alignment.End), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 dismissButton()
                 confirmButton()
             }

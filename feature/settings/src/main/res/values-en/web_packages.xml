@@ -1,5 +1,6 @@
 <resources>
-    <string name="web_packages_title">External Web plugins</string>
+    <string name="web_packages_service_write">Requests configuration and actions on the bound plugin service, which may save credentials, generate keys or change remote data. Every write requires native confirmation. This grants no arbitrary host or shell access.</string>
+    <string name="web_packages_title">Web plugins</string>
     <string name="web_packages_scope">Import static page plugins. Ordinary pages need no Linux; PRoot static and tool-service sources require local Linux (PRoot static also needs Python 3). App capabilities require separate confirmation.</string>
     <string name="web_packages_proot_label">PRoot static service</string>
     <string name="web_packages_service_label">Tool service source · %1$s</string>

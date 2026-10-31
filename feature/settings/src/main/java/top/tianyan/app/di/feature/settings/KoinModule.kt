@@ -23,10 +23,12 @@ import top.tianyan.app.ui.settings.LocalBackupViewModel
 
 /** Dependency registrations owned by the feature:settings module. */
 val featureSettingsModule = module {
+    viewModel { top.tianyan.app.ui.settings.RemotePluginsViewModel(get(), get(), get(), get()) }
     single { top.tianyan.app.ui.settings.PackagedWebPluginSources(get(), get(), get(), get()) }
     viewModel { top.tianyan.app.ui.settings.WebPluginsViewModel(repository = get()) }
     viewModel { top.tianyan.app.ui.settings.ThemePaletteViewModel(get()) }
     viewModel { top.tianyan.app.ui.settings.ChatBackgroundSettingsViewModel(get(), get()) }
+    viewModel { top.tianyan.app.ui.settings.ChatIdentitySettingsViewModel(get(), get(org.koin.core.qualifier.named("chatIdentityImages"))) }
     viewModel { top.tianyan.app.ui.settings.PackagedPluginsViewModel(get(), get(), get()) }
     viewModel { top.tianyan.app.ui.settings.McpClientSettingsViewModel(get()) }
     viewModel { top.tianyan.app.ui.settings.McpToolPolicyViewModel(get(), get()) }

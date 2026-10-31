@@ -4,6 +4,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import top.tianyan.app.core.database.HarnessSessionRepository
 import top.tianyan.app.harness.compaction.CompactionManager
+import top.tianyan.app.harness.compaction.CompactedContext
 import top.tianyan.app.harness.compaction.CompressAnchorResult
 import top.tianyan.app.harness.compaction.SummaryRequestContext
 import top.tianyan.app.harness.core.ToolBackend
@@ -87,7 +88,29 @@ class ContextMemoryToolBackend(
             is CompressAnchorResult.Resolved -> resolved.keepFromIndex
             is CompressAnchorResult.Invalid -> return false to resolved.message
         }
+        return compactAtIndex(sessionId, context, keepFromIndex, modeLabel = mode)
+    }
 
+    /**
+     * UI 手动压缩入口（"+" 附件弹窗）：至少保留最近 [keepRecent] 条，并回退到完整用户轮次，
+     * 走与 compress 工具相同的 LLM 摘要路径（模型解析失败退回机械摘要）；原文不丢，可 history_read 回读。
+     */
+    suspend fun manualCompact(sessionId: String, keepRecent: Int = 4): Pair<Boolean, String> {
+        val manager = compactionManager ?: return false to "未初始化压缩管理器"
+        if (sessionId.isBlank()) return false to "当前没有活动会话，无法压缩"
+        val context = manager.project(sessionId)
+        val boundary = manualCompactionBoundary(context.messages, keepRecent)
+        if (boundary <= 0) return false to "可折叠的完整历史轮次不足，无需压缩"
+        return compactAtIndex(sessionId, context, boundary, modeLabel = "手动")
+    }
+
+    private suspend fun compactAtIndex(
+        sessionId: String,
+        context: CompactedContext,
+        keepFromIndex: Int,
+        modeLabel: String,
+    ): Pair<Boolean, String> {
+        val manager = compactionManager ?: return false to "未初始化压缩管理器"
         // 手动压缩也走 LLM 摘要：按会话绑定的模型解析；解析失败退回机械摘要路径
         val model = runCatching {
             sessionDao?.findById(sessionId)?.let { session ->
@@ -115,8 +138,8 @@ class ContextMemoryToolBackend(
         val foldedCount = context.messages.size - compacted.messages.size
         return true to buildString {
             append("已按 ")
-            append(if (mode == "before") "before" else "after")
-            append(" 模式压缩：折叠 $foldedCount 条消息为结构化摘要")
+            append(modeLabel)
+            append("模式压缩：折叠 $foldedCount 条消息为结构化摘要")
             append("（保留后 ${compacted.messages.size} 条）。")
             append("被折叠的原文仍在会话记录中，需要细节时可用 history_read(message_id) 按需回读。")
         }

@@ -37,7 +37,8 @@ object WebPluginPackagePolicy {
     val CLIPBOARD_WRITE = PackageCapability("CLIPBOARD_WRITE", "clipboard")
     val INSTALL_APK = PackageCapability("INSTALL_APK", "apk")
     val LOGCAT = PackageCapability("LOGCAT", "logcat")
-    private val CAPABILITIES = listOf(APP_INFO, CLIPBOARD_WRITE, INSTALL_APK, LOGCAT)
+    val SERVICE_WRITE = PackageCapability("SERVICE_WRITE", "service")
+    private val CAPABILITIES = listOf(APP_INFO, CLIPBOARD_WRITE, INSTALL_APK, LOGCAT, SERVICE_WRITE)
 
     fun isWeb(manifest: ToolManifest) = manifest.schemaVersion == 2 && manifest.plugin?.execution == "WEB"
 
@@ -60,6 +61,7 @@ object WebPluginPackagePolicy {
         require(spec.extensions == listOf(PackageExtension("main", "PAGE"))) { "Web 插件必须声明 main PAGE 扩展" }
         require(spec.dependencies.isEmpty() && spec.resources.isEmpty()) { "静态 Web 插件不支持依赖或全局资源" }
         require(spec.capabilities.distinct() == spec.capabilities && spec.capabilities.all { it in CAPABILITIES }) { "不支持的 Web 插件能力" }
+        require(SERVICE_WRITE !in spec.capabilities || spec.webSource == TOOL_SERVICE_SOURCE) { "服务写入要求工具中心托管的认证服务来源" }
         if (serviceSource) {
             // The referenced tool service serves every byte; the package ships no page assets at all.
             require(spec.integrity.isEmpty()) { "工具服务来源不能携带包内页面资源" }

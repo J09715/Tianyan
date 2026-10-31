@@ -7,11 +7,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.koin.compose.viewmodel.koinViewModel
 import top.tianyan.app.core.model.RemoteServer
+import top.tianyan.app.feature.settings.R
 import top.tianyan.app.ui.components.*
 
 @Composable
@@ -29,6 +31,15 @@ internal fun SystemEnvironmentPicker(localCount: Int, onInstallLocal: () -> Unit
     var editing by remember { mutableStateOf<RemoteServer?>(null) }
     var chooseRemote by remember { mutableStateOf(false) }
     var choose by remember { mutableStateOf(false) }
+    var localNetworkMessage by remember { mutableStateOf<String?>(null) }
+    val localNetworkDenied = stringResource(R.string.settings_local_network_permission_required)
+    val withLocalNetwork = rememberLocalNetworkPermission { localNetworkMessage = localNetworkDenied }
+    fun selectServer(server: RemoteServer) {
+        withLocalNetwork(server.host) {
+            localNetworkMessage = null
+            viewModel.select(server.id)
+        }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         configurationError?.let { NoticeBanner(text = it, isError = true) }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
@@ -41,18 +52,19 @@ internal fun SystemEnvironmentPicker(localCount: Int, onInstallLocal: () -> Unit
             RuntimeIconName.Server, active != null) {
             when (servers.size) {
                 0 -> { viewModel.clear(); addRemote = true }
-                1 -> viewModel.select(servers.single().id)
+                1 -> selectServer(servers.single())
                 else -> chooseRemote = true
             }
         }
         connection.message?.let { Text(it, color = if (connection.tested) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error) }
+        localNetworkMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             Text("连接档案 (${servers.size})", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
             RuntimeTextButton(onClick = { viewModel.clear(); addRemote = true }) { Text("新增连接") }
         }
         if (servers.isEmpty()) Text("添加 SSH 连接后，可选择它作为主系统。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         servers.forEach { server ->
-            ConnectionProfileCard(server, server.id == active, onSelect = { viewModel.select(server.id) },
+            ConnectionProfileCard(server, server.id == active, onSelect = { selectServer(server) },
                 onEdit = { viewModel.clear(); editing = server }, onRemove = { remove = server })
         }
     }
@@ -68,7 +80,7 @@ internal fun SystemEnvironmentPicker(localCount: Int, onInstallLocal: () -> Unit
     editing?.let { target -> key(target.id) { RemoteServerDialog(viewModel, target) { editing = null } } }
     if (chooseRemote) RuntimeAlertDialog(onDismissRequest = { chooseRemote = false }, title = { Text("选择连接档案") },
         text = { Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            servers.forEach { server -> RuntimeOutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = { viewModel.select(server.id); chooseRemote = false }) {
+            servers.forEach { server -> RuntimeOutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = { selectServer(server); chooseRemote = false }) {
                 Text(server.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
             } }
         } }, confirmButton = { RuntimeTextButton(onClick = { chooseRemote = false }) { Text("取消") } })

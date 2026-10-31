@@ -91,6 +91,26 @@ class ProcessLinuxSessionLifecycleTest {
         assertEquals(1, f.cleanups)
     }
 
+    @Test fun forcedTerminationAlsoSignalsTheChildsProcessGroup() = scenario(childPid = 4242L) { f ->
+        // 网关自带进程组（host + server 同组）：只杀根会留下整组，必须 TERM → KILL 收尾。
+        f.process.gracefulExit = false
+        f.process.forcedExit = false
+        f.reaper.group = 1133L
+        assertTrue(failure { f.session.close() }.message!!.contains("仍未退出"))
+        assertEquals(listOf(1133L to false, 1133L to true), f.reaper.groupSignals)
+        f.process.forcedExit = true
+        f.session.close()
+    }
+
+    @Test fun gracefulExitStillReapsDescendantsProotLeftBehind() = scenario(childPid = 4242L) { f ->
+        // 网关真正的监听者是 tracer 的孙进程；tracer 优雅退出并不保证它把孙进程一并带走，
+        // 否则停止后端口依旧被占，下一次启动必然失败。
+        f.reaper.descendants = listOf(5000L, 5001L)
+        f.session.close()
+        assertTrue(f.reaper.reaped.isEmpty())
+        assertEquals(listOf(listOf(5000L, 5001L)), f.reaper.detached)
+    }
+
     @Test fun failedWaitCanBeRetriedWithoutSkippingReaderDrain() = scenario { f ->
         val error = IllegalStateException("wait failed")
         f.process.waitFailure = error
@@ -248,8 +268,19 @@ class ProcessLinuxSessionLifecycleTest {
     /** 记录被收的根进程，避免单元测试触碰 /proc 与 android.os.Process。 */
     private class FakeReaper : ProcessTreeReaper {
         val reaped = mutableListOf<Long>()
+        val detached = mutableListOf<List<Long>>()
+        val groupSignals = mutableListOf<Pair<Long, Boolean>>()
+        var descendants: List<Long> = emptyList()
+        var group: Long? = null
         override fun forkTid(): Int? = null
         override fun childOfThread(tid: Int): Long? = null
+        override fun descendantsOf(rootPid: Long): List<Long> = descendants
+        override fun processGroupOf(pid: Long): Long? = group
+        override fun signalGroup(processGroup: Long, force: Boolean): Boolean {
+            groupSignals += processGroup to force
+            return true
+        }
         override fun reap(rootPid: Long): Int { reaped += rootPid; return 1 }
+        override fun reapDetached(descendants: List<Long>): Int { detached += descendants; return descendants.size }
     }
 }

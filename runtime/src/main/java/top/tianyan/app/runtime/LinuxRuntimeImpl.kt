@@ -569,14 +569,14 @@ class LinuxRuntimeImpl(
         val prepared = prepareInteractiveSession(config, distroId)
         // Termux JNI owns the PTY; marker file is unused for this path.
         prepared.markerFile.delete()
-        // Termux JNI createSubprocess replaces the process environment entirely.
-        // Merge Android env + our PRoot host vars (same shape as Android-PRoot-Engine).
-        val mergedEnv = LinkedHashMap<String, String>().apply {
-            System.getenv().forEach { (k, v) -> put(k, v) }
-            putAll(prepared.hostEnvironment)
-            putIfAbsent("HOME", pathManager.baseDir.parentFile?.absolutePath ?: "/")
-            putIfAbsent("PATH", System.getenv("PATH") ?: "/system/bin:/system/xbin")
-        }
+        // JNI 会整表替换环境。登录壳 source /etc/profile 早于 -c 里的 export PATH，
+        // 因此这里就要盖掉宿主 PATH；su 仍保留 Android PATH 以便在宿主上解析。
+        val mergedEnv = GuestProcessEnvironment.interactiveLaunchEnvironment(
+            androidEnvironment = System.getenv(),
+            hostEnvironment = prepared.hostEnvironment,
+            executable = prepared.command.first(),
+            fallbackHome = pathManager.baseDir.parentFile?.absolutePath ?: "/",
+        )
         InteractiveLaunchSpec(
             executable = prepared.command.first(),
             arguments = prepared.command.toTypedArray(),
@@ -722,6 +722,8 @@ class LinuxRuntimeImpl(
     override fun listBackground(): List<ManagedProcess> = processRegistry.list()
 
     override suspend fun cleanupDeadBackground(): Int = processRegistry.cleanupDeadProcesses()
+    override suspend fun reclaimListeningPort(port: Int, protectedSessions: Set<Long>): Int =
+        processRegistry.reclaimListeningPort(port, protectedSessions + interactiveSessions.rootPids() + shellExecutor.pendingRootPids())
 
     override fun observeBackgroundLogs(idOrToolId: String): Flow<List<String>> =
         processRegistry.observeLogs(idOrToolId)
@@ -770,10 +772,8 @@ class LinuxRuntimeImpl(
 
     override fun workspacePath(): File = pathManager.workspaceDir
 
-    private fun detectArchitecture(): CpuArch {
-        val abi = Build.SUPPORTED_ABIS.firstOrNull().orEmpty()
-        return CpuArch.fromBuildAbi(abi)
-    }
+    private fun detectArchitecture(): CpuArch =
+        CpuArch.fromBuildAbi(Build.SUPPORTED_ABIS.firstOrNull().orEmpty())
 
     private fun checkStorage() {
         val filesPath = pathManager.baseDir.parentFile?.absolutePath

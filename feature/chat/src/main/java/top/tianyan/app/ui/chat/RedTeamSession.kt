@@ -29,7 +29,8 @@ import top.tianyan.app.core.model.RedTeamPhase
 @OptIn(ExperimentalCoroutinesApi::class)
 internal fun ChatViewModel.redTeamFactStream(): Flow<List<RedTeamFactEntity>> =
     currentSessionId.flatMapLatest { id ->
-        if (id.isBlank()) flowOf(emptyList()) else redTeamFactsSource.observeForSession(id)
+        val repo = redTeamFactsSource
+        if (id.isBlank() || repo == null) flowOf(emptyList()) else repo.observeForSession(id)
     }
 
 /**

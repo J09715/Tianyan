@@ -1,12 +1,15 @@
 package top.tianyan.app.runtime.webchat
 
+import java.io.File
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketTimeoutException
+import java.nio.file.Files
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -90,6 +93,45 @@ class AndroidHttpServerTest {
             }
         } finally {
             runCatching { client.close() }
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun `sendFileResponse streams large files with an exact content length`() {
+        val port = ServerSocket(0).use { it.localPort }
+        val server = AndroidHttpServer.create(InetSocketAddress("127.0.0.1", port), 0)
+        // 3MB：远超单次 read 缓冲，验证分块写入与 Content-Length 一致。
+        val source = File.createTempFile("tianyan-download", ".bin")
+        val payload = ByteArray(3 * 1024 * 1024) { (it % 251).toByte() }
+        Files.write(source.toPath(), payload)
+        server.createContext("/api/download") { exchange ->
+            sendFileResponse(exchange, 200, "application/octet-stream", source, fileName = "sample.bin")
+        }
+
+        try {
+            server.start()
+            val raw = Socket("127.0.0.1", port).use { socket ->
+                socket.soTimeout = 10_000
+                socket.getOutputStream().apply {
+                    write("GET /api/download HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".toByteArray())
+                    flush()
+                }
+                socket.getInputStream().readBytes()
+            }
+            // ISO-8859-1 与字节一一对应，切分头部时不会破坏二进制正文。
+            val text = String(raw, Charsets.ISO_8859_1)
+            val headerEnd = text.indexOf("\r\n\r\n") + 4
+            val headers = text.substring(0, headerEnd)
+            val body = text.substring(headerEnd).toByteArray(Charsets.ISO_8859_1)
+
+            assertTrue(headers.startsWith("HTTP/1.1 200 OK"))
+            assertTrue(headers.contains("Content-Length: ${payload.size}"))
+            assertTrue(headers.contains("Content-Disposition: attachment; filename=\"sample.bin\""))
+            assertEquals(payload.size, body.size)
+            assertTrue(payload.contentEquals(body))
+        } finally {
+            source.delete()
             server.stop(0)
         }
     }

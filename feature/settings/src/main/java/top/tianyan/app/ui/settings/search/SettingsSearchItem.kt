@@ -27,6 +27,7 @@ enum class SettingsSearchTarget {
     QUICK_PHRASES,
     STATS,
     TOOL_CENTER,
+    PLUGIN_LIBRARY,
     CC_SWITCH,
     AGENT_EXECUTION,
     AGENT_SUBAGENTS,

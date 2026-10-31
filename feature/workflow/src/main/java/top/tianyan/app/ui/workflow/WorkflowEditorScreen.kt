@@ -48,7 +48,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
@@ -1062,14 +1062,14 @@ private fun NodeInspectorCard(
                 }
             }
 
-            OutlinedTextField(
+            RuntimeFilledTextField(
                 value = title,
                 onValueChange = { title = it },
                 label = { Text("节点标题") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
-            OutlinedTextField(
+            RuntimeFilledTextField(
                 value = description,
                 onValueChange = { description = it },
                 label = { Text("节点备注 / 说明") },
@@ -1093,7 +1093,7 @@ private fun NodeInspectorCard(
                                 RuntimeIcon(RuntimeIconName.Terminal, Modifier.size(16.dp), tint = top.tianyan.app.ui.theme.semanticColors().info)
                                 Text("终端 Shell 命令行（在沙箱环境中执行）", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = top.tianyan.app.ui.theme.semanticColors().info)
                             }
-                            OutlinedTextField(
+                            RuntimeFilledTextField(
                                 value = configMap["command"].orEmpty(),
                                 onValueChange = { configMap["command"] = it },
                                 label = { Text("Bash 命令（在此输入执行的命令）") },
@@ -1126,7 +1126,7 @@ private fun NodeInspectorCard(
                                     }
                                 }
                             }
-                            OutlinedTextField(
+                            RuntimeFilledTextField(
                                 value = configMap["workingDirectory"].orEmpty(),
                                 onValueChange = { configMap["workingDirectory"] = it },
                                 label = { Text("工作目录（可选）") },
@@ -1139,7 +1139,7 @@ private fun NodeInspectorCard(
                 }
 
                 WorkflowNodeType.CONDITION_BRANCH -> {
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = configMap["expression"] ?: configMap["condition"].orEmpty(),
                         onValueChange = {
                             configMap["expression"] = it
@@ -1163,7 +1163,7 @@ private fun NodeInspectorCard(
                 }
 
                 WorkflowNodeType.PROCESS_SERVICE -> {
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = configMap["command"].orEmpty(),
                         onValueChange = { configMap["command"] = it },
                         label = { Text("后台服务启动命令（必填）") },
@@ -1173,7 +1173,7 @@ private fun NodeInspectorCard(
                         maxLines = 4,
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = configMap["workingDirectory"].orEmpty(),
                         onValueChange = { configMap["workingDirectory"] = it },
                         label = { Text("工作目录（可选）") },
@@ -1214,7 +1214,7 @@ private fun NodeInspectorCard(
                             }
                         }
                     }
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = configMap["task"] ?: "assembleDebug",
                         onValueChange = { configMap["task"] = it },
                         label = { Text("构建 Task 任务") },
@@ -1233,7 +1233,7 @@ private fun NodeInspectorCard(
                 }
 
                 WorkflowNodeType.SET_VARIABLE -> {
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = configMap["variables"].orEmpty(),
                         onValueChange = { configMap["variables"] = it },
                         label = { Text("变量赋值（每行 KEY=value）") },
@@ -1287,7 +1287,7 @@ private fun NodeInspectorCard(
                 )
             }
             if (showAdvancedJson) {
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = rawJsonText,
                     onValueChange = {
                         rawJsonText = it
@@ -1401,7 +1401,7 @@ private fun HostActionConfigFields(configMap: MutableMap<String, String>) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             def.fields.forEach { field ->
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = configMap[field.key].orEmpty(),
                     onValueChange = { configMap[field.key] = it },
                     label = { Text(if (field.required) "${field.label} *" else field.label) },
@@ -1412,7 +1412,7 @@ private fun HostActionConfigFields(configMap: MutableMap<String, String>) {
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
-        } ?: OutlinedTextField(
+        } ?: RuntimeFilledTextField(
             value = configMap["command"].orEmpty(),
             onValueChange = { configMap["command"] = it },
             label = { Text("自定义宿主命令（逃逸舱）") },
@@ -1762,7 +1762,7 @@ private fun NodeConnectionsCard(
                                 }
                             }
                         }
-                        OutlinedTextField(
+                        RuntimeFilledTextField(
                             value = conditionText,
                             onValueChange = { conditionText = it },
                             label = { Text("条件（可选）") },

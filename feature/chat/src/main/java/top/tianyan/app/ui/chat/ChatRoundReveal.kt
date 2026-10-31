@@ -91,7 +91,10 @@ internal fun rememberChatRenderItems(
     revealLimits: Map<String, Int>,
 ): List<ChatRenderItem> {
     val projectionToolResults = if (chatRoundCollapse) toolResults else emptyMap()
-    return remember(messages, expandedOverrides, chatRoundCollapse, projectionToolResults, revealLimits) {
-        projectChatMessages(messages, projectionToolResults, expandedOverrides, chatRoundCollapse, revealLimits)
+    val focusedId = LocalChatTimelineFocus.current?.value
+    return remember(messages, expandedOverrides, chatRoundCollapse, projectionToolResults, revealLimits, focusedId) {
+        val focusedRound = focusedRoundKey(messages, focusedId)
+        val overrides = if (focusedRound == null) expandedOverrides else expandedOverrides + (focusedRound to true)
+        projectChatTimeline(messages, projectionToolResults, overrides, chatRoundCollapse, revealLimits)
     }
 }

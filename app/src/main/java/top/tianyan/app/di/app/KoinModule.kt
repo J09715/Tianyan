@@ -30,7 +30,6 @@ import top.tianyan.app.core.database.BuildScriptDao
 import top.tianyan.app.core.database.GroupChatDao
 import top.tianyan.app.core.database.HarnessRuntimeDao
 import top.tianyan.app.core.database.HarnessSessionDao
-import top.tianyan.app.core.database.RedTeamFactDao
 import top.tianyan.app.core.database.InstallLogDao
 import top.tianyan.app.core.database.InstallTaskDao
 import top.tianyan.app.core.database.McpOAuthCredentialDao
@@ -76,7 +75,6 @@ import top.tianyan.app.di.AppModule.provideDependencyManager
 import top.tianyan.app.di.AppModule.provideFileDownloader
 import top.tianyan.app.di.AppModule.provideHarnessRuntimeDao
 import top.tianyan.app.di.AppModule.provideHarnessSessionDao
-import top.tianyan.app.di.AppModule.provideRedTeamFactDao
 import top.tianyan.app.di.AppModule.provideInstallLogDao
 import top.tianyan.app.di.AppModule.provideInstallTaskDao
 import top.tianyan.app.di.AppModule.provideJson
@@ -87,6 +85,7 @@ import top.tianyan.app.di.AppModule.provideMcpOAuthCredentialDao
 import top.tianyan.app.di.AppModule.provideMcpOAuthTransactionDao
 import top.tianyan.app.di.AppModule.provideMcpServerDao
 import top.tianyan.app.di.AppModule.provideOkHttpClient
+import top.tianyan.app.di.AppModule.provideModelsDevUpdater
 import top.tianyan.app.di.AppModule.provideProcessRegistry
 import top.tianyan.app.di.AppModule.providePtyManager
 import top.tianyan.app.di.AppModule.provideQuickPhraseDao
@@ -103,6 +102,7 @@ import top.tianyan.app.di.AppModule.provideWorkflowScheduleStore
 import top.tianyan.app.di.AppModule.provideWorkspaceDao
 import top.tianyan.app.di.AppModule.provideWorkspaceFileAccess
 import top.tianyan.app.harness.AgentForegroundLauncher
+import top.tianyan.app.harness.model.ModelsDevUpdater
 import top.tianyan.app.harness.WorkspaceFileAccess
 import top.tianyan.app.harness.agent.AgentMcpForegroundLauncher
 import top.tianyan.app.harness.checkpoint.CheckpointStore
@@ -176,8 +176,6 @@ val appModule = module {
 
     single<HarnessSessionDao> { provideHarnessSessionDao(database = get()) }
 
-    single<RedTeamFactDao> { provideRedTeamFactDao(database = get()) }
-
     single<AiModelDao> { provideAiModelDao(database = get()) }
 
     single<WorkspaceDao> { provideWorkspaceDao(database = get()) }
@@ -227,6 +225,8 @@ val appModule = module {
     single<ProcessRegistry> { provideProcessRegistry(impl = get()) }
 
     single<OkHttpClient> { provideOkHttpClient(provider = get()) }
+
+    single<ModelsDevUpdater> { provideModelsDevUpdater(context = get(), okHttpClient = get()) }
 
     single<HttpClient> { provideKtorHttpClient(provider = get(), okHttpClient = get()) }
 

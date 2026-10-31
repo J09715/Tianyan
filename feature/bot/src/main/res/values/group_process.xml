@@ -1,0 +1,22 @@
+<resources>
+    <string name="fbot_process_more_steps">再显示 %1$d 步</string>
+    <string name="fbot_process_read">读取文件</string>
+    <string name="fbot_process_write">写入文件</string>
+    <string name="fbot_process_edit">编辑文件</string>
+    <string name="fbot_process_command">终端命令</string>
+    <string name="fbot_process_process">管理进程</string>
+    <string name="fbot_process_host">操作设备</string>
+    <string name="fbot_process_download">下载文件</string>
+    <string name="fbot_process_memory">更新记忆</string>
+    <string name="fbot_process_plan">更新计划</string>
+    <string name="fbot_process_scratchpad">记录笔记</string>
+    <string name="fbot_process_search">检索历史</string>
+    <string name="fbot_process_build">构建项目</string>
+    <string name="fbot_process_subagent">委派任务</string>
+    <string name="fbot_process_compress">整理上下文</string>
+    <string name="fbot_process_question">询问用户</string>
+    <string name="fbot_process_surface">展示界面</string>
+    <string name="fbot_process_composer_busy">执行中，可继续发送</string>
+    <string name="fbot_process_composer_members">%1$d 位成员</string>
+    <string name="fbot_process_more_actions">更多操作</string>
+</resources>

@@ -36,14 +36,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import top.tianyan.app.core.model.bot.Bot
-import top.tianyan.app.core.model.bot.BotAvatarState
 import top.tianyan.app.core.model.bot.GroupMessage
 import top.tianyan.app.core.model.bot.GroupSenderType
 import top.tianyan.app.feature.bot.R
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
 
-private val AvatarSize = 32.dp
+private val AvatarSize = 24.dp
 private val GroupGap = 2.dp
 
 @Composable
@@ -86,59 +85,26 @@ private fun BotMessageBubble(
 ) {
     val role = bot?.role.orEmpty()
     val botId = bot?.id
-    // 头像跟随作者名放在消息组顶部；同组后续消息用等宽占位保持缩进。
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-        if (firstInGroup) {
-            BotAvatar(
-                seed = bot?.avatarSeed ?: message.senderName,
-                colorHex = bot?.colorHex ?: "#3D5AFE",
-                size = AvatarSize,
-                active = message.isStreaming,
-                state = when {
-                    message.isStreaming && message.steps.any { it.success == null } -> BotAvatarState.EXECUTING
-                    message.isStreaming && message.reasoning.isNotBlank() && !message.contentText.hasText -> BotAvatarState.THINKING
-                    message.isStreaming -> BotAvatarState.ACTIVE
-                    else -> BotAvatarState.IDLE
-                },
-                modifier = if (botId != null) Modifier.clickable { onOpenBot(botId) } else Modifier,
-            )
-        } else {
-            Spacer(Modifier.width(AvatarSize))
+    Column(Modifier.fillMaxWidth().widthIn(max = 680.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (firstInGroup) Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            BotAvatar(seed = bot?.avatarSeed ?: message.senderName, colorHex = bot?.colorHex ?: "#3D5AFE",
+                size = AvatarSize, active = message.isStreaming,
+                modifier = if (botId != null) Modifier.clickable { onOpenBot(botId) } else Modifier)
+            Text(bot?.name ?: message.senderName, style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false).then(if (botId != null) Modifier.clickable { onOpenBot(botId) } else Modifier))
+            if (bot?.isMainBot == true) MainBadge()
+            if (role.isNotBlank()) Text(role, style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
+                overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         }
-        Column(
-            modifier = Modifier.weight(1f).padding(start = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(GroupGap),
-        ) {
-            if (firstInGroup) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Text(
-                        text = bot?.name ?: message.senderName,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = if (botId != null) Modifier.clickable { onOpenBot(botId) } else Modifier,
-                    )
-                    if (bot?.isMainBot == true) MainBadge()
-                    if (role.isNotBlank()) {
-                        Text(
-                            text = role,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.outline,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false),
-                        )
-                    } else {
-                        Spacer(Modifier.weight(1f))
-                    }
-                }
-            }
-            if (message.reasoning.isNotBlank() || (message.isStreaming && !message.contentText.hasText)) {
-                GroupReasoningPanel(message.id, message.reasoning, message.isStreaming)
+        Column(verticalArrangement = Arrangement.spacedBy(GroupGap)) {
+            if (message.reasoning.isNotBlank() || (message.isStreaming && !message.contentText.hasText && message.steps.isEmpty())) {
+                GroupReasoningPanel(message.id, message.reasoning,
+                    message.isStreaming && !message.contentText.hasText && message.steps.none { it.success == null },
+                    waiting = message.reasoning.isBlank(), startedAtMs = message.timestamp)
             }
             GroupToolCallPanel(message.id, message.steps, message.isStreaming)
             if (message.contentText.hasText || (!message.isStreaming && message.steps.isEmpty())) {
@@ -194,15 +160,11 @@ private fun MessageBubble(message: GroupMessage, shape: Shape) {
         content.startsWith("💭") -> GroupReasoningPanel(
             message.id, content.toString().removePrefix("💭").trim(), message.isStreaming,
         )
-        else -> Surface(
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            shape = shape,
-            modifier = Modifier.widthIn(max = 600.dp),
-        ) {
-            Column(Modifier.padding(horizontal = 12.dp, vertical = 9.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                ExpandableGroupText(message.id, content, message.isStreaming)
-                if (message.isStreaming) TypingDots(MaterialTheme.colorScheme.primary)
-            }
+        else -> Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            ExpandableGroupText(message.id, content, message.isStreaming)
+            AttachmentChips(message.attachments, MaterialTheme.colorScheme.onSurfaceVariant)
+            if (message.isStreaming) TypingDots(MaterialTheme.colorScheme.onSurfaceVariant)
+            else if (content.hasText) GroupMessageActions(message)
         }
     }
 }
@@ -223,7 +185,7 @@ private fun UserMessageBubble(
     ) {
         BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
             Surface(
-                color = MaterialTheme.colorScheme.primary,
+                color = MaterialTheme.colorScheme.primaryContainer,
                 shape = userShape(firstInGroup, lastInGroup),
                 modifier = Modifier
                     .widthIn(max = maxWidth * 0.86f)
@@ -248,12 +210,12 @@ private fun UserMessageBubble(
                         Text(
                             text = message.content,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onPrimary,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
                     }
                     AttachmentChips(
                         attachments = message.attachments,
-                        tint = MaterialTheme.colorScheme.onPrimary,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }
             }
@@ -297,8 +259,8 @@ private fun botShape(first: Boolean, last: Boolean) = RoundedCornerShape(
 )
 
 private fun userShape(first: Boolean, last: Boolean) = RoundedCornerShape(
-    topStart = 12.dp,
-    topEnd = if (first) 12.dp else 4.dp,
-    bottomEnd = if (last) 12.dp else 4.dp,
-    bottomStart = 12.dp,
+    topStart = 24.dp,
+    topEnd = if (first) 24.dp else 6.dp,
+    bottomEnd = if (last) 24.dp else 6.dp,
+    bottomStart = 24.dp,
 )

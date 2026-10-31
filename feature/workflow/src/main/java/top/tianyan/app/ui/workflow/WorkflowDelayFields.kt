@@ -2,7 +2,7 @@ package top.tianyan.app.ui.workflow
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -13,7 +13,7 @@ internal fun WorkflowDelayFields(config: MutableMap<String, String>) {
     val milliseconds = "milliseconds" in config
     val key = if (milliseconds) "milliseconds" else "seconds"
     Column {
-        OutlinedTextField(
+        RuntimeFilledTextField(
             value = config[key] ?: config["delaySeconds"] ?: "1",
             onValueChange = { config[key] = it },
             label = { Text(if (milliseconds) "等待毫秒数" else "等待秒数") },

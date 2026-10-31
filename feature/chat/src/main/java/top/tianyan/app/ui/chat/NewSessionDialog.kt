@@ -23,7 +23,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import top.tianyan.app.ui.components.RuntimeTextButton as TextButton
@@ -80,7 +80,7 @@ internal fun NewSessionDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text(stringResource(R.string.chat_session_title), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = title,
                     onValueChange = { title = it },
                     placeholder = { Text(stringResource(R.string.chat_session_name_hint)) },

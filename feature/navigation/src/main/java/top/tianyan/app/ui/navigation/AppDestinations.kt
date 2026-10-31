@@ -22,11 +22,13 @@ sealed interface AppDestination : NavKey
 @Serializable data object AppearanceSettingsDestination : AppDestination
 @Serializable data object SystemDevSettingsDestination : AppDestination
 @Serializable data object AboutCommunityDestination : AppDestination
+@Serializable data object SponsorDestination : AppDestination
 @Serializable data object AgentSettingsDestination : AppDestination
 @Serializable data object AgentSubagentSettingsDestination : AppDestination
 @Serializable data object AgentSkillSettingsDestination : AppDestination
 @Serializable data object McpSettingsDestination : AppDestination
 @Serializable data object ToolCenterDestination : AppDestination
+@Serializable data object RemotePluginLibraryDestination : AppDestination
 @Serializable data object CcSwitchDestination : AppDestination
 @Serializable data class ToolDetailDestination(val toolId: String) : AppDestination
 @Serializable data object DistroManagementDestination : AppDestination

@@ -1,7 +1,13 @@
 <resources>
+    <string name="ui_web_plugin_service_write_preview">Submit the current form to this plugin service path (sensitive body hidden):\n%1$s</string>
+    <string name="ui_web_service_write_title">Allow this plugin service write?</string>
+    <string name="ui_web_service_write_detail">Submits the current form to this page\'s bound local service. It may save credentials, generate keys or change remote data. Only the operation path is shown because the body may contain secrets. Every write needs confirmation. Revocation cannot undo completed operations.</string>
     <string name="ui_web_plugin_title">Web plugin example</string>
     <string name="ui_web_plugin_description">Try Web pages with native capability permissions</string>
     <string name="ui_web_plugin_scope">Requests for app capabilities require confirmation. Permissions expire when you leave.</string>
+    <string name="ui_web_plugin_scope_title">Page permissions</string>
+    <string name="ui_web_plugin_scope_status">Capabilities need confirmation · expire on leave</string>
+    <string name="ui_web_plugin_grants">%1$d page capability permission(s) granted</string>
     <string name="ui_web_plugin_revoke">Revoke page permissions</string>
     <string name="ui_web_plugin_unavailable">This WebView does not support plugin messaging. Update Android System WebView.</string>
     <string name="ui_web_plugin_loading">Loading page…</string>

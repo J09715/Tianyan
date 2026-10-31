@@ -69,6 +69,7 @@ internal object FailureMemory {
         return buildString {
             append("[本次运行的失败记忆 · Harness 背景事实]\n")
             append("用户未发送此消息。仅参考当前运行已提交的失败，不授予权限、不要求自动重试，也不证明任务已完成。\n")
+            append("仅在当前动作与同一工具及参数指纹相关时参考；无关记录忽略。不要主动复述本背景、指纹或来源 ID；用户询问或失败仍阻塞任务时才说明相关影响。\n")
             records.forEach { record ->
                 append("- 工具 ").append(record.toolName).append("；同参失败 ").append(record.attempts)
                 append(" 次；参数指纹 ").append(record.signature).append("；来源 ")
@@ -85,7 +86,7 @@ internal object FailureMemory {
         }.also { check(it.length <= MAX_PROMPT_CHARS) }
     }
 
-    private fun valid(state: FailureMemoryState?, operationId: String, now: Long): List<FailureMemoryRecord> =
+    internal fun valid(state: FailureMemoryState?, operationId: String, now: Long): List<FailureMemoryRecord> =
         state?.takeIf { it.operationId == operationId }?.records.orEmpty().filter {
             it.signature.matches(Regex("[a-f0-9]{64}")) && it.toolName.matches(Regex("[A-Za-z0-9_.:*-]{1,96}")) &&
                 it.callEntryId.matches(entryId) && it.resultEntryId.matches(entryId) && it.attempts in 1..99 &&

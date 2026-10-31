@@ -6,7 +6,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -71,56 +72,28 @@ internal fun GroupChatTopBar(
             onBack = onBack,
             statusText = statusText,
             actions = {
-                Surface(
-                    onClick = { onSwitchMode(GroupChatViewMode.STUDIO) },
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    modifier = Modifier.padding(end = 4.dp).testTag("topbar-cyber-studio-btn"),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp),
-                    ) {
-                        RuntimeIcon(
-                            name = RuntimeIconName.Workspace,
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                        )
-                        Text(
-                            text = stringResource(R.string.fbot_cyber_studio),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        )
-                        if (busy || workSummary.attention > 0) {
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .background(
-                                        if (workSummary.attention > 0) MaterialTheme.colorScheme.error
-                                        else MaterialTheme.colorScheme.primary,
-                                        CircleShape,
-                                    ),
-                            )
-                        }
+                var menuExpanded by rememberSaveable { mutableStateOf(false) }
+                RuntimeIconButton(onClick = { onSwitchMode(GroupChatViewMode.STUDIO) },
+                    modifier = Modifier.testTag("topbar-cyber-studio-btn"),
+                    contentDescription = stringResource(R.string.fbot_cyber_studio)) {
+                    Box {
+                        RuntimeIcon(RuntimeIconName.Workspace, Modifier.size(22.dp))
+                        if (busy || workSummary.attention > 0) Box(Modifier.align(Alignment.TopEnd).size(6.dp)
+                            .background(if (workSummary.attention > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary, CircleShape))
                     }
                 }
-                RuntimeIconButton(
-                    onClick = onExportDiagnostics,
-                    enabled = !exporting,
-                    contentDescription = stringResource(R.string.fbot_export_diagnostics),
-                ) {
-                    if (exporting) {
-                        RuntimeCircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                    } else {
-                        RuntimeIcon(RuntimeIconName.FolderDownload, Modifier.size(20.dp))
+                Box {
+                    RuntimeIconButton(onClick = { menuExpanded = true }, contentDescription = stringResource(R.string.fbot_process_more_actions)) {
+                        RuntimeIcon(RuntimeIconName.More, Modifier.size(22.dp))
                     }
-                }
-                RuntimeIconButton(
-                    onClick = onShowInfo,
-                    contentDescription = stringResource(R.string.fbot_group_info),
-                ) {
-                    RuntimeIcon(RuntimeIconName.Info, Modifier.size(21.dp))
+                    RuntimeDropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                        RuntimeDropdownMenuItem(text = { Text(stringResource(R.string.fbot_group_info)) },
+                            leadingIcon = { RuntimeIcon(RuntimeIconName.Info, Modifier.size(20.dp)) },
+                            onClick = { menuExpanded = false; onShowInfo() })
+                        RuntimeDropdownMenuItem(text = { Text(stringResource(R.string.fbot_export_diagnostics)) }, enabled = !exporting,
+                            leadingIcon = { RuntimeIcon(RuntimeIconName.FolderDownload, Modifier.size(20.dp)) },
+                            onClick = { menuExpanded = false; onExportDiagnostics() })
+                    }
                 }
             },
         )

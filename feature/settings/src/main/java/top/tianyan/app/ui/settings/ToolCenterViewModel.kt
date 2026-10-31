@@ -42,7 +42,7 @@ class ToolCenterViewModel(
     val installProgress: StateFlow<Map<String, ToolInstallProgress>> = toolManager.installProgress
     val verifications: StateFlow<Map<String, ToolVerification>> = toolManager.verifications
 
-    private val _selectedCategory = MutableStateFlow("ALL")
+    private val _selectedCategory = MutableStateFlow("INSTALLED")
     val selectedCategory: StateFlow<String> = _selectedCategory.asStateFlow()
 
     private val _viewingLogsToolId = MutableStateFlow<String?>(null)

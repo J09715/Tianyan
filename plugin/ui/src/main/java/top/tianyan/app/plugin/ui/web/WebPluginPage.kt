@@ -3,6 +3,7 @@ package top.tianyan.app.plugin.ui.web
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -24,6 +25,7 @@ import top.tianyan.app.plugin.ui.PluginPageRequest
 import top.tianyan.app.plugin.ui.R
 import top.tianyan.app.ui.components.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun WebPluginPage(plugin: WebPagePlugin, request: PluginPageRequest) {
     val context = LocalContext.current
@@ -99,15 +101,25 @@ internal fun WebPluginPage(plugin: WebPagePlugin, request: PluginPageRequest) {
     DisposableEffect(session) {
         onDispose { bridge.close(); session.close(); view?.dispose(); view = null }
     }
-    Scaffold(topBar = { RuntimeTopBar(plugin.title(), request.onBack) }) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
-            RuntimeCard(Modifier.fillMaxWidth().padding(12.dp)) {
-                if (plugin.openSource != null) Text(plugin.description())
-                Text(stringResource(R.string.ui_web_plugin_scope))
-                RuntimeTextButton(onClick = { session.revoke() }) {
-                    Text(stringResource(R.string.ui_web_plugin_revoke))
+    // 说明与授权范围放进底部抽屉：页面本体（WebView）不再被一张常驻卡片切掉三分之一屏幕。
+    var showScope by remember(session) { mutableStateOf(false) }
+    val grants by session.grantCount.collectAsState()
+    Scaffold(topBar = {
+        RuntimeTopBar(
+            plugin.title(),
+            request.onBack,
+            statusText = stringResource(R.string.ui_web_plugin_scope_status),
+            actions = {
+                RuntimeIconButton(
+                    onClick = { showScope = true },
+                    contentDescription = stringResource(R.string.ui_web_plugin_scope_title),
+                ) {
+                    RuntimeIcon(RuntimeIconName.Info, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-            }
+            },
+        )
+    }) { padding ->
+        Column(Modifier.fillMaxSize().padding(padding)) {
             if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
                 Text(stringResource(R.string.ui_web_plugin_unavailable), Modifier.padding(16.dp))
             } else if (resources == null) {
@@ -126,6 +138,39 @@ internal fun WebPluginPage(plugin: WebPagePlugin, request: PluginPageRequest) {
             }
         }
     }
+    if (showScope) {
+        RuntimeModalBottomSheet(onDismissRequest = { showScope = false }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 28.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(stringResource(R.string.ui_web_plugin_scope_title), style = MaterialTheme.typography.titleMedium)
+                if (plugin.openSource != null) {
+                    Text(plugin.description(), style = MaterialTheme.typography.bodyMedium)
+                }
+                Text(
+                    stringResource(R.string.ui_web_plugin_scope),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    stringResource(R.string.ui_web_plugin_grants, grants),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (grants > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                RuntimeFilledTonalButton(
+                    onClick = { session.revoke(); showScope = false },
+                    enabled = grants > 0,
+                ) {
+                    Text(stringResource(R.string.ui_web_plugin_revoke))
+                }
+            }
+        }
+    }
     prompt?.let { pending ->
         val capability = plugin.capabilities.single { it.capability == pending.call.capability }
         RuntimeAlertDialog(
@@ -135,10 +180,15 @@ internal fun WebPluginPage(plugin: WebPagePlugin, request: PluginPageRequest) {
                 Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(capability.description())
                     pending.call.text?.let { text ->
-                        val preview = if (pending.call.capability.action in PluginCapabilityInput.SERVICE_ACTIONS) {
+                        val preview = if (pending.call.capability == PluginCapabilityInput.SERVICE_WRITE) {
+                            R.string.ui_web_plugin_service_write_preview
+                        } else if (pending.call.capability.action in PluginCapabilityInput.SERVICE_ACTIONS) {
                             R.string.ui_web_plugin_service_preview
                         } else R.string.ui_web_plugin_text_preview
-                        Text(stringResource(preview, PluginCapabilityInput.preview(text)))
+                        val display = if (pending.call.capability == PluginCapabilityInput.SERVICE_WRITE) {
+                            PluginCapabilityInput.serviceWritePreview(text)
+                        } else PluginCapabilityInput.preview(text)
+                        Text(stringResource(preview, display))
                     }
                     Text("${pending.identity.pluginId} · ${pending.identity.version}\n${pending.call.capability.action}\n${pending.call.capability.target}\n${pending.identity.environment}")
                 }

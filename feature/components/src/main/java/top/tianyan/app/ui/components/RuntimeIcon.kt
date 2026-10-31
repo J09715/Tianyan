@@ -25,6 +25,7 @@ enum class RuntimeIconName {
     GitBranch, GitCommit, Alarm,
     Phone, Bookmark, Checklist, StickyNote, History, Hammer, BookOpen,
     Menu, Sessions, PanelLeftClose, PanelRightOpen, WriteDocument,
+    Camera,
 }
 
 /**
@@ -77,6 +78,7 @@ fun RuntimeIcon(
         RuntimeIconName.Cpu -> R.drawable.components_ic_cpu
         RuntimeIconName.Search -> R.drawable.components_ic_search
         RuntimeIconName.Info -> R.drawable.components_ic_info
+        RuntimeIconName.Camera -> R.drawable.components_ic_camera
         RuntimeIconName.Image -> R.drawable.components_ic_image
         RuntimeIconName.Attach -> R.drawable.components_ic_attach
         RuntimeIconName.VolumeOn -> R.drawable.components_ic_volume_on

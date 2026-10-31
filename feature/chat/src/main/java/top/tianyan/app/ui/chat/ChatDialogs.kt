@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -31,7 +30,7 @@ import androidx.compose.material3.ButtonDefaults
 import top.tianyan.app.ui.components.RuntimeCircularProgressIndicator as CircularProgressIndicator
 import top.tianyan.app.ui.components.RuntimeIconButton as IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import top.tianyan.app.ui.components.RuntimeTextButton as TextButton
@@ -57,7 +56,7 @@ import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.theme.semanticColors
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.core.model.SessionRunState
-import top.tianyan.app.ui.components.ProviderBadge
+import top.tianyan.app.ui.components.ModelBadge
 
 /** 会话 / 模型 / 新建会话对话框。 */
 @Composable
@@ -77,7 +76,7 @@ internal fun EditAndResendDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = text,
                     onValueChange = { text = it },
                     label = { Text(stringResource(R.string.chat_user_request_clipboard)) },
@@ -380,7 +379,7 @@ internal fun RenameSessionDialog(
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
             ) {
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = title,
                     onValueChange = { title = it },
                     label = { Text(stringResource(R.string.chat_title_label)) },
@@ -405,381 +404,6 @@ internal fun RenameSessionDialog(
             ) { Text(stringResource(R.string.chat_save), color = MaterialTheme.colorScheme.primary) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.chat_cancel)) } },
-    )
-}
-
-@Composable
-internal fun ModelDialog(
-    models: List<AiModelEntity>,
-    selectedProfileId: String?,
-    selectedModelVariant: String?,
-    providerModelIds: List<String>,
-    discoveringProviderModels: Boolean,
-    providerModelDiscoveryError: String?,
-    modelPickerProfileId: String?,
-    onDismiss: () -> Unit,
-    onSelectProfile: (String) -> Unit,
-    onSelectSubModel: (profileId: String, subModel: String) -> Unit,
-    onOpenModelPicker: (String) -> Unit,
-    onCloseModelPicker: () -> Unit,
-    onRefreshModels: (String) -> Unit,
-    onSwitchModel: (profileId: String, modelId: String) -> Unit,
-    onCreate: () -> Unit,
-    onDelete: (String) -> Unit,
-) {
-    // 删除模型档案为破坏性操作，先记录目标 id 并经确认对话框
-    var deleteModelTargetId by rememberSaveable { mutableStateOf<String?>(null) }
-    val pickingProfile = modelPickerProfileId?.let { id -> models.firstOrNull { it.id == id } }
-    if (pickingProfile != null) {
-        ProviderModelPickerDialog(
-            profile = pickingProfile,
-            selectedModelVariant = selectedModelVariant.takeIf { pickingProfile.id == selectedProfileId },
-            modelIds = providerModelIds,
-            discovering = discoveringProviderModels,
-            error = providerModelDiscoveryError,
-            onDismiss = onCloseModelPicker,
-            onRefresh = { onRefreshModels(pickingProfile.id) },
-            onSelect = { modelId -> onSwitchModel(pickingProfile.id, modelId) },
-        )
-        return
-    }
-    ChatBottomSheet(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.chat_select_model), fontWeight = FontWeight.Bold) },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 400.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Text(
-                    stringResource(R.string.chat_select_provider_hint),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                if (models.isEmpty()) {
-                    Text(
-                        stringResource(R.string.chat_no_models),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        items(models, key = { it.id }) { model ->
-                    val subModels = model.model.split(",").map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { listOf(model.model) }
-                    val isProfileSelected = model.id == selectedProfileId
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(MaterialTheme.shapes.small)
-                            .background(
-                                if (isProfileSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent,
-                                MaterialTheme.shapes.small,
-                            )
-                            .border(
-                                1.dp,
-                                if (isProfileSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f) else Color.Transparent,
-                                MaterialTheme.shapes.small,
-                            )
-                            .padding(horizontal = 10.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable { onSelectProfile(model.id) },
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            ProviderBadge(
-                                providerIdOrName = model.provider,
-                                size = 26.dp,
-                            )
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    model.name.ifBlank { model.provider },
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Text(
-                                    model.provider,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                            if (isProfileSelected) {
-                                Surface(
-                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
-                                    shape = RoundedCornerShape(6.dp),
-                                ) {
-                                    Text(
-                                        stringResource(R.string.chat_current),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                    )
-                                }
-                            }
-                            IconButton(
-                                onClick = { deleteModelTargetId = model.id },
-                                modifier = Modifier.minimumInteractiveComponentSize(),
-                                contentDescription = stringResource(R.string.chat_delete_model_profile),
-                            ) {
-                                RuntimeIcon(RuntimeIconName.Trash, Modifier.size(15.dp), MaterialTheme.colorScheme.error)
-                            }
-                        }
-
-                        if (subModels.size > 1) {
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp),
-                            ) {
-                                subModels.forEach { subModel ->
-                                    val isSubActive = isProfileSelected && subModel == selectedModelVariant
-                                    Surface(
-                                        color = if (isSubActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceContainerHighest,
-                                        shape = RoundedCornerShape(8.dp),
-                                        border = if (isSubActive) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
-                                        modifier = Modifier.clickable {
-                                            onSelectSubModel(model.id, subModel)
-                                            onDismiss()
-                                        },
-                                    ) {
-                                        Text(
-                                            subModel,
-                                            style = MaterialTheme.typography.labelMedium.copy(
-                                                fontFamily = FontFamily.Monospace,
-                                                fontWeight = if (isSubActive) FontWeight.Bold else FontWeight.Normal,
-                                            ),
-                                            color = if (isSubActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            if (subModels.size <= 1) {
-                                Surface(
-                                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.weight(1f),
-                                ) {
-                                    Text(
-                                        model.model.ifBlank { stringResource(R.string.chat_model_not_set) },
-                                        style = MaterialTheme.typography.labelMedium.copy(fontFamily = FontFamily.Monospace),
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                                    )
-                                }
-                            } else {
-                                Spacer(Modifier.weight(1f))
-                            }
-                            Surface(
-                                onClick = { onOpenModelPicker(model.id) },
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.secondaryContainer,
-                            ) {
-                                Row(
-                                    Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                ) {
-                                    RuntimeIcon(RuntimeIconName.Tune, Modifier.size(14.dp), MaterialTheme.colorScheme.onSecondaryContainer)
-                                    Text(
-                                        stringResource(R.string.chat_switch_model),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    )
-                                }
-                            }
-                        }
-                    }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                onDismiss()
-                onCreate()
-            }) { Text(stringResource(R.string.chat_add_model), color = MaterialTheme.colorScheme.primary) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.chat_close)) }
-        },
-    )
-
-    // 删除模型档案二次确认
-    deleteModelTargetId?.let { targetId ->
-        RuntimeAlertDialog(
-            onDismissRequest = { deleteModelTargetId = null },
-            title = { Text(stringResource(R.string.chat_delete_model_title), fontWeight = FontWeight.Bold) },
-            text = {
-                Text(
-                    stringResource(R.string.chat_delete_model_message),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        deleteModelTargetId = null
-                        onDelete(targetId)
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        disabledContainerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.3f),
-                    ),
-                ) {
-                    Text(stringResource(R.string.chat_confirm_delete), color = MaterialTheme.colorScheme.onError)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { deleteModelTargetId = null }) { Text(stringResource(R.string.chat_cancel)) }
-            },
-        )
-    }
-}
-
-@Composable
-internal fun ProviderModelPickerDialog(
-    profile: AiModelEntity,
-    selectedModelVariant: String?,
-    modelIds: List<String>,
-    discovering: Boolean,
-    error: String?,
-    onDismiss: () -> Unit,
-    onRefresh: () -> Unit,
-    onSelect: (String) -> Unit,
-) {
-    var manualId by remember(profile.id, profile.model, selectedModelVariant) {
-        mutableStateOf(selectedModelVariant ?: profile.model.substringBefore(',').trim())
-    }
-    ChatBottomSheet(
-        onDismissRequest = onDismiss,
-        title = {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(stringResource(R.string.chat_switch_model_title), fontWeight = FontWeight.Bold)
-                Text(
-                    profile.name.ifBlank { profile.provider },
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        },
-        text = {
-            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    stringResource(R.string.chat_switch_model_hint),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                when {
-                    discovering -> {
-                        Row(
-                            Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                stringResource(R.string.chat_model_discovering),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                    error != null && modelIds.isEmpty() -> {
-                        Text(
-                            error,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                    modelIds.isNotEmpty() -> {
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = 280.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            items(modelIds) { modelId ->
-                                val selected = modelId == selectedModelVariant
-                                Row(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(
-                                            if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                                            else MaterialTheme.colorScheme.surfaceContainerLow,
-                                        )
-                                        .clickable { onSelect(modelId) }
-                                        .padding(horizontal = 10.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    Text(
-                                        modelId,
-                                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                                        modifier = Modifier.weight(1f),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                    if (selected) {
-                                        RuntimeIcon(RuntimeIconName.Check, Modifier.size(16.dp), MaterialTheme.colorScheme.primary)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                if (!error.isNullOrBlank() && modelIds.isNotEmpty()) {
-                    Text(error, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
-                }
-                OutlinedTextField(
-                    value = manualId,
-                    onValueChange = { manualId = it },
-                    label = { Text(stringResource(R.string.chat_model_id)) },
-                    placeholder = { Text("gpt-4o / deepseek-chat") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        },
-        confirmButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = onRefresh, enabled = !discovering) {
-                    Text(stringResource(R.string.chat_refresh_models), color = MaterialTheme.colorScheme.primary)
-                }
-                TextButton(
-                    onClick = { onSelect(manualId) },
-                    enabled = manualId.isNotBlank(),
-                ) {
-                    Text(stringResource(R.string.chat_apply_model), color = MaterialTheme.colorScheme.primary)
-                }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.chat_cancel)) }
-        },
     )
 }
 

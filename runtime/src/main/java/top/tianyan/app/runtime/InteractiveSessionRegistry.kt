@@ -41,6 +41,9 @@ internal class InteractiveSessionRegistry {
 
     fun hasSessions(): Boolean = sessions.isNotEmpty()
 
+    /** 仍在运行的交互/终端会话根 pid；端口回收时整棵豁免（终端里手起的服务不能被误伤）。 */
+    fun rootPids(): Set<Long> = sessions.keys.mapNotNull { it.pid }.toSet()
+
     suspend fun closeAll(distroId: String? = null) {
         val targets = sessions.entries.filter { distroId == null || it.value == distroId }.map { it.key }
         closeRuntimeResources(targets.map { session -> suspend { session.close() } })

@@ -40,6 +40,7 @@ class OperationCoordinator(
     private val acceptMutex = Mutex()
     /** Only journal read/commit work is serialized; provider calls and tool execution stay concurrent. */
     private val settlementMutex = Mutex()
+    val failureMemories = FailureMemoryAccess(repository, json, settlementMutex)
 
     suspend fun acceptRun(sessionId: String, userMessage: HarnessMessage, laneName: String = SessionTreeStore.MAIN_LANE,
         taskId: String? = null): String = acceptMutex.withLock {

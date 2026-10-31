@@ -394,6 +394,8 @@ internal fun AssistantBubble(
     autoTranslate: Boolean = false,
     live: Boolean = false,
     showRegenerate: Boolean = false,
+    /** 是否在气泡下方显示操作工具条；false 时只显示正文。 */
+    prominentActions: Boolean = true,
     onRegenerate: () -> Unit = {},
     onCreateBranch: () -> Unit = {},
     onNavigateToSettings: (() -> Unit)? = null,
@@ -573,173 +575,6 @@ internal fun AssistantBubble(
 }
 
 private const val MAX_LIVE_TEXT_CHARS = 64_000
-/** Avoid rescanning a multi-megabyte Base64 response whenever its lazy-list item re-enters composition. */
-private val generatedImageFlagCache = LruCache<String, Boolean>(64)
-
-private data class TaskStepItem(
-    val index: Int,
-    val title: String,
-    val isCompleted: Boolean,
-)
-
-private val taskPlanCache = LruCache<String, List<TaskStepItem>>(200)
-
-private fun extractTaskPlanSteps(text: String): List<TaskStepItem> {
-    taskPlanCache.get(text)?.let { return it }
-    val lines = text.lines()
-    val steps = mutableListOf<TaskStepItem>()
-    val checkboxRegex = Regex("""^(\s*[-*]|\s*\d+[\.\)])?\s*\[([ xX])\]\s*(.+)""")
-    var idx = 1
-    for (line in lines) {
-        val match = checkboxRegex.find(line.trim())
-        if (match != null) {
-            val isChecked = match.groupValues[2].equals("x", ignoreCase = true)
-            val title = match.groupValues[3].trim()
-            if (title.isNotBlank()) {
-                steps.add(TaskStepItem(index = idx++, title = title, isCompleted = isChecked))
-            }
-        }
-    }
-    taskPlanCache.put(text, steps)
-    return steps
-}
-
-@Composable
-private fun TaskPlanCard(steps: List<TaskStepItem>, modifier: Modifier = Modifier) {
-    var expanded by remember { mutableStateOf(true) }
-    val completedCount = steps.count { it.isCompleted }
-    val progress = if (steps.isNotEmpty()) completedCount.toFloat() / steps.size else 0f
-    val haptic = LocalHapticFeedback.current
-
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .clickable {
-                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                expanded = !expanded
-            },
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
-        shape = RoundedCornerShape(12.dp),
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(24.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    RuntimeIcon(
-                        RuntimeIconName.Code,
-                        modifier = Modifier.size(13.dp),
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                }
-
-                Text(
-                    text = stringResource(R.string.chat_plan),
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-
-                Spacer(Modifier.weight(1f))
-
-                Surface(
-                    color = if (completedCount == steps.size) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                    else MaterialTheme.colorScheme.surfaceContainerHigh,
-                    shape = RoundedCornerShape(6.dp),
-                ) {
-                    Text(
-                        text = stringResource(R.string.chat_plan_completed, completedCount, steps.size),
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp,
-                        ),
-                        color = if (completedCount == steps.size) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                    )
-                }
-
-                RuntimeIcon(
-                    if (expanded) RuntimeIconName.ChevronDown else RuntimeIconName.ChevronRight,
-                    Modifier.size(14.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            // 进度条
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .clip(RoundedCornerShape(2.dp)),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            )
-
-            AnimatedVisibility(
-                visible = expanded,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut(),
-            ) {
-                Column(
-                    modifier = Modifier.padding(top = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    steps.forEach { step ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(16.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (step.isCompleted) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    ),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                if (step.isCompleted) {
-                                    Text(
-                                        "✓",
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold,
-                                        ),
-                                        color = MaterialTheme.colorScheme.onPrimary,
-                                    )
-                                }
-                            }
-
-                            Text(
-                                text = step.title,
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    fontWeight = if (step.isCompleted) FontWeight.Normal else FontWeight.Medium,
-                                ),
-                                color = if (step.isCompleted) MaterialTheme.colorScheme.onSurfaceVariant
-                                else MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 @Composable
 internal fun ThinkingBlock(
@@ -1237,3 +1072,6 @@ internal fun ModelSwitchCard(event: ModelSwitchEvent) {
         )
     }
 }
+
+/** 生成图判定缓存：避免每次重组都对整段文本跑 contains 扫描。 */
+private val generatedImageFlagCache = android.util.LruCache<String, Boolean>(64)

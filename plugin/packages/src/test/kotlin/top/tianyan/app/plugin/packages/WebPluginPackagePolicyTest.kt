@@ -6,6 +6,22 @@ import top.tianyan.app.core.model.*
 import top.tianyan.app.plugin.api.PluginExtensionPoint
 
 class WebPluginPackagePolicyTest {
+    @Test fun serviceWritesRequireAnExplicitDeclarationAndBoundService() {
+        val original = web()
+        val spec = original.plugin!!
+        assertThrows(IllegalArgumentException::class.java) {
+            PluginPackageProtocol.validate(original.copy(plugin = spec.copy(capabilities = listOf(WebPluginPackagePolicy.SERVICE_WRITE))))
+        }
+        val service = spec.copy(webSource = "TOOL_SERVICE", serviceToolId = "github", integrity = emptyMap(),
+            capabilities = listOf(WebPluginPackagePolicy.SERVICE_WRITE))
+        PluginPackageProtocol.validate(original.copy(plugin = service))
+        assertThrows(IllegalArgumentException::class.java) {
+            PluginPackageProtocol.validate(original.copy(plugin = service.copy(webSource = "PROOT_SERVICE")))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            PluginPackageProtocol.validate(original.copy(plugin = service.copy(capabilities = listOf(PackageCapability("SERVICE_WRITE", "*")))))
+        }
+    }
     @Test fun omittedSourceRemainsCompatibleAndFixedProotSourceCanRoundTrip() {
         val original = web()
         val json = kotlinx.serialization.json.Json.encodeToString(ToolManifest.serializer(), original)

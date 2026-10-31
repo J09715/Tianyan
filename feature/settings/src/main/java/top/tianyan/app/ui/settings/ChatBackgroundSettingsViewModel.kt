@@ -19,11 +19,16 @@ class ChatBackgroundSettingsViewModel(
     private val images: ChatBackgroundImageStore,
 ) : ViewModel() {
     val style = preferences.style.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ChatBackgroundStyle())
+    val inputBlurEnabled = preferences.inputBlurEnabled.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
     private val mutation = Mutex()
     private val _busy = MutableStateFlow(false)
     val busy = _busy.asStateFlow()
     private val _failed = MutableStateFlow(false)
     val failed = _failed.asStateFlow()
+
+    fun setInputBlurEnabled(value: Boolean) = mutate {
+        preferences.setInputBlurEnabled(value)
+    }
 
     fun chooseImage(uri: Uri) = mutate {
         val previous = preferences.style.first().imageName

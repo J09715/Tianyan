@@ -3,8 +3,8 @@ package top.tianyan.app.ui.settings.search
 import top.tianyan.app.ui.components.RuntimeIconName
 
 /**
- * 天衍全局功能与细粒度设置选项索引仓库
- * 全面深层收录天衍全系统的每一个子功能、具体配置项、开关与参数，支持多维加权检索与一键直达
+ * 天衍全局功能与细粒度设置选项索引仓库。
+ * 全面深层收录天衍全系统的每一个子功能、具体配置项、开关与参数，支持多维加权检索与一键直达。
  */
 object SettingsSearchRegistry {
 
@@ -32,7 +32,7 @@ object SettingsSearchRegistry {
     /**
      * 全局功能及深度子功能全量清单（覆盖所有一级、二级、三级功能及具体参数项）
      */
-    val allItems: List<SettingsSearchItem> = listOf(firstResponseTimeoutSearchItem) + listOf(
+    val allItems: List<SettingsSearchItem> = listOf(firstResponseTimeoutSearchItem, pluginLibrarySearchItem) + listOf(
         // ==================== 1. 智能体与 AI 模型生态 ====================
         SettingsSearchItem(
             id = "agent_model_profiles",
@@ -158,14 +158,14 @@ object SettingsSearchRegistry {
         ),
         SettingsSearchItem(
             id = "agent_tool_center",
-            title = "插件与底层工具中心",
-            subtitle = "安装 llama.cpp、QEMU、Python、Node 等底层沙箱开发环境",
-            category = SettingsSearchCategory.AGENT,
+            title = "插件中心",
+            subtitle = "下载、导入和更新插件，查看已安装内容及内置功能",
+            category = SettingsSearchCategory.CORE_FEATURE,
             target = SettingsSearchTarget.TOOL_CENTER,
             icon = RuntimeIconName.Wrench,
-            keywords = listOf("tools", "plugin", "qemu", "python", "node", "工具", "插件", "安装", "gongju", "chajian"),
+            keywords = listOf("tools", "plugin", "qemu", "python", "node", "工具中心", "插件管理", "插件", "安装", "导入文件", "txplugin", "内置功能", "gongju", "chajian"),
             badge = "生态",
-            breadcrumb = "智能体与 AI 模型 > 工具中心",
+            breadcrumb = "设置 > 插件中心",
         ),
         SettingsSearchItem(
             id = "agent_cc_switch",

@@ -23,6 +23,8 @@ import top.tianyan.app.ui.components.previewOrNull
 import top.tianyan.app.ui.components.previewStateOf
 import top.tianyan.app.ui.components.RuntimeCard
 import top.tianyan.app.ui.theme.LocalChatBackgroundActive
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 import top.tianyan.app.ui.theme.chatBackdropSurface
 
 class ChatBackgroundViewModel(preferences: ChatBackgroundPreferences) : ViewModel() {
@@ -39,12 +41,16 @@ internal fun ChatPageSurface(
     val appearance = previewOrNull { koinInject<AppearancePreferences>() }
     val classicDots by appearance?.classicToolStatusDots?.collectAsStateWithLifecycle(initialValue = false) ?: previewStateOf(false)
     val normalized = style.normalized()
-    CompositionLocalProvider(LocalChatBackgroundActive provides
-        (normalized.imageName != null && normalized.visibility > 0f), LocalClassicToolStatusDots provides classicDots) {
-        // One continuous image behind the top bar, conversation, composer and system insets.
-        Box(modifier) {
-            RuntimeChatBackground(normalized, Modifier.matchParentSize())
-            content()
+    val hazeState = rememberHazeState()
+    ChatIdentityHost {
+        CompositionLocalProvider(LocalChatBackgroundActive provides
+            (normalized.imageName != null && normalized.visibility > 0f), LocalClassicToolStatusDots provides classicDots,
+            LocalChatHazeState provides hazeState) {
+            // One continuous image behind the top bar, conversation, composer and system insets.
+            Box(modifier) {
+                RuntimeChatBackground(normalized, Modifier.matchParentSize().hazeSource(hazeState))
+                content()
+            }
         }
     }
 }

@@ -71,6 +71,7 @@ fun WebPluginsScreen(onOpen: (String, String, String) -> Unit, onBack: () -> Uni
                                 "CLIPBOARD_WRITE" -> R.string.web_packages_clipboard_write
                                 "INSTALL_APK" -> R.string.web_packages_install_apk_detail
                                 "LOGCAT" -> R.string.web_packages_logcat_detail
+                                "SERVICE_WRITE" -> R.string.web_packages_service_write
                                 else -> R.string.web_packages_app_info
                             },
                         ))

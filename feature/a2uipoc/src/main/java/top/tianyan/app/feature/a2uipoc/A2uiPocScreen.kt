@@ -38,6 +38,7 @@ import top.tianyan.app.ui.components.RuntimeTextButton
 import top.tianyan.app.ui.components.RuntimeTopBar
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.coroutines.delay
 
 /** 当前聊天会话。卡片用它给 surfaceId 加前缀，和工具执行时写入总线的会话一致。 */
 val LocalA2uiSessionId = staticCompositionLocalOf { "" }
@@ -88,6 +89,13 @@ fun A2uiSurfaceHost(
     }
     val engineId = A2uiSurfaceBus.engineSurfaceId(sessionId, surfaceId)
     var renderError by remember(scopedJson) { mutableStateOf<String?>(null) }
+    // surface 入队到引擎真正建出来有几十~上百毫秒的窗口，此前直接摆原文 JSON 会闪一下。
+    // 先给骨架屏，超过宽限期仍未渲染（如 surfaceId 对不上）再回退到原文，避免无限闪烁。
+    var loadingGraceExpired by remember(scopedJson) { mutableStateOf(false) }
+    LaunchedEffect(scopedJson) {
+        delay(SURFACE_LOADING_GRACE_MS)
+        loadingGraceExpired = true
+    }
     LaunchedEffect(scopedJson, replayKey) {
         renderError = if (scopedJson.isBlank()) {
             "载荷为空"
@@ -105,7 +113,18 @@ fun A2uiSurfaceHost(
         }
         val rendered = TianyanA2uiRenderer.SurfaceView(surfaceId = engineId, modifier = Modifier.fillMaxWidth())
         if (!rendered) {
-            A2uiFallbackCard(renderError = renderError, messagesJson = messagesJson)
+            if (renderError == null && !loadingGraceExpired) {
+                TianyanA2uiSkeletonGroup { shimmerRootModifier ->
+                    TianyanA2uiSkeleton(
+                        Modifier
+                            .then(shimmerRootModifier)
+                            .fillMaxWidth()
+                            .height(TianyanA2uiRootSkeletonHeight),
+                    )
+                }
+            } else {
+                A2uiFallbackCard(renderError = renderError, messagesJson = messagesJson)
+            }
         }
     }
 }
@@ -207,6 +226,9 @@ fun A2uiPocScreen(modifier: Modifier = Modifier, onBack: (() -> Unit)? = null) {
         }
     }
 }
+
+/** surface 入队到引擎可渲染的宽限期，超过则不再假装"还在加载"。 */
+private const val SURFACE_LOADING_GRACE_MS = 1_500L
 
 /** 演示屏注入示例时模拟一次 render_surface 工具调用（与真实工具共用同一校验/发布链路）。 */
 private fun sampleToolArgs(timestamp: Long) = buildJsonObject {

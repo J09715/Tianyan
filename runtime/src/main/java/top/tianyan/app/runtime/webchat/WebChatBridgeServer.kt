@@ -485,8 +485,8 @@ class WebChatBridgeServer(
         val root = File(entity.path).canonicalFile
         val file = File(root, relative).canonicalFile
         require(file.isFile && (file == root || file.path.startsWith(root.path + File.separator))) { "文件路径无效" }
-        exchange.responseHeaders.add("Content-Disposition", "attachment; filename=\"${file.name.replace("\"", "")}\"")
-        sendResponse(exchange, 200, "application/octet-stream", file.readBytes())
+        // 流式回传：工作区产物最大 128MB，整份 readBytes 会在手机上直接 OOM。
+        sendFileResponse(exchange, 200, "application/octet-stream", file, fileName = file.name)
     }
 
     private fun conversationJson(session: HarnessSessionEntity) = buildJsonObject {

@@ -1,7 +1,13 @@
 <resources>
+    <string name="ui_web_plugin_service_write_preview">本次将向插件服务的以下路径提交表单（敏感正文不显示）：\n%1$s</string>
+    <string name="ui_web_service_write_title">允许本次插件服务写入？</string>
+    <string name="ui_web_service_write_detail">将当前表单提交给此页面绑定的本地服务，可能保存凭据、生成密钥或执行远端操作。请求内容可能包含密钥，因此只显示操作路径。每次操作单独确认；撤销不能回滚已完成的操作。</string>
     <string name="ui_web_plugin_title">Web 插件示例</string>
     <string name="ui_web_plugin_description">体验 Web 页面与应用能力授权</string>
     <string name="ui_web_plugin_scope">页面请求应用能力时需要确认。离开页面后授权失效。</string>
+    <string name="ui_web_plugin_scope_title">页面授权范围</string>
+    <string name="ui_web_plugin_scope_status">页面能力需确认 · 离开页面失效</string>
+    <string name="ui_web_plugin_grants">当前已授予 %1$d 项页面能力</string>
     <string name="ui_web_plugin_revoke">撤销页面授权</string>
     <string name="ui_web_plugin_unavailable">当前 WebView 不支持插件消息通道，请更新系统 WebView。</string>
     <string name="ui_web_plugin_loading">正在加载页面…</string>

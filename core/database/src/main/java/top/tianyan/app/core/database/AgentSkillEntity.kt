@@ -83,39 +83,49 @@ class AgentSkillRepository(
     }
 
     /**
-     * 递归扫描各根目录（含任意深度嵌套），把直属包含 SKILL.md / prompt.md 且尚未入库的
+     * 递归扫描各集合目录，把直属包含 SKILL.md / prompt.md 且尚未入库的
      * 目录自动注册为自定义 Skill。用户手动复制 Skill 文件夹（或把其他工具的整个
      * skills 目录整体复制）到 attachments/skills 或工作区 skills 目录即可被发现，
      * 无需通过 ZIP 逐个导入。按 resourcePath 去重，重复调用安全。
      *
-     * 嵌套语义：目录树中任何直属含 SKILL.md 的目录都是一个 Skill——既支持
-     * “单个 Skill 目录”，也支持“集合目录（如 rikkahub / aicode 的整个 skills 目录）”，
-     * 以及 Skill 目录内再嵌套 Skill 子目录的多级结构。
+     * 发现 Skill 入口后即停止向其内部扫描，子文档由主 Skill 按需读取。
+     * 无主入口的集合目录（如 rikkahub / aicode 的整个 skills 目录）仍递归发现独立技能。
+     * 同步移除旧版误注册的子资源条目，仅清理数据库记录，保留资源文件。
      *
      * @return 本次新注册的 Skill 列表
      */
     suspend fun syncFromDirectories(roots: List<SkillScanRoot>): List<AgentSkill> = directorySyncMutex.withLock {
         ensureInitialized()
-        val knownPaths = dao.observeAll().first()
-            .mapNotNull { it.resourcePath }
+        val existing = dao.observeAll().first()
+        val knownPaths = existing.mapNotNull { it.resourcePath?.takeIf(String::isNotBlank) }
             .mapTo(mutableSetOf()) { stored ->
                 runCatching { File(stored).canonicalPath }.getOrDefault(stored)
             }
         val imported = mutableListOf<AgentSkill>()
-        roots.forEach { root ->
-            root.hostDir.walkTopDown()
-                .maxDepth(MAX_SCAN_DEPTH)
-                .filter { it.isDirectory && it != root.hostDir }
-                .forEach { dir ->
-                    val canonical = runCatching { dir.canonicalPath }.getOrNull() ?: return@forEach
-                    if (canonical in knownPaths) return@forEach
-                    val promptFile = directPromptFile(dir) ?: return@forEach
-                    val relative = dir.relativeTo(root.hostDir).invariantSeparatorsPath
-                    registerDir(dir, promptFile, root.guestPrefix.trimEnd('/') + "/" + relative, knownPaths, imported)
-                }
+        // 重叠扫描根也按父包优先处理；已有 ZIP 包的包装目录同样作为资源边界。
+        roots.flatMap { root -> SkillDirectoryDiscovery.discover(root.hostDir).map { root to it } }
+            .sortedBy { (_, prompt) -> prompt.canonicalFile.toPath().nameCount }
+            .forEach { (root, promptFile) ->
+                val dir = promptFile.parentFile ?: return@forEach
+                val canonical = runCatching { dir.canonicalPath }.getOrNull() ?: return@forEach
+                if (knownPaths.any { canonical == it || isNestedPath(canonical, it) && File(it).isDirectory }) return@forEach
+                val relative = dir.relativeTo(root.hostDir).invariantSeparatorsPath
+                val guestPath = root.guestPrefix.trimEnd('/') + if (relative.isEmpty()) "" else "/$relative"
+                registerDir(dir, promptFile, guestPath, knownPaths, imported)
+            }
+        val scannedPaths = roots.map { it.hostDir.canonicalPath }
+        existing.filterNot { it.isBuiltin }.forEach { skill ->
+            val path = skill.resourcePath?.let { File(it).canonicalPath } ?: return@forEach
+            if (scannedPaths.any { path == it || isNestedPath(path, it) } &&
+                knownPaths.any { isNestedPath(path, it) && File(it).isDirectory }
+            ) {
+                dao.deleteCustom(skill.id)
+            }
         }
         imported
     }
+
+    private fun isNestedPath(path: String, parent: String) = path.startsWith(parent + File.separator)
 
     private suspend fun registerDir(dir: File, promptFile: File, guestPath: String, knownPaths: MutableSet<String>, imported: MutableList<AgentSkill>) {
         val markdown = runCatching { promptFile.readText().trim() }.getOrNull()
@@ -137,12 +147,6 @@ class AgentSkillRepository(
         knownPaths += runCatching { dir.canonicalPath }.getOrDefault(dir.absolutePath)
         imported += skill
     }
-
-    /** 目录直属的提示词文件（不含嵌套子目录），优先 SKILL.md。 */
-    private fun directPromptFile(dir: File): File? =
-        dir.listFiles().orEmpty()
-            .filter { it.isFile && it.name.lowercase() in SKILL_PROMPT_FILE_NAMES }
-            .let { files -> files.firstOrNull { it.name.lowercase() == "skill.md" } ?: files.firstOrNull() }
 
     companion object {
         /** Skill 目录的提示词文件名（小写），供导入与扫描逻辑统一判定。 */
@@ -188,7 +192,6 @@ class AgentSkillRepository(
         )
         private const val AGENT_SKILL_SCAN_DEPTH = 3
 
-        private const val MAX_SCAN_DEPTH = 6
         private const val MAX_DESCRIPTION_CHARS = 1024
 
         /** 从 SKILL.md 的 YAML frontmatter 中提取 name / description 等元数据。 */

@@ -440,89 +440,32 @@ fun RuntimeSearchBar(
     onClear: (() -> Unit)? = null,
     enabled: Boolean = true,
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isFocused by interactionSource.collectIsFocusedAsState()
-
-    val containerModifier = modifier
-        .height(42.dp)
-        .clip(CapsuleShape)
-        .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-        .border(
-            width = if (isFocused) 1.5.dp else 0.dp,
-            color = if (isFocused) MaterialTheme.colorScheme.primary else Color.Transparent,
-            shape = CapsuleShape,
-        )
-
-    Row(
-        modifier = containerModifier.padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // 左侧搜索图标
-        if (leadingIcon != null) {
-            leadingIcon()
-            Spacer(Modifier.width(8.dp))
-        } else {
-            RuntimeIcon(
-                name = RuntimeIconName.Search,
-                modifier = Modifier.size(18.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.60f),
-            )
-            Spacer(Modifier.width(8.dp))
-        }
-
-        // 搜索输入主体
-        Box(
-            modifier = Modifier.weight(1f),
-            contentAlignment = Alignment.CenterStart,
-        ) {
-            if (query.isEmpty()) {
-                Text(
-                    text = placeholder,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
-                )
+    RuntimeFilledTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = modifier,
+        placeholder = { Text(placeholder) },
+        leadingIcon = leadingIcon ?: { RuntimeIcon(RuntimeIconName.Search) },
+        trailingIcon = if (query.isNotEmpty()) {
+            {
+                RuntimeIconButton(
+                    onClick = { onQueryChange(""); onClear?.invoke() },
+                    contentDescription = androidx.compose.ui.res.stringResource(top.tianyan.app.feature.components.R.string.components_clear_search),
+                ) { RuntimeIcon(RuntimeIconName.Close) }
             }
-            BasicTextField(
-                value = query,
-                onValueChange = onQueryChange,
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                enabled = enabled,
-                textStyle = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurface,
-                ),
-                keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { onSearch?.invoke(query) }),
-                interactionSource = interactionSource,
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-            )
-        }
-
-        // 右侧一键清空按钮
-        AnimatedVisibility(
-            visible = query.isNotEmpty(),
-            enter = fadeIn(),
-            exit = fadeOut(),
-        ) {
-            Box(
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .clickable(role = Role.Button) {
-                        onQueryChange("")
-                        onClear?.invoke()
-                    }
-                    .padding(4.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                RuntimeIcon(
-                    name = RuntimeIconName.Close,
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.70f),
-                )
-            }
-        }
-    }
+        } else null,
+        enabled = enabled,
+        singleLine = true,
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = androidx.compose.material3.TextFieldDefaults.colors(
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent,
+        ),
+        keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { onSearch?.invoke(query) }),
+    )
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

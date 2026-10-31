@@ -1,6 +1,8 @@
 package top.tianyan.app.runtime.service
 
 import java.lang.reflect.Proxy
+import java.net.InetAddress
+import java.net.ServerSocket
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.runBlocking
@@ -159,6 +161,20 @@ class ProotToolServiceSourceTest {
         }
     }
 
+    @Test fun staleOrphanListenerIsReclaimedBeforeThePageStartsItsOwnService() = runBlocking {
+        val stale = ServerSocket(0)
+        val port = stale.localPort
+        val server = MockWebServer()
+        val fake = Fake()
+        fake.reclaim = { stale.close(); 1 }
+        fake.onStart = { server.start(InetAddress.getByName("127.0.0.1"), port) }
+        server.enqueue(MockResponse().setBody(okio.Buffer().write(html)))
+        val source = ProotToolServiceSource(fake.runtime, descriptor(port, "/ui/"), { true })
+        assertArrayEquals(html, source.snapshot().getValue("index.html"))
+        assertTrue(source.close())
+        server.shutdown()
+    }
+
     private class Fake {
         val state = MutableStateFlow<RuntimeState>(RuntimeState.Ready)
         val distro = MutableStateFlow("ubuntu")
@@ -166,6 +182,8 @@ class ProotToolServiceSourceTest {
         var supported = true
         var stopFailures = 0
         var deadAfterStart = false
+        var reclaim: () -> Int = { 0 }
+        var onStart: () -> Unit = {}
         var command: ShellCommand? = null
         var requestedDistro: String? = null
         val processes = linkedMapOf<String, ManagedProcess>()
@@ -188,6 +206,7 @@ class ProotToolServiceSourceTest {
                 "startBackground" -> {
                     command = args[1] as ShellCommand
                     requestedDistro = args[4] as String
+                    onStart()
                     val id = args[0] as String
                     ManagedProcess(id, 1, Session(), args[2] as String?, type = args[3] as ProcessType).also {
                         processes[id] = it
@@ -195,6 +214,7 @@ class ProotToolServiceSourceTest {
                     }
                 }
                 "listBackground" -> processes.values.toList()
+                "reclaimListeningPort" -> reclaim()
                 "stopBackgroundInstance" -> {
                     val owned = args[0] as ManagedProcess
                     if (stopFailures > 0) { stopFailures--; false }

@@ -24,7 +24,7 @@ class CustomIterationBootstrapTest {
     private val workflowText = """
         name: Build TianyanDev APK
         env:
-          TIANYAN_DEV_BUILD: "1"
+          TAIXU_DEV_BUILD: "1"
         packages: 'platform-tools'
     """.trimIndent().toByteArray()
 
@@ -89,7 +89,7 @@ class CustomIterationBootstrapTest {
         assertTrue("workflow cache must exist: $workflow", workflow.isFile)
         val text = workflow.readText()
         assertTrue(text.contains("packages: 'platform-tools'"))
-        assertTrue(text.contains("TIANYAN_DEV_BUILD"))
+        assertTrue(text.contains("TAIXU_DEV_BUILD"))
 
         val cloneTarget = File(home, CustomIterationBootstrap.WORKSPACE_NAME)
         assertTrue(cloneTarget.list().isNullOrEmpty())
@@ -160,7 +160,7 @@ class CustomIterationBootstrapTest {
 
         assertFalse(result.success)
         assertEquals("", result.prompt)
-        assertTrue(result.errorMessage?.contains("TIANYAN_DEV_BUILD") == true)
+        assertTrue(result.errorMessage?.contains("TAIXU_DEV_BUILD") == true)
     }
 
     @Test
@@ -206,10 +206,10 @@ class CustomIterationBootstrapTest {
             forkRepo = "haotaoran520/tianyan",
         )
         assertTrue(prompt.contains("构建目标仓库 = haotaoran520/tianyan"))
-        assertTrue(prompt.contains("https://github.com/J09715/Tianyan"))
+        assertTrue(prompt.contains("https://github.com/tianyan-lab/tianyan"))
         assertTrue(prompt.contains(".github/workflows/tianyandev-build.yml"))
         assertTrue(prompt.contains(CustomIterationBootstrap.GUEST_WORKFLOW_CACHE))
-        assertFalse(prompt.contains("构建目标仓库 = J09715/Tianyan"))
+        assertFalse(prompt.contains("构建目标仓库 = tianyan-lab/tianyan"))
         assertFalse(prompt.contains("\${"))
         assertFalse(prompt.contains("OFFICIAL_REPO_SLUG"))
         assertFalse(prompt.contains("WORKSPACE_NAME"))
@@ -223,8 +223,8 @@ class CustomIterationBootstrapTest {
         )
         assertTrue(prompt.contains(CustomIterationBootstrap.FORK_REPO_PLACEHOLDER))
         assertTrue(prompt.contains("git remote get-url origin"))
-        assertTrue(prompt.contains("禁止对 J09715/Tianyan 执行 workflow_dispatch"))
-        assertFalse(prompt.contains("构建目标仓库 = J09715/Tianyan"))
+        assertTrue(prompt.contains("禁止对 tianyan-lab/tianyan 执行 workflow_dispatch"))
+        assertFalse(prompt.contains("构建目标仓库 = tianyan-lab/tianyan"))
         assertEquals(
             CustomIterationBootstrap.FORK_REPO_PLACEHOLDER,
             CustomIterationBootstrap.promptForkLabel("  "),

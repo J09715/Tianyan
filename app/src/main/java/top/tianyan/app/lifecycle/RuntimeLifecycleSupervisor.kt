@@ -3,6 +3,7 @@ package top.tianyan.app.lifecycle
 import android.content.Context
 import android.net.wifi.WifiManager
 import android.os.PowerManager
+import android.os.SystemClock
 import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -42,6 +43,7 @@ class RuntimeLifecycleSupervisor(
 
     /** 进程唯一 CPU 唤醒锁，防止息屏后 CPU 休眠冻结推理 / PRoot 进程。 */
     private var wakeLock: PowerManager.WakeLock? = null
+    private var wakeLockRenewAt = 0L
 
     /**
      * 进程唯一 Wi-Fi 锁，防止息屏后无线电源进入省电模式导致沙箱网络断连。
@@ -97,6 +99,11 @@ class RuntimeLifecycleSupervisor(
     /** 当前活跃租约 holderId 集合的快照（仅用于诊断/日志）。 */
     fun holderSnapshot(): Set<String> = synchronized(this) { holders.toSet() }
 
+    /** A live foreground owner renews the bounded lock; abandoned owners still time out. */
+    fun refreshActiveLeases() = synchronized(this) {
+        if (holders.isNotEmpty()) acquireLocks()
+    }
+
     // ──────────────────────────────────────────────────────────────
     // 内部：锁管理
     // ──────────────────────────────────────────────────────────────
@@ -114,11 +121,14 @@ class RuntimeLifecycleSupervisor(
     }
 
     private fun acquireWakeLock() {
-        if (wakeLock?.isHeld == true) return
+        val now = SystemClock.elapsedRealtime()
+        if (wakeLock?.isHeld == true && now < wakeLockRenewAt) return
         runCatching {
-            wakeLock = context.getSystemService(PowerManager::class.java)
-                .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_LOCK_TAG)
-                .also { it.acquire(LOCK_TIMEOUT_MS) }
+            val lock = wakeLock ?: context.getSystemService(PowerManager::class.java)
+                .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_LOCK_TAG).apply { setReferenceCounted(false) }
+            lock.acquire(LOCK_TIMEOUT_MS)
+            wakeLock = lock
+            wakeLockRenewAt = now + LOCK_TIMEOUT_MS / 2
             Log.i(TAG, "WakeLock acquired (holders: ${holderSnapshot()})")
         }.onFailure { Log.w(TAG, "Failed to acquire WakeLock", it) }
     }
@@ -129,6 +139,7 @@ class RuntimeLifecycleSupervisor(
             Log.i(TAG, "WakeLock released")
         }.onFailure { Log.w(TAG, "Failed to release WakeLock", it) }
         wakeLock = null
+        wakeLockRenewAt = 0L
     }
 
     private fun acquireWifiLock() {

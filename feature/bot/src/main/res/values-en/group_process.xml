@@ -1,0 +1,22 @@
+<resources>
+    <string name="fbot_process_more_steps">Show %1$d more steps</string>
+    <string name="fbot_process_read">Read file</string>
+    <string name="fbot_process_write">Write file</string>
+    <string name="fbot_process_edit">Edit file</string>
+    <string name="fbot_process_command">Run command</string>
+    <string name="fbot_process_process">Manage process</string>
+    <string name="fbot_process_host">Use device</string>
+    <string name="fbot_process_download">Download file</string>
+    <string name="fbot_process_memory">Update memory</string>
+    <string name="fbot_process_plan">Update plan</string>
+    <string name="fbot_process_scratchpad">Take notes</string>
+    <string name="fbot_process_search">Search history</string>
+    <string name="fbot_process_build">Build project</string>
+    <string name="fbot_process_subagent">Delegate task</string>
+    <string name="fbot_process_compress">Compact context</string>
+    <string name="fbot_process_question">Ask user</string>
+    <string name="fbot_process_surface">Show interface</string>
+    <string name="fbot_process_composer_busy">Working · add a message</string>
+    <string name="fbot_process_composer_members">%1$d members</string>
+    <string name="fbot_process_more_actions">More actions</string>
+</resources>

@@ -9,6 +9,7 @@ import java.util.Locale
 
 /** 消息流渲染的通用纯函数工具：间距判定 / 推理去重 / 时长与 token 格式化。 */
 internal fun isThinkingOrActionItem(item: ChatRenderItem?): Boolean {
+    if (item is ToolStepsItem || item is ChatRenderItem.ReasoningItem) return true
     if (item !is ChatRenderItem.MessageItem) return false
     return when (val msg = item.message) {
         is ToolCall, is CapabilityEvent -> true

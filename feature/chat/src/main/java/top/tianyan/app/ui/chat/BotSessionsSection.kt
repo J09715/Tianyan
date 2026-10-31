@@ -151,7 +151,7 @@ internal fun BotSessionsSection(
                     }
                     if (bucketExpanded) {
                         Column(
-                            modifier = Modifier.fillMaxWidth().padding(start = 12.dp),
+                            modifier = Modifier.fillMaxWidth().padding(start = 24.dp),
                             verticalArrangement = Arrangement.spacedBy(2.dp),
                         ) {
                             bucket.sessions.forEach { session ->

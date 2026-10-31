@@ -10,6 +10,8 @@
     <string name="onboarding_permission_files_hint">允许访问手机共享存储中的项目和文件。不开启也可使用应用内文件及系统文件选择器。</string>
     <string name="onboarding_permission_autostart">自启动权限</string>
     <string name="onboarding_permission_autostart_hint">在系统的自启动或应用启动管理中允许天衍运行。不同品牌入口可能不同，部分系统没有此选项。</string>
+    <string name="onboarding_permission_local_network">附近的设备</string>
+    <string name="onboarding_permission_local_network_hint">允许访问同一局域网中的设备。连接局域网 SSH 需要此权限；Android 17 会在未授权时直接拦截。</string>
     <string name="onboarding_permission_battery">电池优化无限制</string>
     <string name="onboarding_permission_battery_hint">减少息屏后编译或 AI 任务被暂停的情况。建议在应用电池设置中选择「无限制」或「不受限制」；开启后可能增加耗电。</string>
     <string name="onboarding_permission_manual">需在系统设置中手动确认</string>

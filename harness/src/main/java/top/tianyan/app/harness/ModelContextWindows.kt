@@ -1,5 +1,7 @@
 package top.tianyan.app.harness
 
+import top.tianyan.app.harness.model.ModelMetadataRegistry
+
 /**
  * Mainstream model context-window registry.
  *
@@ -61,10 +63,16 @@ object ModelContextWindows {
         Rule("Mistral/Mixtral", Regex("^(mistral|mixtral)"), 32_768),
     )
 
-    /** Resolve a model id to a context window, or null when the model cannot be identified. */
+    /**
+     * Resolve a model id to a context window, or null when the model cannot be identified.
+     *
+     * 解析顺序：models.dev 目录 / token 规则注册表（[ModelMetadataRegistry]，数据更细也更新）>
+     * 本地离线正则表 > 供应商默认值。
+     */
     fun resolve(modelId: String?, providerId: String? = null): Int? {
         val normalized = normalize(modelId)
         if (normalized != null) {
+            ModelMetadataRegistry.contextLength(normalized)?.let { return it }
             rules.firstOrNull { it.pattern.containsMatchIn(normalized) }?.let { return it.tokens }
         }
         return providerDefault(providerId)

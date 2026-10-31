@@ -42,7 +42,7 @@ internal fun McpServerItemCard(
         authLabel = authLabel,
         authOk = authOk,
         notice = requiredComponentName?.let { "需先安装「$it」：设置 → 工具中心 → MCP 能力仓库" },
-        error = error,
+        error = server.headersReadError ?: error,
         onClick = onClickDetail,
         trailing = {
             Switch(
@@ -59,7 +59,7 @@ internal fun McpServerItemCard(
                     }
                 } else null,
                 // 未安装时锁死开关：打开只会让启动期工具发现每次白等一个超时
-                enabled = !togglePending && (server.isEnabled || requiredComponentName == null),
+                enabled = server.headersReadError == null && !togglePending && (server.isEnabled || requiredComponentName == null),
             )
         },
     )

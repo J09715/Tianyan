@@ -5,10 +5,10 @@ import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -27,14 +27,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import top.tianyan.app.feature.bot.R
-import top.tianyan.app.ui.components.RuntimeCard
+import top.tianyan.app.ui.components.*
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeTextButton
 
 /** 思考内容从一行开始随正文增长，达到上限后固定视口并自动跟随尾部。 */
 @Composable
-internal fun GroupReasoningPanel(messageId: String, reasoning: String, streaming: Boolean) {
+internal fun GroupReasoningPanel(messageId: String, reasoning: String, streaming: Boolean, waiting: Boolean = false, startedAtMs: Long? = null) {
     var expanded by rememberSaveable(messageId) { mutableStateOf(true) }
     var following by rememberSaveable(messageId) { mutableStateOf(true) }
     val scroll = rememberScrollState()
@@ -57,27 +57,29 @@ internal fun GroupReasoningPanel(messageId: String, reasoning: String, streaming
             }
         }
     }
-    RuntimeCard(contentPadding = PaddingValues(12.dp)) {
+    Column(Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(
-                modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 28.dp).clickable { expanded = !expanded }.padding(horizontal = 2.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                RuntimeIcon(RuntimeIconName.Brain, Modifier.size(15.dp), MaterialTheme.colorScheme.outline)
+                RuntimeProcessIcon(RuntimeIconName.Brain, streaming)
                 Text(
-                    stringResource(if (streaming) R.string.fbot_thinking else R.string.fbot_reasoning),
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.weight(1f),
+                    stringResource(if (waiting) R.string.fbot_waiting_response else if (streaming) R.string.fbot_thinking else R.string.fbot_reasoning),
+                    style = MaterialTheme.typography.bodySmall, color = runtimeProcessColor(),
+                    maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f).then(runtimeProcessPulse(streaming)),
                 )
-                RuntimeIcon(if (expanded) RuntimeIconName.ChevronUp else RuntimeIconName.ChevronDown, Modifier.size(15.dp))
+                RuntimeProcessTimer("reasoning:$messageId", streaming, startedAtMs.takeIf { waiting })
+                RuntimeIcon(if (expanded) RuntimeIconName.ChevronUp else RuntimeIconName.ChevronDown, Modifier.size(16.dp), runtimeProcessColor())
             }
-            if (expanded) {
+            if (expanded && reasoning.isNotBlank()) {
                 Box(
                     Modifier
                         .fillMaxWidth()
                         .heightIn(max = 160.dp)
-                        .testTag("group-reasoning-viewport"),
+                        .padding(start = 28.dp).testTag("group-reasoning-viewport"),
                 ) {
                     Text(
                         reasoning.ifBlank { stringResource(R.string.fbot_waiting_response) },

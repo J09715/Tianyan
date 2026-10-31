@@ -30,7 +30,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -962,7 +962,7 @@ private fun UpgradeVersionDialog(
                 InfoRow(label = "当前版本", value = agent.currentVersion ?: "未安装")
                 InfoRow(label = "推荐版本", value = agent.latestVersion ?: "latest")
 
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = versionInput,
                     onValueChange = { versionInput = it },
                     label = { Text("目标版本 (如 1.0.0，留空即最新)") },

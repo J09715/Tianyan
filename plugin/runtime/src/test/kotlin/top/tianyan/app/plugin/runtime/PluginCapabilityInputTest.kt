@@ -46,14 +46,23 @@ class PluginCapabilityInputTest {
     }
 
     @Test fun writeActionsAreNeverSessionEligible() {
-        assertEquals(setOf(PluginCapabilityInput.CLIPBOARD_WRITE, PluginCapabilityInput.INSTALL_APK), PluginCapabilityInput.ONE_SHOT)
+        assertEquals(setOf(PluginCapabilityInput.CLIPBOARD_WRITE, PluginCapabilityInput.INSTALL_APK, PluginCapabilityInput.SERVICE_WRITE), PluginCapabilityInput.ONE_SHOT)
         assertTrue(PluginCapabilityInput.ONE_SHOT.none { it in setOf(PluginCapabilityInput.LOGCAT, PluginCapabilityInput.SERVICE_REQUEST) })
     }
 
     @Test fun theServiceActionSetMatchesTheRegisteredCapabilities() {
         assertEquals(
-            setOf(PluginCapabilityInput.SERVICE_REQUEST, PluginCapabilityInput.SERVICE_STREAM),
+            setOf(PluginCapabilityInput.SERVICE_REQUEST, PluginCapabilityInput.SERVICE_STREAM, PluginCapabilityInput.SERVICE_WRITE),
             PluginCapabilityInput.SERVICE_ACTIONS.map { PluginCapability(it, "service") }.toSet(),
         )
+    }
+
+    @Test fun writesFreezeTheirBodyAndKeepSecretsOutOfThePreview() {
+        val input = "api/auth/token\n{\"token\":\"secret\"}"
+        assertTrue(PluginCapabilityInput.valid(PluginCapabilityCall("w", PluginCapabilityInput.SERVICE_WRITE, input)))
+        assertEquals("\"api/auth/token\"", PluginCapabilityInput.serviceWritePreview(input))
+        for (text in listOf("api/write", "api/write\n", "../write\n{}", "a//b\n{}", "/write\n{}", "a\n" + "x".repeat(1024), "a\n\u0000")) {
+            assertFalse(PluginCapabilityInput.validServiceWrite(text))
+        }
     }
 }

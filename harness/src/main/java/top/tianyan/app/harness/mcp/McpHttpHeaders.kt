@@ -8,6 +8,7 @@ import top.tianyan.app.harness.mcp.oauth.McpOAuthTokenProvider
 import top.tianyan.app.harness.mcp.server.BuiltinBrowserMcpAccess
 
 internal suspend fun resolveMcpHttpHeaders(server: McpServerConfig, oauth: McpOAuthTokenProvider?): Map<String, String> {
+    check(server.headersReadError == null) { server.headersReadError.orEmpty() }
     validateMcpHttpHeaders(server.headers)
     val headers = server.headers.toMutableMap()
     val authorization = headers.keys.firstOrNull { it.equals("Authorization", ignoreCase = true) }

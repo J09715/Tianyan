@@ -26,4 +26,5 @@
     <string name="components_md_code_copied">代码已复制到剪贴板</string>
     <string name="components_md_code_badge">代码</string>
     <string name="components_md_copy">复制</string>
+    <string name="components_clear_search">清空搜索</string>
 </resources>

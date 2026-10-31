@@ -31,9 +31,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import top.tianyan.app.ui.components.SpotlightGuideOverlay
-import top.tianyan.app.ui.components.rememberSpotlightAnchor
-import top.tianyan.app.ui.components.spotlightAnchor
 import top.tianyan.app.ui.components.RuntimeButton as Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
@@ -86,7 +83,6 @@ import android.widget.Toast
 import top.tianyan.app.core.tools.LocalPluginImportState
 import top.tianyan.app.feature.components.R as ComponentsR
 import top.tianyan.app.feature.settings.R
-
 /**
  * 天衍 · 插件与 AI 工具中心 (Tool & Plugin Center)
  */
@@ -98,14 +94,14 @@ internal fun LocalToolCenterContent(
     onOpenToolDetail: (toolId: String) -> Unit = {},
     onStartAiHealing: (toolId: String, toolName: String, errorLogs: List<String>) -> Unit = { _, _, _ -> },
     viewModel: ToolCenterViewModel? = previewOrNull { koinViewModel() },
+    onOpenLibrary: () -> Unit = {}, onOpenBuiltinFeatures: () -> Unit = {}, onOpenWebPlugins: () -> Unit = {},
 ) {
     val tools by viewModel?.tools?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
     val installProgress by viewModel?.installProgress?.collectAsStateWithLifecycle() ?: previewStateOf(emptyMap())
     val verifications by viewModel?.verifications?.collectAsStateWithLifecycle() ?: previewStateOf(emptyMap())
-    val selectedCategory by viewModel?.selectedCategory?.collectAsStateWithLifecycle() ?: previewStateOf("")
+    val selectedCategory by viewModel?.selectedCategory?.collectAsStateWithLifecycle() ?: previewStateOf("INSTALLED")
     val viewingLogsToolId by viewModel?.viewingLogsToolId?.collectAsStateWithLifecycle() ?: previewStateOf(null)
     val toolLogs by viewModel?.toolLogs?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
-
     val installedComponentIds by viewModel?.installedComponentIds?.collectAsStateWithLifecycle() ?: previewStateOf(emptySet())
     val activeBundle by viewModel?.activeBundle?.collectAsStateWithLifecycle() ?: previewStateOf(null)
     val selectedComponents by viewModel?.selectedComponents?.collectAsStateWithLifecycle() ?: previewStateOf(emptySet())
@@ -122,15 +118,10 @@ internal fun LocalToolCenterContent(
         uri?.let({ arg0 -> viewModel?.importLocalPlugin(arg0) })
     }
 
-    // 首次进入引导：高亮顶栏「导入离线插件包」文件夹按钮
-    val importGuideShown by viewModel?.importGuideShown?.collectAsStateWithLifecycle() ?: previewStateOf(false)
-    val importAnchor = rememberSpotlightAnchor()
-
     val categories = listOf(
-        "ALL" to "全部生态",
-        "BUNDLES" to "全栈开发套件",
-        "SOURCE_LOCAL" to "本地插件",
-        "SOURCE_REMOTE" to "在线插件",
+        "INSTALLED" to "已安装",
+        "ALL" to "全部插件",
+        "BUNDLES" to "开发套件",
         "CODING_AGENT" to "编程助手",
         "AI_AGENT" to "智能体生态",
     )
@@ -138,16 +129,8 @@ internal fun LocalToolCenterContent(
     val showBundles = selectedCategory == "ALL" || selectedCategory == "BUNDLES"
     val showTools = selectedCategory != "BUNDLES"
 
-    val filteredTools = tools.filter { tool ->
-        when (selectedCategory) {
-            "ALL" -> true
-            "SOURCE_LOCAL" -> viewModel?.toolSource(tool.id) == "LOCAL"
-            "SOURCE_REMOTE" -> viewModel?.toolSource(tool.id) != "LOCAL"
-            else -> tool.category.equals(selectedCategory, ignoreCase = true)
-        }
-    }
+    val filteredTools = PluginCenterCatalogPolicy.visibleTools(tools, selectedCategory)
 
-    // 遮罩与 Scaffold 放在同一 Box 下（同层兄弟节点），保证遮罩坐标与按钮 boundsInRoot 同一参照系
     Box(modifier = Modifier.fillMaxSize()) {
     val scrollBehavior = androidx.compose.material3.TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
@@ -155,21 +138,10 @@ internal fun LocalToolCenterContent(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             RuntimeTopBar(
-                title = "插件与工具中心",
+                title = androidx.compose.ui.res.stringResource(R.string.plugin_center_title),
                 onBack = onBack,
                 scrollBehavior = scrollBehavior,
                 actions = {
-                    IconButton(
-                        onClick = { importLauncher.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) },
-                        modifier = Modifier.spotlightAnchor(importAnchor),
-                        contentDescription = "导入离线插件包",
-                    ) {
-                        RuntimeIcon(
-                            name = RuntimeIconName.FolderOpen,
-                            modifier = Modifier.size(20.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
                     IconButton(
                         onClick = {
                             viewModel?.syncRegistry()
@@ -195,16 +167,22 @@ internal fun LocalToolCenterContent(
             )
         },
     ) { innerPadding ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .then(top.tianyan.app.ui.components.runtimeScrollViewport(innerPadding)),
+            contentPadding = top.tianyan.app.ui.components.runtimeScrollContentPadding(innerPadding, top.tianyan.app.ui.components.runtimeContentPadding(horizontal = 16.dp, top = 16.dp, bottom = 32.dp)),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            // Category Filter Bar
+            item("plugin-actions") {
+                PluginCenterActions(onOpenLibrary, { importLauncher.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) },
+                    onOpenBuiltinFeatures, onOpenWebPlugins,
+                    enabled = localPluginImport !is LocalPluginImportState.Reading && localPluginImport !is LocalPluginImportState.Importing && localPluginImport !is LocalPluginImportState.PendingConfirmation)
+            }
+            item("plugin-categories") {
             LazyRow(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                    .fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(categories) { (catId, label) ->
@@ -221,12 +199,7 @@ internal fun LocalToolCenterContent(
                     )
                 }
             }
-
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = top.tianyan.app.ui.components.runtimeScrollContentPadding(innerPadding, top.tianyan.app.ui.components.runtimeContentPadding(horizontal = 16.dp, top = 16.dp, bottom = 32.dp)),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
+            }
                 item(key = "tool_catalog_summary") {
                     Text("已集成 ${tools.count { it.state == ToolState.INSTALLED.name }} 个已就绪工具",
                         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -580,8 +553,8 @@ internal fun LocalToolCenterContent(
                 // 分类下无任何工具时给出空态提示，避免列表区完全空白
                 if (showTools && filteredTools.isEmpty()) {
                     item(key = "tool_center_empty_category") {
-                        val emptyTitle = androidx.compose.ui.res.stringResource(R.string.settings_tool_center_empty_category_title)
-                        val emptySubtitle = androidx.compose.ui.res.stringResource(R.string.settings_tool_center_empty_category_subtitle)
+                        val emptyTitle = androidx.compose.ui.res.stringResource(if (selectedCategory == "INSTALLED") R.string.plugin_center_empty_title else R.string.settings_tool_center_empty_category_title)
+                        val emptySubtitle = androidx.compose.ui.res.stringResource(if (selectedCategory == "INSTALLED") R.string.plugin_center_empty_summary else R.string.settings_tool_center_empty_category_subtitle)
                         RuntimeCard(
                             modifier = Modifier.fillMaxWidth(),
                             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -612,7 +585,6 @@ internal fun LocalToolCenterContent(
                         }
                     }
                 }
-            }
         }
 
         // A package is only committed/installed after explicit confirmation.
@@ -803,17 +775,6 @@ internal fun LocalToolCenterContent(
         }
     }
 
-    // 首次进入引导遮罩：高亮顶栏「导入离线插件包」入口（组件内部等待按钮完成布局测量后才绘制）
-    if (!importGuideShown) {
-        SpotlightGuideOverlay(
-            anchor = importAnchor,
-            title = "导入离线插件包",
-            message = "已从 QQ 群下载好全量离线插件包？点击右上角的文件夹图标，选择 zip 文件即可导入，" +
-                "一次装齐 Android、Flutter、反编译环境，全程无需联网。",
-            icon = RuntimeIconName.FolderOpen,
-            onDismiss = { viewModel?.markImportGuideShown() },
-        )
-    }
     } // Box
 }
 

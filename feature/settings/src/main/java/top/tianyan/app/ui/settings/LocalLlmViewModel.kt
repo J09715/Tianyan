@@ -154,8 +154,11 @@ class LocalLlmViewModel(
             _message.value = null
             _messageIsError.value = false
             runCatching {
-                localLlmManager.start(fileName)
-                activateLocalProfile(fileName)
+                val profileId = "local-llamacpp-${linuxRuntime.activeDistroId.value}"
+                val contextTokens = aiModelRepository.findById(profileId)?.contextTokens
+                    ?: localLlmManager.defaultContextTokens
+                localLlmManager.start(fileName, contextTokens)
+                activateLocalProfile(fileName, contextTokens)
             }.onSuccess {
                 showMessage("模型服务已启动，并已设为当前对话模型", isError = false)
             }.onFailure { throwable ->
@@ -230,7 +233,7 @@ class LocalLlmViewModel(
         }
     }
 
-    private suspend fun activateLocalProfile(fileName: String) {
+    private suspend fun activateLocalProfile(fileName: String, contextTokens: Int) {
         val distroId = linuxRuntime.activeDistroId.value
         val profileId = "local-llamacpp-$distroId"
         val existing = aiModelRepository.findById(profileId)
@@ -251,7 +254,7 @@ class LocalLlmViewModel(
                 reasoningMode = existing?.reasoningMode,
                 reasoningEffort = existing?.reasoningEffort,
                 toolCallMode = existing?.toolCallMode,
-                contextTokens = existing?.contextTokens ?: if (deviceRamBytes < 6L * GIB) 2048 else 4096,
+                contextTokens = contextTokens,
                 customHeaders = existing?.customHeaders.orEmpty(),
                 pureChatMode = existing?.pureChatMode ?: false,
                 visionEnabled = false,

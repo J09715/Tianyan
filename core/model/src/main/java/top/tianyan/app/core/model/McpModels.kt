@@ -34,6 +34,8 @@ data class McpServerConfig(
     val serverUrl: String = "",
     /** 自定义 HTTP 请求头；仓储单独加密，不参与通用序列化或导出。 */
     @Transient val headers: Map<String, String> = emptyMap(),
+    /** 持久化凭据不可读时阻止连接，编辑后重新保存方可恢复。 */
+    @Transient val headersReadError: String? = null,
     /** Authentication mode for remote HTTP MCP services. */
     val authMode: McpAuthMode = McpAuthMode.NONE,
     /** Public OAuth client configuration; secrets are never stored here. */

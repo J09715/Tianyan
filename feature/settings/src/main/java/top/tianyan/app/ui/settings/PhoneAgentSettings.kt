@@ -13,7 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -87,7 +87,7 @@ internal fun PhoneAgentSettingsEntry(
         title = "手机操作模型",
         subtitle = "单独的接口、模型名和密钥，不会出现在聊天模型里",
         value = config.model.ifBlank { "未配置" },
-        onClick = onOpen,
+        onClick = onOpen, tonalIcon = true,
     )
 }
 
@@ -125,7 +125,7 @@ fun PhoneAgentSettingsScreen(
                     Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = baseUrl,
                         onValueChange = { baseUrl = it },
                         modifier = Modifier.fillMaxWidth(),
@@ -135,7 +135,7 @@ fun PhoneAgentSettingsScreen(
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                     )
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = model,
                         onValueChange = { model = it },
                         modifier = Modifier.fillMaxWidth(),
@@ -144,7 +144,7 @@ fun PhoneAgentSettingsScreen(
                         supportingText = { Text("智谱的手机操作模型名是 autoglm-phone") },
                         singleLine = true,
                     )
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = apiKey,
                         onValueChange = { apiKey = it },
                         modifier = Modifier.fillMaxWidth(),

@@ -7,7 +7,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -59,7 +59,7 @@ internal fun BotMemoryEditorDialog(path: String, onDismiss: () -> Unit,
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
                 Text(path, style = MaterialTheme.typography.bodyMedium)
                 if (loading) RuntimeCircularProgressIndicator()
-                if (draft != null) OutlinedTextField(value = draft.orEmpty(), onValueChange = { draft = it },
+                if (draft != null) RuntimeFilledTextField(value = draft.orEmpty(), onValueChange = { draft = it },
                     enabled = !saving && !loading, label = { Text(stringResource(R.string.fbot_memory_body)) }, minLines = 8, maxLines = 18,
                     textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace), modifier = Modifier.fillMaxWidth())
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }

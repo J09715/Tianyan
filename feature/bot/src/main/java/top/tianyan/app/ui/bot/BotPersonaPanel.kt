@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -108,21 +108,21 @@ internal fun BotPersonaPanel(
         }
         BotAvatarEditor(avatarSeed, name.ifBlank { bot.name }, bot.colorHex, !busy,
             onChange = { avatarSeed = it }, onLoading = { avatarLoading = it })
-        OutlinedTextField(
+        RuntimeFilledTextField(
             value = name,
             onValueChange = { name = it.take(40) },
             label = { Text(stringResource(R.string.fbot_name)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
-        OutlinedTextField(
+        RuntimeFilledTextField(
             value = role,
             onValueChange = { role = it.take(40) },
             label = { Text(stringResource(R.string.fbot_role)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
-        OutlinedTextField(
+        RuntimeFilledTextField(
             value = persona,
             onValueChange = { persona = it },
             label = { Text(stringResource(R.string.fbot_persona)) },

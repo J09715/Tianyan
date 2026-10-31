@@ -10,6 +10,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.Role
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -71,22 +74,23 @@ fun ModelExportDialog(
             } finally { busy = false }
         }
     }
-    RuntimeAlertDialog(
-        onDismissRequest = { if (!busy) onDismiss() },
-        title = { Text(title) },
-        text = {
-            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(subtitle)
-                Row {
-                    RuntimeCheckbox(checked = includeKeys, enabled = !busy, onCheckedChange = { includeKeys = it })
-                    Column(Modifier.weight(1f)) {
-                        Text("包含 API Key 与自定义请求头", style = MaterialTheme.typography.titleSmall)
-                        Text(if (includeKeys) "包含敏感凭据，请妥善保管，切勿公开发送" else "默认不导出 API Key 与任何自定义请求头",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (includeKeys) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+    RuntimeSelectionSheet(title = title, subtitle = subtitle, onDismissRequest = onDismiss, dismissEnabled = !busy) {
+        Column(Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(Modifier.fillMaxWidth().toggleable(includeKeys, enabled = !busy,
+                role = Role.Checkbox, onValueChange = { includeKeys = it }).heightIn(min = 80.dp).padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                RuntimeCheckbox(checked = includeKeys, enabled = !busy, onCheckedChange = null)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("包含 API Key 与自定义请求头", style = MaterialTheme.typography.bodyLarge)
+                    Text(if (includeKeys) "包含敏感凭据，请妥善保管，切勿公开发送" else "默认不导出 API Key 与任何自定义请求头",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (includeKeys) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                RuntimeOutlinedButton(modifier = Modifier.fillMaxWidth(), enabled = !busy, onClick = {
+            }
+            RuntimeCard(contentPadding = PaddingValues(0.dp), shape = MaterialTheme.shapes.extraLarge,
+                containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+                SettingsRow(RuntimeIconName.Copy, "复制 JSON", "复制配置到剪贴板", enabled = !busy, onClick = {
                     generate { content ->
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
                             ?: error("Clipboard unavailable")
@@ -94,11 +98,11 @@ fun ModelExportDialog(
                         Toast.makeText(context, "已复制 JSON 配置到剪贴板", Toast.LENGTH_SHORT).show()
                         onDismiss()
                     }
-                }) { Text("复制 JSON 到剪贴板") }
-                RuntimeOutlinedButton(modifier = Modifier.fillMaxWidth(), enabled = !busy, onClick = {
+                })
+                SettingsRow(RuntimeIconName.Document, "保存为文件", defaultFileName, enabled = !busy, onClick = {
                     generate { content -> pendingFile = content; createFile.launch(defaultFileName) }
-                }) { Text("保存为 .json 文件") }
-                RuntimeOutlinedButton(modifier = Modifier.fillMaxWidth(), enabled = !busy, onClick = {
+                })
+                SettingsRow(RuntimeIconName.OpenInNew, "系统分享", "选择分享配置的应用", enabled = !busy, onClick = {
                     generate { content ->
                         val intent = Intent(Intent.ACTION_SEND).apply {
                             type = "text/plain"; putExtra(Intent.EXTRA_SUBJECT, "Tianyan Model Profiles")
@@ -107,13 +111,14 @@ fun ModelExportDialog(
                         context.startActivity(Intent.createChooser(intent, "分享模型配置"))
                         onDismiss()
                     }
-                }) { Text("系统分享") }
-                if (busy) RuntimeCircularProgressIndicator(Modifier.size(20.dp))
-                if (failed) Text("导出失败，请检查凭据、配置及文件访问权限后重试", color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall)
+                })
             }
-        },
-        confirmButton = {},
-        dismissButton = { RuntimeTextButton(enabled = !busy, onClick = onDismiss) { Text("关闭") } },
-    )
+            if (busy) Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                RuntimeCircularProgressIndicator(Modifier.size(24.dp))
+                Text("正在导出配置…", style = MaterialTheme.typography.bodyMedium)
+            }
+            if (failed) Text("导出失败，请检查凭据、配置及文件访问权限后重试", color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyMedium)
+        }
+    }
 }

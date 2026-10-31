@@ -1,4 +1,5 @@
 package top.tianyan.app.ui.chat
+import kotlinx.coroutines.flow.first
 import top.tianyan.app.ui.components.previewOrNull
 import top.tianyan.app.ui.components.previewStateOf
 import org.koin.compose.viewmodel.koinViewModel
@@ -13,7 +14,6 @@ import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
-import top.tianyan.app.ui.components.RuntimeAlertDialog
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -85,8 +85,6 @@ import top.tianyan.app.harness.QueuedPrompt
 import top.tianyan.app.harness.compaction.CompactionSnapshot
 import top.tianyan.app.harness.mcp.McpWorkspaceRecommender
 import top.tianyan.app.runtime.ProjectType
-import top.tianyan.app.ui.chat.ChatRenderItem
-import top.tianyan.app.ui.chat.projectChatMessages
 import top.tianyan.app.feature.a2uipoc.LocalA2uiSessionId
 import top.tianyan.app.harness.HarnessTool
 import top.tianyan.app.harness.SkillSuggestion
@@ -179,6 +177,8 @@ fun ChatScreen(
     var showRunModes by rememberSaveable { mutableStateOf(false) }; var showSkillsMcpSheet by rememberSaveable { mutableStateOf(false) }
     var showBranches by rememberSaveable { mutableStateOf(false) }; var showRuntimeTimeline by rememberSaveable { mutableStateOf(false) }
     var showMemorySheet by rememberSaveable { mutableStateOf(false) }
+    val timelineFocus = rememberSaveable(currentSessionId) { mutableStateOf<String?>(null) }
+    val timelineItems = remember(currentSessionId) { mutableStateOf(ChatTimelineSnapshot()) }
     var showReasoningSlider by rememberSaveable { mutableStateOf(false) }
     var branchFromMessageId by rememberSaveable { mutableStateOf<String?>(null) }
     // 编辑目标消息只保存 id，避免把不可保存的实体放进状态保存器
@@ -269,26 +269,19 @@ fun ChatScreen(
     // 🌟 1. 消息发送与流式输出跟随滚动
     // 仅当用户本来就停在底部附近时才跟随输出滚动；上滑阅读历史时不打扰，
     // 重新滑回底部（或新发消息）后恢复自动跟随。
+    var lastSeenMessageCount by remember { mutableStateOf(messages.size) }
     LaunchedEffect(messages.size, lastMessageSignature) {
+        val userSent = messages.size > lastSeenMessageCount && messages.lastOrNull() is UserMessage
+        lastSeenMessageCount = messages.size
         if (messages.isNotEmpty()) {
             delay(30)
-            if (initialPositionedSessionKey != currentSessionKey) {
-                initialPositionedSessionKey = currentSessionKey
-                listState.safeScrollToLastItem()
-            } else if (followLatest) {
-                listState.safeScrollToLastItem()
-            }
+            val reposition = initialPositionedSessionKey != currentSessionKey
+            if (reposition) initialPositionedSessionKey = currentSessionKey
+            if (reposition || followLatest || userSent) listState.safeScrollToAbsoluteBottom()
         }
     }
 
-    // 🌟 2. 软键盘弹起时自动平滑滚动定位到最后一条消息。
-    // delay 之后必须重新读 totalItemsCount：IME insets 会触发 relayout，
-    // 未测量完成时 count 为 0，animateScrollToItem(-1) 会直接崩。
-    LaunchedEffect(isImeVisible) {
-        if (!isImeVisible) return@LaunchedEffect
-        delay(80)
-        listState.safeScrollToLastItem(animated = true)
-    }
+    ChatImeFollowLatest(listState, isImeVisible, followLatest)
 
     val snackbarHostState = remember { SnackbarHostState() }
     val appContext = LocalContext.current.applicationContext
@@ -353,7 +346,6 @@ fun ChatScreen(
     }
     val noProjectHint = stringResource(R.string.chat_repository_no_project)
     var toolchainGap by remember { mutableStateOf(false) }; var showToolchainPanel by remember { mutableStateOf(false) }
-    var showRedTeamPanel by rememberSaveable { mutableStateOf(false) }
 
     val chatTopBar: @Composable (onOpenBrowser: (() -> Unit)?, browserHighlight: Boolean, companion: ChatCompanionToggle?) -> Unit =
         { onOpenBrowser, browserHighlight, companion ->
@@ -365,7 +357,7 @@ fun ChatScreen(
                 onOpenSessions = onOpenNavigation, onOpenBots = { onNavigate(MainDestination.Bots) }, onOpenWorkshop = { onNavigate(MainDestination.Workspace) },
                 onOpenRunModes = { showRunModes = true },
                 onOpenBranches = { showBranches = true },
-                onOpenRuntime = { showRuntimeTimeline = true },
+                onOpenRuntime = { showRuntimeTimeline = true }, onOpenMemory = { showMemorySheet = true },
                 onOpenBrowser = onOpenBrowser,
                 browserHighlight = browserHighlight,
                 onOpenRepository = onOpenRepository?.let { open ->
@@ -381,15 +373,13 @@ fun ChatScreen(
                 },
                 repositoryHighlight = repositoryHighlight,
                 toolchainHighlight = toolchainGap, onOpenToolchain = { showToolchainPanel = true },
-                onOpenRedTeam = viewModel?.let { { showRedTeamPanel = true } },
-                redTeamActive = currentSession?.redTeamMode == top.tianyan.app.core.model.RedTeamMode.RED_TEAM.id,
                 onOpenReasoning = { showReasoningSlider = true }, companion = companion, speech = speech,
             )
         }
 
     // 模型回复里的 /workspace、/attachments 等沙箱路径在此翻译为宿主真实文件，
     // 否则 Coil 会按 Android 根文件系统路径加载而必然失败。
-    CompositionLocalProvider(LocalSandboxHostRoots provides (viewModel?.sandboxHostRoots ?: emptyMap()), LocalA2uiSessionId provides currentSessionId) {
+    CompositionLocalProvider(LocalSandboxHostRoots provides (viewModel?.sandboxHostRoots ?: emptyMap()), LocalA2uiSessionId provides currentSessionId, LocalChatTimelineFocus provides timelineFocus, LocalChatTimelineItems provides timelineItems, LocalChatContextLimit provides contextUsage.limitTokens) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -453,6 +443,7 @@ fun ChatScreen(
                     initializing = initializing,
                     pinnedCapabilities = pinnedCapabilities,
                     onOpenSkillsMcp = { showSkillsMcpSheet = true },
+                    onCompactContext = { viewModel?.compactContextNow() },
                     onUnpinMention = { arg0 -> viewModel?.unpinMention(arg0) },
                     activePlan = activePlan,
                     pendingApprovals = pendingApprovals,
@@ -575,10 +566,6 @@ fun ChatScreen(
         )
     }
 
-    if (showRedTeamPanel && currentSession != null && viewModel != null) {
-        RedTeamWorkbenchSheet(currentSession, viewModel) { showRedTeamPanel = false }
-    }
-
     ToolchainHost(showToolchainPanel, { showToolchainPanel = false }) { toolchainGap = it }
     if (showRuntimeTimeline) {
         RuntimeTimelineSheet(
@@ -592,16 +579,16 @@ fun ChatScreen(
             onNavigateToMessage = { messageId ->
                 showRuntimeTimeline = false
                 coroutineScope.launch {
-                    // 关键修复：旧实现用过滤后的 messages.indexOfFirst，缺少 LazyColumn 头部偏移补偿
-                    // 与上界保护，sheet 打开后消息变化时可能传入越界索引（LazyListState 抛
-                    // IllegalArgumentException）。此处改用与 ChatMessageList 完全一致的投影（含折叠开关）。
-                    val renderItems = projectChatMessages(messages, toolResults, collapseEnabled = chatRoundCollapse)
+                    // 等待同一列表的真实投影展开目标轮次，避免手动折叠改变索引后定位错位。
+                    timelineFocus.value = messageId
+                    val renderItems = kotlinx.coroutines.withTimeoutOrNull(1_000) {
+                        androidx.compose.runtime.snapshotFlow { timelineItems.value }.first { it.focusedId == messageId && it.items.any { item -> item.containsMessage(messageId) } }.items
+                    } ?: return@launch
                     val targetIndex = renderItems.indexOfFirst { item ->
-                        item is ChatRenderItem.MessageItem && item.message.id == messageId
+                        item.containsMessage(messageId)
                     }
                     if (targetIndex < 0) return@launch
-                    // LazyColumn 头部偏移：(init ? 1 : empty ? 1 : 0) + (compaction ? 1 : 0)。
-                    // activePlan 不是独立头部 —— 不要再加 1。
+                    // 头部仅包含初始化/空态与压缩横幅，任务计划不占单独条目。
                     val headerOffset = (if (initializing) 1 else 0) +
                         (if (!initializing && messages.isEmpty()) 1 else 0) +
                         (if (activeCompaction != null) 1 else 0)
@@ -615,27 +602,22 @@ fun ChatScreen(
     if (showApprovalModes) {
         ApprovalModeSheet(currentApprovalMode = currentApprovalMode,
             onSelect = { mode -> viewModel?.setCurrentSessionApprovalMode(mode); showApprovalModes = false },
-            onDismiss = { showApprovalModes = false })
-    }
+            onDismiss = { showApprovalModes = false }) }
 
     if (showRunModes) {
         RunModeSheet(currentRunMode = currentRunMode,
             onSelect = { mode -> viewModel?.setCurrentSessionRunMode(mode); showRunModes = false },
-            onDismiss = { showRunModes = false })
-    }
+            onDismiss = { showRunModes = false }) }
 
     if (showReasoningSlider) {
-        PlainBackdropModalBottomSheet(onDismissRequest = { showReasoningSlider = false }) {
-            ReasoningEffortSlider(
-                currentMode = activeModel?.reasoningMode, currentEffort = activeModel?.reasoningEffort,
-                onSelect = { mode, effort -> viewModel?.updateActiveModelReasoning(mode, effort); showReasoningSlider = false },
-                onClose = { showReasoningSlider = false },
-            )
-        }
+        PlainBackdropModalBottomSheet(onDismissRequest = { showReasoningSlider = false }) { ReasoningEffortSlider(
+            currentMode = activeModel?.reasoningMode, currentEffort = activeModel?.reasoningEffort,
+            onSelect = { mode, effort -> viewModel?.updateActiveModelReasoning(mode, effort); showReasoningSlider = false },
+            onClose = { showReasoningSlider = false }) }
     }
 
     if (showMemorySheet) {
-        SessionMemorySheet(memories = memories, scratchpads = scratchpads,
+        SessionMemorySheet(memories = memories, scratchpads = scratchpads, sessionId = currentSessionId, failureMemoryAccess = viewModel?.failureMemoryAccess,
             onDeleteMemory = { arg0 -> viewModel?.deleteMemory(arg0) }, onDeleteScratchpad = { arg0 -> viewModel?.deleteScratchpad(arg0) },
             onClearScratchpads = { viewModel?.clearScratchpads() }, onDismiss = { showMemorySheet = false })
     }
@@ -698,6 +680,7 @@ private fun ChatPaneContent(
     initializing: Boolean = false,
     pinnedCapabilities: List<MentionItem> = emptyList(),
     onOpenSkillsMcp: () -> Unit = {},
+    onCompactContext: () -> Unit = {},
     onUnpinMention: (String) -> Unit = {},
     activeModel: AiModelEntity? = null,
     onOpenModels: () -> Unit, approvalMode: ApprovalMode, onOpenApprovalModes: () -> Unit,
@@ -803,7 +786,7 @@ private fun ChatPaneContent(
 
         shareActions?.let { share -> ShareQuickActionsRow(state = share, modifier = Modifier.padding(vertical = 4.dp)) }
 
-        Column(Modifier.windowInsetsPadding(chatBottomInsets())) { ChatComposer(
+        Column(Modifier.chatInputScrim().windowInsetsPadding(chatBottomInsets())) { ChatComposer(
             listState = listState,
             running = running,
             initializing = initializing,
@@ -834,6 +817,7 @@ private fun ChatPaneContent(
             pinnedCapabilities = pinnedCapabilities,
             onUnpinMention = onUnpinMention,
             onOpenSkillsMcp = onOpenSkillsMcp,
+            onCompactContext = onCompactContext,
             activeModel = activeModel,
             onOpenModels = onOpenModels, approvalMode = approvalMode, onOpenApprovalModes = onOpenApprovalModes,
             onUpdateReasoning = onUpdateReasoning,

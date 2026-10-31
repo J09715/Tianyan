@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -107,7 +107,7 @@ internal fun OnboardingModelImportDialog(
                 }
 
                 if (selectedTab == 0) {
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = jsonText,
                         onValueChange = { jsonText = it },
                         modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp),

@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Text
 import top.tianyan.app.ui.components.RuntimeTextButton as TextButton
 import androidx.compose.runtime.Composable
@@ -136,7 +136,7 @@ private fun SentinelTimeEditorDialog(
         text = {
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = hourText,
                         onValueChange = { hourText = it.filter(Char::isDigit).take(2) },
                         label = { Text(stringResource(R.string.settings_feature_sentinel_hour_label)) },
@@ -144,7 +144,7 @@ private fun SentinelTimeEditorDialog(
                         singleLine = true,
                         modifier = Modifier.weight(1f),
                     )
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = minuteText,
                         onValueChange = { minuteText = it.filter(Char::isDigit).take(2) },
                         label = { Text(stringResource(R.string.settings_feature_sentinel_minute_label)) },

@@ -212,18 +212,18 @@ fun ModelProfilesScreen(
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     RuntimeIcon(RuntimeIconName.Alert, Modifier.size(20.dp), MaterialTheme.colorScheme.error)
-                    Text("删除模型档案", fontWeight = FontWeight.Bold)
+                    Text("删除模型档案")
                 }
             },
             text = { Text("确定要删除模型档案「${target.name}」吗？此操作将同时清理该模型保存的 API Key。") },
             confirmButton = {
-                RuntimeButton(
+                RuntimeTextButton(
                     onClick = {
                         viewModel?.deleteModel(target.id)
                         modelPendingDelete = null
                     },
                 ) {
-                    Text("确认删除")
+                    Text("确认删除", color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
@@ -232,64 +232,5 @@ fun ModelProfilesScreen(
                 }
             },
         )
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun ModelProfilesContent(
-    modifier: Modifier, bottomPadding: androidx.compose.ui.unit.Dp = 0.dp,
-    models: List<AiModelEntity>,
-    onCreate: () -> Unit,
-    onEdit: (AiModelEntity) -> Unit,
-    onActivate: (String) -> Unit,
-    onDelete: (AiModelEntity) -> Unit,
-    onExportSingle: (AiModelEntity) -> Unit,
-) {
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = top.tianyan.app.ui.components.runtimeContentPadding(horizontal = 16.dp, top = 16.dp, bottom = 32.dp + bottomPadding),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        item {
-            RuntimeButton(
-                onClick = onCreate,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
-                shape = RoundedCornerShape(50),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    RuntimeIcon(RuntimeIconName.Plus, Modifier.size(16.dp), MaterialTheme.colorScheme.onPrimary)
-                    Text("新增模型档案", fontWeight = FontWeight.Bold)
-                }
-            }
-        }
-
-        if (models.isEmpty()) {
-            item {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    IconTile(RuntimeIconName.Model, color = MaterialTheme.colorScheme.primary, size = 42.dp)
-                    Text("暂无模型档案", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "点击上方新增或从右上角导入 OpenAI / DeepSeek / Claude / 本地模型配置",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-
-        items(models, key = { it.id }) { model ->
-            ModelProfileCard(
-                model = model,
-                onEdit = { onEdit(model) },
-                onActivate = { onActivate(model.id) },
-                onDelete = { onDelete(model) },
-                onExport = { onExportSingle(model) },
-            )
-        }
     }
 }

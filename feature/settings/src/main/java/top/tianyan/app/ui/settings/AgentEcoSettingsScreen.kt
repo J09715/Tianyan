@@ -27,7 +27,6 @@ fun AgentEcoSettingsScreen(
     onBack: () -> Unit,
     onOpenModelProfiles: () -> Unit,
     onOpenLocalLlm: () -> Unit,
-    onOpenToolCenter: () -> Unit,
     onOpenAgentSettings: () -> Unit,
     onOpenSubagentSettings: () -> Unit,
     onOpenSkillSettings: () -> Unit,
@@ -36,24 +35,23 @@ fun AgentEcoSettingsScreen(
     onOpenStats: () -> Unit,
     onOpenPhoneAgent: () -> Unit,
     onOpenCcSwitch: () -> Unit = {},
+    onOpenToolCenter: () -> Unit = {},
     viewModel: SettingsViewModel? = previewOrNull { koinViewModel() },
 ) {
     val models by viewModel?.models?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
     val skills by viewModel?.allSkills?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
     val phrases by viewModel?.quickPhrases?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
-    // 插件只安装在本机 PRoot；远程模式仍可点击，由目标页的 LocalSettingsGate 解释限制。
-    val activeServerId by (previewOrNull { koinViewModel<RemoteServerViewModel>() }?.activeId?.collectAsStateWithLifecycle() ?: previewStateOf<String?>(null))
 
     PersonalizationScaffold(stringResource(R.string.personal_agents_title), onBack) {
         item {
-            PersonalizationSection("模型档案与提供商") {
+            PersonalizationSection("模型与对话") {
                 PreferenceSurface(first = true, last = false) {
                     SettingsRow(
                         icon = RuntimeIconName.Model,
                         title = "模型档案管理",
                         subtitle = stringResource(R.string.settings_nav_models_summary),
                         value = if (models.isEmpty()) "未配置" else "${models.size} 个模型",
-                        onClick = onOpenModelProfiles,
+                        onClick = onOpenModelProfiles, tonalIcon = true,
                     )
                 }
                 PreferenceSurface(first = false, last = false) {
@@ -61,7 +59,7 @@ fun AgentEcoSettingsScreen(
                         icon = RuntimeIconName.Cpu,
                         title = "本地 LLM",
                         subtitle = stringResource(R.string.settings_nav_local_summary),
-                        onClick = onOpenLocalLlm,
+                        onClick = onOpenLocalLlm, tonalIcon = true,
                     )
                 }
                 PreferenceSurface(first = false, last = false) {
@@ -70,7 +68,7 @@ fun AgentEcoSettingsScreen(
                         title = "快捷短语与常用指令",
                         subtitle = stringResource(R.string.settings_nav_phrases_summary),
                         value = "${phrases.count { it.isEnabled }} 条已启用",
-                        onClick = onOpenQuickPhrases,
+                        onClick = onOpenQuickPhrases, tonalIcon = true,
                     )
                 }
                 PreferenceSurface(first = false, last = true) {
@@ -78,7 +76,7 @@ fun AgentEcoSettingsScreen(
                         icon = RuntimeIconName.Speed,
                         title = "数据统计与用量分析",
                         subtitle = stringResource(R.string.settings_nav_stats_summary),
-                        onClick = onOpenStats,
+                        onClick = onOpenStats, tonalIcon = true,
                     )
                 }
             }
@@ -93,38 +91,30 @@ fun AgentEcoSettingsScreen(
         }
 
         item {
-            PersonalizationSection("工具与插件生态") {
+            PersonalizationSection("智能体能力") {
                 PreferenceSurface(first = true, last = false) {
-                    SettingsRow(
-                        icon = RuntimeIconName.Wrench,
-                        title = "插件与底层工具中心",
-                        subtitle = if (activeServerId != null) stringResource(R.string.settings_nav_tools_remote_summary) else stringResource(R.string.settings_nav_tools_summary),
-                        onClick = onOpenToolCenter,
-                    )
-                }
-                PreferenceSurface(first = false, last = false) {
                     SettingsRow(
                         icon = RuntimeIconName.Sparkles,
                         title = "智能体中枢 (CC-Switch)",
                         subtitle = stringResource(R.string.settings_nav_cc_summary),
-                        onClick = onOpenCcSwitch,
+                        onClick = onOpenCcSwitch, tonalIcon = true,
                     )
                 }
                 PreferenceSurface(first = false, last = false) {
-                    SettingsRow(icon = RuntimeIconName.Bot, title = "Agent 执行与上下文", subtitle = stringResource(R.string.settings_nav_execution_summary), onClick = onOpenAgentSettings)
+                    SettingsRow(icon = RuntimeIconName.Bot, title = "Agent 执行与上下文", subtitle = stringResource(R.string.settings_nav_execution_summary), onClick = onOpenAgentSettings, tonalIcon = true)
                 }
                 PreferenceSurface(first = false, last = false) {
-                    SettingsRow(icon = RuntimeIconName.Bot, title = "子智能体角色", subtitle = stringResource(R.string.settings_nav_roles_summary), onClick = onOpenSubagentSettings)
+                    SettingsRow(icon = RuntimeIconName.Bot, title = "子智能体角色", subtitle = stringResource(R.string.settings_nav_roles_summary), onClick = onOpenSubagentSettings, tonalIcon = true)
                 }
                 PreferenceSurface(first = false, last = false) {
-                    SettingsRow(icon = RuntimeIconName.Sparkles, title = "Skills 与插件", subtitle = stringResource(R.string.settings_nav_skills_summary), value = "${skills.count { it.isEnabled }} 个技能", onClick = onOpenSkillSettings)
+                    SettingsRow(icon = RuntimeIconName.Sparkles, title = "Skills 与插件", subtitle = stringResource(R.string.settings_nav_skills_summary), value = "${skills.count { it.isEnabled }} 个技能", onClick = onOpenSkillSettings, tonalIcon = true)
                 }
                 PreferenceSurface(first = false, last = true) {
                     SettingsRow(
                         icon = RuntimeIconName.Network,
                         title = "MCP 协议生态与服务",
                         subtitle = stringResource(R.string.settings_nav_mcp_summary),
-                        onClick = onOpenMcpSettings,
+                        onClick = onOpenMcpSettings, tonalIcon = true,
                     )
                 }
             }

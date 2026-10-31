@@ -65,6 +65,12 @@ interface LinuxRuntime {
     suspend fun stopBackgroundInstance(process: ManagedProcess): Boolean = false
     fun listBackground(): List<ManagedProcess>
     suspend fun cleanupDeadBackground(): Int
+    /**
+     * 回收 [port] 上被遗弃的本运行时监听者（上一代进程被强杀后仍在监听回环端口的孤儿）。
+     * [protectedSessions] 为调用方可额外豁免的会话根（终端会话、前台命令）；
+     * 不支持精确回收的后端返回 0。
+     */
+    suspend fun reclaimListeningPort(port: Int, protectedSessions: Set<Long> = emptySet()): Int = 0
     fun observeBackgroundLogs(idOrToolId: String): Flow<List<String>> = emptyFlow()
     fun getBackgroundLogs(idOrToolId: String): List<String> = emptyList()
     fun clearBackgroundLogs(idOrToolId: String) = Unit

@@ -265,29 +265,22 @@ class ToolManager(
 
     /** Stop a running gateway service for the given tool. */
     suspend fun stopGateway(toolId: String) {
-        val spec = serviceSpec(toolId)
-        serviceController.stop(toolId, spec)
+        runExclusive { toolSettingsRepository.setAutoStart(currentDistroId(), toolId, false)
+            serviceController.stop(toolId, serviceSpec(toolId)) }
     }
 
-    /**
-     * Restart a running gateway service. Used to apply config changes (new token,
-     * model environment) that are injected via environment variables at process start.
-     */
-    suspend fun restartGateway(toolId: String): ManagedProcess {
-        localAccess?.requireLocal()
+    /** Apply changed service configuration. */
+    suspend fun restartGateway(toolId: String): ManagedProcess = runExclusive {
         requireInstalledTool(toolId)
-        return serviceController.restart(toolId, requireAdapter(toolId), serviceSpec(toolId))
+        serviceController.restart(toolId, requireAdapter(toolId), serviceSpec(toolId))
     }
 
-    /** Observe real-time output logs for a tool's background service. */
     fun observeServiceLogs(toolId: String): Flow<List<String>> =
         serviceController.observeLogs(toolId)
 
-    /** Get snapshot of service logs for a tool. */
     fun getServiceLogs(toolId: String): List<String> =
         serviceController.getLogs(toolId)
 
-    /** Clear service logs for a tool. */
     fun clearServiceLogs(toolId: String) {
         serviceController.clearLogs(toolId)
     }
@@ -342,20 +335,20 @@ class ToolManager(
 
     /** Service metadata comes from the signed/validated manifest, not the UI. */
     suspend fun serviceSpec(toolId: String): LocalServiceSpec? {
-        val manifest = packageOperations.runtimeManifest(currentDistroId(), toolId) ?: return null
+        val distro = currentDistroId()
+        val manifest = packageOperations.runtimeManifest(distro, toolId) ?: return null
         val port = manifest.servicePort ?: return null
         return LocalServiceSpec(
             serviceId = toolId,
             port = port,
             path = manifest.servicePath,
+            authenticated = manifest.plugin?.capabilities?.any { it.name == "LOCAL_WEB" && it.target == "authenticated-v1" } == true,
+            authentication = serviceController.authentication(toolId, distro), distroId = distro,
         )
     }
 
-    /**
-     * Native launch plan for a tool service a plugin page may start itself. Port, path, command and
-     * environment are all resolved natively from the installed manifest and provider environment,
-     * never from Web content, a package field or a page argument.
-     */
+    fun serviceAuthentication(toolId: String, distroId: String) = serviceController.authentication(toolId, distroId)
+    /** Launch plan from the installed manifest; no command or endpoint comes from Web content. */
     suspend fun serviceLaunch(toolId: String): ProotServiceDescriptor? {
         val spec = serviceSpec(toolId) ?: return null
         val distro = currentDistroId()
@@ -420,8 +413,7 @@ class ToolManager(
         }
         distroIds.forEach { distroId ->
             manifests.forEach { manifest ->
-                val existing = toolRepository.findById(distroId, manifest.id)
-                toolRepository.upsert(manifest.toEntity(distroId, existing))
+                val existing = packageOperations.syncManifest(distroId, manifest)
                 if (existing?.state == ToolState.INSTALLING.name && manifest.id !in liveInstallTools) {
                     // The process may have been killed while an installer was running.
                     // Never leave a durable INSTALLING state that has no live Job behind it.
@@ -581,12 +573,11 @@ class ToolManager(
                     // 而 DB 已记新版本且状态 INSTALLED——磁盘回旧版却永不提示更新，无法自愈。
                     // commit 后落库则任一时刻被杀都可恢复：快照在 → 按旧快照回滚、DB 版本号仍是
                     // 旧值（一致）；快照已删 → 磁盘即新版，最坏多提示一次更新（无害）。
-                    val receiptVersion = safeEvent.version?.trim()?.takeIf { it.isNotBlank() } ?: fixed.version
+                    val receiptVersion = installedToolVersion(fixed, safeEvent.version)
                     packageOperations.record(distroId, fixed, receiptVersion)
                     transaction?.let { installTransactionManager.commit(it) }
                     transaction = null
-                    val installedVer = safeEvent.version?.trim()?.takeIf { it.isNotBlank() }
-                        ?: fixed.version
+                    val installedVer = receiptVersion
                     toolRepository.updateStateAndInstalledVersion(
                         distroId = distroId,
                         id = toolId,
@@ -686,7 +677,7 @@ class ToolManager(
 
     suspend fun uninstall(toolId: String, deleteData: Boolean = false) {
         localAccess?.requireLocal()
-        val distro = currentDistroId()
+        val distro = currentDistroId(); toolSettingsRepository.setAutoStart(distro, toolId, false)
         packageOperations.uninstall(distro, toolId) { fixed ->
             require(isToolSupported(toolId)) { "暂不支持卸载工具：$toolId" }
             installMutex.withLock {
@@ -819,12 +810,17 @@ class ToolManager(
         return verification
     }
 
-    suspend fun startGateway(toolId: String): ManagedProcess {
-        localAccess?.requireLocal()
+    suspend fun startGateway(toolId: String): ManagedProcess = runExclusive {
         requireInstalledTool(toolId)
-        return serviceController.start(toolId, requireAdapter(toolId), serviceSpec(toolId))
+        serviceController.start(toolId, requireAdapter(toolId), serviceSpec(toolId))
     }
-
+    internal suspend fun recoverGateway(distro: String, manifest: ToolManifest) {
+        requireManifestEnabled(manifest.id)
+        check(currentDistroId() == distro) { "服务目标发行版已改变" }
+        val spec = LocalServiceSpec(manifest.id, requireNotNull(manifest.servicePort), manifest.servicePath,
+            authenticated = manifest.plugin?.capabilities?.any { it.name == "LOCAL_WEB" && it.target == "authenticated-v1" } == true, distroId = distro)
+        serviceController.restart(manifest.id, checkNotNull(getAdapter(manifest.id, manifest, distro)), spec)
+    }
     private suspend fun requireInstalledTool(toolId: String): ToolEntity {
         val tool = toolRepository.findById(currentDistroId(), toolId)
             ?: error("工具不在当前清单中：$toolId")

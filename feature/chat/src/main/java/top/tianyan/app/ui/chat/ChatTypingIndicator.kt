@@ -37,7 +37,7 @@ internal fun isWaitingForFirstToken(messages: List<HarnessMessage>, running: Boo
 }
 
 @Composable
-internal fun ChatTypingIndicator() {
+internal fun ChatTypingIndicator(id: String = "first_output", startedAtMs: Long? = null) {
     val description = stringResource(R.string.chat_waiting_first_token)
     val transition = rememberInfiniteTransition(label = "chatTyping")
     val density = LocalDensity.current.density
@@ -58,5 +58,7 @@ internal fun ChatTypingIndicator() {
                 alpha = 0.45f + (-bounce / 3f) * 0.55f
             }.size(5.dp).background(MaterialTheme.colorScheme.onSurfaceVariant, CircleShape))
         }
+        Spacer(Modifier.width(4.dp))
+        ChatProcessTimer(id, running = true, startedAtMs = startedAtMs)
     }
 }

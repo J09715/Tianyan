@@ -34,11 +34,8 @@ internal fun ChatTopBar(
     onOpenRepository: (() -> Unit)? = null, repositoryHighlight: Boolean = false,
     toolchainHighlight: Boolean = false, onOpenToolchain: () -> Unit,
     onOpenReasoning: (() -> Unit)? = null, companion: ChatCompanionToggle? = null,
-    /** 红队入口：null 表示当前环境不提供（例如预览/无 ViewModel）。 */
-    onOpenRedTeam: (() -> Unit)? = null,
-    /** 当前会话是否已绑定红队，用于入口高亮。 */
-    redTeamActive: Boolean = false,
     speech: ChatSpeechToggle? = null,
+    onOpenMemory: () -> Unit = {},
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     val openFloatingChat = rememberFloatingChatLauncher()
@@ -93,10 +90,14 @@ internal fun ChatTopBar(
                 }
                 ChatWorkspaceBar(
                     onOpenBrowser = onOpenBrowser?.let(closeThen), browserHighlight = browserHighlight,
-                    onOpenRepository = onOpenRepository?.let(closeThen), repositoryHighlight = repositoryHighlight,
-                    onOpenRedTeam = onOpenRedTeam?.let(closeThen), redTeamActive = redTeamActive)
+                    onOpenRepository = onOpenRepository?.let(closeThen), repositoryHighlight = repositoryHighlight)
                 Text(stringResource(R.string.chat_workbench_session), Modifier.padding(top = 8.dp),
                     style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                RuntimeTextButton(onClick = closeThen(onOpenMemory)) {
+                    RuntimeIcon(RuntimeIconName.Brain, Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.chat_memory_sheet_title))
+                }
                 ChatWorkbenchControls(runMode, currentBranch, runtimeEvents, running,
                     closeThen(onOpenRunModes), closeThen(onOpenBranches),
                     closeThen(onOpenRuntime), closeThen(onOpenToolchain), toolchainHighlight,

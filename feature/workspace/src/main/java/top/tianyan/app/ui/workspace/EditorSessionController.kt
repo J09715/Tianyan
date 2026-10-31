@@ -8,7 +8,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import top.tianyan.app.core.common.result.ErrorCode
 import top.tianyan.app.feature.workspace.R
+import top.tianyan.app.runtime.HostFileActions
 import top.tianyan.app.runtime.WorkspaceManager
+import top.tianyan.app.runtime.WorkspaceFileInspection
+import top.tianyan.app.runtime.hostFile
+import top.tianyan.app.runtime.inspectFile
 
 /**
  * 代码编辑器会话：持有草稿与其状态（脏标记/版本号/保存冲突），负责打开、编辑、保存与冲突处理。
@@ -48,6 +52,11 @@ internal class EditorSessionController(
     /** 冲突前待执行的保存回调（如「保存并退出」），覆盖保存成功后继续执行。 */
     private var pendingConflictOnSuccess: (() -> Unit)? = null
 
+    private val _binaryFile = MutableStateFlow<WorkspaceFileInspection?>(null)
+
+    /** 非空表示当前文件是二进制（APK/图片/压缩包）：编辑器拒绝载入，改由系统应用打开。 */
+    val binaryFile: StateFlow<WorkspaceFileInspection?> = _binaryFile.asStateFlow()
+
     fun editorText(project: String, path: String): String =
         if (draft.matches(project, path)) draft.text else ""
 
@@ -55,10 +64,21 @@ internal class EditorSessionController(
         selectedProject.value = projectName
         _openedFilePath.value = relativePath
         _saveConflict.value = false
+        _binaryFile.value = null
         pendingConflictOnSuccess = null
         if (draft.matches(projectName, relativePath)) return
         scope.launch {
             loadingFiles.value = true
+            // 二进制文件先拦：按 UTF-8 读进来只会得到乱码，保存还会把原文件写坏。
+            val inspection = workspaceManager.inspectFile(projectName, relativePath).getOrNull()
+            if (selectedProject.value != projectName || _openedFilePath.value != relativePath) return@launch
+            if (inspection?.binary == true) {
+                _binaryFile.value = inspection
+                _fileContent.value = ""
+                _isDirty.value = false
+                loadingFiles.value = false
+                return@launch
+            }
             val result = workspaceManager.readFile(projectName, relativePath)
             if (selectedProject.value != projectName || _openedFilePath.value != relativePath) return@launch
             if (result.isSuccess) {
@@ -71,6 +91,18 @@ internal class EditorSessionController(
                 notify(result.errorOrNull()?.message ?: context.getString(R.string.workspace_open_file_failed), true)
             }
             loadingFiles.value = false
+        }
+    }
+
+    /** 交给系统应用：APK/图片/压缩包等二进制产物走这里，不走编辑器。 */
+    fun openExternally(share: Boolean) {
+        val proj = selectedProject.value ?: return
+        val path = _openedFilePath.value ?: return
+        scope.launch {
+            val file = workspaceManager.hostFile(proj, path).getOrNull()
+            val launched = file != null &&
+                if (share) HostFileActions.share(context, file, subject = file.name) else HostFileActions.open(context, file)
+            if (!launched) notify(context.getString(R.string.workspace_open_external_failed), true)
         }
     }
 
@@ -90,6 +122,7 @@ internal class EditorSessionController(
     fun saveFile(content: String? = null, onSuccess: (() -> Unit)? = null) {
         val proj = selectedProject.value ?: return
         val path = _openedFilePath.value ?: return
+        if (_binaryFile.value != null) return
         if (_isSaving.value || loadingFiles.value || !draft.matches(proj, path)) return
         content?.let(draft::edit)
         // 以编辑器最后已知的磁盘内容作为版本基线：磁盘已被外部（如 AI 工具）改动时拒绝覆盖。
@@ -172,6 +205,7 @@ internal class EditorSessionController(
     fun closeFile() {
         _openedFilePath.value = null
         _fileContent.value = ""
+        _binaryFile.value = null
         draft.clear()
         _isDirty.value = false
         _saveConflict.value = false

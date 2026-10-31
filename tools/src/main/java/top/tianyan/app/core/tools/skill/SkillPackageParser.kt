@@ -131,6 +131,9 @@ class SkillPackageParser {
         val id = frontmatter["id"]
             ?.takeIf { it.isNotBlank() }
             ?.let(::sanitizeSkillId)
+            // 社区 Agent Skills 通常只声明 name，它也是技能的稳定标识。
+            ?: frontmatter["name"]?.takeIf { it.isNotBlank() }
+                ?.let { runCatching { sanitizeSkillId(it) }.getOrNull() }
             ?: run {
                 // fallback（目录名/调用方提供）清洗失败时不阻断解析，回退到生成的稳定 id
                 runCatching { sanitizeSkillId(fallbackId) }.getOrElse {

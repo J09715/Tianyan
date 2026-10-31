@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import top.tianyan.app.ui.components.RuntimeButton as Button
 import androidx.compose.material3.MaterialTheme
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Text
 import top.tianyan.app.ui.components.RuntimeTextButton as TextButton
 import androidx.compose.runtime.Composable
@@ -82,7 +83,7 @@ internal fun CreateTerminalDialog(
                 }
 
                 Text(stringResource(R.string.terminal_label), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
-                androidx.compose.material3.OutlinedTextField(
+                RuntimeFilledTextField(
                     value = label,
                     onValueChange = { label = it },
                     placeholder = { Text(stringResource(R.string.terminal_label_hint)) },

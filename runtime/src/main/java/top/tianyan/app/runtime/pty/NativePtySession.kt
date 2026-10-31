@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import top.tianyan.app.runtime.GuestProcessEnvironment
 import top.tianyan.app.runtime.shell.*
 
 /** JNI master I/O and child reaping remain owned until every shutdown step succeeds. */
@@ -23,8 +24,17 @@ class NativePtySession internal constructor(
 ) : LinuxSession {
     constructor(command: List<String>, hostEnvironment: Map<String, String>, config: SessionConfig,
         cleanupCallback: suspend () -> Unit = {}) : this(
-        NativePty.openAndExec(command.toTypedArray(), hostEnvironment.entries.map { "${it.key}=${it.value}" }.toTypedArray(),
-            "/", config.columns, config.rows), cleanupCallback,
+        NativePty.openAndExec(
+            command.toTypedArray(),
+            GuestProcessEnvironment.commandLaunchEnvironment(
+                hostEnvironment,
+                command.firstOrNull().orEmpty(),
+                System.getenv("PATH"),
+            ).entries.map { "${it.key}=${it.value}" }.toTypedArray(),
+            "/",
+            config.columns,
+            config.rows,
+        ), cleanupCallback,
     )
     private constructor(pair: IntArray, cleanup: suspend () -> Unit) :
         this(pair[0], pair[1], JniNativePtyBackend, cleanup)

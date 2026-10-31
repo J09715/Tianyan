@@ -8,7 +8,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -98,7 +98,7 @@ fun RequestContextDialog(requests: List<RequestContextSnapshot>, archiveStatus: 
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = query, onValueChange = { query = it },
                         label = { Text(stringResource(R.string.chat_request_context_search)) },
                         singleLine = true, modifier = Modifier.fillMaxWidth(),

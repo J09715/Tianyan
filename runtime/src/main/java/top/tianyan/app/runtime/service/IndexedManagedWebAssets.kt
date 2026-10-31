@@ -24,6 +24,7 @@ class IndexedManagedWebAssets(
     private val authorization: String? = null,
     private val available: () -> Boolean,
     private val indexPath: String = ENTRY_PATH,
+    private val authentication: ToolServiceAuthentication? = null,
 ) {
     private class Pinned(val digest: String, val bytes: ByteArray)
 
@@ -121,6 +122,7 @@ class IndexedManagedWebAssets(
 
     private fun client(): OkHttpClient = synchronized(monitor) {
         client ?: OkHttpClient.Builder().proxy(Proxy.NO_PROXY).followRedirects(false)
+            .apply { authentication?.let { addInterceptor(it) } }
             .followSslRedirects(false).retryOnConnectionFailure(false).protocols(listOf(Protocol.HTTP_1_1))
             .connectTimeout(1, TimeUnit.SECONDS).readTimeout(2, TimeUnit.SECONDS)
             .callTimeout(3, TimeUnit.SECONDS).build().also { client = it }

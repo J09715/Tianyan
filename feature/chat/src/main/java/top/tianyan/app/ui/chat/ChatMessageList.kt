@@ -7,7 +7,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,7 +29,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
@@ -45,9 +43,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import top.tianyan.app.feature.chat.R
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import top.tianyan.app.harness.AssistantText
 import top.tianyan.app.harness.HarnessMessage
@@ -62,10 +57,8 @@ import top.tianyan.app.harness.checkpoint.RewindScope
 import top.tianyan.app.harness.ToolResult
 import top.tianyan.app.harness.UserMessage
 import top.tianyan.app.runtime.WorkspaceProject
-import top.tianyan.app.ui.components.IconTile
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
-import top.tianyan.app.ui.components.RuntimeCard
 import top.tianyan.app.ui.components.RuntimeCircularProgressIndicator as CircularProgressIndicator
 import top.tianyan.app.ui.components.ScrollFadeOverlay
 import androidx.compose.foundation.lazy.LazyListState
@@ -131,9 +124,15 @@ internal fun ChatMessageList(
 
     val reveal = rememberRoundRevealState()
     val renderItems = rememberChatRenderItems(messages, toolResults, expandedOverrides, chatRoundCollapse, reveal.limits)
+    val timelineFocus = LocalChatTimelineFocus.current
+    val timelineItems = LocalChatTimelineItems.current
+    val timelineSnapshot = ChatTimelineSnapshot(renderItems, timelineFocus?.value)
+    androidx.compose.runtime.SideEffect { timelineItems?.value = timelineSnapshot }
+    val toolbarIds = remember(messages, running) { assistantToolbarIds(messages, running) }
+    val lastInputIndex = remember(messages) { messages.indexOfLast { it is UserMessage } }
+    val turnLabelKeys = remember(renderItems) { assistantTurnLabelKeys(renderItems) }
     val waitingForFirstOutput = remember(
-        // 只依赖「末条消息的 id + 其内容签名」：流式期间末条内容变化会改变签名（真正需要重算），
-        // 而历史消息变化不影响该判定，因此无需依赖整个 messages 列表引用（避免每帧 O(n) 重算）。
+        // 仅依赖末条消息内容签名，避免流式期间每帧扫描历史。
         messages.lastOrNull()?.id,
         messages.lastOrNull()?.let { last ->
             when (last) {
@@ -179,22 +178,30 @@ internal fun ChatMessageList(
                 }
             }
             itemsIndexed(renderItems, key = { _, item -> item.stableKey }) { index, item ->
-                if (index > 0) Spacer(Modifier.height(2.dp))
+                if (index > 0) Spacer(Modifier.height(chatTimelineItemSpacing(renderItems[index - 1], item).dp))
+                if (item.stableKey in turnLabelKeys) AssistantTurnLabel()
                 when (item) {
+                    is ToolStepsItem -> ToolStepsCard(item, toolResults, messages, workspace, onOpenFile, running, status,
+                        thinkingExpanded, onRetryTool, running && item.steps.first().stepRawIndex > lastInputIndex,
+                        liveThinkingMessageId.takeIf { thinkingLive }, thinkingAutoTranslate, onNavigateToSettings)
                     is ChatRenderItem.CollapseButtonItem -> {
                         RoundCollapseButton(
                             item = item,
                             onToggle = {
+                                timelineFocus?.value = null
                                 val wasExpanded = item.isExpanded
                                 expandedOverrides = expandedOverrides + (item.roundKey to !wasExpanded)
                                 reveal.onToggled(item, wasExpanded, chatRoundCollapse)
                             },
                         )
                     }
+                    is ChatRenderItem.ReasoningItem -> ReasoningRow(item, thinkingExpanded,
+                        thinkingLive && item.messageId == liveThinkingMessageId, thinkingAutoTranslate,
+                        onNavigateToSettings)
                     is ChatRenderItem.MessageItem -> {
                         when (val message = item.message) {
                             is CapabilityEvent -> CapabilityEventCard(message)
-                            is TaskDelivery -> TaskDeliveryCard(message)
+                            is TaskDelivery -> TaskDeliveryCard(message, workspace, onOpenFile)
                             is SkillSuggestion -> if (message.id !in hiddenSkillSuggestions) {
                                 SkillSuggestionCard(
                                     suggestion = message,
@@ -213,18 +220,17 @@ internal fun ChatMessageList(
                                 onRewind = { scope -> onRewindMessage(message.id, scope) },
                             )
                             is AssistantText -> AssistantBubble(
-                                message = message,
+                                // 思考已作为链内步骤渲染时，气泡不再重复展示。
+                                message = if (item.showReasoning) message else message.copy(reasoning = null),
                                 defaultExpanded = thinkingExpanded,
                                 live = thinkingLive && message.id == liveThinkingMessageId,
-                                showRegenerate = message.id == lastAssistantMessageId,
+                                showRegenerate = !running && message.id == lastAssistantMessageId, prominentActions = message.id in toolbarIds,
                                 onRegenerate = onRegenerate,
                                 onCreateBranch = { onCreateBranch(message.id) },
                                 autoTranslate = thinkingAutoTranslate,
                                 onNavigateToSettings = onNavigateToSettings,
                             )
                             is ToolCall -> {
-                                // 原始下标由投影阶段预计算（见 projectChatMessages），组合期 O(1)，
-                                // 不再在每个 Lazy 项里对 messages 做 indexOfFirst 的 O(n) 全表扫描。
                                 val rawIndex = item.rawIndex
                                 if (message.tool == HarnessTool.SUBAGENT) {
                                     SubagentCard(
@@ -240,7 +246,7 @@ internal fun ChatMessageList(
                                         result = toolResults[message.id],
                                         workspace = workspace,
                                         onOpenFile = onOpenFile,
-                                        running = running,
+                                        running = running, executing = running && item.rawIndex > lastInputIndex,
                                         liveStatus = status,
                                         showReasoning = message.reasoning != null &&
                                             !reasoningAlreadyShown(messages, rawIndex, message.reasoning),
@@ -257,7 +263,7 @@ internal fun ChatMessageList(
             if (waitingForFirstOutput) {
                 item(key = "assistant_generation_placeholder") {
                     Spacer(Modifier.height(8.dp))
-                    ChatTypingIndicator()
+                    ChatTypingIndicator(messages.getOrNull(lastInputIndex)?.id ?: "first_output", messages.getOrNull(lastInputIndex)?.createdAt)
                 }
             }
         }
@@ -281,53 +287,10 @@ internal fun ChatMessageList(
             Spacer(Modifier.height(4.dp))
         }
     }
-        if (!top.tianyan.app.ui.theme.LocalChatBackgroundActive.current) ScrollFadeOverlay(top = androidx.compose.foundation.layout.WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 72.dp, bottom = 0.dp)
+        ScrollFadeOverlay(top = androidx.compose.foundation.layout.WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 72.dp,
+            bottom = 0.dp, color = top.tianyan.app.ui.theme.chatBackdropChrome())
     }
 }
-}
-
-@Composable
-internal fun RoundCollapseButton(
-    item: ChatRenderItem.CollapseButtonItem,
-    onToggle: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val text = if (item.isExpanded) {
-        stringResource(R.string.chat_collapse)
-    } else {
-        val durationSuffix = if (item.hiddenDurationMs > 0) {
-            " · " + formatChatDuration(item.hiddenDurationMs)
-        } else {
-            ""
-        }
-        stringResource(R.string.chat_expand_more, item.hiddenSteps, item.totalSteps, durationSuffix)
-    }
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onToggle)
-            .padding(horizontal = 8.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center,
-    ) {
-        HorizontalDivider(
-            modifier = Modifier.weight(1f),
-            thickness = 1.dp,
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
-        )
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 12.dp),
-        )
-        HorizontalDivider(
-            modifier = Modifier.weight(1f),
-            thickness = 1.dp,
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
-        )
-    }
 }
 
 @Composable

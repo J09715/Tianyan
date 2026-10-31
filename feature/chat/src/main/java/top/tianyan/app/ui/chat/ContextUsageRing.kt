@@ -60,7 +60,7 @@ fun ContextUsageRing(
             onClick = { showDialog = true },
             shape = CircleShape,
             color = ringColor.copy(alpha = 0.08f),
-            modifier = Modifier.minimumInteractiveComponentSize().size(30.dp).semantics { contentDescription = description },
+            modifier = Modifier.minimumInteractiveComponentSize().size(ComposerActionSize).semantics { contentDescription = description },
         ) {
             Box(contentAlignment = Alignment.Center) {
                 // 环形进度仪表盘

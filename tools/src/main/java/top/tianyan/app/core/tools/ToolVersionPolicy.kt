@@ -1,5 +1,10 @@
 package top.tianyan.app.core.tools
 
+/** Local package releases have their own version, independent from bundled command output. */
+internal fun installedToolVersion(manifest: top.tianyan.app.core.model.ToolManifest, reported: String?): String =
+    if (manifest.source == "LOCAL" || manifest.schemaVersion == 2) manifest.version
+    else reported?.trim()?.takeIf { it.isNotBlank() } ?: manifest.version
+
 internal fun isUpdateNewer(manifestLatest: String?, installedVersion: String?): Boolean {
     if (manifestLatest.isNullOrBlank() || installedVersion.isNullOrBlank()) return false
     val latestSemantic = top.tianyan.app.plugin.packages.SemanticVersion.parse(manifestLatest)

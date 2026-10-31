@@ -31,4 +31,13 @@
     <string name="delivery_failed_tool">包含失败的工具调用，请结合后续结果判断。</string>
     <string name="delivery_incomplete_artifact">部分产物记录不完整：日志可能截断，或文件扫描、指纹读取未完成。</string>
     <string name="delivery_invalid_artifact">部分产物指纹记录无法解析，未计入证据。</string>
+    <string name="delivery_artifact_open">打开</string>
+    <string name="delivery_artifact_view">查看</string>
+    <string name="delivery_artifact_share">分享</string>
+    <string name="delivery_artifact_missing">文件已不在工作区，可能被删除或移动</string>
+    <string name="delivery_artifact_changed">文件已改动，与记录的 SHA-256 不一致</string>
+    <string name="delivery_artifact_open_failed">没有可用的应用打开该文件</string>
+    <string name="delivery_artifact_save">另存</string>
+    <string name="delivery_artifact_saved">已保存到所选位置</string>
+    <string name="delivery_artifact_save_failed">保存失败</string>
 </resources>

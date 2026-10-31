@@ -12,6 +12,7 @@ class WebPluginAssetLease(
     private val resolve: ((String) -> ByteArray?)? = null,
     private val request: (suspend (String) -> String?)? = null,
     private val stream: (suspend (String, suspend (String) -> Boolean) -> Boolean)? = null,
+    private val write: (suspend (String, String) -> String?)? = null,
 ) {
     private val lock = Mutex()
     private var released = false
@@ -36,6 +37,9 @@ class WebPluginAssetLease(
      * source, and a closed lease answers nothing, so the page can never reach another endpoint.
      */
     internal suspend fun requestPath(path: String): String? = if (isAvailable) request?.invoke(path) else null
+
+    internal suspend fun writePath(path: String, body: String): String? =
+        if (isAvailable) write?.invoke(path, body) else null
 
     /** Bounded incremental read of the lease's own live service; false stops a spent or closed source. */
     internal suspend fun streamPath(path: String, emit: suspend (String) -> Boolean): Boolean =

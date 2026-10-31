@@ -64,6 +64,7 @@ class ProotCommandBuilderTest {
         assertEquals("-lc", args[workingDirectoryIndex + 3])
         assert(args[workingDirectoryIndex + 4].contains("export HOME='/root'"))
         assert(args[workingDirectoryIndex + 4].contains("export TMPDIR='/tmp'"))
+        assert(args[workingDirectoryIndex + 4].contains("export PATH='${EnvironmentResolver().runtimePath()}'"))
         assert(args[workingDirectoryIndex + 4].contains("cat /etc/os-release"))
     }
 
@@ -223,18 +224,18 @@ class ProotCommandBuilderTest {
             workspaceDir = File("/w"),
             command = ShellCommand(
                 commandLine = "tianyan-host health",
-                environment = mapOf("TIANYAN_BRIDGE_TOKEN" to "provider-forged"),
+                environment = mapOf("TAIXU_BRIDGE_TOKEN" to "provider-forged"),
             ),
             hostCredential = mapOf(
-                "TIANYAN_BRIDGE_TOKEN" to "native-issued",
-                "TIANYAN_BRIDGE_ACTIONS" to "host.install-apk,host.logcat",
+                "TAIXU_BRIDGE_TOKEN" to "native-issued",
+                "TAIXU_BRIDGE_ACTIONS" to "host.install-apk,host.logcat",
             ),
         )
 
         val resolved = args.last()
         assert(!resolved.contains("provider-forged"))
-        assert(resolved.contains("export TIANYAN_BRIDGE_TOKEN='native-issued'"))
-        assert(resolved.contains("export TIANYAN_BRIDGE_ACTIONS='host.install-apk,host.logcat'"))
+        assert(resolved.contains("export TAIXU_BRIDGE_TOKEN='native-issued'"))
+        assert(resolved.contains("export TAIXU_BRIDGE_ACTIONS='host.install-apk,host.logcat'"))
     }
 
     @Test
@@ -245,10 +246,10 @@ class ProotCommandBuilderTest {
             workspaceDir = File("/w"),
             config = SessionConfig(commandLine = "/bin/bash -i"),
             nativePty = true,
-            hostCredential = mapOf("TIANYAN_BRIDGE_TOKEN" to "native-issued"),
+            hostCredential = mapOf("TAIXU_BRIDGE_TOKEN" to "native-issued"),
         )
 
-        assert(args.last().contains("export TIANYAN_BRIDGE_TOKEN='native-issued'"))
+        assert(args.last().contains("export TAIXU_BRIDGE_TOKEN='native-issued'"))
     }
 
     @Test(expected = IllegalArgumentException::class)

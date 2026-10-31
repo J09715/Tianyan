@@ -4,6 +4,7 @@ import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
+import top.tianyan.app.core.common.files.BinaryFileSniffer
 import top.tianyan.app.core.common.files.SafeFileTree
 import top.tianyan.app.core.common.result.AppError
 import top.tianyan.app.core.common.result.AppResult
@@ -38,6 +39,40 @@ class WorkspaceFileService(
             "文件过大（${file.length()} 字节，上限 ${WorkspaceManager.MAX_FILE_READ_BYTES / 1024 / 1024} MB）"
         }
         file.readText(Charsets.UTF_8)
+    }
+
+    /**
+     * 只读文件头做二进制判定，供编辑器与文本预览拦截 APK / 图片 / 压缩包等产物。
+     * 不读正文，所以对大文件也是常数级开销。
+     */
+    suspend fun inspectFile(projectName: String, relativePath: String): AppResult<WorkspaceFileInspection> =
+        ioResult("检查文件失败") {
+            val file = resolve(projectName, relativePath)
+            check(file.isFile) { "不是文件：${displayPath(projectName, relativePath)}" }
+            val head = ByteArray(BinaryFileSniffer.SAMPLE_BYTES)
+            val read = file.inputStream().use { input ->
+                var total = 0
+                // 单次 read 不保证填满缓冲，循环读到 8KB 或 EOF 再判定。
+                while (total < head.size) {
+                    val count = input.read(head, total, head.size - total)
+                    if (count <= 0) break
+                    total += count
+                }
+                total
+            }
+            WorkspaceFileInspection(
+                relativePath = relativePath.trimStart('/'),
+                sizeBytes = file.length(),
+                binary = BinaryFileSniffer.looksBinary(head, read),
+                extension = file.extension.lowercase(),
+            )
+        }
+
+    /** 解析工作区文件对应的宿主 [File]（用于 FileProvider 外发），不做存在性校验以外的副作用。 */
+    suspend fun hostFile(projectName: String, relativePath: String): AppResult<File> = ioResult("定位文件失败") {
+        val file = resolve(projectName, relativePath)
+        check(file.isFile) { "不是文件：${displayPath(projectName, relativePath)}" }
+        file
     }
 
     suspend fun writeFile(
@@ -155,3 +190,11 @@ class WorkspaceFileService(
         const val MAX_UPLOAD_BYTES = 32 * 1024 * 1024
     }
 }
+
+/** 文件分类结果：编辑器只能处理 [binary] 为假的内容。 */
+data class WorkspaceFileInspection(
+    val relativePath: String,
+    val sizeBytes: Long,
+    val binary: Boolean,
+    val extension: String,
+)

@@ -37,7 +37,7 @@ import androidx.compose.material3.HorizontalDivider
 import top.tianyan.app.ui.components.RuntimeIconButton as IconButton
 import androidx.compose.material3.MaterialTheme
 import top.tianyan.app.ui.components.RuntimeOutlinedButton as OutlinedButton
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Scaffold
 import top.tianyan.app.ui.components.RuntimeSlider as Slider
 import androidx.compose.material3.Surface
@@ -101,7 +101,6 @@ fun AgentSettingsScreen(
     val agentUserName by viewModel?.agentUserName?.collectAsStateWithLifecycle() ?: previewStateOf("")
     val compactionEnabled by viewModel?.contextCompactionEnabled?.collectAsStateWithLifecycle() ?: previewStateOf(false)
     val maxToolRounds by viewModel?.maxToolRounds?.collectAsStateWithLifecycle() ?: previewStateOf(0)
-    val maxConcurrentAgentTurns by viewModel?.maxConcurrentAgentTurns?.collectAsStateWithLifecycle() ?: previewStateOf(2)
     val roundLimitAutoContinuations by viewModel?.roundLimitAutoContinuations?.collectAsStateWithLifecycle() ?: previewStateOf(0)
     val autoWorkspaceCwd by viewModel?.autoWorkspaceCwd?.collectAsStateWithLifecycle() ?: previewStateOf(false)
     val commandOutputCompressionEnabled by viewModel?.commandOutputCompressionEnabled?.collectAsStateWithLifecycle() ?: previewStateOf(false)
@@ -293,9 +292,10 @@ fun AgentSettingsScreen(
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     FirstResponseTimeoutRow()
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    ConcurrencySliderRow(currentValue = maxConcurrentAgentTurns, onValueChange = { arg0 -> viewModel?.setMaxConcurrentAgentTurns(arg0) })
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    RoundsSliderRow(currentValue = maxToolRounds, onValueChange = { arg0 -> viewModel?.setMaxToolRounds(arg0) })
+                    RoundsSliderRow(
+                        currentValue = maxToolRounds,
+                        onValueChange = { arg0 -> viewModel?.setMaxToolRounds(arg0) },
+                    )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     AutoContinuationSliderRow(
                         currentValue = roundLimitAutoContinuations,
@@ -407,7 +407,7 @@ fun AgentSettingsScreen(
                 AgentBlockTitle("角色列表")
             }
             item {
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = subagentQuery,
                     onValueChange = { subagentQuery = it },
                     modifier = Modifier.fillMaxWidth(),
@@ -539,7 +539,7 @@ fun AgentSettingsScreen(
                     }
                 }
                 Text(
-                    text = "在文件管理器中任选一个目录（支持任意深度嵌套，含 Skill 目录内再嵌套 Skill 子目录的情况），自动查找其中所有包含 SKILL.md 的技能文件夹并导入",
+                    text = "可选择单个 Skill 或技能集合目录。包含 SKILL.md 的目录作为一个完整 Skill 导入，内部子文档和脚本保留为资源，不单独列出",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 6.dp, start = 4.dp),
@@ -560,7 +560,7 @@ fun AgentSettingsScreen(
             }
 
             item {
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = skillQuery,
                     onValueChange = { skillQuery = it },
                     modifier = Modifier.fillMaxWidth(),
@@ -1367,28 +1367,28 @@ private fun AddSkillDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("技能名称（如: Rust 编译专家）") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = desc,
                     onValueChange = { desc = it },
                     label = { Text("简要描述") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = cmd,
                     onValueChange = { cmd = it },
                     label = { Text("触发指令（选填，如 /rust）") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = prompt,
                     onValueChange = { prompt = it },
                     label = { Text("系统提示词规则 (System Prompt)") },
@@ -1454,7 +1454,7 @@ private fun SubagentEditorDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = roleId,
                     onValueChange = { roleId = it },
                     label = { Text("角色标识") },
@@ -1465,14 +1465,14 @@ private fun SubagentEditorDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("显示名称") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = description,
                     onValueChange = { description = it },
                     label = { Text("职责简介") },
@@ -1480,7 +1480,7 @@ private fun SubagentEditorDialog(
                     maxLines = 3,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = prompt,
                     onValueChange = { prompt = it },
                     label = { Text("角色指导词") },
@@ -1717,7 +1717,7 @@ You are a helpful and expert AI assistant called {{char}}, based on model {{mode
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = charNameBuffer,
                     onValueChange = { charNameBuffer = it },
                     label = { Text("模型自称") },
@@ -1726,7 +1726,7 @@ You are a helpful and expert AI assistant called {{char}}, based on model {{mode
                     singleLine = true,
                     textStyle = MaterialTheme.typography.bodySmall,
                 )
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = userNameBuffer,
                     onValueChange = { userNameBuffer = it },
                     label = { Text("对用户的称呼") },
@@ -1766,7 +1766,7 @@ You are a helpful and expert AI assistant called {{char}}, based on model {{mode
                     }
                 }
 
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = textBuffer,
                     onValueChange = { textBuffer = it },
                     placeholder = { Text("在此输入自定义系统提示词，支持 {{cur_datetime}} 等宏变量...") },

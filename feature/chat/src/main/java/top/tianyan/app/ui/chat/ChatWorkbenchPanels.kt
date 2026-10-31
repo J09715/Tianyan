@@ -32,7 +32,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import top.tianyan.app.ui.components.RuntimeTextButton as TextButton
@@ -1251,7 +1251,6 @@ private fun RuntimeEventRow(event: HarnessEvent) {
 private fun eventVisual(event: HarnessEvent): EventVisual = redTeamEventVisual(event) ?: baseEventVisual(event)
 
 
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun QueuedPromptStack(
@@ -1343,7 +1342,7 @@ internal fun CreateBranchDialog(messageId: String, onDismiss: () -> Unit, onCrea
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(stringResource(R.string.chat_create_branch_description), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = name,
                     onValueChange = { name = it.take(48) },
                     label = { Text(stringResource(R.string.chat_branch_name)) },

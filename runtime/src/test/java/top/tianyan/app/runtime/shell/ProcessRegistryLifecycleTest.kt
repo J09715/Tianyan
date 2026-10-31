@@ -19,6 +19,12 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ProcessRegistryLifecycleTest {
+    @Test fun serviceRegistrationRetainsItsCapturedDistribution() = scenario { f ->
+        val process = f.registry.start("tool-service:debian:gateway", ShellCommand("fake"), "gateway", distroId = "debian")
+        assertEquals("debian", process.distroId)
+        assertSame(process, f.registry.list().single())
+    }
+
     @Test fun queuedInstanceStopCannotFollowAReplacementWithTheSameId() = scenario { f ->
         val entered = CompletableDeferred<Unit>(); val release = CompletableDeferred<Unit>()
         f.start("service").apply { beforeClose = { entered.complete(Unit); release.await() } }

@@ -49,9 +49,7 @@ import android.content.ClipboardManager
 import android.widget.Toast
 import top.tianyan.app.core.model.AppUpdateInfo
 import top.tianyan.app.core.model.UpdateCheckState
-/**
- * 二级子页 4：关于、版本更新与官方社区
- */
+/** 二级子页 4：关于、版本更新与官方社区 / */
 @Composable
 fun AboutCommunityScreen(
     onBack: () -> Unit,
@@ -363,21 +361,6 @@ private fun UpdateInfoDialog(
     )
 }
 
-private fun joinQqGroup(context: Context, groupId: String = "964382207") {
-    val uri = Uri.parse("mqqapi://card/show_pslcard?src_type=internal&version=1&uin=$groupId&card_type=group&source=qrcode")
-    val intent = Intent(Intent.ACTION_VIEW, uri).apply {
-        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    }
-    runCatching {
-        context.startActivity(intent)
-    }.onFailure {
-        // 剪贴板兜底
-        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-        val clip = ClipData.newPlainText("天衍官方交流群", groupId)
-        clipboard?.setPrimaryClip(clip)
-        Toast.makeText(context, "已复制 QQ 群号：$groupId，可打开 QQ 搜索加入", Toast.LENGTH_LONG).show()
-    }
-}
 
 private fun openBrowser(context: Context, url: String) {
     runCatching {

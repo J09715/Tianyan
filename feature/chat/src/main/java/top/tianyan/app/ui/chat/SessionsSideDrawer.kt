@@ -1,13 +1,8 @@
 package top.tianyan.app.ui.chat
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,12 +10,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -30,32 +21,22 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import top.tianyan.app.core.database.HarnessSessionEntity
 import top.tianyan.app.core.model.SessionRunState
 import top.tianyan.app.core.model.bot.BotSessionGroupRef
 import top.tianyan.app.feature.chat.R
-import top.tianyan.app.runtime.ProjectType
 import top.tianyan.app.runtime.WorkspaceProject
 import top.tianyan.app.ui.components.RuntimeAlertDialog
 import top.tianyan.app.ui.components.RuntimeButton
-import top.tianyan.app.ui.components.RuntimeIcon
-import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeTextButton
-import top.tianyan.app.ui.theme.semanticColors
 
 /**
- * Solab 风格的会话侧栏：固定搜索与底部功能入口，会话列表独立滚动。
+ * 会话侧栏：固定搜索与底部功能入口，会话列表独立滚动。
  * - 屏幕左侧展开，含背景遮罩与进退场滑动动画。
  * - 搜索会话标题/工作区，顶部 + 创建新会话，底部展开主功能与插件。
  * - 分区自上而下为「项目」→「Bot 会话」→「最近」，统一用名称 + 数量 + 折叠箭头的分区头。
@@ -141,8 +122,8 @@ internal fun SessionsSideDrawer(
                     .fillMaxWidth()
                     .weight(1f)
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 if (query.isNotBlank() && partition.projectGroups.isEmpty() && partition.recentSessions.isEmpty() && botMatches.isEmpty()) {
                     Text(stringResource(R.string.chat_drawer_no_matches),
@@ -157,7 +138,7 @@ internal fun SessionsSideDrawer(
                         onOpen = { onSwitch(attentionSessions.first().id) },
                     )
                 }
-                if (query.isBlank() || partition.projectGroups.isNotEmpty()) {
+                if (partition.projectGroups.isNotEmpty()) {
                     ProjectSection(
                         projectGroups = partition.projectGroups,
                         sectionExpanded = if (query.isBlank()) projectsExpanded else searchProjectsExpanded,
@@ -287,109 +268,16 @@ private fun RecentSection(
         if (!expanded) return@Column
 
         if (recentSessions.isEmpty()) {
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                shape = MaterialTheme.shapes.small,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    text = stringResource(R.string.chat_drawer_no_recent_sessions),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    modifier = Modifier.padding(10.dp),
-                )
-            }
+            Text(text = stringResource(R.string.chat_drawer_no_recent_sessions),
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp))
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 recentSessions.forEach { session ->
-                    SessionDrawerItem(
-                        session = session,
-                        isCurrent = session.id == currentSessionId,
+                    SessionDrawerItem(session = session, isCurrent = session.id == currentSessionId,
                         runState = sessionRunStates[session.id] ?: SessionRunState.IDLE,
-                        onSwitch = { onSwitch(session.id) },
-                        onRename = { onRename(session.id) },
-                        onDelete = { onDelete(session.id) },
-                    )
-                }
-            }
-        }
-    }
-}
-
-/** 单条会话项：只保留标题一行；重命名/删除走长按，当前与执行中的行额外给出 ⋮。 */
-@Composable
-internal fun SessionDrawerItem(
-    session: HarnessSessionEntity, isCurrent: Boolean, runState: SessionRunState,
-    onSwitch: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit,
-    onHide: (() -> Unit)? = null,
-) {
-    var showMenu by remember(session.id) { mutableStateOf(false) }
-    val moreLabel = stringResource(R.string.chat_more_controls)
-    val isBusy = runState == SessionRunState.RUNNING || runState == SessionRunState.WAITING_APPROVAL ||
-        runState == SessionRunState.FAILED
-    val dotColor = when (runState) {
-        SessionRunState.RUNNING -> semanticColors().warning
-        SessionRunState.WAITING_APPROVAL -> semanticColors().agent
-        SessionRunState.FAILED -> MaterialTheme.colorScheme.error
-        else -> Color.Transparent
-    }
-    Surface(
-        shape = MaterialTheme.shapes.small,
-        color = if (isCurrent) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clip(MaterialTheme.shapes.small)
-                .combinedClickable(onClick = onSwitch, onLongClick = { showMenu = true })
-                .semantics { selected = isCurrent }
-                .padding(start = 12.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            // 空闲时留透明占位，保证各层级标题左边界对齐。
-            Box(Modifier.size(8.dp).clip(CircleShape).background(dotColor))
-            Text(
-                text = session.title,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Normal,
-                color = if (isCurrent) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            Box {
-                if (isCurrent || isBusy) {
-                    Box(
-                        modifier = Modifier
-                            .size(24.dp)
-                            .clip(MaterialTheme.shapes.small)
-                            .clickable { showMenu = true }
-                            .semantics { contentDescription = moreLabel },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        RuntimeIcon(RuntimeIconName.More, Modifier.size(16.dp), MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.chat_rename_session)) },
-                        leadingIcon = { RuntimeIcon(RuntimeIconName.Edit, Modifier.size(18.dp)) },
-                        onClick = { showMenu = false; onRename() },
-                    )
-                    if (onHide != null) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.chat_hide_session)) },
-                            leadingIcon = { RuntimeIcon(RuntimeIconName.VisibilityOff, Modifier.size(18.dp)) },
-                            onClick = { showMenu = false; onHide() },
-                        )
-                    }
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.chat_delete_session), color = MaterialTheme.colorScheme.error) },
-                        leadingIcon = { RuntimeIcon(RuntimeIconName.Trash, Modifier.size(18.dp), MaterialTheme.colorScheme.error) },
-                        onClick = { showMenu = false; onDelete() },
-                    )
+                        onSwitch = { onSwitch(session.id) }, onRename = { onRename(session.id) },
+                        onDelete = { onDelete(session.id) })
                 }
             }
         }

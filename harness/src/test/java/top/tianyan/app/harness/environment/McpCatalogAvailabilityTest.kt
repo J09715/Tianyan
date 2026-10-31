@@ -93,6 +93,66 @@ class McpCatalogAvailabilityTest {
         assertTrue(closed)
     }
 
+    @Test fun failedCleanupDisablesProbeAndRetriesBeforeOpeningReplacement() = runBlocking {
+        var canClose = false
+        var opened = 0
+        var closes = 0
+        val owned = object : ExecutionEnvironment by world(true) {
+            override suspend fun close() {
+                closes++
+                check(canClose) { "命令进程尚未退出，保留资源供重试" }
+            }
+        }
+        val availability = McpCatalogAvailability(runtime, ExecutionEnvironmentFactory { _, _, _ ->
+            opened++
+            owned
+        })
+        assertFalse(availability.resolve(listOf(preset)).single().installationReady == true)
+        assertEquals(1, opened)
+        assertFalse(availability.resolve(listOf(preset)).single().installationReady == true)
+        assertEquals(1, opened)
+        assertEquals(2, closes)
+        canClose = true
+        assertTrue(availability.resolve(listOf(preset)).single().installationReady == true)
+        assertEquals(2, opened)
+        assertEquals(4, closes)
+    }
+
+    @Test fun cleanupFailureDoesNotReplaceProbeCancellation() = runBlocking {
+        var canClose = false
+        var opened = 0
+        val cancelled = object : ExecutionEnvironment by world(true) {
+            override suspend fun execute(command: ShellCommand): CommandResult = throw CancellationException("probe cancelled")
+            override suspend fun close() { check(canClose) { "cleanup failed" } }
+        }
+        val availability = McpCatalogAvailability(runtime, ExecutionEnvironmentFactory { _, _, _ ->
+            if (++opened == 1) cancelled else world(true)
+        })
+        try {
+            availability.resolve(listOf(preset))
+            fail("Cancellation must propagate")
+        } catch (cancelled: CancellationException) {
+            assertEquals("probe cancelled", cancelled.message)
+        }
+        assertFalse(availability.resolve(listOf(preset)).single().installationReady == true)
+        assertEquals(1, opened)
+        canClose = true
+        assertTrue(availability.resolve(listOf(preset)).single().installationReady == true)
+        assertEquals(2, opened)
+    }
+
+    @Test fun failedCleanupDoesNotDisableAnotherDistribution() = runBlocking {
+        val stuck = object : ExecutionEnvironment by world(true) {
+            override suspend fun close() { error("cleanup failed") }
+        }
+        val availability = McpCatalogAvailability(runtime, ExecutionEnvironmentFactory { owner, _, _ ->
+            if (owner.endsWith("local:debian")) stuck else world(true)
+        })
+        assertFalse(availability.resolve(listOf(preset)).single().installationReady == true)
+        selection.value = "ubuntu"
+        assertTrue(availability.resolve(listOf(preset)).single().installationReady == true)
+    }
+
     @Test fun channelStartupCannotBypassMissingPackage() = runBlocking {
         var opened = false
         val missing = object : ExecutionEnvironment by world(false) {

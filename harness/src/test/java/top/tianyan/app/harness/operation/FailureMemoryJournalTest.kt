@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.*
 import org.junit.After
 import org.junit.Assert.*
@@ -142,5 +143,73 @@ class FailureMemoryJournalTest {
         val other = repository.ensureLane("other", "main")
         db.harnessRuntimeDao().upsertLane(other.copy(currentOperationId = operation))
         assertNotNull(runCatching { coordinator.failureMemoryBlock("other") }.exceptionOrNull())
+    }
+
+    @Test fun deletingReviewedFailuresPersistsAndPreservesPendingRecoveryAndNewFailures() = runBlocking {
+        val operation = start()
+        fail(operation)
+        val reviewed = coordinator.failureMemories.inspect("s")!!
+        fail(operation, call("new-call", "new-command"), "new-result")
+        val pending = call("pending-call", "pending-command")
+        coordinator.toolIntent(operation, pending, pending.args.toString(), ReplayPolicy.NEVER, 3)
+        val before = repository.findOperation(operation)!!
+        assertTrue(coordinator.failureMemories.delete("s", reviewed))
+        val after = repository.findOperation(operation)!!
+        assertEquals(before.copy(stateJson = after.stateJson), after)
+        assertEquals(snapshot(operation).copy(failureMemory = null),
+            json.decodeFromString(OperationSnapshot.serializer(), before.stateJson).copy(failureMemory = null))
+        val restored = freshCoordinator().failureMemories.inspect("s")!!
+        assertEquals("new-result", restored.records.single().resultEntryId)
+        assertNotNull(repository.findEntry("s", "result"))
+        assertFalse(coordinator.failureMemoryBlock("s").contains("call / result"))
+        assertTrue(coordinator.failureMemories.delete("s", restored))
+        coordinator.providerIntent(operation, "response", 4, 1, 1)
+        assertTrue(freshCoordinator().failureMemoryBlock("s").isEmpty())
+    }
+
+    @Test fun staleDeletionDoesNotRemoveRefailedArgumentsOrAnotherOperationOrLane() = runBlocking {
+        val operation = start()
+        fail(operation)
+        val reviewed = coordinator.failureMemories.inspect("s")!!
+        fail(operation, call("retried-call"), "retried-result")
+        assertTrue(coordinator.failureMemories.delete("s", reviewed))
+        assertEquals("retried-result", coordinator.failureMemories.inspect("s")!!.records.single().resultEntryId)
+        val child = start(lane = "child")
+        fail(child, call("child-call"), "child-result")
+        assertFalse(coordinator.failureMemories.delete("s", reviewed, "child"))
+        assertEquals(1, coordinator.failureMemories.inspect("s", "child")!!.records.size)
+        coordinator.finish("s", "aborted")
+        val next = coordinator.acceptRun("s", UserMessage("next", 5, "next task"))
+        fail(next, call("next-call"), "next-result")
+        assertFalse(coordinator.failureMemories.delete("s", reviewed))
+        assertEquals("next-result", coordinator.failureMemories.inspect("s")!!.records.single().resultEntryId)
+    }
+
+    @Test fun observerRefreshesAfterDeletionWithoutChangingLaneOrHistory() = runBlocking {
+        val operation = start()
+        fail(operation)
+        val reviewed = coordinator.failureMemories.observe("s").first { !it?.records.isNullOrEmpty() }!!
+        val lane = repository.findLane("s", "main")
+        val observer = async(start = CoroutineStart.UNDISPATCHED) {
+            withTimeout(5_000) { coordinator.failureMemories.observe("s").first { it?.records?.isEmpty() == true } }
+        }
+        coordinator.failureMemories.delete("s", reviewed)
+        assertTrue(observer.await()!!.records.isEmpty())
+        assertEquals(lane, repository.findLane("s", "main"))
+        assertNotNull(repository.findEntry("s", "result"))
+    }
+
+    @Test fun deletionAndConcurrentSettlementDoNotRestoreOldRecordsOrLoseNewOnes() = runBlocking {
+        val operation = start()
+        fail(operation)
+        val reviewed = coordinator.failureMemories.inspect("s")!!
+        val nextCall = call("next-call", "different-command")
+        coordinator.toolIntent(operation, nextCall, nextCall.args.toString(), ReplayPolicy.NEVER, 2)
+        withTimeout(5_000) {
+            listOf(async(Dispatchers.Default) { coordinator.failureMemories.delete("s", reviewed) },
+                async(Dispatchers.Default) { coordinator.toolSettled(operation,
+                    ToolResult("next-result", 4, nextCall.id, false, "failure"), 2) }).awaitAll()
+        }
+        assertEquals("next-result", coordinator.failureMemories.inspect("s")!!.records.single().resultEntryId)
     }
 }

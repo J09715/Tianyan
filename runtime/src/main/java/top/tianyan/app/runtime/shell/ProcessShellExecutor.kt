@@ -1,5 +1,6 @@
 package top.tianyan.app.runtime.shell
 
+import top.tianyan.app.runtime.GuestProcessEnvironment
 import top.tianyan.app.runtime.RuntimePathManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -35,6 +36,7 @@ class ProcessShellExecutor internal constructor(
     private val pending = ConcurrentHashMap<ShellProcessOwner, Boolean>()
     override fun hasPending() = pending.isNotEmpty()
     override fun hasUnsettled() = pending.values.any { it }
+    override fun pendingRootPids(): Set<Long> = pending.keys.mapNotNull { it.rootPid }.toSet()
     override suspend fun closePending() = closeRuntimeResources(pending.keys.toList().map { owner -> suspend { owner.close() } })
 
     override suspend fun execute(
@@ -48,10 +50,15 @@ class ProcessShellExecutor internal constructor(
         var acquired: ShellProcessOwner? = null
         val capture = currentCoroutineContext()[CommandOutputCapture]?.start(captureDirectory())
         val registration = currentCoroutineContext()[ExecutionEnvironmentContext]?.own { acquired?.close() }
+        val launchEnvironment = GuestProcessEnvironment.commandLaunchEnvironment(
+            baseEnvironment() + environment,
+            command.firstOrNull().orEmpty(),
+            System.getenv("PATH"),
+        )
         // forkTid 必须取样于 startProcess 之前，且两者之间不得有挂起点：/proc 以线程粒度记录
         // children，一旦期间线程被调度走，解析出的 pid 就不再是本次 fork 的子进程。
         val forkTid = reaper.forkTid()
-        val process = try { startProcess(command, workingDirectory, baseEnvironment() + environment) }
+        val process = try { startProcess(command, workingDirectory, launchEnvironment) }
         catch (failure: Throwable) { registration?.close(); throw failure }
         val childPid = forkTid?.let(reaper::childOfThread)
         val owned = ShellProcessOwner(process = process, reaper = reaper, childPid = childPid) { pending.remove(it) }

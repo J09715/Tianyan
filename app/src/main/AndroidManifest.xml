@@ -9,7 +9,7 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <!-- 无线 ADB：保持 mDNS 多播接收，自动发现动态配对端口与连接端口。 -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
-    <!-- Android 17 (API 37) 本地网络权限：用于无线调试端口 mDNS 发现 -->
+    <!-- Android 17 (API 37) 本地网络权限：无线调试 mDNS，以及局域网 SSH（附近的设备，需运行时请求） -->
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
@@ -53,10 +53,9 @@
     </queries>
 
     <application
-        android:name=".TianyanApplication"
+        android:name=".天衍Application"
         android:allowBackup="false"
         android:icon="@mipmap/tianyan_ic_launcher"
-        android:roundIcon="@mipmap/tianyan_ic_launcher_round"
         android:label="${appLabel}"
         android:largeHeap="true"
         android:localeConfig="@xml/tianyan_locales_config"
@@ -110,8 +109,12 @@
         <service
             android:name=".runtime.service.RuntimeForegroundService"
             android:exported="false"
-            android:foregroundServiceType="dataSync"
-            android:stopWithTask="false" />
+            android:foregroundServiceType="specialUse"
+            android:stopWithTask="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="User-started Linux sandbox with persistent local plugin servers and terminals" />
+        </service>
         <service
             android:name=".service.AgentForegroundService"
             android:exported="false"
@@ -144,6 +147,9 @@
         </service>
         <receiver
             android:name=".service.AgentReplyReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".service.ToolServiceStopReceiver"
             android:exported="false" />
         <receiver
             android:name=".workflow.WorkflowApprovalReceiver"
@@ -180,7 +186,7 @@
         </provider>
         <!-- GUI 手势通路：必须 exported=true，否则 Android 12+ system_server 无法绑定无障碍服务 -->
         <service
-            android:name="top.tianyan.app.runtime.gui.TianyanGuiAccessibilityService"
+            android:name="top.tianyan.app.runtime.gui.天衍GuiAccessibilityService"
             android:exported="true"
             android:label="@string/tianyan_app_name"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">

@@ -1,10 +1,10 @@
 <resources>
-    <string name="ui_plugin_manager_title">Plugins</string>
-    <string name="ui_plugin_pages_title">Page features</string>
-    <string name="ui_plugin_pages_description">Choose features for the sidebar and workspace</string>
+    <string name="ui_plugin_manager_title">Built-in features</string>
+    <string name="ui_plugin_pages_title">Feature switches</string>
+    <string name="ui_plugin_pages_description">Manage access to built-in features such as Terminal and Browser</string>
     <string name="ui_plugin_open">Open</string>
     <string name="ui_plugin_manager_scope">These switches control page access. Existing terminal tasks and browser background activity continue running.</string>
-    <string name="ui_plugin_preferences_failed">Could not read or save plugin selection. Please retry.</string>
+    <string name="ui_plugin_preferences_failed">Could not read or save feature selection. Please retry.</string>
     <string name="ui_plugin_retry">Retry</string>
     <string name="ui_plugin_ready">Waiting for initialization</string>
     <string name="ui_plugin_starting">Enabling</string>

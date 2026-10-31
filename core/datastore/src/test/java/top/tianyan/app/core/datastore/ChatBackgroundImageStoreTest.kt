@@ -1,6 +1,7 @@
 package top.tianyan.app.core.datastore
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -50,5 +51,19 @@ class ChatBackgroundImageStoreTest {
             assertEquals(listOf(previous.name), directory.listFiles()!!.map { it.name })
             assertEquals("previous", previous.readText())
         }
+    }
+
+    @Test fun avatarCropSavesASquareWithoutRecyclingThePreview() = runBlocking {
+        val directory = temporary.newFolder("avatars")
+        val store = ChatBackgroundImageStore(directory, { null })
+        val preview = Bitmap.createBitmap(12, 8, Bitmap.Config.ARGB_8888)
+        val name = store.saveAvatarCrop(preview, left = 4, top = 2, side = 6)
+        val saved = BitmapFactory.decodeFile(File(directory, name).absolutePath)!!
+        assertEquals(6, saved.width)
+        assertEquals(6, saved.height)
+        assertFalse(preview.isRecycled)
+        try { store.saveAvatarCrop(preview, 11, 0, 4); fail("Out-of-bounds crop was accepted") }
+        catch (_: IllegalArgumentException) { }
+        assertEquals(listOf(name), directory.listFiles()!!.map { it.name })
     }
 }

@@ -22,6 +22,9 @@ data class LocalServiceSpec(
     val path: String = "/",
     val startupTimeoutMs: Long = DEFAULT_STARTUP_TIMEOUT_MS,
     val pollIntervalMs: Long = DEFAULT_POLL_INTERVAL_MS,
+    val authenticated: Boolean = false,
+    val authentication: ToolServiceAuthentication? = null,
+    val distroId: String? = null,
 ) {
     init {
         require(SERVICE_ID.matches(serviceId)) { "本地服务 ID 无效：$serviceId" }

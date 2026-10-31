@@ -24,6 +24,30 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.material3.Slider
+import androidx.compose.material3.toPath
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.DpSize
+import androidx.graphics.shapes.Morph
+import kotlinx.coroutines.flow.drop
+import kotlin.math.roundToInt
 import androidx.compose.material3.ExperimentalMaterial3Api
 import top.tianyan.app.ui.components.RuntimeIconButton as IconButton
 import androidx.compose.material3.MaterialTheme
@@ -63,7 +87,6 @@ import top.tianyan.app.core.model.McpConnectionState
 import top.tianyan.app.core.model.AgentSkill
 import top.tianyan.app.core.model.McpServerConfig
 
-/** 底部弹层：能力挂载面板、推理强度滑块、审批模式选择。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SkillsAndMcpSheet(
@@ -194,12 +217,11 @@ internal fun SkillsAndMcpSheet(
                                     shape = MaterialTheme.shapes.large, contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
                                     modifier = Modifier.fillMaxWidth(),
                                 ) {
-                                    FlowRow(
+                                    Column(
                                         modifier = Modifier.padding(16.dp),
-                                        itemVerticalAlignment = Alignment.CenterVertically, verticalArrangement = Arrangement.spacedBy(12.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(12.dp),
                                     ) {
-                                        Column(modifier = Modifier.widthIn(min = 160.dp).weight(1f)) {
+                                        Column(modifier = Modifier.fillMaxWidth()) {
                                             FlowRow(
                                                 itemVerticalAlignment = Alignment.CenterVertically, verticalArrangement = Arrangement.spacedBy(8.dp),
                                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -238,8 +260,9 @@ internal fun SkillsAndMcpSheet(
                                         }
 
                                         Row(
+                                            modifier = Modifier.fillMaxWidth(),
                                             verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
                                         ) {
                                             Surface(
                                                 shape = MaterialTheme.shapes.medium,
@@ -305,7 +328,7 @@ internal fun SkillsAndMcpSheet(
                                     enabled = server.isEnabled,
                                     connectionState = mcpConnectionStates[server.id] ?: McpConnectionState.UNKNOWN,
                                     toolCount = mcpToolCounts[server.id],
-                                    trailing = {
+                                    bottomActions = {
                                         Surface(
                                             shape = MaterialTheme.shapes.medium,
                                             color = if (isPinned) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
@@ -378,194 +401,7 @@ internal fun SkillsAndMcpSheet(
     }
 }
 
-/**
- * ⚡ 思考/推理强度悬浮调节面板（ChatGPT 同款平滑胶囊滑块）
- */
-@Composable
-internal fun ReasoningEffortSlider(
-    currentMode: String?,
-    currentEffort: String?,
-    onSelect: (mode: String?, effort: String?) -> Unit,
-    onClose: () -> Unit,
-) {
-    val levels = listOf(
-        Triple(stringResource(R.string.chat_reasoning_disabled), stringResource(R.string.chat_reasoning_disabled_description), "disabled" to null),
-        Triple(stringResource(R.string.chat_reasoning_low), stringResource(R.string.chat_reasoning_low_description), "enabled" to "low"),
-        Triple(stringResource(R.string.chat_reasoning_medium), stringResource(R.string.chat_reasoning_medium_description), "enabled" to "medium"),
-        Triple(stringResource(R.string.chat_reasoning_high), stringResource(R.string.chat_reasoning_high_description), "enabled" to "high"),
-        Triple(stringResource(R.string.chat_reasoning_extreme), stringResource(R.string.chat_reasoning_extreme_description), "enabled" to "max"),
-    )
-
-    val currentIndex = when {
-        currentMode == "disabled" -> 0
-        currentMode == "enabled" && currentEffort == "low" -> 1
-        currentMode == "enabled" && currentEffort == "medium" -> 2
-        currentMode == "enabled" && currentEffort == "high" -> 3
-        currentMode == "enabled" && (currentEffort == "extreme" || currentEffort == "max") -> 4
-        else -> 2 // 默认中推理
-    }
-
-    var selectedIndex by remember(currentIndex) { mutableIntStateOf(currentIndex) }
-
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 6.dp),
-        shape = RoundedCornerShape(22.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-        ),
-        shadowElevation = 6.dp,
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            val activeLevel = levels.getOrElse(selectedIndex) { levels[2] }
-
-            // 顶部居中大字标题与说明（还原 ChatGPT 样式）
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Spacer(Modifier.size(20.dp))
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    Text(
-                        text = activeLevel.first,
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp,
-                        ),
-                        color = reasoningLevelTint(selectedIndex),
-                    )
-                    Text(
-                        text = activeLevel.second,
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                IconButton(
-                    onClick = onClose,
-                    modifier = Modifier.minimumInteractiveComponentSize(),
-                    contentDescription = stringResource(R.string.chat_close),
-                ) {
-                    RuntimeIcon(RuntimeIconName.Close, Modifier.size(13.dp), MaterialTheme.colorScheme.outline)
-                }
-            }
-
-            // 现代化连续胶囊滑动条 (Smooth Segmented Slider)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(44.dp)
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                    .padding(horizontal = 4.dp, vertical = 4.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    levels.indices.forEach { index ->
-                        val isSelected = index == selectedIndex
-                        val itemColor = if (isSelected) {
-                            reasoningLevelTint(index)
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(36.dp)
-                                .clip(RoundedCornerShape(18.dp))
-                                .background(
-                                    if (isSelected) {
-                                        reasoningLevelTint(index).copy(alpha = 0.25f)
-                                    } else Color.Transparent,
-                                )
-                                .clickable {
-                                    selectedIndex = index
-                                    val (mode, effort) = levels[index].third
-                                    onSelect(mode, effort)
-                                },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                text = when (index) {
-                                    0 -> stringResource(R.string.chat_depth_off)
-                                    1 -> stringResource(R.string.chat_depth_light)
-                                    2 -> stringResource(R.string.chat_depth_medium)
-                                    3 -> stringResource(R.string.chat_depth_deep)
-                                    4 -> stringResource(R.string.chat_depth_extreme)
-                                    else -> ""
-                                },
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    fontSize = 11.5.sp,
-                                ),
-                                color = if (isSelected) itemColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
-                            )
-                        }
-                    }
-                }
-            }
-
-            // 💡 说明提示：必须模型支持才生效
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    RuntimeIcon(
-                        name = RuntimeIconName.Info,
-                        modifier = Modifier.size(15.dp),
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                    Text(
-                        text = stringResource(R.string.chat_reasoning_model_support_notice),
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, lineHeight = 15.sp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * 推理强度档位的统一配色。
- *
- * 档位强弱用 [MaterialTheme.colorScheme.primary] 的明度梯度表达，而非绿/蓝/紫/粉彩虹色：
- * 彩虹色在 Material You 动态取色下与容器主色割裂，且深色主题中低饱和档位对比度不足。
- * index 0 为「关闭」，使用 onSurfaceVariant 表达中性态。
- */
-@Composable
-internal fun reasoningLevelTint(index: Int): Color = when (index) {
-    0 -> MaterialTheme.colorScheme.onSurfaceVariant
-    1 -> MaterialTheme.colorScheme.primary.copy(alpha = 0.62f)
-    2 -> MaterialTheme.colorScheme.primary.copy(alpha = 0.78f)
-    3 -> MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
-    else -> MaterialTheme.colorScheme.primary
-}
-
-/**
- * 审批模式选择底部弹层（完全访问 / 询问 / 每次审批）。
- */
+/** 审批模式选择底部弹层（完全访问 / 询问 / 每次审批）。 / */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ApprovalModeSheet(
@@ -655,11 +491,7 @@ internal fun ApprovalModeSheet(
     }
 }
 
-/**
- * 运行意图选择底部弹层（构建 / 规划）。
- *
- * 与审批权限模式正交：本层决定「这一轮动手还是只看」，审批模式决定「要不要问」。
- */
+/** 运行意图选择底部弹层（构建 / 规划）。 与审批权限模式正交：本层决定「这一轮动手还是只看」，审批模式决定「要不要问」。 / */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun RunModeSheet(
@@ -753,4 +585,3 @@ internal fun runModeIcon(mode: RunMode): RuntimeIconName = when (mode) {
     RunMode.BUILD -> RuntimeIconName.Code
     RunMode.PLAN -> RuntimeIconName.Search
 }
-

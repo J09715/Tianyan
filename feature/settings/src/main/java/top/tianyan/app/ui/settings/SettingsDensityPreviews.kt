@@ -40,6 +40,29 @@ private fun SettingsDensityPreview() {
                         stringResource(R.string.settings_nav_stats_summary), onClick = {})
                 }
             }
+            // Same rows as the settings home, so nav-entry density is judged side by side.
+            PersonalizationSection("首页导航入口 · 色调图标") {
+                PreferenceSurface(last = false) {
+                    SettingsRow(RuntimeIconName.Brain, "智能体与生态",
+                        stringResource(R.string.settings_nav_agents_summary), value = "3 个模型 · 5 技能",
+                        onClick = {}, tonalIcon = true)
+                }
+                PreferenceSurface(first = false, last = false) {
+                    SettingsRow(RuntimeIconName.Server, "Linux 环境",
+                        stringResource(R.string.settings_nav_linux_summary), value = "2 套系统 · PRoot",
+                        onClick = {}, tonalIcon = true)
+                }
+                PreferenceSurface(first = false, last = false) {
+                    SettingsRow(RuntimeIconName.Sparkles, "特色功能",
+                        stringResource(R.string.settings_nav_features_summary), value = "5 项功能",
+                        onClick = {}, tonalIcon = true)
+                }
+                PreferenceSurface(first = false) {
+                    SettingsRow(RuntimeIconName.Admin, "诊断与系统",
+                        stringResource(R.string.settings_nav_diagnostics_summary), value = "运行平稳",
+                        onClick = {}, tonalIcon = true)
+                }
+            }
         }
     }
 }

@@ -26,4 +26,13 @@ class ChatListScrollTest {
         assertEquals(false, isAwayFromChatBottom(10, 9, 800, 800))
         assertEquals(false, isAwayFromChatBottom(1, 0, 200, 800))
     }
+
+    @Test
+    fun `tolerance absorbs streaming growth but not real distance from bottom`() {
+        // 流式单帧增量落在容差内：视为仍在底部（回底按钮不闪烁）
+        assertEquals(false, isAwayFromChatBottom(10, 9, 850, 800, 64))
+        // 超出容差（或末项不是最后一项）：离开底部
+        assertEquals(true, isAwayFromChatBottom(10, 9, 900, 800, 64))
+        assertEquals(true, isAwayFromChatBottom(10, 8, 850, 800, 64))
+    }
 }

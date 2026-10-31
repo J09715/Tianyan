@@ -37,6 +37,61 @@ import top.tianyan.app.runtime.tools.*
 @RunWith(RobolectricTestRunner::class)
 @Config(manifest = Config.NONE, sdk = [35])
 class PluginRecoveryTest {
+    @Test fun localLegacyPackageStoresPackageVersionDespiteOlderRuntimeBanner() = runBlocking {
+        val fixture = Fixture()
+        val legacy = manifest().copy(schemaVersion = 1, plugin = null)
+        fixture.seed(legacy, "rtk 0.15.0")
+        fixture.verificationOutput = "rtk 0.15.0"
+        val events = fixture.manager.update("sample").toList()
+        assertEquals("1.0.0", events.filterIsInstance<InstallEvent.Completed>().single().version)
+        fixture.newManager().syncRegistry()
+        val installed = fixture.repository.findById("debian", "sample")!!
+        assertEquals("1.0.0", installed.installedVersion)
+        assertEquals("INSTALLED", installed.state)
+    }
+
+    @Test fun reopeningRepairsLegacyBannerFromReceiptWithoutReinstallingOrChangingGrants() = runBlocking {
+        val fixture = Fixture()
+        fixture.seed(manifest().copy(schemaVersion = 1, plugin = null, permissions = listOf("NETWORK")), "rtk 0.15.0")
+        val previous = fixture.receipts.read("debian", "sample", "rtk 0.15.0")!!
+        repeat(2) { fixture.newManager().syncRegistry() }
+        val installed = fixture.repository.findById("debian", "sample")!!
+        assertEquals("1.0.0", installed.installedVersion)
+        assertEquals("INSTALLED", installed.state)
+        assertEquals(previous.copy(version = "1.0.0"), fixture.receipts.read("debian", "sample", "1.0.0"))
+        assertEquals(previous, fixture.receipts.read("debian", "sample", "rtk 0.15.0"))
+        assertTrue(fixture.commands.isEmpty())
+    }
+
+    @Test fun receiptRepairKeepsRealUpgradeAvailableUntilNewPackageIsInstalled() = runBlocking {
+        val fixture = Fixture()
+        val legacy = manifest().copy(schemaVersion = 1, plugin = null)
+        fixture.seed(legacy, "rtk 0.15.0")
+        fixture.import(legacy.copy(version = "2.0.0"))
+        fixture.manager.syncRegistry()
+        val previous = fixture.repository.findById("debian", "sample")!!
+        assertEquals("1.0.0", previous.installedVersion)
+        assertEquals("UPDATE_AVAILABLE", previous.state)
+        assertEquals(legacy, fixture.operations.runtimeManifest("debian", "sample"))
+        fixture.verificationOutput = "rtk 0.15.0"
+        assertTrue(fixture.manager.update("sample").toList().any { it is InstallEvent.Completed })
+        fixture.newManager().syncRegistry()
+        val upgraded = fixture.repository.findById("debian", "sample")!!
+        assertEquals("2.0.0", upgraded.installedVersion)
+        assertEquals("INSTALLED", upgraded.state)
+    }
+
+    @Test fun missingReceiptNeverPromotesSelectedPackageToInstalledVersion() = runBlocking {
+        val fixture = Fixture()
+        val legacy = manifest().copy(schemaVersion = 1, plugin = null)
+        fixture.seed(legacy, "rtk 0.15.0")
+        File(fixture.context.filesDir, "receipts").walkTopDown().filter { it.isFile }.forEach { it.delete() }
+        fixture.import(legacy.copy(version = "2.0.0"))
+        fixture.manager.syncRegistry()
+        assertEquals("rtk 0.15.0", fixture.repository.findById("debian", "sample")!!.installedVersion)
+        assertNull(fixture.receipts.read("debian", "sample", "2.0.0"))
+    }
+
     private fun manifest(version: String = "1.0.0") = ToolManifest(
         schemaVersion = 2, id = "sample", name = "Sample", description = "Recovery test", version = version,
         source = "LOCAL", offlineOnly = true, installMethod = "LOCAL_PACKAGE", launchType = "web",
@@ -127,6 +182,7 @@ class PluginRecoveryTest {
         val commands = mutableListOf<ShellCommand>()
         var failInstallation = false
         var cancelInstallation = false
+        var verificationOutput = ""
         private val tools = mutableMapOf<Pair<String, String>, ToolEntity>()
         private val tasks = mutableMapOf<Pair<String, String>, InstallTaskEntity>()
         private val redactor = SecretRedactor()
@@ -136,10 +192,12 @@ class PluginRecoveryTest {
         private val registry: ToolRegistry
         val repository: ToolRepository
         val operations: ToolPackageOperations
+        val receipts = PluginReceiptStore(File(context.filesDir, "receipts"))
         val manager: ToolManager
         private val runtime = proxy<LinuxRuntime> { name, args -> when (name) {
             "getActiveDistroId" -> selected
             "getState" -> MutableStateFlow<RuntimeState>(RuntimeState.Ready)
+            "getInstalledDistros" -> MutableStateFlow(emptyList<InstalledDistro>())
             "listBackground" -> emptyList<ManagedProcess>()
             "execute" -> {
                 val command = args[0] as ShellCommand
@@ -150,7 +208,7 @@ class PluginRecoveryTest {
                 }
                 val failed = (failInstallation && command.commandLine.startsWith("install-")) ||
                     (command.commandLine.startsWith("verify-") && File(program, "version").takeIf { it.exists() }?.readText() != command.commandLine.removePrefix("verify-"))
-                CommandResult(if (failed) 1 else 0, "", if (failed) "deliberate failure" else "", 0)
+                CommandResult(if (failed) 1 else 0, if (command.commandLine.startsWith("verify-")) verificationOutput else "", if (failed) "deliberate failure" else "", 0)
             }
             else -> error("Unexpected runtime method $name")
         } }
@@ -174,10 +232,11 @@ class PluginRecoveryTest {
                     "upsert" -> { val tool = args[0] as ToolEntity; tools[tool.distroId to tool.id] = tool; Unit }
                     "updateState" -> { tools[key] = tools.getValue(key).copy(state = args[2] as String); Unit }
                     "updateStateAndInstalledVersion" -> { tools[key] = tools.getValue(key).copy(state = args[2] as String, installedVersion = args[3] as String?); Unit }
+                    "deleteByIds" -> { tools.entries.removeAll { it.value.id in (args[0] as Collection<*>) }; Unit }
                     else -> error("Unexpected tool DAO method $name")
                 }
             }, registry)
-            operations = ToolPackageOperations(repository, PluginReceiptStore(File(context.filesDir, "receipts")))
+            operations = ToolPackageOperations(repository, receipts)
             manager = newManager()
         }
 
@@ -205,6 +264,7 @@ class PluginRecoveryTest {
             val taskRepository = InstallTaskRepository(proxy<InstallTaskDao> { name, args -> when (name) {
                 "upsert" -> { val task = args[0] as InstallTaskEntity; tasks[task.distroId to task.toolId] = task; Unit }
                 "findByTool" -> tasks[args[0] to args[1]]
+                "listByState" -> tasks.values.filter { it.state == args[0] }
                 else -> error("Unexpected task DAO method $name")
             } })
             val dependencies = object : DependencyManager {

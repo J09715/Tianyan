@@ -140,6 +140,7 @@ class McpServerRepository(
 
     suspend fun save(server: McpServerConfig) {
         ensureInitialized()
+        require(server.headersReadError == null) { server.headersReadError.orEmpty() }
         top.tianyan.app.core.model.validateMcpHttpHeaders(server.headers)
         dao.upsert(server.toEntity(json, secretManager))
     }
@@ -186,32 +187,43 @@ private fun McpServerConfig.withPresetMetadata(): McpServerConfig =
         )
     } ?: this
 
-private fun McpServerEntity.toModel(json: Json, secretManager: SecretManager): McpServerConfig = McpServerConfig(
-    id = id,
-    name = name,
-    description = description,
-    transportType = runCatching { McpTransportType.valueOf(transportType) }.getOrDefault(McpTransportType.STDIO),
-    command = command,
-    args = secretManager.decrypt(argsCiphertext)
-        ?.let { plaintext -> runCatching { json.decodeFromString<List<String>>(plaintext) }.getOrDefault(emptyList()) }
-        .orEmpty(),
-    env = secretManager.decrypt(envCiphertext)
-        ?.let { plaintext -> runCatching { json.decodeFromString<Map<String, String>>(plaintext) }.getOrDefault(emptyMap()) }
-        .orEmpty(),
-    headers = if (headersCiphertext.isEmpty()) emptyMap() else
-        json.decodeFromString<Map<String, String>>(requireNotNull(secretManager.decrypt(headersCiphertext)) { "MCP 请求头解密失败" }),
-    serverUrl = serverUrl,
-    authMode = runCatching { McpAuthMode.valueOf(authMode) }.getOrDefault(McpAuthMode.NONE),
-    oauthClientId = oauthClientId,
-    oauthAuthorizationEndpoint = oauthAuthorizationEndpoint,
-    oauthTokenEndpoint = oauthTokenEndpoint,
-    oauthRedirectUri = oauthRedirectUri,
-    oauthScope = oauthScope,
-    oauthResource = oauthResource,
-    isEnabled = isEnabled,
-    isBuiltin = isBuiltin,
-    userToggled = userToggled,
-)
+private fun McpServerEntity.toModel(json: Json, secretManager: SecretManager): McpServerConfig =
+    toModel(json, secretManager::decrypt)
+
+internal fun McpServerEntity.toModel(json: Json, decrypt: (String) -> String?): McpServerConfig {
+    val headersResult = runCatching {
+        if (headersCiphertext.isEmpty()) emptyMap() else {
+            json.decodeFromString<Map<String, String>>(requireNotNull(decrypt(headersCiphertext)))
+                .also { top.tianyan.app.core.model.validateMcpHttpHeaders(it) }
+        }
+    }
+    return McpServerConfig(
+        id = id,
+        name = name,
+        description = description,
+        transportType = runCatching { McpTransportType.valueOf(transportType) }.getOrDefault(McpTransportType.STDIO),
+        command = command,
+        args = decrypt(argsCiphertext)
+            ?.let { plaintext -> runCatching { json.decodeFromString<List<String>>(plaintext) }.getOrDefault(emptyList()) }
+            .orEmpty(),
+        env = decrypt(envCiphertext)
+            ?.let { plaintext -> runCatching { json.decodeFromString<Map<String, String>>(plaintext) }.getOrDefault(emptyMap()) }
+            .orEmpty(),
+        headers = headersResult.getOrDefault(emptyMap()),
+        headersReadError = if (headersResult.isFailure) "MCP 请求头无法读取，请编辑服务并重新填写请求头后保存" else null,
+        serverUrl = serverUrl,
+        authMode = runCatching { McpAuthMode.valueOf(authMode) }.getOrDefault(McpAuthMode.NONE),
+        oauthClientId = oauthClientId,
+        oauthAuthorizationEndpoint = oauthAuthorizationEndpoint,
+        oauthTokenEndpoint = oauthTokenEndpoint,
+        oauthRedirectUri = oauthRedirectUri,
+        oauthScope = oauthScope,
+        oauthResource = oauthResource,
+        isEnabled = isEnabled && headersResult.isSuccess,
+        isBuiltin = isBuiltin,
+        userToggled = userToggled,
+    )
+}
 
 private fun McpServerConfig.toEntity(json: Json, secretManager: SecretManager): McpServerEntity = McpServerEntity(
     id = id,

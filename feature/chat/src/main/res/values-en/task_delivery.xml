@@ -31,4 +31,13 @@
     <string name="delivery_failed_tool">Some tool calls failed; consider subsequent results.</string>
     <string name="delivery_incomplete_artifact">Some artifact records are incomplete: a log was truncated, or inventory or fingerprinting did not finish.</string>
     <string name="delivery_invalid_artifact">Some artifact fingerprint records could not be read and were excluded from evidence.</string>
+    <string name="delivery_artifact_open">Open</string>
+    <string name="delivery_artifact_view">View</string>
+    <string name="delivery_artifact_share">Share</string>
+    <string name="delivery_artifact_missing">The file is no longer in the workspace; it may have been deleted or moved</string>
+    <string name="delivery_artifact_changed">The file changed and no longer matches the recorded SHA-256</string>
+    <string name="delivery_artifact_open_failed">No app available to open this file</string>
+    <string name="delivery_artifact_save">Save as</string>
+    <string name="delivery_artifact_saved">Saved to the chosen location</string>
+    <string name="delivery_artifact_save_failed">Save failed</string>
 </resources>

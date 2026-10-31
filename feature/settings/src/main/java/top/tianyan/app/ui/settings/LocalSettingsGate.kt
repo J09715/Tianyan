@@ -16,7 +16,7 @@ import top.tianyan.app.ui.components.*
 
 /** Gate before constructing local ViewModels, including navigation/search/deep-link entry points. */
 @Composable
-internal fun LocalSettingsGate(title: String, onBack: () -> Unit, content: @Composable () -> Unit) {
+internal fun LocalSettingsGate(title: String, onBack: () -> Unit, unavailableContent: @Composable () -> Unit = {}, content: @Composable () -> Unit) {
     val repository = koinInject<RemoteServerRepository>()
     val active by repository.activeId.collectAsStateWithLifecycle()
     if (active == null) content()
@@ -24,6 +24,7 @@ internal fun LocalSettingsGate(title: String, onBack: () -> Unit, content: @Comp
         Column(Modifier.fillMaxSize().padding(padding).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             NoticeBanner(text = "此功能管理手机上的 Linux、插件和配置，当前主系统无法使用。请先在「Linux 系统管理」中切回本地系统。")
             Text("服务器工具链可通过智枢命令管理；手机目录不会自动挂载或同步到服务器。", style = MaterialTheme.typography.bodyMedium)
+            unavailableContent()
             RuntimeTextButton(onClick = onBack) { Text("返回") }
         }
     }
@@ -45,5 +46,8 @@ fun CcSwitchScreen(onBack: () -> Unit, onLaunchTerminal: (String) -> Unit, onOpe
 
 @Composable
 fun ToolCenterScreen(onBack: () -> Unit, onLaunchPty: (String) -> Unit, onOpenToolDetail: (String) -> Unit = {},
-    onStartAiHealing: (String, String, List<String>) -> Unit = { _, _, _ -> }, viewModel: ToolCenterViewModel? = null) =
-    LocalSettingsGate("插件与底层工具中心", onBack) { LocalToolCenterContent(onBack, onLaunchPty, onOpenToolDetail, onStartAiHealing, viewModel ?: koinViewModel()) }
+    onStartAiHealing: (String, String, List<String>) -> Unit = { _, _, _ -> }, viewModel: ToolCenterViewModel? = null,
+    onOpenLibrary: () -> Unit = {}, onOpenBuiltinFeatures: () -> Unit = {}, onOpenWebPlugins: () -> Unit = {}) =
+    LocalSettingsGate("插件中心", onBack, unavailableContent = {
+        RuntimeTextButton(onClick = onOpenBuiltinFeatures) { Text(androidx.compose.ui.res.stringResource(top.tianyan.app.feature.settings.R.string.plugin_center_builtin)) }
+    }) { LocalToolCenterContent(onBack, onLaunchPty, onOpenToolDetail, onStartAiHealing, viewModel ?: koinViewModel(), onOpenLibrary, onOpenBuiltinFeatures, onOpenWebPlugins) }

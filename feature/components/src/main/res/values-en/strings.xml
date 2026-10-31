@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="components_nav_home">Tianyan</string>
+    <string name="components_nav_home">天衍</string>
     <string name="components_nav_agent">Agent</string>
     <string name="components_nav_workspace">Workspace</string>
     <string name="components_nav_bots">Bots</string>
@@ -26,4 +26,5 @@
     <string name="components_md_code_copied">Code copied to clipboard</string>
     <string name="components_md_code_badge">CODE</string>
     <string name="components_md_copy">Copy</string>
+    <string name="components_clear_search">Clear search</string>
 </resources>

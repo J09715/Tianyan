@@ -82,7 +82,7 @@ class HarnessProviderRunner(
             }
         }
 
-        var requestModel = model.copy(redTeamEnabled = sessionEntity?.redTeamMode == "red_team") // 红队会话才挂 red_team
+        var requestModel = model
         var outputBudgetReduced = false
         var outputLimitRecoveries = 0
         var netRetry = 0
@@ -102,7 +102,7 @@ class HarnessProviderRunner(
         // 漏掉 schema 会低估真实输入规模，余量被吃光后以 400/413 溢出。
         val toolSchemaTokens =
             if (model.capabilities.nativeTools) {
-                ContextWindowPolicy.estimateToolDefinitionTokens(ProviderClient.buildDynamicTools(requestModel, requestModel.redTeamEnabled))
+                ContextWindowPolicy.estimateToolDefinitionTokens(ProviderClient.buildDynamicTools(model))
             } else {
                 0
             }
@@ -498,7 +498,7 @@ class HarnessProviderRunner(
             responsesTurn = responsesTurn,
             modelId = model?.model,
             providerId = model?.provider,
-            promptTokens = usage?.inputTokens?.takeIf { it > 0 }?.toInt(),
+            promptTokens = usage?.messagePromptTokens(model?.protocol ?: ApiProtocol.OPENAI),
             completionTokens = usage?.outputTokens?.takeIf { it > 0 }?.toInt(),
             cachedTokens = usage?.cacheReadTokens?.takeIf { it > 0 }?.toInt(),
         )

@@ -103,7 +103,7 @@ internal fun metricsCommand(workspace: String): String = """
     set -e
     printf 'architecture\t'; uname -m
     printf 'kernel\t'; uname -r
-    printf 'distribution\t'; if [ -r /etc/os-release ]; then sed -n 's/^PRETTY_NAME=//p' /etc/os-release | tr -d '"'; else uname -s; fi
+    printf 'distribution\t'; if [ -r /etc/os-release ]; then name=${'$'}(sed -n 's/^PRETTY_NAME=//p' /etc/os-release); name=${'$'}{name#\"}; name=${'$'}{name%\"}; printf '%s\n' "${'$'}name"; else uname -s; fi
     awk '/^MemTotal:/{t=${'$'}2}/^MemAvailable:/{a=${'$'}2} END{printf "memoryTotal\t%.0f\nmemoryUsed\t%.0f\n",t/1024,(t-a)/1024}' /proc/meminfo
     awk '{printf "uptime\t%.0f\n",${'$'}1}' /proc/uptime
     awk '{print "load\t" ${'$'}1 " " ${'$'}2 " " ${'$'}3}' /proc/loadavg

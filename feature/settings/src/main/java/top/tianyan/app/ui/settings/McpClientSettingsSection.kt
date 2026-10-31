@@ -35,7 +35,7 @@ internal fun McpClientSettingsSection(viewModel: McpClientSettingsViewModel? = p
             LocalizedText(stringResource(R.string.mcp_client_idle_title), style = MaterialTheme.typography.titleMedium)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 (listOf(1, 3, 5, 10, 30, 60) + minutes).distinct().sorted().forEach { value ->
-                    RuntimeFilterChip(shape = androidx.compose.foundation.shape.RoundedCornerShape(50), selected = minutes == value, onClick = { viewModel?.setIdleMinutes(value) },
+                    RuntimeFilterChip(shape = MaterialTheme.shapes.small, selected = minutes == value, onClick = { viewModel?.setIdleMinutes(value) },
                         label = { LocalizedText(stringResource(R.string.mcp_client_minutes, value), maxLines = 1,
                             overflow = TextOverflow.Ellipsis) })
                 }

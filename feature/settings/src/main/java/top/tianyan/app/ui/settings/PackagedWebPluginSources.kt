@@ -39,23 +39,31 @@ class PackagedWebPluginSources(
      * declaration ([allowStart] false) can never cause a start. In both cases port, path, command and
      * environment come from native state through [ToolManager], never from the page.
      */
-    suspend fun openService(toolId: String, allowStart: Boolean): WebPluginAssetLease {
+    suspend fun openService(toolId: String, allowStart: Boolean, requireWrites: Boolean = false): WebPluginAssetLease {
         val spec = requireNotNull(tools.serviceSpec(toolId)) { "工具未声明本地服务" }
+        check(!requireWrites || spec.authenticated) { "服务写入要求认证协议，请升级后端插件" }
+        val distro = requireNotNull(spec.distroId ?: linux.activeDistroId.value) { "未选择本地系统" }
+        check(linux.activeDistroId.value == distro && servers.activeId.value == null) { "执行环境已改变" }
         if (tools.isGatewayRunning(toolId)) {
+            check(!spec.authenticated || spec.authentication != null) { "服务身份不可用，请在工具中心重新启动" }
             val source = ToolServiceWebSource(
                 ToolServiceDescriptor(
                     port = spec.port,
                     basePath = spec.path.trimEnd('/') + "/",
                     ownerPluginId = toolId,
-                    distroId = requireNotNull(linux.activeDistroId.value) { "未选择本地系统" },
+                    distroId = distro,
+                    authentication = spec.authentication,
                 ),
-                isLocal = { servers.activeId.value == null },
+                isLocal = { servers.activeId.value == null && linux.activeDistroId.value == distro &&
+                    (!spec.authenticated || spec.authentication === tools.serviceAuthentication(toolId, distro)) },
             )
             return WebPluginAssetLease(emptyMap(), available = { source.isAvailable },
                 release = { source.close() }, load = { source.snapshot() }, resolve = { source.resolve(it) },
-                request = { source.read(it) }, stream = { path, emit -> source.stream(path, emit) })
+                request = { source.read(it) }, stream = { path, emit -> source.stream(path, emit) },
+                write = { path, body -> source.write(path, body) })
         }
         require(allowStart) { "只读工具服务来源要求服务已在运行" }
+        check(!spec.authenticated) { "认证服务需在工具中心启动，页面关闭不会停止后台任务" }
         val launch = requireNotNull(tools.serviceLaunch(toolId)) { "工具不支持由插件页面启动服务" }
         val source = ProotToolServiceSource(
             linux, launch,
@@ -63,7 +71,8 @@ class PackagedWebPluginSources(
         )
         return WebPluginAssetLease(emptyMap(), available = { source.isAvailable },
             release = { source.close() }, load = { source.snapshot() }, resolve = { source.resolve(it) },
-            request = { source.read(it) }, stream = { path, emit -> source.stream(path, emit) })
+            request = { source.read(it) }, stream = { path, emit -> source.stream(path, emit) },
+            write = { path, body -> source.write(path, body) })
     }
 
     suspend fun openToolService(toolId: String): WebPluginAssetLease = openService(toolId, allowStart = true)

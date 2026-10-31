@@ -60,11 +60,6 @@ internal fun selectedPluginPage(destination: androidx.navigation3.runtime.NavKey
 }
 
 @Composable
-internal fun ManagedPluginsScreen(platform: NativePluginPlatform, controller: PluginController, onOpen: (PluginExtensionRef) -> Unit, onOpenTool: (String) -> Unit, onBack: () -> Unit, onOpenWebPackages: () -> Unit = {}) {
-    top.tianyan.app.plugin.ui.PluginManagerScreen(platform.plugins, controller, onOpen, onBack) {
-        top.tianyan.app.ui.components.RuntimeTextButton(onClick = onOpenWebPackages) {
-            androidx.compose.material3.Text(androidx.compose.ui.res.stringResource(top.tianyan.app.feature.settings.R.string.web_packages_title))
-        }
-        top.tianyan.app.ui.settings.PackagedPluginInventorySection(onOpenTool)
-    }
+internal fun ManagedPluginsScreen(platform: NativePluginPlatform, controller: PluginController, onOpen: (PluginExtensionRef) -> Unit, onBack: () -> Unit) {
+    top.tianyan.app.plugin.ui.PluginManagerScreen(platform.plugins, controller, onOpen, onBack)
 }

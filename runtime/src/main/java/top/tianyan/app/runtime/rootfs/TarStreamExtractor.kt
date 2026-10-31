@@ -1,6 +1,5 @@
 package top.tianyan.app.runtime.rootfs
 
-import android.system.Os
 import top.tianyan.app.core.common.logging.AppLogger
 import java.io.File
 import java.io.InputStream
@@ -9,34 +8,6 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-
-interface FileSystemOps {
-    fun symlink(target: String, linkPath: String)
-    fun chmod(path: String, mode: Int)
-}
-
-internal class AndroidFileSystemOps : FileSystemOps {
-    override fun symlink(target: String, linkPath: String) {
-        try {
-            Os.symlink(target, linkPath)
-        } catch (e: NoClassDefFoundError) {
-            Files.createSymbolicLink(File(linkPath).toPath(), File(target).toPath())
-        } catch (e: UnsatisfiedLinkError) {
-            Files.createSymbolicLink(File(linkPath).toPath(), File(target).toPath())
-        }
-    }
-
-    override fun chmod(path: String, mode: Int) {
-        try {
-            Os.chmod(path, mode)
-        } catch (e: Throwable) {
-            val file = File(path)
-            if (mode and 0x100 != 0) file.setReadable(true, false)
-            if (mode and 0x80 != 0) file.setWritable(true, false)
-            if (mode and 0x40 != 0) file.setExecutable(true, false)
-        }
-    }
-}
 
 class TarStreamExtractor internal constructor(
     private val logWarning: (String, Throwable?) -> Unit,
@@ -188,10 +159,10 @@ class TarStreamExtractor internal constructor(
             ensurePathWritable(target.parentFile ?: destination, destination)
             deleteTree(target)
             target.parentFile?.mkdirs()
-            runCatching { Files.createLink(target.toPath(), source.toPath()) }
+            runCatching { fsOps.hardlink(source.absolutePath, target.absolutePath) }
                 .onFailure {
                     logWarning("Hardlink unsupported, copying ${source.name} instead", it)
-                    source.copyTo(target, overwrite = true)
+                    copyPreservingMode(source, target, fsOps)
                 }
         }
 

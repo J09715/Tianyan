@@ -12,6 +12,25 @@ import org.junit.Test
 class SettingsSearchRegistryTest {
 
     @Test
+    fun pluginManagementAndImportAliasesReachTheUnifiedCenter() {
+        listOf("插件中心", "插件管理", "工具中心", "导入文件", "txplugin", "内置功能").forEach { query ->
+            val result = SettingsSearchRegistry.search(query).first { it.target == SettingsSearchTarget.TOOL_CENTER }
+            assertEquals("插件中心", result.title)
+            assertEquals("设置 > 插件中心", result.breadcrumb)
+        }
+        val library = SettingsSearchRegistry.allItems.first { it.target == SettingsSearchTarget.PLUGIN_LIBRARY }
+        assertEquals("设置 > 插件中心 > 下载插件", library.breadcrumb)
+    }
+
+    @Test
+    fun pluginDownloadsAndRepositorySourcesAreDiscoverable() {
+        listOf("插件仓库", "下载插件", "GitHub", "Gitee", "切换源").forEach { query ->
+            assertTrue("应可通过 $query 找到插件仓库", SettingsSearchRegistry.search(query)
+                .any { it.target == SettingsSearchTarget.PLUGIN_LIBRARY })
+        }
+    }
+
+    @Test
     fun testAllItemsNotEmptyAndHaveValidTargets() {
         val allItems = SettingsSearchRegistry.allItems
         assertTrue("全局功能搜索条目应不少于60项，当前有 ${allItems.size} 项", allItems.size >= 60)

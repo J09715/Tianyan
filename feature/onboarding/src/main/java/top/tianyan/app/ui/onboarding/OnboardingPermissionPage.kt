@@ -47,6 +47,8 @@ import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import top.tianyan.app.feature.onboarding.R
+import top.tianyan.app.runtime.remote.LocalNetworkAccess
+import top.tianyan.app.runtime.remote.needsLocalNetworkPermission
 import top.tianyan.app.ui.components.RuntimeButton
 import top.tianyan.app.ui.components.RuntimeCard
 import top.tianyan.app.ui.components.RuntimeIcon
@@ -56,6 +58,7 @@ import top.tianyan.app.ui.components.runtimeContentPadding
 
 private enum class SetupPermission(val title: Int, val description: Int, val icon: RuntimeIconName) {
     NOTIFICATION(R.string.onboarding_permission_notification, R.string.onboarding_permission_notification_hint, RuntimeIconName.Chat),
+    LOCAL_NETWORK(R.string.onboarding_permission_local_network, R.string.onboarding_permission_local_network_hint, RuntimeIconName.Network),
     OVERLAY(R.string.onboarding_permission_overlay, R.string.onboarding_permission_overlay_hint, RuntimeIconName.Terminal),
     FILES(R.string.onboarding_permission_files, R.string.onboarding_permission_files_hint, RuntimeIconName.Folder),
     AUTOSTART(R.string.onboarding_permission_autostart, R.string.onboarding_permission_autostart_hint, RuntimeIconName.PowerSettingsNew),
@@ -72,11 +75,18 @@ internal fun OnboardingPermissionPage(
     val preview = LocalInspectionMode.current
     var statuses by remember { mutableStateOf(if (preview) emptyMap() else permissionStatuses(context)) }
     var notificationRequested by rememberSaveable { mutableStateOf(false) }
+    var localNetworkRequested by rememberSaveable { mutableStateOf(false) }
     val notificationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         statuses = permissionStatuses(context)
         if (granted) onNotificationGranted()
     }
+    val localNetworkLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        statuses = permissionStatuses(context)
+    }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { if (!preview) statuses = permissionStatuses(context) }
+    val permissions = SetupPermission.entries.filter { permission ->
+        permission != SetupPermission.LOCAL_NETWORK || preview || LocalNetworkAccess.enforcedAt(Build.VERSION.SDK_INT)
+    }
 
     LazyColumn(
         modifier = modifier,
@@ -89,7 +99,7 @@ internal fun OnboardingPermissionPage(
                 description = stringResource(R.string.onboarding_permissions_description),
             )
         }
-        items(SetupPermission.entries) { permission ->
+        items(permissions) { permission ->
             val granted = statuses[permission] == true
             val legacyFiles = permission == SetupPermission.FILES && Build.VERSION.SDK_INT < Build.VERSION_CODES.R
             RuntimeCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(16.dp)) {
@@ -122,6 +132,9 @@ internal fun OnboardingPermissionPage(
                             ) {
                                 notificationRequested = true
                                 notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            } else if (permission == SetupPermission.LOCAL_NETWORK && context.needsLocalNetworkPermission() && !localNetworkRequested) {
+                                localNetworkRequested = true
+                                localNetworkLauncher.launch(LocalNetworkAccess.PERMISSION)
                             } else {
                                 openPermissionSettings(context, permission)
                             }
@@ -151,6 +164,7 @@ internal fun PermissionContinueActions(onContinue: () -> Unit) {
 
 private fun permissionStatuses(context: Context): Map<SetupPermission, Boolean> = mapOf(
     SetupPermission.NOTIFICATION to NotificationManagerCompat.from(context).areNotificationsEnabled(),
+    SetupPermission.LOCAL_NETWORK to !context.needsLocalNetworkPermission(),
     SetupPermission.OVERLAY to Settings.canDrawOverlays(context),
     SetupPermission.FILES to (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager()),
     SetupPermission.BATTERY to context.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(context.packageName),
@@ -161,6 +175,7 @@ private fun openPermissionSettings(context: Context, permission: SetupPermission
     val details = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, appUri)
     val intents = when (permission) {
         SetupPermission.NOTIFICATION -> listOf(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
+        SetupPermission.LOCAL_NETWORK -> listOf(details)
         SetupPermission.OVERLAY -> listOf(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, appUri))
         SetupPermission.FILES -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) listOf(
             Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, appUri),

@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -37,7 +37,7 @@ internal fun GroupAssignmentContinueDialog(task: BotAssignment, onDismiss: () ->
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
                 Text(task.title, style = MaterialTheme.typography.bodyMedium)
                 Text(stringResource(R.string.fbot_assignment_continue_hint), style = MaterialTheme.typography.bodySmall)
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = instruction, onValueChange = { instruction = it }, enabled = !sending,
                     label = { Text(stringResource(R.string.fbot_assignment_instruction)) }, minLines = 3,
                     modifier = Modifier.fillMaxWidth(), isError = error != null,

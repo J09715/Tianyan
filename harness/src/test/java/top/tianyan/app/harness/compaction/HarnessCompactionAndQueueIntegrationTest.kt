@@ -8,6 +8,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -30,6 +31,10 @@ import top.tianyan.app.core.common.logging.SensitiveDataRedactor
 import top.tianyan.app.core.database.HarnessEntryEntity
 import top.tianyan.app.core.database.HarnessRuntimeRepository
 import top.tianyan.app.harness.HarnessMessage
+import top.tianyan.app.harness.ContextMemoryToolBackend
+import top.tianyan.app.harness.HarnessTool
+import top.tianyan.app.harness.ToolCall
+import top.tianyan.app.harness.ToolResult
 import top.tianyan.app.harness.session.SessionTreeStore
 
 /**
@@ -71,6 +76,33 @@ class HarnessCompactionAndQueueIntegrationTest {
     private fun message(index: Int) =
         if (index % 2 == 0) UserMessage(id = "m-$index", createdAt = index.toLong(), text = "消息内容 $index")
         else AssistantText(id = "m-$index", createdAt = index.toLong(), text = "回复内容 $index")
+
+    @Test
+    fun `manual compact retains active tool turn and keeps original history readable`() = runBlocking {
+        val sessionId = "manual-tool-turn"
+        val messages = listOf(
+            UserMessage("old-user", 0, "Old request"), AssistantText("old-answer", 1, "Old answer"),
+            UserMessage("current-user", 2, "Current request"),
+            ToolCall("call-a", 3, HarnessTool.READ, JsonObject(emptyMap())),
+            ToolResult("result-a", 4, "call-a", true, "First output"),
+            ToolCall("call-b", 5, HarnessTool.READ, JsonObject(emptyMap())),
+            ToolResult("result-b", 6, "call-b", true, "Second output"),
+            AssistantText("answer", 7, "Completed"),
+        )
+        repository.ensureLane(sessionId, "main")
+        for (message in messages) repository.appendToLane(sessionId, "main", HarnessEntryEntity(
+            id = message.id, sessionId = sessionId,
+            parentId = repository.findLane(sessionId, "main")!!.leafId, createdAt = message.createdAt,
+            entryType = "message", customType = null,
+            payloadJson = Json.encodeToString(HarnessMessage.serializer(), message),
+        ))
+        val backend = ContextMemoryToolBackend(store, compaction)
+        assertTrue(backend.manualCompact(sessionId).first)
+        assertEquals(messages.drop(2), compaction.project(sessionId).messages)
+        assertTrue(store.readWithRelated(sessionId, messageId = "old-user").isNotEmpty())
+        assertTrue(!backend.manualCompact(sessionId).first)
+        assertEquals(messages.drop(2), compaction.project(sessionId).messages)
+    }
 
     @Test
     fun `compaction projects summary plus retained tail`() = runBlocking {

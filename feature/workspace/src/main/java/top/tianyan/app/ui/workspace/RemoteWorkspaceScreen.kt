@@ -7,7 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -105,7 +105,7 @@ internal fun RemoteWorkspaceScreen(serverId: String, onNavigate: (MainDestinatio
     if (createProject) RuntimeAlertDialog(onDismissRequest = { if (!creating) createProject = false }, title = { Text("新建服务器项目") },
         text = { Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("将在当前服务器的工作目录下创建项目目录。")
-            OutlinedTextField(projectName, { projectName = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, enabled = !creating, label = { Text("项目名称") })
+            RuntimeFilledTextField(projectName, { projectName = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, enabled = !creating, label = { Text("项目名称") })
             message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         } }, confirmButton = { RuntimeTextButton(enabled = !creating && projectName.isNotBlank(), onClick = {
             val snapshot = projectName.trim()
@@ -131,7 +131,7 @@ private fun RemoteFileEditor(serverId: String, path: String, original: String, s
     RuntimeAlertDialog(onDismissRequest = { if (!busy) onDismiss() }, title = { Text(path.substringAfterLast('/'), maxLines = 1, overflow = TextOverflow.Ellipsis) },
         text = { Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(path, style = MaterialTheme.typography.bodySmall)
-            OutlinedTextField(content, { content = it }, modifier = Modifier.fillMaxWidth(), maxLines = 14, minLines = 8,
+            RuntimeFilledTextField(content, { content = it }, modifier = Modifier.fillMaxWidth(), maxLines = 14, minLines = 8,
                 enabled = !busy, textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace))
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         } }, confirmButton = { RuntimeTextButton(enabled = !busy && content != original, onClick = {

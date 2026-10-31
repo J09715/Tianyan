@@ -335,6 +335,7 @@ fun TianyanNavHost(
                                 SettingsSearchTarget.AGENT_SKILLS -> activeStack.push(SettingsSearchDestination, AgentSkillSettingsDestination)
                                 SettingsSearchTarget.MCP_SETTINGS -> activeStack.push(SettingsSearchDestination, McpSettingsDestination)
                                 SettingsSearchTarget.DISTRO_MANAGEMENT -> activeStack.push(SettingsSearchDestination, DistroManagementDestination)
+                                SettingsSearchTarget.PLUGIN_LIBRARY -> activeStack.push(SettingsSearchDestination, RemotePluginLibraryDestination)
                                 SettingsSearchTarget.STORAGE_USAGE -> activeStack.push(SettingsSearchDestination, StorageUsageDestination)
                                 SettingsSearchTarget.STORAGE_MOUNTS -> activeStack.push(SettingsSearchDestination, StorageMountSettingsDestination)
                                 SettingsSearchTarget.ENV_VARS -> activeStack.push(SettingsSearchDestination, EnvironmentVariableSettingsDestination)
@@ -659,7 +660,7 @@ fun TianyanNavHost(
                     )
                 }
             }
-            entry<PluginManagerDestination> { GuardedEntry(PluginManagerDestination) { ManagedPluginsScreen(pluginPlatform, pluginController, { activeStack.pushRaw(PluginPageDestination(it.pluginId, it.extensionId)) }, { activeStack.pushRaw(ToolDetailDestination(it)) }, ::popBack, { activeStack.pushRaw(WebPluginManagerDestination) }) } }
+            entry<PluginManagerDestination> { GuardedEntry(PluginManagerDestination) { ManagedPluginsScreen(pluginPlatform, pluginController, { activeStack.pushRaw(PluginPageDestination(it.pluginId, it.extensionId)) }, ::popBack) } }
             entry<WebPluginManagerDestination> { GuardedEntry(WebPluginManagerDestination) { top.tianyan.app.ui.settings.WebPluginsScreen({ id, version, plugin -> activeStack.pushRaw(PluginPageDestination(plugin, "main", mapOf("web.package.id" to id, "web.package.version" to version))) }, ::popBack) } }
             entry<PluginPageDestination> { destination ->
                 GuardedEntry(destination) { RegisteredPluginPage(pluginPages, destination, ::popBack) }
@@ -678,7 +679,6 @@ fun TianyanNavHost(
             entry<BotDetailDestination> { destination -> GuardedEntry(destination) { top.tianyan.app.ui.bot.BotDetailScreen(botId = destination.botId, onBack = ::popBack, onOpenSession = { sessionId -> chatViewModel.switchSession(sessionId); navigateMain(MainDestination.Agent) }) } }
             entry<GroupChatDestination> { destination -> GuardedEntry(destination) { top.tianyan.app.ui.bot.GroupChatScreen(groupId = destination.groupId, onBack = ::popBack, onOpenBot = { activeStack.pushRaw(BotDetailDestination(it)) }) } }
     }
-
     // Keep entry state and ViewModels across pushes and pops in the shared navigation stack.
     // Explicit <NavKey>: outside NavDisplay's parameter context, listOf cannot infer T.
     val entryDecorators = listOf(rememberSaveableStateHolderNavEntryDecorator<NavKey>(), rememberViewModelStoreNavEntryDecorator<NavKey>())

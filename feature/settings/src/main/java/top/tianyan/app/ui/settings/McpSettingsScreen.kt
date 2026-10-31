@@ -37,7 +37,7 @@ import androidx.compose.material3.FilterChipDefaults
 import top.tianyan.app.ui.components.RuntimeIconButton as IconButton
 import androidx.compose.material3.MaterialTheme
 import top.tianyan.app.ui.components.RuntimeOutlinedButton as OutlinedButton
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import top.tianyan.app.ui.components.RuntimeRadioButton as RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -161,42 +161,12 @@ fun McpSettingsScreen(
             }
 
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        "可用 MCP 插件服务 (${servers.size})",
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                        IconButton(
-                            onClick = { viewModel?.refreshMcpConnections() },
-                            modifier = Modifier.size(30.dp),
-                        ) {
-                            RuntimeIcon(RuntimeIconName.Refresh, Modifier.size(16.dp), MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        TextButton(
-                            onClick = {
-                                showLocalDiscoveryDialog = true
-                                viewModel?.discoverLocalMcpServers()
-                            },
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                RuntimeIcon(RuntimeIconName.Search, Modifier.size(14.dp), MaterialTheme.colorScheme.primary)
-                                Text("探测本机", style = MaterialTheme.typography.labelMedium)
-                            }
-                        }
-                        TextButton(onClick = { showAddDialog = true }) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                RuntimeIcon(RuntimeIconName.Plus, Modifier.size(14.dp), MaterialTheme.colorScheme.primary)
-                                Text("添加服务", style = MaterialTheme.typography.labelMedium)
-                            }
-                        }
-                    }
-                }
+                McpManagementActions(
+                    count = servers.size,
+                    onRefresh = { viewModel?.refreshMcpConnections() },
+                    onDiscover = { showLocalDiscoveryDialog = true; viewModel?.discoverLocalMcpServers() },
+                    onAdd = { showAddDialog = true },
+                )
             }
 
             val builtinServers = servers.filter { it.isBuiltin }
@@ -631,7 +601,7 @@ private fun AgentServerCard(state: AgentServerState, viewModel: SettingsViewMode
                     )
 
                     // 端口
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = portText,
                         onValueChange = { input ->
                             portText = input.filter { it.isDigit() }.take(5)

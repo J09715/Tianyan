@@ -632,23 +632,19 @@ private fun FloatingChatPanel(
                     )
                 }
 
-                RuntimeIconButton(
-                    onClick = {
-                        if (inputText.isNotBlank()) {
-                            val prompt = inputText.trim()
-                            inputText = ""
-                            onSendPrompt(prompt)
-                        }
-                    },
-                    modifier = Modifier.size(24.dp),
-                    contentDescription = stringResource(R.string.chat_floating_send),
+                // 迷你实心圆钮，与主 composer 发送按钮同族
+                Box(
+                    modifier = Modifier.size(24.dp).clip(CircleShape)
+                        .background(if (inputText.isNotBlank()) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.surfaceContainerHigh)
+                        .clickable(enabled = inputText.isNotBlank()) {
+                            onSendPrompt(inputText.trim()); inputText = ""
+                        },
+                    contentAlignment = Alignment.Center,
                 ) {
-                    RuntimeIcon(
-                        RuntimeIconName.ArrowUp,
-                        Modifier.size(13.dp),
-                        tint = if (inputText.isNotBlank()) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                    )
+                    RuntimeIcon(RuntimeIconName.ArrowUp, Modifier.size(14.dp),
+                        tint = if (inputText.isNotBlank()) MaterialTheme.colorScheme.onPrimary
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
                 }
             }
         }

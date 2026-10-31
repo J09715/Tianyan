@@ -13,6 +13,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.graphics.Color
 
 /** Native filled field; keeps focus/error indicators, floating labels and IME behavior. */
 @Composable
@@ -67,4 +69,24 @@ fun RuntimeFilledTextField(
         shape = shape,
         colors = colors,
     )
+}
+
+/** Composer keeps cursor/mention state while sharing native Material input behavior. */
+@Composable
+fun RuntimeComposerTextField(
+    value: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: @Composable () -> Unit,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+) {
+    TextField(value = value, onValueChange = onValueChange, modifier = modifier,
+        placeholder = placeholder, visualTransformation = visualTransformation,
+        textStyle = MaterialTheme.typography.bodyLarge, minLines = 1, maxLines = 5,
+        keyboardOptions = keyboardOptions,
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
+            focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
+        ))
 }

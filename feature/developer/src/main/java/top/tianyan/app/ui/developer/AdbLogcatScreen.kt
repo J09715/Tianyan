@@ -22,7 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -214,7 +214,7 @@ fun AdbLogcatScreen(
                 Spacer(Modifier.height(12.dp))
 
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = pairingCode,
                         onValueChange = { value -> pairingCode = value.filter(Char::isDigit).take(6) },
                         modifier = Modifier.weight(1.1f),
@@ -223,7 +223,7 @@ fun AdbLogcatScreen(
                         supportingText = { Text("首次配对时填入") },
                         singleLine = true,
                     )
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = explicitPort,
                         onValueChange = { value -> explicitPort = value.filter(Char::isDigit).take(5) },
                         modifier = Modifier.weight(0.9f),
@@ -276,7 +276,7 @@ fun AdbLogcatScreen(
             // ── 3. 日志抓取工作台 ───────────────────────────────────────────
             SectionHeader("Logcat 日志抓取", "指定目标应用包名、Tag 与过滤条件，就地抓取与分析运行日志")
             RuntimeCard(Modifier.fillMaxWidth()) {
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = logcatPackage,
                     onValueChange = { logcatPackage = it },
                     modifier = Modifier.fillMaxWidth(),
@@ -301,14 +301,14 @@ fun AdbLogcatScreen(
                 Spacer(Modifier.height(10.dp))
 
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = logcatTag,
                         onValueChange = { logcatTag = it },
                         modifier = Modifier.weight(1f),
                         label = { Text("Tag 过滤（可选）") },
                         singleLine = true,
                     )
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = logcatLines,
                         onValueChange = { logcatLines = it.filter(Char::isDigit).take(4) },
                         modifier = Modifier.weight(0.6f),
@@ -318,7 +318,7 @@ fun AdbLogcatScreen(
                 }
                 Spacer(Modifier.height(8.dp))
 
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = logcatKeyword,
                     onValueChange = { logcatKeyword = it },
                     modifier = Modifier.fillMaxWidth(),

@@ -20,25 +20,19 @@ internal fun EditorToggleRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
 ) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shape = MaterialTheme.shapes.large,
-        modifier = Modifier.fillMaxWidth(),
+    Row(
+        Modifier.fillMaxWidth().toggleable(checked, role = Role.Switch, onValueChange = onCheckedChange)
+            .heightIn(min = SettingsDensity.rowMinHeight).padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Row(
-            Modifier.toggleable(checked, role = Role.Switch, onValueChange = onCheckedChange)
-                .heightIn(min = SettingsDensity.rowMinHeight).padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(SettingsDensity.textGap)) {
-                Text(title, style = settingsTitleStyle(), color = MaterialTheme.colorScheme.onSurface)
-                Text(subtitle, style = settingsSupportingStyle(), color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            RuntimeSwitch(checked, onCheckedChange = null,
-                thumbContent = if (checked) {
-                    { RuntimeIcon(RuntimeIconName.Check, Modifier.size(16.dp), MaterialTheme.colorScheme.onPrimaryContainer) }
-                } else null)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(SettingsDensity.textGap)) {
+            Text(title, style = settingsTitleStyle(), color = MaterialTheme.colorScheme.onSurface)
+            Text(subtitle, style = settingsSupportingStyle(), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        RuntimeSwitch(checked, onCheckedChange = null,
+            thumbContent = if (checked) {
+                { RuntimeIcon(RuntimeIconName.Check, Modifier.size(16.dp), MaterialTheme.colorScheme.onPrimaryContainer) }
+            } else null)
     }
 }

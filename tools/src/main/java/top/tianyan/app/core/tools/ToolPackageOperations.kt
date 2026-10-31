@@ -12,9 +12,10 @@ class ToolPackageOperations(private val repository: ToolRepository, private val 
     private val hostGrants: top.tianyan.app.runtime.bridge.FullAccessGrant? = null) {
     private val operations = Mutex()
 
-    suspend fun <T> useInstalled(distro: String, expected: ToolManifest, action: suspend () -> T): T = operations.withLock {
+    suspend fun <T> useInstalled(distro: String, expected: ToolManifest, allowUpdateAvailable: Boolean = false, action: suspend () -> T): T = operations.withLock {
         val installed = repository.findById(distro, expected.id)
-        check(installed?.installedVersion != null && installed.state == "INSTALLED") { "插件未安装或正在改变" }
+        check(installed?.installedVersion != null && (installed.state == "INSTALLED" ||
+            allowUpdateAvailable && installed.state == "UPDATE_AVAILABLE")) { "插件未安装或正在改变" }
         check(runtimeManifest(distro, expected.id) == expected) { "插件安装版本已改变，请重新发现扩展" }
         action()
     }
@@ -56,6 +57,25 @@ class ToolPackageOperations(private val repository: ToolRepository, private val 
     }
 
     fun record(distro: String, manifest: ToolManifest, version: String) = receipts.record(distro, manifest, version)
+
+    /** Refresh metadata and repair legacy runtime-banner versions under the installation lock. */
+    suspend fun syncManifest(distro: String, manifest: ToolManifest): top.tianyan.app.core.database.ToolEntity? = operations.withLock {
+        val existing = repository.findById(distro, manifest.id)
+        val normalized = existing?.let { tool ->
+            val version = tool.installedVersion
+            val receipt = version?.let { receipts.read(distro, tool.id, it) }
+            val packageVersion = receipt?.packageVersion
+            val installed = packageVersion?.let { repository.localManifest(tool.id, it) }
+            if (version != null && packageVersion != null && version != packageVersion &&
+                tool.state in setOf("INSTALLED", "UPDATE_AVAILABLE", "DISABLED") && installed?.schemaVersion == 1 && installed.source == "LOCAL") {
+                require(PluginPackageProtocol.identity(installed) == receipt.pluginId) { "已安装插件收据身份不匹配" }
+                receipts.bindToPackageVersion(distro, receipt)
+                tool.copy(installedVersion = packageVersion)
+            } else tool
+        }
+        repository.upsert(manifest.toEntity(distro, normalized))
+        normalized
+    }
 
     /** Selected packages are installation candidates, never replacements for installed runtime config. */
     suspend fun runtimeManifest(distro: String, id: String): ToolManifest? {

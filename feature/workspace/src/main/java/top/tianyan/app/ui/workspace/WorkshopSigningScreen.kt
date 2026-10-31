@@ -17,7 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -425,7 +425,7 @@ private fun SigningField(
     onValueChange: (String) -> Unit,
 ) {
     var passwordVisible by remember { mutableStateOf(false) }
-    OutlinedTextField(
+    RuntimeFilledTextField(
         value = value,
         onValueChange = onValueChange,
         label = { Text(if (optional) "$label（可选）" else label) },

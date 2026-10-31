@@ -57,67 +57,69 @@ fun ChatNavigationDrawer(
     val runStates by viewModel.sessionRunStates.collectAsStateWithLifecycle()
     val pluginActive = LocalPluginDestinationActive.current
 
-    RuntimeAdaptiveNavigationScaffold(
-        visible = visible,
-        onDismiss = onDismiss,
-        onOpen = onOpen,
-        gesturesEnabled = gesturesEnabled,
-        docked = docked,
-        onDockedChange = onDockedChange,
-        rail = { onOpenSidebar ->
-            fun destination(target: MainDestination, label: String) = RuntimeRailItem(label, target.icon,
-                selected = selected == target && !pluginActive) { onDismiss(); onNavigate(target) }
-            RuntimeNavigationRail(
-                header = listOf(
-                    RuntimeRailItem(stringResource(ComponentsR.string.components_rail_sessions), RuntimeIconName.Sessions, onClick = onOpenSidebar),
-                    RuntimeRailItem(stringResource(ComponentsR.string.components_rail_new_session), RuntimeIconName.Plus) { onDismiss(); onNewSession() },
-                ),
-                items = listOf(
-                    destination(MainDestination.Agent, stringResource(ComponentsR.string.components_nav_agent)),
-                    destination(MainDestination.Workspace, stringResource(ComponentsR.string.components_drawer_tab_workspace)),
-                    destination(MainDestination.Home, stringResource(ComponentsR.string.components_drawer_tab_system)),
-                    RuntimeRailItem(stringResource(ComponentsR.string.components_rail_terminal), RuntimeIconName.Terminal) { onDismiss(); onOpenTerminal() },
-                    RuntimeRailItem(stringResource(ComponentsR.string.components_rail_tools), RuntimeIconName.Wrench) { onDismiss(); onOpenTools() },
-                ),
-                footer = listOf(destination(MainDestination.Settings, stringResource(ComponentsR.string.components_drawer_settings))),
-            )
-        },
-        drawerContent = { onCollapse ->
-            SessionsSideDrawer(
-                visible = true,
-                sessions = normalSessions,
-                botSessions = botSessions,
-                botSessionGroups = botSessionGroups,
-                hiddenBotSessionIds = hiddenBotSessionIds,
-                onHideBotSession = { id, hidden ->
-                    hiddenScope.launch { context.setBotSessionHidden(id, hidden) }
-                },
-                currentSessionId = currentSessionId,
-                workspaces = catalog.projects,
-                sessionRunStates = runStates,
-                onDismiss = onDismiss,
-                onSettings = { onDismiss(); onNavigate(MainDestination.Settings) },
-                onSwitch = { id -> viewModel.switchSession(id); onNavigate(MainDestination.Agent); onDismiss() },
-                onNew = { onDismiss(); onNewSession() },
-                onCreateInWorkspace = { project ->
-                    viewModel.createSession("", project.linuxPath, project.projectType.name)
-                    onNavigate(MainDestination.Agent); onDismiss()
-                },
-                onDelete = viewModel::deleteSession,
-                onRename = viewModel::renameSession,
-                onCollapse = onCollapse,
-                navigationContent = {
-                    AppNavigationSection(
-                        selected = selected,
-                        onNavigate = { destination -> onDismiss(); onNavigate(destination) },
-                        onOpenTerminal = { onDismiss(); onOpenTerminal() },
-                        onOpenTools = { onDismiss(); onOpenTools() },
-                    )
-                },
-            )
-        },
-        content = content,
-    )
+    ChatIdentityHost {
+        RuntimeAdaptiveNavigationScaffold(
+            visible = visible,
+            onDismiss = onDismiss,
+            onOpen = onOpen,
+            gesturesEnabled = gesturesEnabled,
+            docked = docked,
+            onDockedChange = onDockedChange,
+            rail = { onOpenSidebar ->
+                fun destination(target: MainDestination, label: String) = RuntimeRailItem(label, target.icon,
+                    selected = selected == target && !pluginActive) { onDismiss(); onNavigate(target) }
+                RuntimeNavigationRail(
+                    header = listOf(
+                        RuntimeRailItem(stringResource(ComponentsR.string.components_rail_sessions), RuntimeIconName.Sessions, onClick = onOpenSidebar),
+                        RuntimeRailItem(stringResource(ComponentsR.string.components_rail_new_session), RuntimeIconName.Plus) { onDismiss(); onNewSession() },
+                    ),
+                    items = listOf(
+                        destination(MainDestination.Agent, stringResource(ComponentsR.string.components_nav_agent)),
+                        destination(MainDestination.Workspace, stringResource(ComponentsR.string.components_drawer_tab_workspace)),
+                        destination(MainDestination.Home, stringResource(ComponentsR.string.components_drawer_tab_system)),
+                        RuntimeRailItem(stringResource(ComponentsR.string.components_rail_terminal), RuntimeIconName.Terminal) { onDismiss(); onOpenTerminal() },
+                        RuntimeRailItem(stringResource(ComponentsR.string.components_rail_tools), RuntimeIconName.Wrench) { onDismiss(); onOpenTools() },
+                    ),
+                    footer = listOf(destination(MainDestination.Settings, stringResource(ComponentsR.string.components_drawer_settings))),
+                )
+            },
+            drawerContent = { onCollapse ->
+                SessionsSideDrawer(
+                    visible = true,
+                    sessions = normalSessions,
+                    botSessions = botSessions,
+                    botSessionGroups = botSessionGroups,
+                    hiddenBotSessionIds = hiddenBotSessionIds,
+                    onHideBotSession = { id, hidden ->
+                        hiddenScope.launch { context.setBotSessionHidden(id, hidden) }
+                    },
+                    currentSessionId = currentSessionId,
+                    workspaces = catalog.projects,
+                    sessionRunStates = runStates,
+                    onDismiss = onDismiss,
+                    onSettings = { onDismiss(); onNavigate(MainDestination.Settings) },
+                    onSwitch = { id -> viewModel.switchSession(id); onNavigate(MainDestination.Agent); onDismiss() },
+                    onNew = { onDismiss(); onNewSession() },
+                    onCreateInWorkspace = { project ->
+                        viewModel.createSession("", project.linuxPath, project.projectType.name)
+                        onNavigate(MainDestination.Agent); onDismiss()
+                    },
+                    onDelete = viewModel::deleteSession,
+                    onRename = viewModel::renameSession,
+                    onCollapse = onCollapse,
+                    navigationContent = {
+                        AppNavigationSection(
+                            selected = selected,
+                            onNavigate = { destination -> onDismiss(); onNavigate(destination) },
+                            onOpenTerminal = { onDismiss(); onOpenTerminal() },
+                            onOpenTools = { onDismiss(); onOpenTools() },
+                        )
+                    },
+                )
+            },
+            content = content,
+        )
+    }
 
     if (newSessionVisible) {
         NewSessionDialog(

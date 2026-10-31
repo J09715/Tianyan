@@ -87,6 +87,8 @@ import top.tianyan.app.core.model.AiModelProfileExport
 import top.tianyan.app.core.tools.AgentProviderDefinition
 import top.tianyan.app.core.tools.ProviderGroup
 import top.tianyan.app.harness.ModelContextWindows
+import top.tianyan.app.ui.components.ModelCapabilityTags
+import top.tianyan.app.ui.components.ModelCapabilityUi
 import top.tianyan.app.ui.components.ProviderBadge
 import top.tianyan.app.ui.components.RuntimeAlertDialog
 import top.tianyan.app.ui.components.RuntimeButton
@@ -231,7 +233,7 @@ fun ModelEditorScreen(
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun ModelEditorContent(
+internal fun ModelEditorContent(
     modifier: Modifier = Modifier, bottomPadding: androidx.compose.ui.unit.Dp = 0.dp,
     modelId: String?,
     existing: AiModelEntity?,
@@ -322,6 +324,11 @@ private fun ModelEditorContent(
         selected?.let { modelId -> ModelContextWindows.resolve(modelId, provider.id) }
     }
 
+    // 视觉开关属于整个档案，必须同时考虑已选和手填模型；未知模型保留默认的图片输入能力。
+    val autoVisionInput = remember(selectedModels, customModelInput) {
+        profileVisionInput(selectedModels + customModelInput.split(','))
+    }
+
     // 高级与推理参数
     var rpmLimitText by rememberSaveable(modelId) {
         mutableStateOf(existing?.requestsPerMinutePerKey?.takeIf { it > 0 }?.toString().orEmpty())
@@ -362,6 +369,11 @@ private fun ModelEditorContent(
     }
     var visionEnabled by rememberSaveable(modelId) {
         mutableStateOf(existing?.visionEnabled ?: true)
+    }
+    // 用户手动改过视觉开关后，目录自动适配不再覆盖其选择；已保存档案也不被自动改写
+    var visionTouched by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(autoVisionInput) {
+        if (existing == null && !visionTouched) visionEnabled = autoVisionInput
     }
     var imageGenerationEnabled by rememberSaveable(modelId) {
         mutableStateOf(existing?.imageGenerationEnabled ?: false)
@@ -411,6 +423,8 @@ private fun ModelEditorContent(
         profile.reasoningEffort?.let { reasoningEffortText = it }
         toolCallEnabled = profile.toolCallMode != "disabled"
         pureChatMode = profile.pureChatMode
+        // JSON 导入视为显式设置，后续目录自动适配不得覆盖
+        visionTouched = true
         visionEnabled = profile.visionEnabled
         imageGenerationEnabled = profile.imageGenerationEnabled
         responseApiEnabled = profile.responseApiEnabled
@@ -517,7 +531,7 @@ private fun ModelEditorContent(
                         RuntimeIcon(RuntimeIconName.Globe, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
                         Text(
                             text = if (provider.id.startsWith("plugin.")) "档案信息" else "接口与基础连接",
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                     }
@@ -591,7 +605,7 @@ private fun ModelEditorContent(
                 shape = MaterialTheme.shapes.extraLarge,
                 contentPadding = PaddingValues(SettingsDensity.cardPadding),
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -604,13 +618,13 @@ private fun ModelEditorContent(
                             RuntimeIcon(RuntimeIconName.Key, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
                             Text(
                                 text = "API 密钥池",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
                         }
 
                         Surface(
-                            shape = RoundedCornerShape(6.dp),
+                            shape = MaterialTheme.shapes.extraSmall,
                             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
                         ) {
                             Text(
@@ -719,7 +733,7 @@ private fun ModelEditorContent(
 
                     Text(
                         text = "密钥将加密保存在本地 Android Keystore 中，明文不落库。",
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -734,7 +748,7 @@ private fun ModelEditorContent(
                 shape = MaterialTheme.shapes.extraLarge,
                 contentPadding = PaddingValues(SettingsDensity.cardPadding),
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     val totalSelectedCount = (selectedModels + customModelInput.split(",").map { it.trim() }).filter { it.isNotBlank() }.distinct().size
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -748,14 +762,14 @@ private fun ModelEditorContent(
                             RuntimeIcon(RuntimeIconName.Brain, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
                             Text(
                                 text = "模型选择与定制",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
                         }
 
                         if (totalSelectedCount > 0) {
                             Surface(
-                                shape = RoundedCornerShape(6.dp),
+                                shape = MaterialTheme.shapes.extraSmall,
                                 color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
                             ) {
                                 Text(
@@ -769,7 +783,6 @@ private fun ModelEditorContent(
                     }
 
                     if (candidateModels.isNotEmpty()) {
-                        val candidateScrollState = rememberScrollState()
                         val candidateCount = candidateModels.size
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -836,51 +849,13 @@ private fun ModelEditorContent(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         } else {
-                            FlowRow(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(max = 360.dp)
-                                    .verticalScroll(candidateScrollState),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                filteredCandidateModels.forEach { option ->
-                                    val isSelected = selectedModels.contains(option)
-                                    Surface(
-                                        color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceContainerHigh,
-                                        shape = RoundedCornerShape(10.dp),
-                                        border = BorderStroke(
-                                            1.dp,
-                                            if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                                        ),
-                                        modifier = Modifier.clickable {
-                                            selectedModels = if (isSelected) selectedModels - option else selectedModels + option
-                                        },
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                        ) {
-                                            if (isSelected) {
-                                                RuntimeIcon(
-                                                    name = RuntimeIconName.Check,
-                                                    modifier = Modifier.size(13.dp),
-                                                    tint = MaterialTheme.colorScheme.primary,
-                                                )
-                                            }
-                                            Text(
-                                                text = option,
-                                                style = MaterialTheme.typography.bodySmall.copy(
-                                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                                    fontSize = 12.sp,
-                                                ),
-                                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
-                                        }
-                                    }
-                                }
-                            }
+                            ModelEditorCandidateList(
+                                models = filteredCandidateModels,
+                                selectedModels = selectedModels,
+                                onToggle = { option ->
+                                    selectedModels = if (option in selectedModels) selectedModels - option else selectedModels + option
+                                },
+                            )
                         }
                     }
 
@@ -908,17 +883,17 @@ private fun ModelEditorContent(
                 contentPadding = PaddingValues(SettingsDensity.cardPadding),
                 onClick = { reasoningSectionExpanded = !reasoningSectionExpanded },
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
                         RuntimeIcon(RuntimeIconName.Speed, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 "推理与上下文调优",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                style = MaterialTheme.typography.titleMedium,
                             )
                             Text(
                                 "Temperature、Max Tokens、上下文容量与思考模式",
@@ -948,7 +923,7 @@ private fun ModelEditorContent(
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Text("Temperature (随机性)", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
-                                    Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)) {
+                                    Surface(shape = MaterialTheme.shapes.extraSmall, color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)) {
                                         Text(
                                             text = String.format("%.2f", temperature),
                                             style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold),
@@ -974,7 +949,7 @@ private fun ModelEditorContent(
                             // Max Tokens 与 Context Tokens 双列并排
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp),
                             ) {
                                 RuntimeFilledTextField(
                                     value = maxTokensText,
@@ -1024,7 +999,7 @@ private fun ModelEditorContent(
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Text("Top P (核采样)", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
-                                    Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)) {
+                                    Surface(shape = MaterialTheme.shapes.extraSmall, color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)) {
                                         Text(
                                             text = String.format("%.2f", topP),
                                             style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold),
@@ -1089,17 +1064,17 @@ private fun ModelEditorContent(
                 contentPadding = PaddingValues(SettingsDensity.cardPadding),
                 onClick = { advancedSectionExpanded = !advancedSectionExpanded },
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
                         RuntimeIcon(RuntimeIconName.Shield, Modifier.size(18.dp), MaterialTheme.colorScheme.primary)
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 "高级特性与网络配置",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                style = MaterialTheme.typography.titleMedium,
                             )
                             Text(
                                 "Tool Call、识图、Responses API、RPM 限速与请求头",
@@ -1139,7 +1114,7 @@ private fun ModelEditorContent(
                             // 每模型压缩预算覆盖（对齐 pi compaction.modelOverrides）
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp),
                             ) {
                                 RuntimeFilledTextField(
                                     value = compactionKeepRecentText,
@@ -1184,9 +1159,16 @@ private fun ModelEditorContent(
 
                             EditorToggleRow(
                                 title = "支持多模态识图 (Vision)",
-                                subtitle = "向模型直接发送图片",
+                                subtitle = if (!autoVisionInput) {
+                                    "模型目录显示所选模型均不支持图片输入，建议关闭以避免带图请求报错"
+                                } else {
+                                    "向模型直接发送图片"
+                                },
                                 checked = visionEnabled,
-                                onCheckedChange = { visionEnabled = it },
+                                onCheckedChange = {
+                                    visionTouched = true
+                                    visionEnabled = it
+                                },
                             )
 
                             EditorToggleRow(
@@ -1271,7 +1253,7 @@ private fun ModelEditorContent(
 
                 discoveryError?.let {
                     Surface(
-                        shape = RoundedCornerShape(10.dp),
+                        shape = MaterialTheme.shapes.medium,
                         color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
@@ -1295,7 +1277,7 @@ private fun ModelEditorContent(
                 testResult?.let { resultMsg ->
                     val isSuccess = resultMsg == "连接成功"
                     Surface(
-                        shape = RoundedCornerShape(10.dp),
+                        shape = MaterialTheme.shapes.medium,
                         color = if (isSuccess) successStatusColor().copy(alpha = 0.15f) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
@@ -1365,13 +1347,12 @@ private fun ModelEditorContent(
                         promptCacheTtl1h,
                     )
                 },
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
                 enabled = effectiveModels.isNotEmpty() && urlValid && tokenFieldsValid && rpmValid && keepRecentValid && reserveValid,
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     RuntimeIcon(RuntimeIconName.Check, Modifier.size(18.dp), MaterialTheme.colorScheme.onPrimary)
-                    Text(buttonText, fontWeight = FontWeight.Bold)
+                    Text(buttonText, style = MaterialTheme.typography.labelLarge)
                 }
             }
         }
@@ -1392,414 +1373,5 @@ internal fun filterCandidateModels(models: List<String>, query: String): List<St
         models
     } else {
         models.filter { it.contains(normalizedQuery, ignoreCase = true) }
-    }
-}
-@Composable
-private fun BatchImportKeysDialog(
-    onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit,
-) {
-    var text by rememberSaveable { mutableStateOf("") }
-    val context = LocalContext.current
-    val parsedCount = remember(text) {
-        text.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.distinct().count()
-    }
-
-    RuntimeAlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                RuntimeIcon(RuntimeIconName.Key, Modifier.size(20.dp), MaterialTheme.colorScheme.primary)
-                Text("批量导入密钥", fontWeight = FontWeight.Bold)
-            }
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Text(
-                    "粘贴多个 API 密钥，一行一个，遇到换行即为下一个 Key：",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                OutlinedTextField(
-                    value = text,
-                    onValueChange = { text = it },
-                    modifier = Modifier.fillMaxWidth().height(160.dp),
-                    placeholder = { Text("sk-xxxxxxxxxxxxxxxx\nsk-yyyyyyyyyyyyyyyy\nsk-zzzzzzzzzzzzzzzz") },
-                    textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                    shape = RoundedCornerShape(10.dp),
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    RuntimeOutlinedButton(
-                        onClick = {
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                            val clipText = clipboard?.primaryClip?.getItemAt(0)?.text?.toString().orEmpty()
-                            if (clipText.isNotBlank()) {
-                                text = clipText
-                            } else {
-                                Toast.makeText(context, "剪贴板为空", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        modifier = Modifier.weight(1f).height(36.dp),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp),
-                    ) {
-                        Text("从剪贴板粘贴", style = MaterialTheme.typography.labelMedium)
-                    }
-                    if (parsedCount > 0) {
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                        ) {
-                            Text(
-                                text = "已识别 $parsedCount 个",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            RuntimeButton(
-                onClick = { onConfirm(text) },
-                enabled = parsedCount > 0,
-            ) {
-                Text("导入")
-            }
-        },
-        dismissButton = {
-            RuntimeTextButton(onClick = onDismiss) {
-                Text("取消")
-            }
-        },
-    )
-}
-
-@Composable
-private fun QuickImportJsonDialog(
-    onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit,
-) {
-    var text by rememberSaveable { mutableStateOf("") }
-    val context = LocalContext.current
-
-    RuntimeAlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                RuntimeIcon(RuntimeIconName.Code, Modifier.size(20.dp), MaterialTheme.colorScheme.primary)
-                Text("从 JSON 填入模型配置", fontWeight = FontWeight.Bold)
-            }
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Text(
-                    "粘贴天衍导出的模型配置或 OpenAI 兼容 JSON，将自动解析并填入当前表单：",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                OutlinedTextField(
-                    value = text,
-                    onValueChange = { text = it },
-                    modifier = Modifier.fillMaxWidth().height(160.dp),
-                    placeholder = { Text("{\n  \"name\": \"DeepSeek-V4\",\n  \"provider\": \"DeepSeek\",\n  \"baseUrl\": \"https://api.deepseek.com/v1\",\n  \"model\": \"deepseek-v4-flash\"\n}") },
-                    textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                    shape = RoundedCornerShape(10.dp),
-                )
-                RuntimeOutlinedButton(
-                    onClick = {
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                        val clipText = clipboard?.primaryClip?.getItemAt(0)?.text?.toString().orEmpty()
-                        if (clipText.isNotBlank()) {
-                            text = clipText
-                        } else {
-                            Toast.makeText(context, "剪贴板为空", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth().height(36.dp),
-                    shape = RoundedCornerShape(8.dp),
-                ) {
-                    Text("从剪贴板粘贴")
-                }
-            }
-        },
-        confirmButton = {
-            RuntimeButton(
-                onClick = { onConfirm(text) },
-                enabled = text.isNotBlank(),
-            ) {
-                Text("解析并填入")
-            }
-        },
-        dismissButton = {
-            RuntimeTextButton(onClick = onDismiss) {
-                Text("取消")
-            }
-        },
-    )
-}
-
-@Composable
-private fun ProviderPickerDialog(
-    providers: List<AgentProviderDefinition>,
-    currentProviderId: String,
-    onDismiss: () -> Unit,
-    onSelect: (AgentProviderDefinition) -> Unit,
-) {
-    var searchQuery by rememberSaveable { mutableStateOf("") }
-    var selectedGroup by rememberSaveable { mutableStateOf<ProviderGroup?>(null) }
-
-    val filteredProviders = remember(providers, searchQuery, selectedGroup) {
-        providers.filter { item ->
-            val matchesGroup = selectedGroup == null || item.group == selectedGroup
-            val matchesSearch = searchQuery.isBlank() ||
-                item.name.contains(searchQuery, ignoreCase = true) ||
-                item.id.contains(searchQuery, ignoreCase = true) ||
-                item.baseUrl.contains(searchQuery, ignoreCase = true)
-            matchesGroup && matchesSearch
-        }
-    }
-
-    RuntimeAlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                RuntimeIcon(RuntimeIconName.Sparkles, Modifier.size(20.dp), MaterialTheme.colorScheme.primary)
-                Text("选择服务商预设", fontWeight = FontWeight.Bold)
-            }
-        },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                // 搜索框
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    placeholder = { Text("搜索服务商名称或端点...", style = MaterialTheme.typography.bodySmall) },
-                    leadingIcon = {
-                        RuntimeIcon(RuntimeIconName.Search, Modifier.size(16.dp), MaterialTheme.colorScheme.onSurfaceVariant)
-                    },
-                    trailingIcon = {
-                        if (searchQuery.isNotEmpty()) {
-                            RuntimeIconButton(
-                                onClick = { searchQuery = "" },
-                                modifier = Modifier.size(28.dp),
-                            ) {
-                                RuntimeIcon(RuntimeIconName.Close, Modifier.size(14.dp))
-                            }
-                        }
-                    },
-                    singleLine = true,
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                    textStyle = MaterialTheme.typography.bodySmall,
-                )
-
-                // 分类 Filter Chips
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    ProviderFilterChip(
-                        label = "全部",
-                        selected = selectedGroup == null,
-                        onClick = { selectedGroup = null },
-                    )
-                    ProviderFilterChip(
-                        label = "官方",
-                        selected = selectedGroup == ProviderGroup.OFFICIAL,
-                        onClick = { selectedGroup = ProviderGroup.OFFICIAL },
-                    )
-                    ProviderFilterChip(
-                        label = "国内",
-                        selected = selectedGroup == ProviderGroup.CHINA,
-                        onClick = { selectedGroup = ProviderGroup.CHINA },
-                    )
-                    ProviderFilterChip(
-                        label = "聚合",
-                        selected = selectedGroup == ProviderGroup.AGGREGATOR,
-                        onClick = { selectedGroup = ProviderGroup.AGGREGATOR },
-                    )
-                    ProviderFilterChip(
-                        label = "本地",
-                        selected = selectedGroup == ProviderGroup.LOCAL,
-                        onClick = { selectedGroup = ProviderGroup.LOCAL },
-                    )
-                    ProviderFilterChip(
-                        label = "自定义",
-                        selected = selectedGroup == ProviderGroup.CUSTOM,
-                        onClick = { selectedGroup = ProviderGroup.CUSTOM },
-                    )
-                }
-
-                // 列表
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 340.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    if (filteredProviders.isEmpty()) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 24.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    text = "未找到匹配的服务商",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    } else {
-                        items(filteredProviders, key = { it.id }) { option ->
-                            val isSelected = option.id == currentProviderId
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = if (isSelected) {
-                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f)
-                                },
-                                border = if (isSelected) {
-                                    BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
-                                } else {
-                                    null
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        onSelect(option)
-                                    },
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(32.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f)),
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        ProviderBadge(providerIdOrName = option.id, size = 22.dp)
-                                    }
-
-                                    Column(
-                                        modifier = Modifier.weight(1f),
-                                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                        ) {
-                                            Text(
-                                                text = option.name,
-                                                style = MaterialTheme.typography.bodyMedium.copy(
-                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                                ),
-                                                color = MaterialTheme.colorScheme.onSurface,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                            )
-                                            Surface(
-                                                shape = RoundedCornerShape(4.dp),
-                                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f),
-                                            ) {
-                                                Text(
-                                                    text = when (option.group) {
-                                                        ProviderGroup.OFFICIAL -> "官方"
-                                                        ProviderGroup.CHINA -> "国内"
-                                                        ProviderGroup.AGGREGATOR -> "聚合"
-                                                        ProviderGroup.LOCAL -> "本地"
-                                                        ProviderGroup.CUSTOM -> "自定义"
-                                                    },
-                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                                                )
-                                            }
-                                        }
-                                        Text(
-                                            text = option.baseUrl.ifBlank { "需自定义 Base URL" },
-                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                    }
-
-                                    if (isSelected) {
-                                        RuntimeIcon(
-                                            name = RuntimeIconName.Check,
-                                            modifier = Modifier.size(18.dp),
-                                            tint = MaterialTheme.colorScheme.primary,
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            RuntimeTextButton(onClick = onDismiss) {
-                Text("关闭")
-            }
-        },
-    )
-}
-
-@Composable
-private fun ProviderFilterChip(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f),
-        border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)) else null,
-        modifier = Modifier.clickable(onClick = onClick),
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                fontSize = 11.sp,
-            ),
-            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-        )
     }
 }

@@ -13,6 +13,19 @@ import top.tianyan.app.plugin.ui.R
  * request id, so a service can never flood a page.
  */
 object WebPluginServiceCapabilities {
+    fun write(source: () -> WebPluginAssetLease?): WebPluginCapability = WebPluginCapability(
+        capability = PluginCapabilityInput.SERVICE_WRITE,
+        title = { stringResource(R.string.ui_web_service_write_title) },
+        description = { stringResource(R.string.ui_web_service_write_detail) },
+        allowSession = false,
+        execute = { _, _, call ->
+            val text = requireNotNull(call.text)
+            check(PluginCapabilityInput.validServiceWrite(text))
+            source()?.writePath(text.substringBefore('\n'), text.substringAfter('\n'))
+                ?: error("Service write unavailable")
+        },
+    )
+
     fun request(source: () -> WebPluginAssetLease?): WebPluginCapability = WebPluginCapability(
         capability = PluginCapabilityInput.SERVICE_REQUEST,
         title = { stringResource(R.string.ui_web_service_request_title) },

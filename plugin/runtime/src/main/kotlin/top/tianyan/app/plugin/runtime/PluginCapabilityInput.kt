@@ -11,7 +11,8 @@ object PluginCapabilityInput {
      */
     val SERVICE_REQUEST = PluginCapability("host.service-request", "service")
     val SERVICE_STREAM = PluginCapability("host.service-stream", "service")
-    val SERVICE_ACTIONS = setOf(SERVICE_REQUEST.action, SERVICE_STREAM.action)
+    val SERVICE_WRITE = PluginCapability("host.service-write", "service")
+    val SERVICE_ACTIONS = setOf(SERVICE_REQUEST.action, SERVICE_STREAM.action, SERVICE_WRITE.action)
 
     /**
      * Structured host actions a page may request after an explicit confirmation. The APK path travels
@@ -25,7 +26,7 @@ object PluginCapabilityInput {
      * Actions that change device or clipboard state and therefore may never be cached for a session:
      * every call needs its own confirmation. Shared by the session admission and the page registry.
      */
-    val ONE_SHOT = setOf(CLIPBOARD_WRITE, INSTALL_APK)
+    val ONE_SHOT = setOf(CLIPBOARD_WRITE, INSTALL_APK, SERVICE_WRITE)
 
     const val MAX_TEXT_LENGTH = 1024
     const val MAX_APK_PATH_LENGTH = 256
@@ -35,6 +36,7 @@ object PluginCapabilityInput {
     fun valid(call: PluginCapabilityCall): Boolean = when (call.capability) {
         CLIPBOARD_WRITE -> call.text != null && call.text.length in 1..MAX_TEXT_LENGTH && call.text.none { it == '\u0000' }
         SERVICE_REQUEST, SERVICE_STREAM -> call.text != null && validServicePath(call.text)
+        SERVICE_WRITE -> call.text != null && validServiceWrite(call.text)
         INSTALL_APK -> call.text != null && validApkPath(call.text)
         else -> call.text == null
     }
@@ -44,7 +46,14 @@ object PluginCapabilityInput {
      * absolute or traversal segment; native code still re-validates against its own asset rule.
      */
     fun validServicePath(path: String): Boolean = SERVICE_PATH.matches(path) &&
-        !path.startsWith("/") && path.split('/').none { it == ".." || it == "." }
+        !path.startsWith("/") && path.split('/').none { it.isEmpty() || it == ".." || it == "." }
+
+    /** Frozen path + newline + opaque JSON body. Never display the body: it may contain a token. */
+    fun validServiceWrite(text: String): Boolean = text.length in 1..MAX_TEXT_LENGTH &&
+        '\u0000' !in text && text.indexOf('\n') in 1..256 &&
+        validServicePath(text.substringBefore('\n')) && text.substringAfter('\n').isNotBlank()
+
+    fun serviceWritePreview(text: String): String = preview(text.substringBefore('\n'))
 
     /**
      * A bounded absolute path to an `.apk` the host may install. Shape only: the host re-checks that

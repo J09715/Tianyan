@@ -14,7 +14,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -96,7 +96,7 @@ fun WorkflowScheduleEditDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.verticalScroll(rememberScrollState()),
             ) {
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("计划名称") },
@@ -116,32 +116,32 @@ fun WorkflowScheduleEditDialog(
                 }
                 when (repeat) {
                     WorkflowScheduleRepeat.DAILY -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
+                        RuntimeFilledTextField(
                             value = hour, onValueChange = { hour = it.filter(Char::isDigit).take(2) },
                             label = { Text("时(0-23)") }, singleLine = true, modifier = Modifier.weight(1f),
                         )
-                        OutlinedTextField(
+                        RuntimeFilledTextField(
                             value = minute, onValueChange = { minute = it.filter(Char::isDigit).take(2) },
                             label = { Text("分(0-59)") }, singleLine = true, modifier = Modifier.weight(1f),
                         )
                     }
-                    WorkflowScheduleRepeat.INTERVAL -> OutlinedTextField(
+                    WorkflowScheduleRepeat.INTERVAL -> RuntimeFilledTextField(
                         value = intervalMinutes, onValueChange = { intervalMinutes = it.filter(Char::isDigit).take(4) },
                         label = { Text("间隔分钟（≥15）") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                     )
-                    WorkflowScheduleRepeat.ONCE -> OutlinedTextField(
+                    WorkflowScheduleRepeat.ONCE -> RuntimeFilledTextField(
                         value = onceAt, onValueChange = { onceAt = it },
                         label = { Text("触发时间（yyyy-MM-dd HH:mm）") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                     )
                 }
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = variablesText,
                     onValueChange = { variablesText = it },
                     label = { Text("变量（每行 KEY=VALUE，可空）") },
                     modifier = Modifier.fillMaxWidth().heightIn(min = 72.dp),
                     textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = MaterialTheme.typography.bodySmall.fontSize),
                 )
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = workspacePath,
                     onValueChange = { workspacePath = it },
                     label = { Text("工作区路径") },
@@ -290,7 +290,7 @@ private fun SimplePickerField(
     var expanded by remember { mutableStateOf(false) }
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     Box {
-        OutlinedTextField(
+        RuntimeFilledTextField(
             value = value,
             onValueChange = {},
             readOnly = true,

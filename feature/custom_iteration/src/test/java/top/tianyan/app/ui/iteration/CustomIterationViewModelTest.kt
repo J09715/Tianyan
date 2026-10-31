@@ -57,7 +57,7 @@ class CustomIterationViewModelTest {
         val ghCommands = commands.filter { it.startsWith("gh ") }
         assertTrue("expected a gh run list probe, got $ghCommands", ghCommands.isNotEmpty())
         assertTrue(ghCommands.first().contains("--branch 'main'"))
-        assertTrue(ghCommands.first().contains("-R 'J09715/Tianyan'"))
+        assertTrue(ghCommands.first().contains("-R 'tianyan-lab/tianyan'"))
         assertTrue(viewModel.buildState.value is TianyanDevBuildCoordinator.BuildStatus.Failed)
     }
 
@@ -116,7 +116,7 @@ class CustomIterationViewModelTest {
         assertTrue("clone target must stay empty", File(state.workspacePath).list().isNullOrEmpty())
         assertTrue(prompt!!.contains("/root/custom_tianyan"))
         assertTrue(prompt.contains(CustomIterationBootstrap.FORK_REPO_PLACEHOLDER))
-        assertFalse(prompt.contains("构建目标仓库 = J09715/Tianyan"))
+        assertFalse(prompt.contains("构建目标仓库 = tianyan-lab/tianyan"))
     }
 
     @Test
@@ -134,7 +134,7 @@ class CustomIterationViewModelTest {
 
         assertTrue(vm.uiState.value.workspaceReady)
         assertTrue(prompt!!.contains("构建目标仓库 = haotaoran520/tianyan"))
-        assertFalse(prompt.contains("构建目标仓库 = J09715/Tianyan"))
+        assertFalse(prompt.contains("构建目标仓库 = tianyan-lab/tianyan"))
         assertFalse(File(root, "home/${CustomIterationBootstrap.WORKSPACE_NAME}/.github").exists())
     }
 
@@ -153,7 +153,7 @@ class CustomIterationViewModelTest {
 
         assertTrue(prompt!!.contains(CustomIterationBootstrap.FORK_REPO_PLACEHOLDER))
         assertTrue(prompt.contains("git remote get-url origin"))
-        assertFalse(prompt.contains("构建目标仓库 = J09715/Tianyan"))
+        assertFalse(prompt.contains("构建目标仓库 = tianyan-lab/tianyan"))
     }
 
     @Test
@@ -178,7 +178,7 @@ class CustomIterationViewModelTest {
     private fun assetReader() = AssetReader { path ->
         when (path) {
             CustomIterationBootstrap.ASSET_SKILL -> "skill".toByteArray()
-            CustomIterationBootstrap.ASSET_WORKFLOW -> "TIANYAN_DEV_BUILD".toByteArray()
+            CustomIterationBootstrap.ASSET_WORKFLOW -> "TAIXU_DEV_BUILD".toByteArray()
             else -> null
         }
     }

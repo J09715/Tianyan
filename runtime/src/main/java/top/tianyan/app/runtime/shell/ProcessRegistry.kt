@@ -36,6 +36,7 @@ data class ManagedProcess(
     val toolId: String? = null,
     val pid: Long? = session.pid,
     val type: ProcessType = ProcessType.UNKNOWN,
+    val distroId: String? = null,
 )
 
 interface ProcessRegistry {
@@ -51,6 +52,9 @@ interface ProcessRegistry {
     suspend fun stopInstance(process: ManagedProcess): Boolean = false
     suspend fun stopAll()
     suspend fun cleanupDeadProcesses(): Int
+
+    /** 回收 [port] 上被遗弃的本运行时监听者（上一代 tracer 消失后留下的孤儿），返回收到信号的进程数。 */
+    suspend fun reclaimListeningPort(port: Int, protectedSessions: Set<Long> = emptySet()): Int
     fun list(): List<ManagedProcess>
     fun observeLogs(idOrToolId: String): Flow<List<String>>
     fun getLogs(idOrToolId: String): List<String>
@@ -62,13 +66,18 @@ internal fun interface RegistrySessionFactory {
 }
 
 class ProcessCleanupException(val failures: List<Throwable>) :
-    IllegalStateException("${failures.size} 项进程资源清理失败", failures.firstOrNull()) {
+    // 带上第一个失败的原因：UI 只展示这条 message，不带上就只能看到「1 项进程资源清理失败」。
+    IllegalStateException(
+        "${failures.size} 项进程资源清理失败：${failures.firstOrNull()?.message}",
+        failures.firstOrNull(),
+    ) {
     init { failures.drop(1).forEach(::addSuppressed) }
 }
 
 class ProcessRegistryImpl internal constructor(
     private val sessionFactory: RegistrySessionFactory,
     private val scope: CoroutineScope,
+    private val reclaimer: SandboxPortReclaimer? = null,
 ) : ProcessRegistry {
     constructor(
         pathManager: RuntimePathManager,
@@ -95,6 +104,9 @@ class ProcessRegistryImpl internal constructor(
             )
         },
         CoroutineScope(SupervisorJob() + Dispatchers.IO),
+        // 客态进程的可执行文件要么在各发行版 rootfs/opt/home 之下，要么就是我们自己的 PRoot
+        // tracer（随 APK 解出的 native 库目录）。两者都算本运行时的进程，才可能被回收。
+        SandboxPortReclaimer(listOfNotNull(pathManager.baseDir, pathManager.bundledProotFile.parentFile)),
     )
 
     private class Entry(val id: String) {
@@ -132,7 +144,7 @@ class ProcessRegistryImpl internal constructor(
         try {
             entry.session = sessionFactory.open(command, distroId, mounts)
             val session = checkNotNull(entry.session)
-            entry.process = ManagedProcess(id, System.currentTimeMillis(), session, toolId, type = type)
+            entry.process = ManagedProcess(id, System.currentTimeMillis(), session, toolId, type = type, distroId = distroId)
             currentCoroutineContext().ensureActive()
             entry.reader = readLogs(session, setOf(toolId ?: id, id))
             currentCoroutineContext().ensureActive()
@@ -193,6 +205,16 @@ class ProcessRegistryImpl internal constructor(
         val dead = processes.values.filter { it.session?.isAlive != true }
         releaseAll(dead)
         dead.size
+    }
+
+    /**
+     * 只回收与 [port] 相关或（网络表不可读时）已被遗弃的本运行时进程。
+     * 登记表进程与 [protectedSessions]（终端会话、前台命令）全部列为保护名单。
+     */
+    override suspend fun reclaimListeningPort(port: Int, protectedSessions: Set<Long>): Int = mutex.withLock {
+        val reclaimer = this.reclaimer ?: return@withLock 0
+        val registered = processes.values.filter { it.session?.isAlive == true }.mapNotNull { it.process?.pid }.toSet()
+        withContext(Dispatchers.IO) { reclaimer.reclaim(port, registered + protectedSessions) }
     }
 
     private suspend fun releaseAll(entries: List<Entry>) = withContext(NonCancellable) {

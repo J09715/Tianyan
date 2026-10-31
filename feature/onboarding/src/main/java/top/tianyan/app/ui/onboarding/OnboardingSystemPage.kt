@@ -18,7 +18,7 @@ import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -222,7 +222,7 @@ private fun SetupDropdown(
         expanded = expanded,
         onExpandedChange = { if (enabled) expanded = !expanded },
     ) {
-        OutlinedTextField(
+        RuntimeFilledTextField(
             value = selected.label,
             onValueChange = {},
             readOnly = true,

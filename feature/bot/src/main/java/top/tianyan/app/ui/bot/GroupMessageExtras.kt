@@ -34,7 +34,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import top.tianyan.app.core.model.bot.GroupAttachment
-import top.tianyan.app.core.model.bot.GroupToolStep
 import top.tianyan.app.feature.bot.R
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
@@ -103,62 +102,6 @@ private fun openAttachment(context: Context, attachment: GroupAttachment) {
                 Toast.LENGTH_SHORT,
             ).show()
         }
-}
-
-@Composable
-internal fun StepTimeline(steps: List<GroupToolStep>, streaming: Boolean) {
-    if (steps.isEmpty()) return
-    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        steps.forEach { step ->
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-            ) {
-                when (step.success) {
-                    true -> RuntimeIcon(
-                        RuntimeIconName.Check,
-                        Modifier.size(12.dp),
-                        MaterialTheme.colorScheme.tertiary,
-                    )
-                    false -> RuntimeIcon(
-                        RuntimeIconName.Close,
-                        Modifier.size(12.dp),
-                        MaterialTheme.colorScheme.error,
-                    )
-                    null -> Box(
-                        Modifier
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .background(if (streaming) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline),
-                    )
-                }
-                Text(
-                    text = if (step.detail.isNullOrBlank()) step.name else "${step.name} · ${step.detail}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                Text(
-                    stringResource(when (step.success) {
-                        true -> R.string.fbot_tool_success
-                        false -> R.string.fbot_tool_failure
-                        null -> if (streaming) R.string.fbot_step_running else R.string.fbot_tool_unknown
-                    }),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                if (step.durationMs != null) {
-                    Text(
-                        text = "${step.durationMs}ms",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline,
-                    )
-                }
-            }
-        }
-    }
 }
 
 @Composable

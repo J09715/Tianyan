@@ -20,6 +20,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
+import top.tianyan.app.core.tools.PersistentToolServices
 
 class RuntimeForegroundService : Service() {
     val processRegistry: ProcessRegistry by inject()
@@ -27,6 +32,8 @@ class RuntimeForegroundService : Service() {
     val sshServiceManager: SshServiceManager by inject()
     val ftpServiceManager: FtpServiceManager by inject()
     val lifeCycleSupervisor: RuntimeLifecycleSupervisor by inject()
+    private val persistentServices: PersistentToolServices by inject()
+    private var recoveryJob: Job? = null
     /** 停止后的沙箱进程清理作用域：独立于服务生命周期，服务销毁后也要跑完。 */
     private val cleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -65,6 +72,8 @@ class RuntimeForegroundService : Service() {
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelfResult(startId)
             cleanupScope.launch {
+                recoveryJob?.cancelAndJoin()
+                runCatching { persistentServices.disableAll() }.onFailure { Log.w(TAG, "关闭服务自启动失败", it) }
                 runCatching { localServiceLauncher.stopAll() }
                 runCatching { processRegistry.stopAll() }
                 runCatching { ftpServiceManager.stop() }
@@ -75,12 +84,20 @@ class RuntimeForegroundService : Service() {
         }
         startForeground(NOTIFICATION_ID, notification())
         acquireLease()
+        if (recoveryJob?.isActive != true) recoveryJob = cleanupScope.launch {
+            while (true) {
+                try { lifeCycleSupervisor.refreshActiveLeases(); persistentServices.check() }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (failure: Exception) { Log.w(TAG, "服务恢复检查失败", failure) }
+                delay(5_000)
+            }
+        }
         return START_STICKY
     }
 
     override fun onTimeout(startId: Int) {
-        // dataSync 前台服务有系统级 6 小时硬超时（Android 15+），超时后必须立即退出
-        // 前台，否则系统抛 ForegroundServiceDidNotStopInTimeException 杀进程。
+        // Defensive stop for a platform timeout; persistent runtime hosting declares specialUse.
+        recoveryJob?.cancel()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelfResult(startId)
     }
@@ -92,6 +109,7 @@ class RuntimeForegroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        recoveryJob?.cancel()
         releaseLease()
         cleanupScope.launch {
             runCatching { ftpServiceManager.stop() }

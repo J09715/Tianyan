@@ -34,7 +34,7 @@ private fun legacyStringResource(source: String): Int? = when (source) {
         "稍后再说" -> R.string.settings_legacy_0012
         "正在下载…" -> R.string.settings_legacy_0013
         "天衍 · 乾坤" -> R.string.settings_legacy_0014
-        "天衍 · Tianyan" -> R.string.settings_legacy_0015
+        "天衍" -> R.string.settings_legacy_0015
         "系统设置与控制中枢" -> R.string.settings_legacy_0016
         "系统与配置分类" -> R.string.settings_legacy_0017
         "智能体与 AI 模型" -> R.string.settings_legacy_0018
@@ -123,7 +123,7 @@ private fun legacyStringResource(source: String): Int? = when (source) {
         "开发者调试与控制台" -> R.string.settings_legacy_0102
         "实时查看 PRoot 进程与命令追踪" -> R.string.settings_legacy_0103
         "关于与社区" -> R.string.settings_legacy_0104
-        "关于天衍 · Tianyan" -> R.string.settings_legacy_0105
+        "关于天衍" -> R.string.settings_legacy_0105
         "关于、更新与官方社区" -> R.string.settings_legacy_0106
         "应用版本与更新" -> R.string.settings_legacy_0107
         "检查新版本" -> R.string.settings_legacy_0108
@@ -514,7 +514,7 @@ private fun legacyStringResource(source: String): Int? = when (source) {
         "2. 直接调用 base 工具执行针对性的修复命令（如清理 /var/lib/dpkg 锁、dpkg --configure -a、apt-get --fix-broken install、手动从备用源拉取或补齐软链接）；" -> R.string.settings_long_003
         "Android 12+ 会监控应用派生的子进程，超过系统上限后可能终止 PRoot、编译器或 Agent 任务。这里解除的是子进程限制，不是 Java/Kotlin 线程数。" -> R.string.settings_long_004
         "MCP 是开放的标准模型上下文协议。开启后，天衍将在 PRoot 沙箱内启动对应的 Stdio 服务或连接本地 SSE 端点，并动态向智枢 Agent 注入专业工具能力。" -> R.string.settings_long_005
-        "https://github.com/J09715/Tianyan · 欢迎 Star 支持" -> R.string.settings_long_006
+        "https://github.com/tianyan-lab/tianyan · 欢迎 Star 支持" -> R.string.settings_long_006
         "天衍在 Agent 执行期间会启动前台服务并持有 CPU 进程锁，但系统电池优化仍可能在息屏后" -> R.string.settings_long_007
         "天衍支持多套 Linux 系统并存。所有系统均自动挂载 /workspace 代码工程，/sdcard 外部存储按「存储挂载与共享」页的开关注入，各发行版软件生态与包管理器完全独立隔离。" -> R.string.settings_long_008
         "尚未配置任何模型档案，可前往【设置 → 模型档案管理】添加 Claude、OpenAI 或 DeepSeek 模型" -> R.string.settings_long_009

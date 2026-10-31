@@ -1,0 +1,12 @@
+<resources>
+    <string name="chat_failure_memory_title">本次任务的失败记忆（%1$d）</string>
+    <string name="chat_failure_memory_hint">仅供当前主会话任务避坑，30 分钟后过期。清除后从后续请求停止注入这些记录；已发出的请求、聊天记录及真实执行结果不变。新的失败仍会记录。</string>
+    <string name="chat_failure_memory_empty">当前没有有效的失败记忆</string>
+    <string name="chat_failure_memory_error">读取或删除失败，请关闭面板后重试</string>
+    <string name="chat_failure_memory_execution">执行失败</string>
+    <string name="chat_failure_memory_policy">被执行策略阻止</string>
+    <string name="chat_failure_memory_interrupted">只读查询中断</string>
+    <string name="chat_failure_memory_unknown">执行结果未知，仍需核验副作用</string>
+    <string name="chat_failure_memory_details">%1$s · 同参失败 %2$d 次 · %3$s 过期</string>
+    <string name="chat_failure_memory_source">参数指纹：%1$s\n调用来源：%2$s\n结果来源：%3$s</string>
+</resources>

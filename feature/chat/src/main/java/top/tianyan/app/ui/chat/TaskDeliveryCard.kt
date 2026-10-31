@@ -1,7 +1,6 @@
 package top.tianyan.app.ui.chat
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -9,7 +8,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import top.tianyan.app.feature.chat.R
@@ -25,7 +23,11 @@ import top.tianyan.app.ui.components.RuntimeTextButton
 
 /** A transcript-bound delivery record, with observed execution separated from goal verification. */
 @Composable
-internal fun TaskDeliveryCard(message: TaskDelivery) {
+internal fun TaskDeliveryCard(
+    message: TaskDelivery,
+    workspace: String,
+    onOpenFile: ((String, String) -> Unit)? = null,
+) {
     var expanded by rememberSaveable(message.id) { mutableStateOf(false) }
     var showAll by rememberSaveable(message.id) { mutableStateOf(false) }
     val report = message.report
@@ -60,16 +62,13 @@ internal fun TaskDeliveryCard(message: TaskDelivery) {
                     RuntimeTextButton(onClick = { showAll = true }) { Text(stringResource(R.string.delivery_show_all), maxLines = 1) }
                 }
                 report.artifacts.forEach { artifact ->
-                    SelectionContainer {
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(stringResource(kindLabel(artifact.kind)), style = MaterialTheme.typography.labelMedium)
-                            artifact.origin?.let { Text(stringResource(originLabel(it)), style = MaterialTheme.typography.bodySmall) }
-                            Text(artifact.path, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
-                            artifact.observedAt?.let { Text(stringResource(R.string.delivery_observed_at,
-                                DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))), style = MaterialTheme.typography.labelSmall) }
-                            Text(stringResource(R.string.delivery_hash_at_creation), style = MaterialTheme.typography.labelSmall)
-                            Text(artifact.sha256, style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace)
-                        }
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(stringResource(kindLabel(artifact.kind)), style = MaterialTheme.typography.labelMedium)
+                        artifact.origin?.let { Text(stringResource(originLabel(it)), style = MaterialTheme.typography.bodySmall) }
+                        artifact.observedAt?.let { Text(stringResource(R.string.delivery_observed_at,
+                            DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))), style = MaterialTheme.typography.labelSmall) }
+                        // 路径、哈希与打开/分享/另存入口都在这里：图片给缩略图，日志可回编辑器查看。
+                        DeliveryArtifactRow(artifact, workspace, onOpenFile)
                     }
                 }
                 if (report.artifacts.isNotEmpty()) Text(stringResource(R.string.delivery_artifact_version), style = MaterialTheme.typography.bodySmall)

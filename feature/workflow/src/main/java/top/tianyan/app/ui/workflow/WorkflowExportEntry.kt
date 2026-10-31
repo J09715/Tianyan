@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -49,7 +49,7 @@ private fun WorkflowExportDialog(definition: WorkflowDefinition, isDirty: Boolea
             Text("JSON 包含节点配置和默认变量，复制前可在这里核对内容；再次导入会创建新的手动工作流。", style = MaterialTheme.typography.bodySmall)
             raw?.let { text ->
                 Text("${definition.nodes.size} 个节点 · ${definition.edges.size} 条连接 · ${text.length} 个字符", style = MaterialTheme.typography.labelSmall)
-                OutlinedTextField(value = text.take(24_000), onValueChange = {}, readOnly = true,
+                RuntimeFilledTextField(value = text.take(24_000), onValueChange = {}, readOnly = true,
                     label = { Text("JSON 预览") }, minLines = 4, maxLines = 8, modifier = Modifier.fillMaxWidth())
                 if (text.length > 24_000) Text("预览展示前 24000 个字符，“复制完整 JSON”会复制全部内容。", style = MaterialTheme.typography.bodySmall)
             }

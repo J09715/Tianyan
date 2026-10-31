@@ -36,46 +36,47 @@ internal fun SessionDrawerSearch(
     onCollapse: (() -> Unit)? = null,
 ) {
     val searchLabel = stringResource(R.string.chat_drawer_search)
-    Row(
-        Modifier.fillMaxWidth().padding(start = if (onCollapse != null) 4.dp else 16.dp, end = 12.dp, top = 16.dp, bottom = 24.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (onCollapse != null) {
-            RuntimeIconButton(onClick = onCollapse, modifier = Modifier.size(48.dp),
+    val newTaskLabel = stringResource(R.string.chat_drawer_new_task)
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 12.dp, bottom = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            RuntimeChatIdentityAvatar(size = 32.dp)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(LocalChatIdentity.current.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(stringResource(R.string.chat_sidebar_subtitle), style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (onCollapse != null) RuntimeIconButton(onClick = onCollapse, modifier = Modifier.size(40.dp),
                 contentDescription = stringResource(top.tianyan.app.feature.components.R.string.components_collapse_sidebar)) {
-                RuntimeIcon(RuntimeIconName.PanelLeftClose, Modifier.size(24.dp))
+                RuntimeIcon(RuntimeIconName.PanelLeftClose, Modifier.size(20.dp))
             }
         }
-        RuntimeCard(
-            modifier = Modifier.weight(1f),
-            shape = MaterialTheme.shapes.extraLarge,
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                RuntimeIcon(RuntimeIconName.Search, Modifier.size(24.dp), MaterialTheme.colorScheme.onSurfaceVariant)
-                BasicTextField(
-                    value = query,
-                    onValueChange = onQueryChange,
-                    singleLine = true,
-                    modifier = Modifier.weight(1f).semantics { contentDescription = searchLabel },
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    decorationBox = { field ->
-                        Box {
-                            if (query.isEmpty()) Text(searchLabel,
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Surface(modifier = Modifier.weight(1f), shape = MaterialTheme.shapes.extraLarge,
+                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f)) {
+                Row(Modifier.heightIn(min = 44.dp).padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    RuntimeIcon(RuntimeIconName.Search, Modifier.size(18.dp), MaterialTheme.colorScheme.onSurfaceVariant)
+                    BasicTextField(value = query, onValueChange = onQueryChange, singleLine = true,
+                        modifier = Modifier.weight(1f).semantics { contentDescription = searchLabel },
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        decorationBox = { field -> Box {
+                            if (query.isEmpty()) Text(searchLabel, style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             field()
-                        }
-                    },
-                )
+                        } },
+                    )
+                }
             }
-        }
-        RuntimeIconButton(onClick = onNew, modifier = Modifier.size(48.dp),
-            contentDescription = stringResource(R.string.chat_drawer_new_task)) {
-            RuntimeIcon(RuntimeIconName.Plus, Modifier.size(24.dp), MaterialTheme.colorScheme.primary)
+            Surface(onClick = onNew, shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.size(44.dp).semantics { contentDescription = newTaskLabel }) {
+                Box(contentAlignment = Alignment.Center) {
+                    RuntimeIcon(RuntimeIconName.Plus, Modifier.size(22.dp), MaterialTheme.colorScheme.onPrimaryContainer)
+                }
+            }
         }
     }
 }
@@ -89,32 +90,30 @@ internal fun SessionDrawerFooter(
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth()) {
+        androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
         AnimatedVisibility(visible = expanded) {
             Column(Modifier.fillMaxWidth().heightIn(max = 240.dp)
-                .verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)) {
+                .verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp)) {
                 navigationContent()
             }
         }
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            TianyanBrandBadge(size = 40.dp)
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.chat_title), style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(stringResource(R.string.chat_session_count, totalSessions),
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.weight(1f).clip(MaterialTheme.shapes.medium).clickable(onClick = onSettings)
+                .padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                RuntimeIcon(RuntimeIconName.Settings, Modifier.size(20.dp), MaterialTheme.colorScheme.onSurfaceVariant)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(stringResource(top.tianyan.app.feature.components.R.string.components_drawer_settings),
+                        style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(stringResource(R.string.chat_session_count, totalSessions), style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
             }
-            RuntimeIconButton(onClick = { expanded = !expanded }, modifier = Modifier.size(48.dp),
-                contentDescription = stringResource(R.string.chat_drawer_destinations)) {
-                RuntimeIcon(if (expanded) RuntimeIconName.ChevronDown else RuntimeIconName.Menu, Modifier.size(24.dp))
-            }
-            RuntimeIconButton(onClick = onSettings, modifier = Modifier.size(48.dp),
-                contentDescription = stringResource(top.tianyan.app.feature.components.R.string.components_drawer_settings)) {
-                RuntimeIcon(RuntimeIconName.Settings, Modifier.size(24.dp))
+            RuntimeTextButton(onClick = { expanded = !expanded }) {
+                RuntimeIcon(if (expanded) RuntimeIconName.ChevronDown else RuntimeIconName.Menu, Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.chat_sidebar_functions), style = MaterialTheme.typography.labelMedium)
             }
         }
     }
@@ -150,7 +149,7 @@ internal fun SessionSectionHeader(
     ) {
         Text(
             text = title,
-            style = MaterialTheme.typography.titleSmall,
+            style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f),
             maxLines = 1,
@@ -166,7 +165,7 @@ internal fun SessionSectionHeader(
         )
         RuntimeIcon(
             name = if (expanded) RuntimeIconName.ChevronDown else RuntimeIconName.ChevronRight,
-            modifier = Modifier.size(20.dp),
+            modifier = Modifier.size(14.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }

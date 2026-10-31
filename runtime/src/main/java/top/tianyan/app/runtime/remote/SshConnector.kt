@@ -1,6 +1,7 @@
 package top.tianyan.app.runtime.remote
 
 import com.jcraft.jsch.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
@@ -14,17 +15,21 @@ import java.util.Base64
 
 class HostKeyConfirmationRequired(val fingerprint: String) : Exception("请核对服务器主机指纹")
 
+class SshConnectionException(message: String) : Exception(message)
+
 fun interface SshConnectionTester {
     suspend fun test(server: RemoteServer, credentials: SshCredentials)
 }
 
 class SshConnector(
+    private val lanSockets: LanSocketOpener = LanSocketOpener(),
     private val userEnvironment: suspend () -> Map<String, String> = { emptyMap() },
 ) : SshConnectionTester {
     suspend fun openEnvironment(server: RemoteServer, credentials: SshCredentials, id: top.tianyan.app.runtime.environment.ExecutionEnvironmentId, logicalWorkspace: String = "/workspace"): top.tianyan.app.runtime.environment.ExecutionEnvironment {
         val session = connect(server, credentials)
-        try { return SshExecutionEnvironment(server, session, id, credentials, logicalWorkspace, userEnvironment = userEnvironment) }
-        catch (t: Throwable) { session.disconnect(); throw t }
+        try {
+            return SshExecutionEnvironment(server, session, id, credentials, logicalWorkspace, reconnect = ::connect, userEnvironment = userEnvironment)
+        } catch (t: Throwable) { session.disconnect(); throw t }
     }
     internal suspend fun connect(server: RemoteServer, credentials: SshCredentials): Session = withContext(Dispatchers.IO) {
         server.validate()
@@ -54,8 +59,9 @@ class SshConnector(
         if (server.authentication == SshAuthentication.PASSWORD) session.setPassword(credentials.secret)
         session.timeout = 30_000
         session.serverAliveInterval = 15_000
+        lanSockets.socketFactory(server.host, CONNECT_TIMEOUT_MS)?.let { session.setSocketFactory(it) }
         try {
-            runInterruptible { session.connect(15_000) }
+            runInterruptible { session.connect(CONNECT_TIMEOUT_MS) }
             currentCoroutineContext().ensureActive()
             session
         } catch (t: Throwable) {
@@ -68,19 +74,28 @@ class SshConnector(
     }
 
     override suspend fun test(server: RemoteServer, credentials: SshCredentials) {
-        val session = connect(server, credentials)
         try {
-            runInterruptible(Dispatchers.IO) {
-                val channel = session.openChannel("sftp") as ChannelSftp
-                try {
-                    channel.connect(15_000)
-                    require(channel.stat(server.workspace).isDir) { "远程工作目录不存在或不是目录" }
-                } finally { channel.disconnect() }
-            }
-        } finally { session.disconnect() }
+            val session = connect(server, credentials)
+            try {
+                runInterruptible(Dispatchers.IO) {
+                    val channel = session.openChannel("sftp") as ChannelSftp
+                    try {
+                        channel.connect(CONNECT_TIMEOUT_MS)
+                        require(channel.stat(server.workspace).isDir) { "远程工作目录不存在或不是目录" }
+                    } finally { channel.disconnect() }
+                }
+            } finally { session.disconnect() }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: HostKeyConfirmationRequired) {
+            throw e
+        } catch (e: Throwable) {
+            throw sshTestFailure(e, server.host)
+        }
     }
 
     companion object {
+        private const val CONNECT_TIMEOUT_MS = 15_000
         fun fingerprint(key: ByteArray): String = "SHA256:" + Base64.getEncoder().withoutPadding()
             .encodeToString(MessageDigest.getInstance("SHA-256").digest(key))
     }

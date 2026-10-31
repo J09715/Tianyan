@@ -1,21 +1,16 @@
 package top.tianyan.app.ui.settings
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SecondaryTabRow
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -24,16 +19,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import top.tianyan.app.core.model.McpAuthMode
 import top.tianyan.app.core.model.McpServerConfig
 import top.tianyan.app.core.model.McpTransportType
-import top.tianyan.app.ui.components.RuntimeAlertDialog
 import top.tianyan.app.ui.components.RuntimeButton as Button
 import top.tianyan.app.ui.components.RuntimeSwitch as Switch
 import top.tianyan.app.ui.components.RuntimeTextButton as TextButton
@@ -93,222 +83,13 @@ internal fun McpServerEditorDialog(
         (transport != McpTransportType.SSE || serverUrl.isNotBlank()) &&
         (!oauthEnabled || (oauthClientId.isNotBlank() && oauthAuthorizationEndpoint.isNotBlank() && oauthTokenEndpoint.isNotBlank()))
 
-    RuntimeAlertDialog(
+    top.tianyan.app.ui.components.RuntimeSelectionSheet(
+        title = if (editing) "编辑 MCP 服务" else "添加 MCP 服务",
         onDismissRequest = onDismiss,
-        title = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(if (editing) "编辑 MCP 服务" else "添加 MCP 服务", fontWeight = FontWeight.Bold)
-                if (!editing) {
-                    SecondaryTabRow(
-                        selectedTabIndex = selectedTab,
-                        containerColor = Color.Transparent,
-                        divider = {},
-                    ) {
-                        Tab(
-                            selected = selectedTab == 0,
-                            onClick = { selectedTab = 0 },
-                            text = { Text("📝 表单模式", style = MaterialTheme.typography.labelMedium) },
-                        )
-                        Tab(
-                            selected = selectedTab == 1,
-                            onClick = { selectedTab = 1 },
-                            text = { Text("📋 JSON 导入", style = MaterialTheme.typography.labelMedium) },
-                        )
-                    }
-                }
-            }
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                if (editing || selectedTab == 0) {
-                    OutlinedTextField(
-                        value = name,
-                        onValueChange = { name = it },
-                        label = { Text("服务名称") },
-                        placeholder = { Text("如: sqlite / github / fetch") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    OutlinedTextField(
-                        value = description,
-                        onValueChange = { description = it },
-                        label = { Text("描述（可选）") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(
-                            "传输协议类型",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                                .padding(4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            val isStdio = transport == McpTransportType.STDIO
-                            val isSse = transport == McpTransportType.SSE
-
-                            Surface(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clickable { transport = McpTransportType.STDIO },
-                                shape = RoundedCornerShape(8.dp),
-                                color = if (isStdio) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                ) {
-                                    Text(
-                                        "Stdio",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = if (isStdio) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (isStdio) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                    Text(
-                                        "沙箱进程",
-                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                                        color = if (isStdio) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f) else MaterialTheme.colorScheme.outline,
-                                    )
-                                }
-                            }
-
-                            Surface(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clickable { transport = McpTransportType.SSE },
-                                shape = RoundedCornerShape(8.dp),
-                                color = if (isSse) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                ) {
-                                    Text(
-                                        "SSE",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = if (isSse) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (isSse) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                    Text(
-                                        "远程 HTTP",
-                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                                        color = if (isSse) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f) else MaterialTheme.colorScheme.outline,
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    if (transport == McpTransportType.STDIO) {
-                        OutlinedTextField(
-                            value = command,
-                            onValueChange = { command = it },
-                            label = { Text("执行命令（如 npx / uvx / python3）") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        OutlinedTextField(
-                            value = argsStr,
-                            onValueChange = { argsStr = it },
-                            label = { Text("参数（空格分隔）") },
-                            placeholder = { Text("-y @modelcontextprotocol/server-sqlite") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    } else {
-                        OutlinedTextField(
-                            value = serverUrl,
-                            onValueChange = { serverUrl = it },
-                            label = { Text("HTTP / SSE 端点 URL") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        McpHeadersEditor(headersJson, { headersJson = it },
-                            if (headerConflict) "自定义 Authorization 与 OAuth 不能同时启用" else parsedHeaders.exceptionOrNull()?.message)
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text("OAuth 2.0 + PKCE", style = MaterialTheme.typography.labelMedium)
-                                Text("授权码模式；token 加密保存且不会导出", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            Switch(checked = oauthEnabled, onCheckedChange = { oauthEnabled = it })
-                        }
-                        if (oauthEnabled) {
-                            OutlinedTextField(oauthClientId, { oauthClientId = it }, label = { Text("OAuth client ID") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                            OutlinedTextField(oauthAuthorizationEndpoint, { oauthAuthorizationEndpoint = it }, label = { Text("Authorization endpoint") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                            OutlinedTextField(oauthTokenEndpoint, { oauthTokenEndpoint = it }, label = { Text("Token endpoint") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                            OutlinedTextField(oauthScope, { oauthScope = it }, label = { Text("Scope（可选）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                            OutlinedTextField(oauthResource, { oauthResource = it }, label = { Text("Resource（可选）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                        }
-                    }
-
-                    if (editing && initial.env.isNotEmpty()) {
-                        Text(
-                            "环境变量（${initial.env.size} 项）与导入来源保持不变",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                } else {
-                    Text(
-                        "直接粘贴 Claude Desktop / Cursor 标准配置：",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    OutlinedTextField(
-                        value = jsonText,
-                        onValueChange = { jsonText = it },
-                        label = { Text("MCP JSON 配置") },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(180.dp),
-                        textStyle = MaterialTheme.typography.bodySmall.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 11.sp,
-                        ),
-                    )
-
-                    if (parsedServers.isSuccess) {
-                        val list = parsedServers.getOrThrow()
-                        Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(
-                                "✅ 成功解析 ${list.size} 个服务: " + list.joinToString(", ") { it.name },
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            )
-                        }
-                    } else {
-                        val errMsg = parsedServers.exceptionOrNull()?.message ?: "JSON 语法解析错误"
-                        Text(
-                            "❌ $errMsg",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
+        actions = {
+            androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onDismiss) { Text("取消") }
             if (editing || selectedTab == 0) {
                 Button(
                     onClick = {
@@ -322,6 +103,7 @@ internal fun McpServerEditorDialog(
                             args = argsList,
                             serverUrl = serverUrl.trim(),
                             headers = if (transport == McpTransportType.SSE) parsedHeaders.getOrThrow() else initial?.headers.orEmpty(),
+                            headersReadError = null,
                             authMode = if (oauthEnabled) McpAuthMode.OAUTH else McpAuthMode.NONE,
                             oauthClientId = oauthClientId.trim(),
                             oauthAuthorizationEndpoint = oauthAuthorizationEndpoint.trim(),
@@ -350,9 +132,138 @@ internal fun McpServerEditorDialog(
                     Text("导入 (${parsedServers.getOrNull()?.size ?: 0} 个服务)")
                 }
             }
+            }
         },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
-        },
-    )
+    ) {
+        if (!editing) androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            top.tianyan.app.ui.components.RuntimeFilterChip(selectedTab == 0, { selectedTab = 0 },
+                label = { Text("表单模式") }, shape = MaterialTheme.shapes.small)
+            top.tianyan.app.ui.components.RuntimeFilterChip(selectedTab == 1, { selectedTab = 1 },
+                label = { Text("JSON 导入") }, shape = MaterialTheme.shapes.small)
+        }
+        Column(Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            if (editing || selectedTab == 0) {
+                    RuntimeFilledTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("服务名称") },
+                        placeholder = { Text("如: sqlite / github / fetch") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    RuntimeFilledTextField(
+                        value = description,
+                        onValueChange = { description = it },
+                        label = { Text("描述（可选）") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                Text("传输协议", style = MaterialTheme.typography.titleSmall)
+                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    top.tianyan.app.ui.components.RuntimeFilterChip(transport == McpTransportType.STDIO,
+                        { transport = McpTransportType.STDIO }, label = { Text("Stdio") }, shape = MaterialTheme.shapes.small)
+                    top.tianyan.app.ui.components.RuntimeFilterChip(transport == McpTransportType.SSE,
+                        { transport = McpTransportType.SSE }, label = { Text("SSE / HTTP") }, shape = MaterialTheme.shapes.small)
+                }
+                Text(if (transport == McpTransportType.STDIO) "在沙箱中启动服务进程" else "连接远程 HTTP / SSE 服务",
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (transport == McpTransportType.STDIO) {
+                        RuntimeFilledTextField(
+                            value = command,
+                            onValueChange = { command = it },
+                            label = { Text("执行命令（如 npx / uvx / python3）") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        RuntimeFilledTextField(
+                            value = argsStr,
+                            onValueChange = { argsStr = it },
+                            label = { Text("参数（空格分隔）") },
+                            placeholder = { Text("-y @modelcontextprotocol/server-sqlite") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    } else {
+                        RuntimeFilledTextField(
+                            value = serverUrl,
+                            onValueChange = { serverUrl = it },
+                            label = { Text("HTTP / SSE 端点 URL") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        initial?.headersReadError?.let {
+                            Text(it, color = MaterialTheme.colorScheme.error)
+                        }
+                        McpHeadersEditor(headersJson, { headersJson = it },
+                            if (headerConflict) "自定义 Authorization 与 OAuth 不能同时启用" else parsedHeaders.exceptionOrNull()?.message)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text("OAuth 2.0 + PKCE", style = MaterialTheme.typography.labelMedium)
+                                Text("授权码模式；token 加密保存且不会导出", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Switch(checked = oauthEnabled, onCheckedChange = { oauthEnabled = it })
+                        }
+                        if (oauthEnabled) {
+                            RuntimeFilledTextField(oauthClientId, { oauthClientId = it }, label = { Text("OAuth client ID") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            RuntimeFilledTextField(oauthAuthorizationEndpoint, { oauthAuthorizationEndpoint = it }, label = { Text("Authorization endpoint") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            RuntimeFilledTextField(oauthTokenEndpoint, { oauthTokenEndpoint = it }, label = { Text("Token endpoint") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            RuntimeFilledTextField(oauthScope, { oauthScope = it }, label = { Text("Scope（可选）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            RuntimeFilledTextField(oauthResource, { oauthResource = it }, label = { Text("Resource（可选）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+
+                    if (editing && initial.env.isNotEmpty()) {
+                        Text(
+                            "环境变量（${initial.env.size} 项）与导入来源保持不变",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+            } else {
+                    Text(
+                        "直接粘贴 Claude Desktop / Cursor 标准配置：",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    RuntimeFilledTextField(
+                        value = jsonText,
+                        onValueChange = { jsonText = it },
+                        label = { Text("MCP JSON 配置") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 160.dp, max = 280.dp),
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+                    )
+
+                    if (parsedServers.isSuccess) {
+                        val list = parsedServers.getOrThrow()
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                            shape = MaterialTheme.shapes.small,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                "已解析 ${list.size} 个服务: " + list.joinToString(", ") { it.name },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            )
+                        }
+                    } else {
+                        val errMsg = parsedServers.exceptionOrNull()?.message ?: "JSON 语法解析错误"
+                        Text(
+                            errMsg,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+            }
+        }
+    }
 }

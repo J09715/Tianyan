@@ -22,7 +22,7 @@ import androidx.compose.material3.HorizontalDivider
 import top.tianyan.app.ui.components.RuntimeLinearProgressIndicator as LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import top.tianyan.app.ui.components.RuntimeOutlinedButton as OutlinedButton
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import top.tianyan.app.ui.developer.LocalizedText as Text
@@ -198,7 +198,7 @@ internal fun LocalDeveloperScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(12.dp))
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = pairingCode,
                     onValueChange = { value -> pairingCode = value.filter(Char::isDigit).take(6) },
                     modifier = Modifier.fillMaxWidth(),
@@ -226,7 +226,7 @@ internal fun LocalDeveloperScreen(
                 Spacer(Modifier.height(18.dp))
                 Text("应用日志抓取", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(10.dp))
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = logcatPackage,
                     onValueChange = { logcatPackage = it },
                     modifier = Modifier.fillMaxWidth(),
@@ -234,14 +234,14 @@ internal fun LocalDeveloperScreen(
                     singleLine = true,
                 )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = logcatTag,
                         onValueChange = { logcatTag = it },
                         modifier = Modifier.weight(1f),
                         label = { Text("Tag（可选）") },
                         singleLine = true,
                     )
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = logcatLines,
                         onValueChange = { logcatLines = it.filter(Char::isDigit).take(4) },
                         modifier = Modifier.weight(0.55f),
@@ -249,7 +249,7 @@ internal fun LocalDeveloperScreen(
                         singleLine = true,
                     )
                 }
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = logcatKeyword,
                     onValueChange = { logcatKeyword = it },
                     modifier = Modifier.fillMaxWidth(),
@@ -308,7 +308,7 @@ internal fun LocalDeveloperScreen(
                     val manifestUrlValid = manifestUrl.trim().startsWith("https://")
                     val signatureUrlValid = signatureUrl.trim().startsWith("https://")
                     val publicKeyValid = publicKey.isNotBlank()
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = manifestUrl,
                         onValueChange = { manifestUrl = it },
                         modifier = Modifier.fillMaxWidth(),
@@ -319,7 +319,7 @@ internal fun LocalDeveloperScreen(
                         },
                         singleLine = true,
                     )
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = signatureUrl,
                         onValueChange = { signatureUrl = it },
                         modifier = Modifier.fillMaxWidth(),
@@ -330,7 +330,7 @@ internal fun LocalDeveloperScreen(
                         },
                         singleLine = true,
                     )
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = publicKey,
                         onValueChange = { publicKey = it },
                         modifier = Modifier.fillMaxWidth(),
@@ -430,7 +430,7 @@ internal fun LocalDeveloperScreen(
                     }
                 }
                 Spacer(Modifier.height(14.dp))
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = commandInput,
                     onValueChange = { arg0 -> viewModel?.onCommandInputChanged(arg0) },
                     modifier = Modifier.fillMaxWidth(),

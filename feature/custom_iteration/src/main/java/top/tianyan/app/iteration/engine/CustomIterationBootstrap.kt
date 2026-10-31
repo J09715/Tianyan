@@ -24,8 +24,8 @@ import java.io.File
 object CustomIterationBootstrap {
 
     const val WORKSPACE_NAME = "custom_tianyan"
-    const val OFFICIAL_REPO = "https://github.com/J09715/Tianyan"
-    const val OFFICIAL_REPO_SLUG = "J09715/Tianyan"
+    const val OFFICIAL_REPO = "https://github.com/tianyan-lab/tianyan"
+    const val OFFICIAL_REPO_SLUG = "tianyan-lab/tianyan"
     const val DEFAULT_BRANCH = "main"
 
     /** 模块 assets 中的 Skill 名称与工作流文件名。 */
@@ -63,10 +63,10 @@ object CustomIterationBootstrap {
      * 它不是合法仓库标识，Agent 必须先执行 `git remote get-url origin`。
      */
     const val FORK_REPO_PLACEHOLDER =
-        "<先执行 git remote get-url origin 解析 owner/name；禁止对 J09715/Tianyan 执行 workflow_dispatch>"
+        "<先执行 git remote get-url origin 解析 owner/name；禁止对 tianyan-lab/tianyan 执行 workflow_dispatch>"
 
     /** 工作流模板里的关键锚点，用于校验落盘内容确为可用模板。 */
-    private const val WORKFLOW_REQUIRED_MARKER = "TIANYAN_DEV_BUILD"
+    private const val WORKFLOW_REQUIRED_MARKER = "TAIXU_DEV_BUILD"
 
     /**
      * 生成引导 Agent 执行自迭代开发的提示词。

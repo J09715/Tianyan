@@ -89,6 +89,6 @@ class ProotInstaller(
     private companion object {
         const val MIN_RUNTIME_COMPONENT_BYTES = 4096L
         const val MAX_LOADER_BYTES = 4L * 1024L * 1024L
-        const val EXPECTED_PROOT_VERSION = "5.1.107.92"
+        const val EXPECTED_PROOT_VERSION = "5.1.107.101"
     }
 }

@@ -66,7 +66,9 @@ val runtimeModule = module {
     single { top.tianyan.app.runtime.SessionWorkspaceCatalog(servers = get(), remote = get(), local = get()) }
     single {
         val manager = get<LinuxEnvironmentManager>()
-        top.tianyan.app.runtime.remote.SshConnector { manager.snapshotForSsh() }
+        top.tianyan.app.runtime.remote.SshConnector(
+            lanSockets = top.tianyan.app.runtime.remote.androidLanSockets(get<android.content.Context>()),
+        ) { manager.snapshotForSsh() }
     }
     single<top.tianyan.app.runtime.remote.SshConnectionTester> { get<top.tianyan.app.runtime.remote.SshConnector>() }
     single { top.tianyan.app.runtime.remote.RemoteSystemService(get(), get()) }

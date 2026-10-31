@@ -8,6 +8,8 @@ interface ShellExecutor {
     fun hasPending(): Boolean = false
     /** Failed teardown, rather than an ordinarily running foreground child. */
     fun hasUnsettled(): Boolean = false
+    /** Still-running foreground command roots; port reclaim must exempt them. */
+    fun pendingRootPids(): Set<Long> = emptySet()
     suspend fun execute(
         command: List<String>,
         workingDirectory: File? = null,

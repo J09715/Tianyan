@@ -1,5 +1,6 @@
 package top.tianyan.app.runtime.webchat
 
+import java.io.File
 import java.net.URLDecoder
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -22,13 +23,43 @@ internal fun sendText(exchange: AndroidHttpExchange, code: Int, text: String) =
 
 internal fun sendResponse(exchange: AndroidHttpExchange, code: Int, contentType: String, bytes: ByteArray) {
     exchange.responseHeaders.add("Content-Type", contentType)
-    exchange.responseHeaders.add("Access-Control-Allow-Origin", "*")
-    exchange.responseHeaders.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
-    exchange.responseHeaders.add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+    applyCorsHeaders(exchange)
     exchange.sendResponseHeaders(code, bytes.size.toLong())
     if (bytes.isNotEmpty()) exchange.responseBody.write(bytes)
     exchange.close()
 }
+
+/**
+ * 流式发送文件：按块写 socket，绝不把整个文件读进内存。
+ *
+ * 早期实现用 `file.readBytes()` 整份载入，工作区产物上限 128MB 且没有下载闸门，
+ * 手机上点一下就可能 OOM；这里改为 [DEFAULT_FILE_COPY_BUFFER_BYTES] 大小的定长缓冲。
+ */
+internal fun sendFileResponse(
+    exchange: AndroidHttpExchange,
+    code: Int,
+    contentType: String,
+    file: File,
+    fileName: String? = null,
+) {
+    exchange.responseHeaders.add("Content-Type", contentType)
+    applyCorsHeaders(exchange)
+    fileName?.let { name ->
+        exchange.responseHeaders.add("Content-Disposition", "attachment; filename=\"${name.replace("\"", "")}\"")
+    }
+    exchange.sendResponseHeaders(code, file.length())
+    file.inputStream().use { input -> input.copyTo(exchange.responseBody, DEFAULT_FILE_COPY_BUFFER_BYTES) }
+    exchange.responseBody.flush()
+    exchange.close()
+}
+
+private fun applyCorsHeaders(exchange: AndroidHttpExchange) {
+    exchange.responseHeaders.add("Access-Control-Allow-Origin", "*")
+    exchange.responseHeaders.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
+    exchange.responseHeaders.add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+}
+
+private const val DEFAULT_FILE_COPY_BUFFER_BYTES = 64 * 1024
 
 internal fun requestJson(exchange: AndroidHttpExchange): JsonObject {
     val raw = exchange.requestBody.bufferedReader().readText()

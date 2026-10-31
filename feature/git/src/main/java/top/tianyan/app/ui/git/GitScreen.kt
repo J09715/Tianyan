@@ -26,7 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
@@ -1067,7 +1067,7 @@ private fun ChangesTab(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
+                    RuntimeFilledTextField(
                         value = message,
                         onValueChange = onMessageChange,
                         placeholder = { Text(stringResource(R.string.fgit_message_placeholder), style = MaterialTheme.typography.bodySmall) },
@@ -1251,7 +1251,7 @@ private fun CreateBranchDialog(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = name,
                     onValueChange = { name = it.trim().take(64) },
                     label = { Text(stringResource(R.string.fgit_branch_name)) },
@@ -1288,14 +1288,14 @@ private fun CreateTagDialog(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = name,
                     onValueChange = { name = it.trim().take(64) },
                     label = { Text(stringResource(R.string.fgit_tag_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = message,
                     onValueChange = { message = it.take(500) },
                     label = { Text(stringResource(R.string.fgit_tag_message)) },
@@ -1349,7 +1349,7 @@ private fun CredentialsDialog(
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = host,
                     onValueChange = { host = it.trim().take(100) },
                     label = { Text(stringResource(R.string.fgit_host)) },
@@ -1357,14 +1357,14 @@ private fun CredentialsDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = username,
                     onValueChange = { username = it.take(100) },
                     label = { Text(stringResource(R.string.fgit_username)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                RuntimeFilledTextField(
                     value = token,
                     onValueChange = { token = it.take(500) },
                     label = { Text(stringResource(R.string.fgit_token)) },

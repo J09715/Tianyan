@@ -11,6 +11,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import top.tianyan.app.core.model.RuntimeState
 import top.tianyan.app.runtime.LinuxRuntime
 import top.tianyan.app.runtime.shell.ManagedProcess
@@ -23,6 +24,8 @@ data class ServiceLaunch(
     val launchCommand: String,
     val environment: Map<String, String>,
     val pluginIdentity: top.tianyan.app.core.model.PluginExecutionIdentity? = null,
+    val authenticated: Boolean = false,
+    val distroId: String? = null,
 )
 
 /**
@@ -115,6 +118,7 @@ class ProotToolServiceSource(
                 synchronized(monitor) { check(isAvailable); starting = true }
                 try {
                     check(process.get() == null) { "工具服务页面来源已加载" }
+                    awaitPortFreeBeforeStart()
                     val owned = runtime.startBackground(
                         id = instance,
                         command = ShellCommand(
@@ -141,6 +145,8 @@ class ProotToolServiceSource(
     /** Bounded dynamic read of the instance this page started; never another endpoint or credential. */
     suspend fun read(path: String): String? = client.read(path)
 
+    suspend fun write(path: String, body: String): String? = client.write(path, body)
+
     suspend fun stream(path: String, emit: suspend (String) -> Boolean): Boolean = client.stream(path, emit)
 
     suspend fun close(): Boolean = withContext(NonCancellable) {
@@ -152,6 +158,21 @@ class ProotToolServiceSource(
             it.id == instance && it.toolId == descriptor.ownerPluginId
         }?.also { process.compareAndSet(null, it) } ?: return@withContext !stillStarting
         runtime.stopBackgroundInstance(owned) && !owned.session.isAlive
+    }
+
+    /**
+     * 页面自建服务前的端口自愈。上一代被强杀的 tracer 可能来不及带走真正持有 LISTEN 套接字的孙进程，
+     * 它们沿袭了端口却不在进程表里，新进程绑定必败，而下面的就绪探测又会被旧监听者迷惑。
+     * 回收器确认清掉了本运行时的孤儿时才等端口放手；确认不了（外部监听者 / 无 procfs）则保持既有行为，
+     * 交给就绪探测处理，不把一个本来就可能是外部服务的端口硬判为错误。
+     */
+    private suspend fun awaitPortFreeBeforeStart() {
+        if (!isPortOpen()) return
+        val reclaimed = runCatching { runtime.reclaimListeningPort(descriptor.port) }.getOrDefault(0)
+        if (reclaimed <= 0) return
+        withTimeoutOrNull(PORT_RELEASE_TIMEOUT_MS) {
+            while (isPortOpen()) delay(pollIntervalMillis)
+        }
     }
 
     private suspend fun awaitReady() {
@@ -172,5 +193,6 @@ class ProotToolServiceSource(
 
     private companion object {
         const val PORT_PROBE_TIMEOUT_MS = 250
+        const val PORT_RELEASE_TIMEOUT_MS = 2_500L
     }
 }

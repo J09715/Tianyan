@@ -63,7 +63,7 @@ class SkillInstallationManager(
     /**
      * 对 ZIP 字节流执行解构与端侧静态安全审计。
      */
-    fun inspectZipBytes(zipBytes: ByteArray, fallbackId: String = "custom_skill"): SkillInstallInspection {
+    fun inspectZipBytes(zipBytes: ByteArray, fallbackId: String = "skill_${UUID.randomUUID()}"): SkillInstallInspection {
         val pkg = packageParser.parseFromZip(zipBytes, fallbackId)
         return inspectPackage(pkg)
     }

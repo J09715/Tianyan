@@ -3,6 +3,7 @@ package top.tianyan.app.ui.workflow
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
+import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
@@ -16,7 +17,7 @@ internal fun WorkflowNodePolicyFields(type: WorkflowNodeType, timeout: String, o
     policy: FailurePolicy, onPolicy: (FailurePolicy) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (type != WorkflowNodeType.HUMAN_APPROVAL) OutlinedTextField(
+        if (type != WorkflowNodeType.HUMAN_APPROVAL) RuntimeFilledTextField(
             value = timeout, onValueChange = { onTimeout(it.filter(Char::isDigit).take(4)) },
             label = { Text("超时（秒）") }, supportingText = { Text("1–3600 秒") },
             isError = timeout.toIntOrNull()?.let { it in 1..3600 } != true,

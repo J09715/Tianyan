@@ -111,9 +111,12 @@ class ProcessShellLifecycleTest {
     /** 固定返回 tid/子进程 pid，记录被收的根进程，避免单元测试触碰 /proc 与 android.os.Process。 */
     private class FakeReaper : ProcessTreeReaper {
         val reaped = mutableListOf<Long>()
+        val detached = mutableListOf<List<Long>>()
         override fun forkTid(): Int? = 7
         override fun childOfThread(tid: Int): Long? = if (tid == 7) 4242L else null
+        override fun descendantsOf(rootPid: Long): List<Long> = emptyList()
         override fun reap(rootPid: Long): Int { reaped += rootPid; return 1 }
+        override fun reapDetached(descendants: List<Long>): Int { detached += descendants; return descendants.size }
     }
     private suspend fun awaitReader(process: FakeSessionProcess) = withContext(Dispatchers.IO) {
         assertTrue(process.stdout.entered.await(3, TimeUnit.SECONDS))

@@ -860,7 +860,7 @@ class HarnessLoop(
         val taskId = next.taskId ?: newId().also { generated ->
             queuedInstructions.record(sessId, next.copy(taskId = generated))
         }
-        val userMessage = UserMessage(newId(), now(), next.text, next.imageUrls, next.attachments)
+        val userMessage = UserMessage(newId(), now(), next.text, next.imageUrls)
         val operationId = operationCoordinator.acceptQueuedRun(sessId, queueItemId, userMessage, taskId)
         messageProjector.publishPersisted(sessId, userMessage)
         return launchSessionJobLocked(sessId, taskId, operationId = operationId, taskAlreadyRunning = true) {
@@ -1059,28 +1059,12 @@ class HarnessLoop(
                 }
             }
         } catch (_: CancellationException) {
-            // cancel() 先入 cancellingSessions 再 cancel job、cancelAndJoin 之后才移除，
-            // 因此在本 catch（属于被取消 job 的收尾段，join 会等它跑完）里该集合的
-            // 成员关系可判定"是否用户主动停止"。会话删除走 tombstoneSessions 而非
-            // cancellingSessions，据此避免在正在销毁的会话上补写消息。
+            // 保留取消来源供诊断；停止只收尾任务和工具状态，不追加聊天提示。
             val userInitiated = cancellingSessions.isSet(sessId)
-            val tombstoned = tombstonedSessions.contains(sessId)
             withContext(NonCancellable) {
                 repairDanglingToolCalls(sessId, interrupted = true)
                 taskId?.let { agentTaskStateMachine.markCancelled(it) }
                 operationCoordinator.finish(sessId, "aborted", details = "cancelled")
-                // 原实现只把状态置回 IDLE，前台消息流里什么都不留，用户看到的是
-                // "消息发出去就没了"，与"发送总是中断"的反馈完全吻合。
-                if (userInitiated && !tombstoned) {
-                    messageProjector.append(
-                        sessId,
-                        AssistantText(
-                            id = newId(),
-                            createdAt = now(),
-                            text = "⏹ 已停止本次运行。",
-                        ),
-                    )
-                }
             }
             logger.logAgent(
                 sessId,

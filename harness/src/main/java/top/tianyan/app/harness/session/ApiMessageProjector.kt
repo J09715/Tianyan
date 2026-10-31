@@ -68,6 +68,25 @@ object ApiMessageProjector {
             return mapped.copy(content = (mapped.content ?: "") + "\n\n" + suffix)
         }
 
+        // 图片预算：每轮都把全部历史图重发，请求体会随会话线性膨胀（413 / 费用失控）。
+        // 额度从最新消息往前发，超出的旧图改成一行说明，用户仍能在 UI 里看到原图。
+        val imageBudget = ImageBudget(MAX_TOTAL_IMAGE_BYTES)
+        if (visionEnabled) {
+            msgs.asReversed().forEach { message ->
+                if (message is UserMessage && message.imageUrls.isNotEmpty()) imageBudget.admit(message.id, message.imageUrls)
+            }
+        }
+
+        fun applyImagePolicy(mapped: ApiMessage, message: HarnessMessage): ApiMessage {
+            if (message !is UserMessage) return mapped
+            if (!visionEnabled) return mapped.copy(imageUrls = emptyList())
+            val admitted = imageBudget.urls(message)
+            val dropped = imageBudget.dropped(message)
+            if (dropped <= 0) return mapped.copy(imageUrls = admitted)
+            val note = "\n[为控制请求体积，本次未重新附上 $dropped 张历史图片]"
+            return mapped.copy(imageUrls = admitted, content = (mapped.content ?: "") + note)
+        }
+
         return buildList {
             var i = 0
             while (i < msgs.size) {
@@ -118,7 +137,7 @@ object ApiMessageProjector {
                                 else -> HarnessApiMapper.toApiMessage(message)
                             }
                             val withSuffix = withRecallSuffix(mapped, message)
-                            add(if (message is UserMessage && !visionEnabled) withSuffix.copy(imageUrls = emptyList()) else withSuffix)
+                            add(applyImagePolicy(withSuffix, message))
                             i++
                         }
                     }
@@ -184,7 +203,7 @@ object ApiMessageProjector {
                 } else {
                     val mapped = HarnessApiMapper.toApiMessage(message)
                     val withSuffix = withRecallSuffix(mapped, message)
-                    add(if (message is UserMessage && !visionEnabled) withSuffix.copy(imageUrls = emptyList()) else withSuffix)
+                    add(applyImagePolicy(withSuffix, message))
                     i++
                 }
             }
@@ -207,4 +226,37 @@ object ApiMessageProjector {
 
     /** 发给模型的工具截图上限。更早的 imageDataUrl 仍留在会话记录里，只是不再重复发送。 */
     internal const val MAX_RECENT_TOOL_IMAGES = 2
+
+    /**
+     * 一次请求里所有用户图片（base64 data URL）的总额度。
+     * 单张 1280px JPEG 的 data URL 约 300–500KB，8MB 约能容纳 20 张；
+     * 额度按字符数计算（data URL 全为 ASCII，字符数即字节数）；
+     * 写成常量是因为上游 413 与费用都随请求体线性增长，而不只是受上下文窗口限制。
+     */
+    internal const val MAX_TOTAL_IMAGE_BYTES = 8L * 1024 * 1024
+
+    /** 按最新优先发放图片额度；同一批里也是从后往前发，保证最近看到的图一定保留。 */
+    private class ImageBudget(private val maxBytes: Long) {
+        private var remaining = maxBytes
+        private val kept = HashMap<String, List<String>>()
+        private val dropped = HashMap<String, Int>()
+
+        fun admit(messageId: String, urls: List<String>) {
+            val keepMask = BooleanArray(urls.size)
+            for (index in urls.indices.reversed()) {
+                val size = urls[index].length.toLong()
+                if (size <= remaining) {
+                    remaining -= size
+                    keepMask[index] = true
+                }
+            }
+            val admitted = urls.filterIndexed { index, _ -> keepMask[index] }
+            kept[messageId] = admitted
+            dropped[messageId] = urls.size - admitted.size
+        }
+
+        fun urls(message: UserMessage): List<String> = kept[message.id] ?: message.imageUrls
+
+        fun dropped(message: UserMessage): Int = dropped[message.id] ?: 0
+    }
 }

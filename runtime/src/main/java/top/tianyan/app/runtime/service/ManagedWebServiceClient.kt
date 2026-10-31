@@ -10,6 +10,12 @@ import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Call
+import okhttp3.Callback
+import java.io.IOException
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.coroutineContext
 
 /**
@@ -29,6 +35,7 @@ class ManagedWebServiceClient(
     private val maxResponseChars: Int = MAX_RESPONSE_CHARS,
     private val maxStreamChars: Int = MAX_STREAM_CHARS,
     private val chunkChars: Int = CHUNK_CHARS,
+    private val authentication: ToolServiceAuthentication? = null,
 ) {
     private val monitor = Any()
     @Volatile private var closed = false
@@ -60,6 +67,21 @@ class ManagedWebServiceClient(
         } catch (_: Exception) {
             null
         }
+    }
+
+    /** Explicitly approved write to this lease's service; no redirects, retries or arbitrary headers. */
+    suspend fun write(path: String, body: String): String? {
+        if (!usable(path) || body.length !in 1..1024 || '\u0000' in body) return null
+        return try {
+            withContext(Dispatchers.IO) {
+                coroutineContext.ensureActive()
+                awaitWrite(path, body).use { response ->
+                    validate(response)
+                    readChars(response, maxResponseChars)
+                }
+            }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+        catch (_: Exception) { null }
     }
 
     /**
@@ -107,16 +129,35 @@ class ManagedWebServiceClient(
 
     private fun usable(path: String) = ManagedWebAssets.safePath(path) && isAvailable
 
-    private fun call(path: String): Response {
+    private fun request(path: String, body: String? = null): Request {
         val request = Request.Builder().url("http://127.0.0.1:$port$basePath$path").header("Accept-Encoding", "identity")
+        if (body != null) request.header("X-Taixu-Plugin-Write", "1")
+            .post(body.toRequestBody("application/json; charset=utf-8".toMediaType()))
         authorization?.let { request.header("Authorization", it) }
-        val response = client().newCall(request.build()).execute()
+        return request.build()
+    }
+
+    private fun call(path: String): Response = client().newCall(request(path)).execute().also(::validate)
+
+    private suspend fun awaitWrite(path: String, body: String): Response = suspendCancellableCoroutine { continuation ->
+        val call = client().newCall(request(path, body))
+        continuation.invokeOnCancellation { call.cancel() }
+        call.enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                continuation.resumeWith(Result.failure(e))
+            }
+            override fun onResponse(call: Call, response: Response) {
+                continuation.resume(response) { _, value, _ -> value.close() }
+            }
+        })
+    }
+
+    private fun validate(response: Response) {
         val encoding = response.header("Content-Encoding")
         if (response.code != 200 || (encoding != null && encoding != "identity")) {
             response.close()
             error("Web service response rejected")
         }
-        return response
     }
 
     private suspend fun readChars(response: Response, maximum: Int): String {
@@ -143,6 +184,7 @@ class ManagedWebServiceClient(
     private fun client(): OkHttpClient = synchronized(monitor) {
         check(!closed) { "Web service client closed" }
         client ?: OkHttpClient.Builder().proxy(Proxy.NO_PROXY).followRedirects(false)
+            .apply { authentication?.let { addInterceptor(it) } }
             .followSslRedirects(false).retryOnConnectionFailure(false).protocols(listOf(Protocol.HTTP_1_1))
             .connectTimeout(1, TimeUnit.SECONDS).readTimeout(2, TimeUnit.SECONDS)
             .build().also { client = it }

@@ -33,7 +33,6 @@ import top.tianyan.app.ui.components.*
 fun PluginManagerScreen(
     plugins: List<NativePagePlugin>, controller: PluginController,
     onOpen: (PluginExtensionRef) -> Unit, onBack: () -> Unit,
-    packageContent: @Composable () -> Unit = {},
 ) {
     val states by controller.states.collectAsState()
     val initialized by controller.initialized.collectAsState()
@@ -95,7 +94,6 @@ fun PluginManagerScreen(
             }
             item { Text(stringResource(R.string.ui_plugin_manager_scope), style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)) }
-            item { packageContent() }
         }
     }
 }

@@ -1,5 +1,6 @@
 <resources>
-    <string name="web_packages_title">外部 Web 插件</string>
+    <string name="web_packages_service_write">请求向绑定的插件服务提交配置与操作，可能保存凭据、生成密钥或修改远端数据。每次写入均需原生确认；不会获得任意宿主或 Shell 权限。</string>
+    <string name="web_packages_title">网页插件</string>
     <string name="web_packages_scope">导入静态页面插件。普通页面无需 Linux；标注 PRoot 静态或工具服务来源的页面需本地 Linux（PRoot 静态来源还需 Python 3）。使用应用能力时需单独确认。</string>
     <string name="web_packages_proot_label">PRoot 静态服务</string>
     <string name="web_packages_service_label">工具服务来源 · %1$s</string>

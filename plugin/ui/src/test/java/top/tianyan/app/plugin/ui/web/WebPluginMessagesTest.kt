@@ -6,6 +6,12 @@ import org.junit.Test
 import top.tianyan.app.plugin.runtime.PluginCapabilityResult
 
 class WebPluginMessagesTest {
+    @Test fun serviceWritesKeepOpaqueJsonInsideTheBoundedTextField() {
+        val call = WebPluginMessages.decode("""{"id":"write","action":"host.service-write","target":"service","text":"api/auth/token\n{\"token\":\"secret\"}"}""")
+        assertEquals("api/auth/token\n{\"token\":\"secret\"}", call.text)
+        assertTrue(runCatching { WebPluginMessages.decode("""{"id":"write","action":"host.service-write","target":"service","text":"../auth\n{}"}""") }.isFailure)
+        assertTrue(runCatching { WebPluginMessages.decode("""{"id":"write","action":"host.service-write","target":"service","text":"api/auth\n{}","method":"POST"}""") }.isFailure)
+    }
     @Test fun acceptsOnlyTheTypedClipboardTextEnvelope() {
         val call = WebPluginMessages.decode("""{"id":"copy","action":"host.clipboard-write","target":"clipboard","text":"天衍\n{[example]}"}""")
         assertEquals("天衍\n{[example]}", call.text)

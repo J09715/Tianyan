@@ -18,7 +18,7 @@ import okhttp3.Request
  * {
  *   "entries": [
  *     { "kind": "funding",      "name": "阿伟",   "source": "qq",    "identifier": "10001" },
- *     { "kind": "resource",     "name": "tianyan",  "source": "github", "identifier": "tianyan", "note": "提供推理 token" },
+ *     { "kind": "resource",     "name": "wkbin",  "source": "github", "identifier": "wkbin", "note": "提供推理 token" },
  *     { "kind": "contribution", "name": "路人甲", "source": "github", "identifier": "lurenjia", "avatar": "https://avatars.githubusercontent.com/u/1?s=96", "note": "上报多窗口闪退" }
  *   ]
  * }
@@ -88,6 +88,6 @@ class SponsorListRepository(
 
     companion object {
         // TODO: 把仓库根目录的 sponsors.json 推送到 GitHub 后，确认该地址可访问
-        const val SPONSORS_JSON_URL = "https://raw.githubusercontent.com/J09715/Tianyan/main/sponsors.json"
+        const val SPONSORS_JSON_URL = "https://raw.githubusercontent.com/tianyan-lab/tianyan/main/sponsors.json"
     }
 }

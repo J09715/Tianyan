@@ -16,6 +16,30 @@ class SkillPackageParserTest {
     private val parser = SkillPackageParser()
 
     @Test
+    fun parseFromZip_distinguishesNameOnlySkillsWithSameFallbackId() {
+        val first = createTestZip("SKILL.md" to "---\nname: code-review\ndescription: Review code\n---\n# Review")
+        val second = createTestZip("SKILL.md" to "---\nname: test-runner\ndescription: Run tests\n---\n# Tests")
+
+        assertEquals("code-review", parser.parseFromZip(first, "custom_zip").manifest.id)
+        assertEquals("test-runner", parser.parseFromZip(second, "custom_zip").manifest.id)
+        assertEquals("code-review", parser.parseFromZip(first, "another_filename").manifest.id)
+    }
+
+    @Test
+    fun parseFromZip_explicitIdTakesPriorityOverName() {
+        val zip = createTestZip("SKILL.md" to "---\nid: stable-id\nname: display-name\n---\n# Skill")
+
+        assertEquals("stable-id", parser.parseFromZip(zip, "custom_zip").manifest.id)
+    }
+
+    @Test
+    fun parseFromZip_nameWithoutSafeIdFallsBackToCallerId() {
+        val zip = createTestZip("SKILL.md" to "---\nname: 中文技能\n---\n# Skill")
+
+        assertEquals("unique-import", parser.parseFromZip(zip, "unique-import").manifest.id)
+    }
+
+    @Test
     fun parseFromZip_acceptsMoreThan500FilesAndDirectories() {
         val entries = buildList {
             add("SKILL.md" to "# Large Skill")

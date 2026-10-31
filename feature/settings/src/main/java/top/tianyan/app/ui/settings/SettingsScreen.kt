@@ -35,7 +35,6 @@ import top.tianyan.app.ui.components.MainDestination
 import top.tianyan.app.ui.components.RuntimeCard
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
-import top.tianyan.app.ui.components.LocalOpenPluginManager
 
 /**
  * 天衍 · 乾坤配置 (Tianyan Settings & Models)
@@ -50,11 +49,11 @@ fun SettingsScreen(
     onOpenAboutCommunity: () -> Unit,
     onOpenSearch: () -> Unit = {},
     onOpenFeatureHub: () -> Unit = {},
+    onOpenPluginCenter: () -> Unit = {},
     viewModel: SettingsViewModel? = previewOrNull { koinViewModel() }, onBack: () -> Unit = { onNavigate(MainDestination.Agent) },
 ) {
     var showUsageNotice by rememberSaveable { mutableStateOf(false) }
     if (showUsageNotice) RuntimeUsageNoticeDialog(onDismiss = { showUsageNotice = false })
-    val openPluginManager = LocalOpenPluginManager.current
     val models by viewModel?.models?.collectAsStateWithLifecycle() ?: previewStateOf(emptyList())
     val developer by viewModel?.developerMode?.collectAsStateWithLifecycle() ?: previewStateOf(false)
     val themeMode by viewModel?.themeMode?.collectAsStateWithLifecycle() ?: previewStateOf("")
@@ -73,16 +72,13 @@ fun SettingsScreen(
 
 
     PersonalizationScaffold(stringResource(R.string.personal_settings_title), onBack) {
-        item("settings_illustration") {
-            RuntimeIllustration(RuntimeIllustrationScene.Settings, Modifier.height(144.dp))
-        }
         item("search") {
             RuntimeCard(
                 modifier = Modifier.fillMaxWidth(),
                 onClick = onOpenSearch,
-                shape = CircleShape,
+                shape = MaterialTheme.shapes.extraLarge,
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                contentPadding = PaddingValues(20.dp),
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     RuntimeIcon(RuntimeIconName.Search, Modifier.size(24.dp), MaterialTheme.colorScheme.onSurfaceVariant)
@@ -90,6 +86,9 @@ fun SettingsScreen(
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
+        }
+        item("settings_illustration") {
+            RuntimeIllustration(RuntimeIllustrationScene.Settings, Modifier.height(80.dp))
         }
         item("appearance") {
             SettingsCategoryCard(
@@ -117,9 +116,9 @@ fun SettingsScreen(
                 SettingsCategoryCard(RuntimeIconName.Sparkles, stringResource(R.string.settings_feature_hub_title),
                     stringResource(R.string.settings_nav_features_summary),
                     "5 项功能", first = true, last = false, onClick = onOpenFeatureHub)
-                if (openPluginManager != null) SettingsCategoryCard(RuntimeIconName.Extension,
-                    stringResource(R.string.settings_material_plugins_title), stringResource(R.string.settings_material_plugins_summary),
-                    value = null, first = false, last = false, onClick = openPluginManager)
+                SettingsCategoryCard(RuntimeIconName.Extension, stringResource(R.string.plugin_center_title),
+                    stringResource(R.string.plugin_center_summary), value = null,
+                    first = false, last = false, onClick = onOpenPluginCenter)
                 LocalBackupSettingsCard(first = false, last = true)
             }
         }

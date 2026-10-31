@@ -53,7 +53,7 @@ import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconButton
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeTextButton
-import top.tianyan.app.ui.components.RuntimeTopBar
+import top.tianyan.app.ui.components.runtimeContentPadding
 
 enum class GroupChatViewMode {
     CHAT,
@@ -231,7 +231,7 @@ fun GroupChatScreen(
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                        contentPadding = runtimeContentPadding(horizontal = 16.dp, top = 8.dp, bottom = 8.dp),
                         verticalArrangement = Arrangement.Top,
                     ) {
                         items(chatEntries, key = { it.message.id }) { entry ->
