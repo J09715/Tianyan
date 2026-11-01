@@ -35,6 +35,7 @@ import top.tianyan.app.core.database.InstallTaskDao
 import top.tianyan.app.core.database.McpOAuthCredentialDao
 import top.tianyan.app.core.database.McpOAuthTransactionDao
 import top.tianyan.app.core.database.McpServerDao
+import top.tianyan.app.core.database.RedTeamFactDao
 import top.tianyan.app.core.database.PersonaBotDao
 import top.tianyan.app.core.database.QuickPhraseDao
 import top.tianyan.app.core.database.RuntimeDao
@@ -89,6 +90,7 @@ import top.tianyan.app.di.AppModule.provideModelsDevUpdater
 import top.tianyan.app.di.AppModule.provideProcessRegistry
 import top.tianyan.app.di.AppModule.providePtyManager
 import top.tianyan.app.di.AppModule.provideQuickPhraseDao
+import top.tianyan.app.di.AppModule.provideRedTeamFactDao
 import top.tianyan.app.di.AppModule.provideRuntimeDao
 import top.tianyan.app.di.AppModule.provideRuntimeManager
 import top.tianyan.app.di.AppModule.provideShellExecutor
@@ -213,6 +215,8 @@ val appModule = module {
     single<BuildScriptDao> { provideBuildScriptDao(database = get()) }
 
     single<AgentTaskDao> { provideAgentTaskDao(database = get()) }
+
+    single<RedTeamFactDao> { provideRedTeamFactDao(database = get()) }
 
     single<WorkspaceFileAccess> { provideWorkspaceFileAccess(pathManager = get()) }
 
