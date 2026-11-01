@@ -1,5 +1,4 @@
 package top.tianyan.app.ui.navigation
-
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -67,6 +66,7 @@ import top.tianyan.app.ui.settings.LinuxEnvironmentSettingsScreen
 import top.tianyan.app.ui.settings.McpSettingsScreen
 import top.tianyan.app.ui.settings.PhoneAgentSettingsScreen
 import top.tianyan.app.ui.settings.QuickPhrasesScreen
+import top.tianyan.app.ui.settings.RemotePluginLibraryScreen
 import top.tianyan.app.ui.settings.SshSettingsScreen
 import top.tianyan.app.ui.settings.StorageMountSettingsScreen
 import top.tianyan.app.ui.settings.StorageUsageScreen
@@ -83,7 +83,6 @@ import top.tianyan.app.ui.workspace.WorkshopScriptEditorScreen
 import top.tianyan.app.ui.workspace.WorkshopScriptType
 import top.tianyan.app.ui.workspace.WorkshopSettingsScreen
 import top.tianyan.app.ui.workspace.WorkshopSigningScreen
-
 /** 天衍核心导航分发系统：采用 Navigation 3，为每个 Tab 独立维护持久回退栈与状态生命周期 */
 @Composable
 fun TianyanNavHost(
@@ -112,7 +111,6 @@ fun TianyanNavHost(
     fun NavBackStack<NavKey>.pushRaw(destination: NavKey) {
         if (lastOrNull() != destination) add(destination)
     }
-
     val sidebarGesturesEnabled = activeStack.canSwipeOpenNavigation()
     LaunchedEffect(sidebarGesturesEnabled) { if (!sidebarGesturesEnabled) showNavigation = false }
     val selectedMain = activeStack.lastOrNull { it == HomeDestination || it == WorkspaceDestination || it == BotsDestination || it == SettingsDestination }.toMainDestination()
@@ -120,14 +118,12 @@ fun TianyanNavHost(
         if (activeStack.openMainOverlay(destination)) return
         if (destination == MainDestination.Agent) while (activeStack.size > 1) activeStack.removeLastOrNull()
     }
-
     LaunchedEffect(chatViewModel) {
         chatViewModel.workflowLaunchRequests.collect { request ->
             navigateMain(MainDestination.Agent)
             activeStack.pushRaw(WorkflowDestination(request.projectName, request.workflowId, request.initialVariables))
         }
     }
-
     LaunchedEffect(globalNavigationBus) {
         globalNavigationBus?.events?.collect { target ->
             when (target) {
@@ -152,17 +148,14 @@ fun TianyanNavHost(
             globalNavigationBus.clearLatest(target)
         }
     }
-
     fun NavBackStack<NavKey>.push(from: NavKey, destination: NavKey) {
         if (lastOrNull() == from && lastOrNull() != destination) {
             add(destination)
         }
     }
-
     fun popBack() {
         if (activeStack.size > 1) activeStack.removeLastOrNull()
     }
-
     @Composable
     fun GuardedEntry(
         destination: NavKey,
@@ -187,7 +180,6 @@ fun TianyanNavHost(
             content()
         }
     }
-
     val appEntryProvider: (NavKey) -> NavEntry<NavKey> = entryProvider {
             entry<HomeDestination> {
                 GuardedEntry(HomeDestination) {
@@ -504,12 +496,20 @@ fun TianyanNavHost(
                         onBack = ::popBack,
                         onLaunchPty = { toolId -> activeStack.push(ToolCenterDestination, TerminalDestination(toolId = toolId)) },
                         onOpenToolDetail = { toolId -> activeStack.push(ToolCenterDestination, ToolDetailDestination(toolId = toolId)) },
+                        onOpenLibrary = { activeStack.push(ToolCenterDestination, RemotePluginLibraryDestination) },
+                        onOpenBuiltinFeatures = { activeStack.push(ToolCenterDestination, FeatureHubDestination) },
+                        onOpenWebPlugins = { activeStack.push(ToolCenterDestination, WebPluginManagerDestination) },
                         onStartAiHealing = { toolId, toolName, logs ->
                             val prompt = ToolSelfHealingHelper.buildHealingPrompt(toolId, toolName, logs)
                             pendingHealingTask = HealingTask("🔧 自愈: $toolName", prompt)
                             navigateMain(MainDestination.Agent)
                         },
                     )
+                }
+            }
+            entry<RemotePluginLibraryDestination> {
+                GuardedEntry(RemotePluginLibraryDestination) {
+                    RemotePluginLibraryScreen(onBack = ::popBack)
                 }
             }
             entry<CcSwitchDestination> {
