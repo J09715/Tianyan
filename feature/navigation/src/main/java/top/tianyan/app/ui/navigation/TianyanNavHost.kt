@@ -313,6 +313,7 @@ fun TianyanNavHost(
                         onOpenAboutCommunity = { activeStack.push(SettingsDestination, AboutCommunityDestination) },
                         onOpenSearch = { activeStack.push(SettingsDestination, SettingsSearchDestination) },
                         onOpenFeatureHub = { activeStack.push(SettingsDestination, FeatureHubDestination) },
+                        onOpenPluginCenter = { activeStack.push(SettingsDestination, ToolCenterDestination) },
                         viewModel = settingsViewModel,
                     )
                 }
@@ -702,5 +703,4 @@ fun TianyanNavHost(
         }
     }
 }
-
 private data class HealingTask(val title: String, val prompt: String)
