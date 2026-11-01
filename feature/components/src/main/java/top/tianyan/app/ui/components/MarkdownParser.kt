@@ -7,15 +7,17 @@ internal sealed interface MdBlock
 internal data class MdParagraph(val text: String) : MdBlock
 internal data class MdHeading(val level: Int, val text: String) : MdBlock
 internal data class MdCodeBlock(val language: String, val code: String) : MdBlock
-internal data class MdList(val ordered: Boolean, val items: List<String>) : MdBlock
+internal data class MdList(val ordered: Boolean, val items: List<MdListItem>) : MdBlock
+/** 单个列表项；[depth] 为缩进层级（0 起），用于渲染嵌套缩进与悬挂缩进。 */
+internal data class MdListItem(val text: String, val depth: Int = 0)
 internal data class MdQuote(val lines: List<String>) : MdBlock
 internal data class MdTable(val headers: List<String>, val rows: List<List<String>>) : MdBlock
 internal data class MdRemoteMedia(val url: String, val description: String) : MdBlock
 internal object MdHr : MdBlock
 
 private val headingRegex = Regex("^\\s*(#{1,6})\\s+(.+?)\\s*#*\\s*$")
-private val orderedListRegex = Regex("^\\s*\\d+\\.\\s+(.*)$")
-private val unorderedListRegex = Regex("^\\s*[-*+]\\s+(.*)$")
+private val orderedListRegex = Regex("^(\\s*)\\d+\\.\\s+(.*)$")
+private val unorderedListRegex = Regex("^(\\s*)[-*+]\\s+(.*)$")
 private val hrRegex = Regex("^\\s*(?:-{3,}|\\*{3,}|_{3,})\\s*$")
 private val markdownImageRegex = Regex(
     pattern = """^\s*!\[([^]\n]*)]\(((?:https?://|file://|data:image/|/|\./|\\|\.\\)[^)\s]+)\)\s*$""",
@@ -145,11 +147,11 @@ private fun parseRawBlocks(md: String): List<MdBlock> {
             }
             orderedListRegex.matches(line) || unorderedListRegex.matches(line) -> {
                 val ordered = orderedListRegex.matches(lines[i])
-                val items = mutableListOf<String>()
+                val items = mutableListOf<MdListItem>()
                 while (i < lines.size && (orderedListRegex.matches(lines[i]) || unorderedListRegex.matches(lines[i]))) {
                     val l = lines[i]
-                    val m = orderedListRegex.find(l) ?: unorderedListRegex.find(l)
-                    items.add(m!!.groupValues[1])
+                    val m = orderedListRegex.find(l) ?: unorderedListRegex.find(l)!!
+                    items.add(MdListItem(text = m.groupValues[2], depth = listDepthOf(m.groupValues[1])))
                     i++
                 }
                 blocks.add(MdList(ordered, items))
@@ -178,6 +180,16 @@ private fun parseRawBlocks(md: String): List<MdBlock> {
         }
     }
     return blocks
+}
+
+/**
+ * 列表缩进层级：2 个空格或 1 个制表符算一级，最多 5 级。
+ * 上限避免模型输出超深嵌套时正文被挤出屏幕可视区。
+ */
+private fun listDepthOf(indent: String): Int {
+    var spaces = 0
+    indent.forEach { spaces += if (it == '\t') 2 else 1 }
+    return (spaces / 2).coerceIn(0, 5)
 }
 
 /**
