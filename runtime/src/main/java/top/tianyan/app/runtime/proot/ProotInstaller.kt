@@ -1,4 +1,4 @@
-﻿package top.tianyan.app.runtime.proot
+package top.tianyan.app.runtime.proot
 
 import top.tianyan.app.core.common.logging.AppLogger
 import top.tianyan.app.core.common.result.AppError
@@ -81,14 +81,17 @@ class ProotInstaller(
         require(exitCode == 0) {
             "PRoot 主程序执行失败（exit=$exitCode）：${output.trim().ifBlank { "无输出" }}"
         }
-        require(output.contains(EXPECTED_PROOT_VERSION)) {
-            "PRoot 主程序版本不匹配，期望 $EXPECTED_PROOT_VERSION"
+        // 只校验主版本线，不锁死补丁号：APK 内置的二进制与常量各自更新过，
+        // 写死精确版本会让整套 Linux 环境在二进制未同步升级时直接不可用。
+        val reported = Regex("""\d+\.\d+\.\d+\.\d+""").find(output)?.value
+        require(reported != null && reported.startsWith(EXPECTED_PROOT_VERSION_LINE)) {
+            "PRoot 主程序版本不匹配，期望 $EXPECTED_PROOT_VERSION_LINE.x，实际 ${reported ?: "无法识别"}"
         }
     }
 
     private companion object {
         const val MIN_RUNTIME_COMPONENT_BYTES = 4096L
         const val MAX_LOADER_BYTES = 4L * 1024L * 1024L
-        const val EXPECTED_PROOT_VERSION = "5.1.107.101"
+        const val EXPECTED_PROOT_VERSION_LINE = "5.1.107"
     }
 }
