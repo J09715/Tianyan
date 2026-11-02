@@ -53,6 +53,7 @@ import top.tianyan.app.core.model.UpdateCheckState
 @Composable
 fun AboutCommunityScreen(
     onBack: () -> Unit,
+    onOpenSponsor: () -> Unit = {},
     viewModel: SettingsViewModel? = previewOrNull { koinViewModel() },
 ) {
     val autoCheckUpdates by viewModel?.autoCheckUpdates?.collectAsStateWithLifecycle() ?: previewStateOf(false)
@@ -65,7 +66,6 @@ fun AboutCommunityScreen(
     val currentReleaseNotes by viewModel?.currentReleaseNotes?.collectAsStateWithLifecycle() ?: previewStateOf(null)
     val isLoadingReleaseNotes by viewModel?.isLoadingReleaseNotes?.collectAsStateWithLifecycle() ?: previewStateOf(false)
     val currentVersion = rememberAppVersion()
-
     // 版本更新弹窗
     when (val state = updateCheckState) {
         is UpdateCheckState.Success -> {
@@ -100,9 +100,7 @@ fun AboutCommunityScreen(
                             viewModel?.clearUpdateState()
                             viewModel?.loadCurrentReleaseNotes(currentVersion)
                             showReleaseNotesDialog = true
-                        }) {
-                            Text("本版日志")
-                        }
+                        }) { Text("本版日志") }
                     },
                 )
             }
@@ -117,11 +115,7 @@ fun AboutCommunityScreen(
                     }
                 },
                 text = { Text(state.message) },
-                confirmButton = {
-                    TextButton(onClick = { viewModel?.clearUpdateState() }) {
-                        Text("知道了")
-                    }
-                },
+                confirmButton = { TextButton(onClick = { viewModel?.clearUpdateState() }) { Text("知道了") } },
             )
         }
         else -> Unit
@@ -137,7 +131,6 @@ fun AboutCommunityScreen(
             },
         )
     }
-
     if (showReleaseNotesDialog) {
         VersionReleaseNotesDialog(
             version = currentVersion,
@@ -147,7 +140,6 @@ fun AboutCommunityScreen(
             onOpenHistory = { openBrowser(context, "https://github.com/J09715/Tianyan/releases") },
         )
     }
-
     RuntimeSettingsScaffold(
         title = "关于与社区", onBack = onBack,
     ) {
@@ -226,6 +218,14 @@ fun AboutCommunityScreen(
                     title = "关于天衍 · Tianyan",
                     subtitle = "Android 原生 Linux PRoot 沙箱与 AI 结对中枢",
                     onClick = { showAboutDialog = true },
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                // 赞助支持：鸣谢名单页（GitHub sponsors.json + 收款码），此前整链未接线。
+                SettingsRow(
+                    icon = RuntimeIconName.Sponsor,
+                    title = "赞助支持",
+                    subtitle = "查看赞助者鸣谢名单，或通过支付宝 / 微信赞赏",
+                    onClick = onOpenSponsor,
                 )
             }
         }

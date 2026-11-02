@@ -39,6 +39,16 @@ internal class RedTeamConsoleController(
     private val _state = MutableStateFlow(RedTeamConsoleState())
     val state: StateFlow<RedTeamConsoleState> = _state.asStateFlow()
 
+    /** 自动绑定提示：对话识别出目标并绑定时由 [proposeAutoBind] 写入，界面展示一次后清掉。 */
+    private val _autoBindNotice = MutableStateFlow<String?>(null)
+    val autoBindNotice: StateFlow<String?> = _autoBindNotice.asStateFlow()
+
+    internal fun proposeAutoBind(target: String, scope: String) {
+        _autoBindNotice.value = "已从对话识别目标 $target 并自动绑定，授权范围 $scope，可在「目标」页签调整。"
+    }
+
+    fun consumeAutoBindNotice() { _autoBindNotice.value = null }
+
     private val _skillHealth = MutableStateFlow<RedTeamPreflightReport?>(null)
     val skillHealth: StateFlow<RedTeamPreflightReport?> = _skillHealth.asStateFlow()
 

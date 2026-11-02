@@ -20,6 +20,23 @@ import top.tianyan.app.core.database.HarnessSessionEntity
  * 控制器（[RedTeamConsoleController]）挂在 ChatViewModel 上、随会话走：
  * 弹层关闭再打开不该重新拉一遍事实库。
  */
+/**
+ * 红队工作台弹层入口。
+ *
+ * 把「是否可见 / 会话实体是否已落库 / ViewModel 是否就绪」三个判空收在一处：
+ * 调用点 [ChatScreen] 已顶到文件行数棘轮上限，这段样板代码不该长在它身上。
+ */
+@Composable
+internal fun RedTeamWorkbenchSheetHost(
+    visible: Boolean,
+    session: HarnessSessionEntity?,
+    viewModel: ChatViewModel?,
+    onDismiss: () -> Unit,
+) {
+    if (!visible || session == null || viewModel == null) return
+    RedTeamWorkbenchSheet(session = session, viewModel = viewModel, onDismiss = onDismiss)
+}
+
 @Composable
 internal fun RedTeamWorkbenchSheet(
     session: HarnessSessionEntity,
@@ -46,6 +63,8 @@ internal fun RedTeamWorkbenchSheet(
             controller.onTargetBound()
         },
         onDismiss = onDismiss,
+        autoBindNotice = controller.autoBindNotice.collectAsStateWithLifecycle().value,
+        onConsumeAutoBind = controller::consumeAutoBindNotice,
         onSelectTab = controller::selectTab,
         onRefresh = controller::refresh,
         onSelectSegment = controller::selectSegment,

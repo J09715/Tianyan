@@ -5,8 +5,9 @@
  * 单 IIFE，幂等（window.__tianyanHooks 守卫），仅顶层 frame。
  *
  * 桥协议（window.TianyanBridge，addJavascriptInterface 注入）：
- *   - T.onEvent(json)：异步上报事件 envelope {v, seq, ts, kind, data}，绝不阻塞；
- *   - T.getRules()：同步返回规则 payload JSON（页内同步决策 block/mock 的关键）。
+ *   - 注入时由宿主在主帧写入 window.__tianyanBridgeNonce，跨源 iframe 拿不到；
+ *   - T.onEvent(nonce, origin, isTop, json)：异步上报 envelope {v, seq, ts, kind, data}；
+ *   - T.getRules(nonce)：同步返回规则 payload JSON（页内同步决策 block/mock 的关键）。
  *
  * 动作优先级：block > mock > redirect > modify_headers > log。
  * 无规则时所有 wrapper 走快速直通（零开销）。
@@ -18,6 +19,8 @@
   var T = window.TianyanBridge;
   if (!T) { return; }
   if (window.top !== window.self) { return; } // 仅顶层 frame
+  var NONCE = window.__tianyanBridgeNonce;
+  if (!NONCE) { return; } // 无宿主 nonce（如第三方 iframe）：不初始化、不上报
 
   var state = {
     seq: 0,
@@ -34,7 +37,7 @@
   function report(kind, data) {
     try {
       state.seq++;
-      T.onEvent(JSON.stringify({ v: 1, seq: state.seq, ts: Date.now(), kind: kind, data: data }));
+      T.onEvent(NONCE, location.origin, window.top === window.self, JSON.stringify({ v: 1, seq: state.seq, ts: Date.now(), kind: kind, data: data }));
     } catch (e) { /* 桥不可用时静默：不影响页面 */ }
   }
 
@@ -895,7 +898,7 @@
   }
 
   try {
-    applyRules(T.getRules());
+    applyRules(T.getRules(NONCE));
   } catch (e) {
     reportError('init', e);
   }

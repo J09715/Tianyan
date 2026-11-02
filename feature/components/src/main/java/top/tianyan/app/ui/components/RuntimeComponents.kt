@@ -33,22 +33,16 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.FloatingActionButtonElevation
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.SwitchColors
 import androidx.compose.material3.CheckboxColors
 import androidx.compose.material3.RadioButtonColors
@@ -72,11 +66,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -95,52 +86,6 @@ enum class MainDestination(val labelRes: Int, val subtitleRes: Int, val icon: Ru
     Agent(R.string.components_nav_agent, R.string.components_nav_subtitle_agent, RuntimeIconName.NavMessage), Bots(R.string.components_nav_bots, R.string.components_nav_subtitle_bots, RuntimeIconName.Bot),
     Workspace(R.string.components_nav_workspace, R.string.components_nav_subtitle_workspace, RuntimeIconName.NavRepository),
     Settings(R.string.components_nav_settings, R.string.components_nav_subtitle_settings, RuntimeIconName.NavSettings),
-}
-
-/**
- * 天衍 · 核心底部中枢导航栏（Material 3 NavigationBar）。
- */
-@Composable
-fun RuntimeBottomBar(
-    selected: MainDestination,
-    onNavigate: (MainDestination) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val haptic = LocalHapticFeedback.current
-    NavigationBar(
-        modifier = modifier,
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        tonalElevation = 3.dp,
-    ) {
-        MainDestination.entries.forEach { destination ->
-            val isSelected = destination == selected
-            NavigationBarItem(
-                selected = isSelected,
-                onClick = {
-                    if (!isSelected) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    onNavigate(destination)
-                },
-                icon = { RuntimeIcon(destination.icon, Modifier.size(24.dp)) },
-                label = {
-                    Text(
-                        text = stringResource(destination.labelRes),
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        ),
-                    )
-                },
-                alwaysShowLabel = true,
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                    indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
-                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                ),
-            )
-        }
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

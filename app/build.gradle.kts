@@ -1,12 +1,11 @@
 import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
-import java.io.FileInputStream
 import java.security.MessageDigest
 import java.util.Properties
 import org.gradle.kotlin.dsl.configure
 
-val appVersionName = "1.5.14"
-val appVersionCode = 130
+val appVersionName = "1.5.15"
+val appVersionCode = 131
 
 // TianyanDev 双包构建开关：CI（.github/workflows/tianyandev-build.yml）设 TIANYAN_DEV_BUILD=1 时，
 // 产出独立预览包 top.tianyan.app.dev / 应用名 TianyanDev / 版本后缀 -dev，
@@ -39,34 +38,25 @@ extensions.configure<ApplicationExtension> {
         }
     }
 
-    val keystorePropertiesFile = rootProject.file("keystore.properties").takeIf { it.exists() }
-        ?: project.file("keystore.properties").takeIf { it.exists() }
-    val keystoreProperties = Properties()
-    if (keystorePropertiesFile != null) {
-        keystoreProperties.load(FileInputStream(keystorePropertiesFile))
-    }
-
-    fun signingValue(environmentVariable: String, propertyName: String): String? =
-        System.getenv(environmentVariable)?.takeIf { it.isNotBlank() }
-            ?: keystoreProperties.getProperty(propertyName)?.takeIf { it.isNotBlank() }
-
-    val signingStoreFilePath = signingValue("TIANYAN_RELEASE_STORE_FILE", "storeFile")
-    val signingStorePassword = signingValue("TIANYAN_RELEASE_STORE_PASSWORD", "storePassword")
-    val signingKeyAlias = signingValue("TIANYAN_RELEASE_KEY_ALIAS", "keyAlias")
-    val signingKeyPassword = signingValue("TIANYAN_RELEASE_KEY_PASSWORD", "keyPassword")
-    val signingValues = listOf(
+    // 发布签名只从环境变量读取，仓库与工作树内不再保存任何密钥/口令。
+    // 四项齐全才启用 release 签名；缺失时不报错、不阻断构建（debug 包始终可构建），
+    // 仅在配置阶段给出告警，避免把「没配签名」误当成代码错误。
+    val signingStoreFilePath = System.getenv("TIANYAN_RELEASE_STORE_FILE")?.takeIf { it.isNotBlank() }
+    val signingStorePassword = System.getenv("TIANYAN_RELEASE_STORE_PASSWORD")?.takeIf { it.isNotBlank() }
+    val signingKeyAlias = System.getenv("TIANYAN_RELEASE_KEY_ALIAS")?.takeIf { it.isNotBlank() }
+    val signingKeyPassword = System.getenv("TIANYAN_RELEASE_KEY_PASSWORD")?.takeIf { it.isNotBlank() }
+    //noinspection WrongGradleMethod
+    val signingConfigured = listOf(
         signingStoreFilePath,
         signingStorePassword,
         signingKeyAlias,
         signingKeyPassword,
-    )
-    //noinspection WrongGradleMethod
-    val signingRequested = signingValues.any { it != null }
-    //noinspection WrongGradleMethod
-    val signingConfigured = signingValues.all { it != null }
-    check(!signingRequested || signingConfigured) {
-        "Release signing is only partially configured. Provide all TIANYAN_RELEASE_* environment variables " +
-            "or all entries in keystore.properties."
+    ).all { it != null }
+    if (!signingConfigured) {
+        logger.warn(
+            "Release signing disabled: set all TIANYAN_RELEASE_STORE_FILE / STORE_PASSWORD / " +
+                "KEY_ALIAS / KEY_PASSWORD environment variables. Debug builds are unaffected.",
+        )
     }
 
     signingConfigs {

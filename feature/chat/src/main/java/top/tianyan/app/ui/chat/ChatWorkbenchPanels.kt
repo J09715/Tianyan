@@ -300,7 +300,7 @@ internal fun SubagentResultSheet(
     onDismiss: () -> Unit,
 ) {
     val branch = state.branch
-    val finalResult = state.messages.filterIsInstance<AssistantText>().lastOrNull { it.text.isNotBlank() }
+    val finalResult = state.messages.filterIsInstance<AssistantText>().lastOrNull { it.textContent.hasText }
     val task = state.messages.filterIsInstance<UserMessage>().firstOrNull()
     val toolResults = remember(state.messages) {
         state.messages.filterIsInstance<ToolResult>().associateBy { it.toolCallId }
@@ -1042,7 +1042,7 @@ private fun RoundEntryRow(entry: TimelineEntry, isLast: Boolean) {
     val expandable: Boolean = when (entry) {
         is TimelineEntry.Tool -> true
         is TimelineEntry.Assistant ->
-            entry.message != null && (entry.message.text.isNotBlank() || !entry.message.reasoning.isNullOrBlank())
+            entry.message != null && (entry.message.textContent.hasText || !entry.message.reasoning.isNullOrBlank())
         is TimelineEntry.Approval -> false
     }
 
@@ -1133,7 +1133,7 @@ private fun ToolExpandContent(entry: TimelineEntry.Tool) {
 @Composable
 private fun AssistantExpandContent(message: AssistantText) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (message.text.isNotBlank()) {
+        if (message.textContent.hasText) {
             PayloadBox(
                 stringResource(R.string.chat_tl_response),
                 sanitizeModelResponseForDiagnostics(message.text),

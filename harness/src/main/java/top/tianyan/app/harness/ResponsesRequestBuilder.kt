@@ -177,7 +177,7 @@ internal fun buildResponsesRequest(model: ModelConfig, messages: List<ApiMessage
     }
 
     return Request.Builder()
-        .url("${model.baseUrl.trimEnd('/')}/responses")
+        .url(secureProviderUrl(model.baseUrl, "responses"))
         .header("Content-Type", "application/json")
         .apply {
             model.apiKey?.let { header("Authorization", "Bearer $it") }

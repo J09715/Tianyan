@@ -49,8 +49,8 @@ data class CcSwitchUiState(
     val providers: List<CcProviderProfile> = emptyList(),
     val tianyanModels: List<AiModelEntity> = emptyList(),
     val deviceLanIp: String? = null,
-    val webUsername: String = "admin",
-    val webPassword: String = "admin123",
+    val webUsername: String = "",
+    val webPassword: String = "",
     val errorMessage: String? = null,
     val successMessage: String? = null,
     val switchingAgent: CcAgentState? = null,
@@ -98,8 +98,8 @@ class CcSwitchViewModel(
     private val _agents = MutableStateFlow<List<CcAgentState>>(CcSwitchUiState.defaultAgents())
     private val _providers = MutableStateFlow<List<CcProviderProfile>>(emptyList())
     private val _deviceLanIp = MutableStateFlow<String?>(null)
-    private val _webUsername = MutableStateFlow("admin")
-    private val _webPassword = MutableStateFlow("admin123")
+    private val _webUsername = MutableStateFlow("")
+    private val _webPassword = MutableStateFlow("")
     private val _errorMessage = MutableStateFlow<String?>(null)
     private val _successMessage = MutableStateFlow<String?>(null)
     private val _switchingAgent = MutableStateFlow<CcAgentState?>(null)
@@ -234,7 +234,7 @@ class CcSwitchViewModel(
         }
         try {
             val isRunning = toolManager.isGatewayRunning(toolId)
-            val creds = readCcSwitchWebCredentials(linuxRuntime)
+            val creds = readCcSwitchWebCredentials(linuxRuntime) ?: run { _errorMessage.value = "中枢 Web 凭据未配置：请先在中枢页重置访问密码后重试"; return }
             val statusRes = if (isRunning) ccSwitchClient.getDaemonStatus(creds.first, creds.second) else Result.failure(IllegalStateException("中枢未运行"))
             val snapshotRes = if (isRunning) ccSwitchClient.getProviderSnapshot(creds.first, creds.second) else Result.failure(IllegalStateException("中枢未运行"))
             val snapshot = snapshotRes.getOrNull()
@@ -280,7 +280,7 @@ class CcSwitchViewModel(
         }
     }
 
-    fun resetWebPassword(newPassword: String = "admin123") {
+    fun resetWebPassword(newPassword: String) {
         viewModelScope.launch(Dispatchers.IO) {
             val cmd = """
                 PASS_FILE="${'$'}{HOME:-/root}/.cc-switch/web_password"
@@ -585,7 +585,7 @@ EOF
             _switchingAgent.value = null
             _isOperating.value = true
             try {
-                val creds = readCcSwitchWebCredentials(linuxRuntime)
+                val creds = readCcSwitchWebCredentials(linuxRuntime) ?: run { _errorMessage.value = "中枢 Web 凭据未配置：请先在中枢页重置访问密码后重试"; return@launch }
                 val res = ccSwitchClient.switchProvider(appId, provider.id, creds.first, creds.second, creds.third)
                 if (res.isSuccess) {
                     // Update local state optimistic
@@ -631,7 +631,7 @@ EOF
                     availableModels = listOf(model.model),
                     isCustom = true,
                 )
-                val creds = readCcSwitchWebCredentials(linuxRuntime)
+                val creds = readCcSwitchWebCredentials(linuxRuntime) ?: run { _errorMessage.value = "中枢 Web 凭据未配置：请先在中枢页重置访问密码后重试"; return@launch }
                 val saveRes = ccSwitchClient.saveProvider(appId, profile, creds.first, creds.second, creds.third)
                 if (saveRes.isSuccess) {
                     _providers.value = _providers.value.filterNot { it.id == profile.id } + profile

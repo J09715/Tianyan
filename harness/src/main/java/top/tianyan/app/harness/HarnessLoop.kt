@@ -390,12 +390,12 @@ class HarnessLoop(
      *
      * 遍历数据库中所有会话，对存在未完成操作（活跃 operation）的会话执行恢复策略：
      * - 等待审批：保持 WAITING_APPROVAL 状态
-     * - 工具中断 / 运行挂起：先应用 replay policy，再由 durable task 的授权与尝试预算
-     *   决定自动续跑或保持 SUSPENDED；不可重放工具永不自动再次执行。
+     * - 工具中断 / 运行挂起：先应用 replay policy，再由 durable task 的授权与尝试预算决定自动续跑或保持 SUSPENDED
      *
      * @return 实际执行了恢复处理的会话数量
      */
     suspend fun recoverAllInterruptedSessions(): Int {
+        withContext(Dispatchers.IO) { operationCoordinator.suspendStale(System.currentTimeMillis()) }
         val sessions = withContext(Dispatchers.IO) { sessionDao.listAll() }
         var recovered = 0
         for (session in sessions) {

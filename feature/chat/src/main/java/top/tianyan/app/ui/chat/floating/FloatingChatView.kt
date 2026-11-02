@@ -521,7 +521,7 @@ private fun FloatingChatPanel(
                                                 }
                                             }
                                         }
-                                        if (msg.text.isNotBlank()) {
+                                        if (msg.textContent.hasText) {
                                             Surface(
                                                 color = MaterialTheme.colorScheme.surfaceContainerHighest,
                                                 shape = RoundedCornerShape(10.dp),

@@ -67,6 +67,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import top.tianyan.app.core.database.AiModelEntity
 import top.tianyan.app.core.model.ApprovalMode
+import top.tianyan.app.core.model.RedTeamMode
 import top.tianyan.app.core.model.RunMode
 import top.tianyan.app.harness.AssistantText
 import top.tianyan.app.harness.HarnessMessage
@@ -177,6 +178,8 @@ fun ChatScreen(
     var showRunModes by rememberSaveable { mutableStateOf(false) }; var showSkillsMcpSheet by rememberSaveable { mutableStateOf(false) }
     var showBranches by rememberSaveable { mutableStateOf(false) }; var showRuntimeTimeline by rememberSaveable { mutableStateOf(false) }
     var showMemorySheet by rememberSaveable { mutableStateOf(false) }
+    // 红队工作台整页弹层：入口在工作台抽屉的「红队演练」磁贴（见 ChatWorkspaceBar）
+    var showRedTeamSheet by rememberSaveable { mutableStateOf(false) }
     val timelineFocus = rememberSaveable(currentSessionId) { mutableStateOf<String?>(null) }
     val timelineItems = remember(currentSessionId) { mutableStateOf(ChatTimelineSnapshot()) }
     var showReasoningSlider by rememberSaveable { mutableStateOf(false) }
@@ -257,7 +260,7 @@ fun ChatScreen(
     val lastMessageSignature = remember(messages) {
         val last = messages.lastOrNull()
         when (last) {
-            is AssistantText -> "${last.id}:${last.reasoning?.length ?: 0}:${last.text.length}"
+            is AssistantText -> "${last.id}:${last.reasoning?.length ?: 0}:${last.textContent.length}"
             is ToolCall -> "${last.id}:${last.args.hashCode()}"
             is ToolResult -> "${last.id}:${last.output.length}"
             is UserMessage -> "${last.id}:${last.text.length}"
@@ -372,6 +375,10 @@ fun ChatScreen(
                     }
                 },
                 repositoryHighlight = repositoryHighlight,
+                // 红队工作台入口：与浏览器/仓库同层。未绑定红队的会话也给入口，
+                // 用户正是要从这里进去把目标与授权范围绑上（绑定前磁贴显示「未开启」）。
+                onOpenRedTeam = { showRedTeamSheet = true },
+                redTeamActive = currentSession?.redTeamMode == RedTeamMode.RED_TEAM.id,
                 toolchainHighlight = toolchainGap, onOpenToolchain = { showToolchainPanel = true },
                 onOpenReasoning = { showReasoningSlider = true }, companion = companion, speech = speech,
             )
@@ -621,6 +628,9 @@ fun ChatScreen(
             onDeleteMemory = { arg0 -> viewModel?.deleteMemory(arg0) }, onDeleteScratchpad = { arg0 -> viewModel?.deleteScratchpad(arg0) },
             onClearScratchpads = { viewModel?.clearScratchpads() }, onDismiss = { showMemorySheet = false })
     }
+
+    // 红队工作台：挂完整控制台（判空收口在 host 内，本文件已顶到行数棘轮上限）
+    RedTeamWorkbenchSheetHost(showRedTeamSheet, currentSession, viewModel) { showRedTeamSheet = false }
 
     branchFromMessageId?.let { messageId ->
         CreateBranchDialog(messageId = messageId, onDismiss = { branchFromMessageId = null },

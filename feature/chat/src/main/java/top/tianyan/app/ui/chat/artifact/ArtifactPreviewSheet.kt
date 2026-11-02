@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -26,7 +27,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -52,6 +52,12 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -68,6 +74,9 @@ import top.tianyan.app.ui.components.RuntimeIconButton
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.RuntimeOutlinedButton
 import top.tianyan.app.ui.components.SyntaxHighlighter
+/** 行号栏总宽（等宽数字 + 右间距），正文宽度实测时会额外预留同样宽度。 */
+private val GUTTER_WIDTH = 48.dp
+
 enum class ArtifactViewMode {
     PREVIEW,
     CODE,
@@ -302,46 +311,37 @@ fun ArtifactPreviewSheet(
                     }
 
                     ArtifactViewMode.CODE -> {
-                        // 语法高亮代码模式（支持浅色/暗黑主题自适应 + 手势缩放）
-                        val highlighted = remember(editableContent, extension, isDark) {
-                            SyntaxHighlighter.highlight(editableContent, extension, isDark = isDark)
+                        // 语法高亮代码模式（浅色/暗黑自适配 + 手势缩放）
+                        // 行号与正文合并成 LazyColumn（一条 item = 一行）：万行文件只在可视区组合，
+                        // 不再同帧建 N 个 Text + 一份覆盖全文的巨型 AnnotatedString（ANR 级）。
+                        val codeLines = remember(editableContent, extension, isDark) {
+                            SyntaxHighlighter.highlightLines(editableContent, extension, isDark = isDark)
                         }
-                        val lines = remember(editableContent) { editableContent.lines() }
                         val codeFontSize = (12 * zoomScale).sp
                         val codeLineHeight = (18 * zoomScale).sp
-
-                        SelectionContainer {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .verticalScroll(rememberScrollState())
-                                    .horizontalScroll(rememberScrollState())
-                                    .padding(12.dp),
-                            ) {
-                                // 行号栏
-                                Column(
-                                    modifier = Modifier.padding(end = 12.dp),
-                                    horizontalAlignment = Alignment.End,
-                                ) {
-                                    lines.indices.forEach { idx ->
-                                        Text(
-                                            text = "${idx + 1}",
-                                            fontFamily = FontFamily.Monospace,
-                                            fontSize = codeFontSize,
-                                            lineHeight = codeLineHeight,
-                                            color = lineNumColor,
-                                        )
+                        val codeStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = codeFontSize,
+                            lineHeight = codeLineHeight)
+                        // 等宽字体下按最长行实测内容宽（TextMeasurer 天然跟随 fontScale），横向滚动交给外层
+                        val measurer = rememberTextMeasurer()
+                        val density = LocalDensity.current
+                        val contentWidth = remember(codeLines, codeStyle) {
+                            val widest = codeLines.maxByOrNull { it.length }
+                            val px = widest?.let { measurer.measure(it, codeStyle).size.width } ?: 0
+                            with(density) { px.toDp() } + GUTTER_WIDTH
+                        }
+                        BoxWithConstraints(Modifier.fillMaxSize()) {
+                            val viewportWidth = maxWidth
+                            Box(Modifier.fillMaxSize().horizontalScroll(rememberScrollState())) {
+                                LazyColumn(Modifier.fillMaxHeight().width(maxOf(contentWidth, viewportWidth))) {
+                                    itemsIndexed(codeLines) { idx, line ->
+                                        Row(Modifier.fillMaxWidth()) {
+                                            Text("${idx + 1}", style = codeStyle, color = lineNumColor, maxLines = 1,
+                                                textAlign = TextAlign.End,
+                                                modifier = Modifier.width(GUTTER_WIDTH).padding(end = 12.dp))
+                                            Text(line, style = codeStyle, color = codeTextColor, maxLines = 1)
+                                        }
                                     }
                                 }
-
-                                // 语法高亮正文
-                                Text(
-                                    text = highlighted,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = codeFontSize,
-                                    lineHeight = codeLineHeight,
-                                    color = codeTextColor,
-                                )
                             }
                         }
                     }

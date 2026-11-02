@@ -129,6 +129,14 @@ interface HarnessRuntimeDao : HarnessBranchQueries, HarnessTaskCompletionQueries
     @Query("SELECT * FROM harness_operations WHERE sessionId = :sessionId AND status IN ('running', 'waiting_approval', 'suspended', 'aborting') ORDER BY startedAt")
     suspend fun listActiveOperations(sessionId: String): List<HarnessOperationEntity>
 
+    /**
+     * 归一上个进程留下的残骸：进程重启后这些行不可能还有协程在写库，却会永久占住 lane，
+     * 并使本地备份的"执行态表已清空"闸门永远无法通过。只动 running/aborting，
+     * waiting_approval 必须保留（审批仍在有效期内可恢复）。
+     */
+    @Query("UPDATE harness_operations SET status = 'suspended', phase = 'checkpoint', updatedAt = :now WHERE status IN ('running', 'aborting') AND updatedAt <= :before")
+    suspend fun suspendStaleOperations(before: Long, now: Long): Int
+
     @Query("UPDATE harness_lanes SET currentOperationId = NULL, updatedAt = :updatedAt, faulted = :faulted WHERE sessionId = :sessionId AND name = :laneName AND currentOperationId = :operationId")
     suspend fun clearLaneOperationIfCurrent(sessionId: String, laneName: String, operationId: String, updatedAt: Long, faulted: Boolean): Int
 

@@ -604,7 +604,7 @@ class ChatViewModel(
                 list.lastOrNull()?.id,
                 list.lastOrNull()?.let { m ->
                     when (m) {
-                        is AssistantText -> m.text.length
+                        is AssistantText -> m.textContent.length
                         is ToolResult -> m.output.length
                         is UserMessage -> m.text.length
                         else -> 0
@@ -993,10 +993,7 @@ class ChatViewModel(
 
     private val _notice = MutableStateFlow<String?>(null)
     val notice: StateFlow<String?> = _notice.asStateFlow()
-
-    fun clearNotice() {
-        _notice.value = null
-    }
+    fun clearNotice() { _notice.value = null }
 
     fun onAttachmentsPicked(uris: List<Uri>, isImage: Boolean) {
         if (uris.isEmpty()) return
@@ -1067,6 +1064,8 @@ class ChatViewModel(
                 RunningSendMode.QUEUE -> harnessLoop.send(effectiveText, imageUrls = imageUrls)
             }
         }
+        // 红队会话：消息里带演练目标（如「测试 example.com」）时自动提议绑定目标与授权范围。
+        maybeAutoBindRedTeamTarget(effectiveText)
     }
 
     private companion object {
@@ -1481,7 +1480,7 @@ private fun synthesizeHistoricalEvents(sessionId: String, messages: List<Harness
                         round = currentRound,
                         entryId = msg.id,
                         inputTokens = 0L,
-                        outputTokens = msg.text.length.toLong(),
+                        outputTokens = msg.textContent.length.toLong(),
                     )
                 )
             }

@@ -30,12 +30,18 @@ internal val ChatRenderItem.stepRawIndex: Int
         else -> -1
     }
 
+/** 渲染项对应的最小原始消息下标（过程链取链内首个步骤）；无对应消息时 -1。 */
+internal val ChatRenderItem.firstRawIndex: Int
+    get() = if (this is ToolStepsItem) steps.minOfOrNull { it.stepRawIndex } ?: -1 else stepRawIndex
+
 internal fun projectChatTimeline(
     messages: List<HarnessMessage>, toolResults: Map<String, ToolResult> = emptyMap(),
     expandedOverrides: Map<String, Boolean> = emptyMap(), collapseEnabled: Boolean = false,
-    revealLimits: Map<String, Int> = emptyMap(),
+    revealLimits: Map<String, Int> = emptyMap(), rawIndexOffset: Int = 0,
 ): List<ChatRenderItem> =
-    groupToolSteps(splitReasoning(projectChatMessages(messages, toolResults, expandedOverrides, collapseEnabled, revealLimits)))
+    groupToolSteps(splitReasoning(projectChatMessages(
+        messages, toolResults, expandedOverrides, collapseEnabled, revealLimits, rawIndexOffset,
+    )))
 
 /**
  * 把带推理的助手消息拆成「思考步骤 + 正文」。
@@ -48,7 +54,7 @@ private fun splitReasoning(items: List<ChatRenderItem>): List<ChatRenderItem> = 
         val reasoning = (message as? AssistantText)?.reasoning
         if (message is AssistantText && !reasoning.isNullOrBlank()) {
             add(ChatRenderItem.ReasoningItem(message.id, reasoning, message.reasoningMs, item.stepRawIndex))
-            if (message.text.isNotBlank()) add(item.copy(showReasoning = false))
+            if (message.textContent.hasText) add(item.copy(showReasoning = false))
         } else {
             add(item)
         }
@@ -131,7 +137,7 @@ internal fun assistantToolbarIds(messages: List<HarnessMessage>, running: Boolea
         if (message is UserMessage) {
             candidate?.let(::add)
             candidate = null
-        } else if (message is AssistantText && message.text.isNotBlank()) candidate = message.id
+        } else if (message is AssistantText && message.textContent.hasText) candidate = message.id
     }
     if (!running) candidate?.let(::add)
 }

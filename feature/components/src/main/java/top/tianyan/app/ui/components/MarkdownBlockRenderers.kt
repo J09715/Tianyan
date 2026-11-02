@@ -37,6 +37,8 @@ internal fun TableBlock(table: MdTable) {
     val colCount = (listOf(table.headers) + table.rows).maxOfOrNull { it.size } ?: 0
     if (colCount == 0) return
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    // 列宽估算必须跟随系统字号缩放：1.5× 字体下按 7.4dp/字符算出的宽度会把文字裁掉。
+    val fontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale
     val headerBg = if (isDark) {
         MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
     } else {
@@ -48,7 +50,7 @@ internal fun TableBlock(table: MdTable) {
         val widest = (listOf(table.headers) + table.rows)
             .mapNotNull { it.getOrNull(c) }
             .maxOfOrNull { displayWidthOf(it) } ?: 1
-        (widest * 7.4f).dp.coerceIn(56.dp, 260.dp)
+        (widest * 7.4f * fontScale).dp.coerceIn(56.dp * fontScale, 260.dp * fontScale)
     }
 
     Surface(

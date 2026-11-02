@@ -23,7 +23,6 @@ internal fun sendText(exchange: AndroidHttpExchange, code: Int, text: String) =
 
 internal fun sendResponse(exchange: AndroidHttpExchange, code: Int, contentType: String, bytes: ByteArray) {
     exchange.responseHeaders.add("Content-Type", contentType)
-    applyCorsHeaders(exchange)
     exchange.sendResponseHeaders(code, bytes.size.toLong())
     if (bytes.isNotEmpty()) exchange.responseBody.write(bytes)
     exchange.close()
@@ -43,7 +42,6 @@ internal fun sendFileResponse(
     fileName: String? = null,
 ) {
     exchange.responseHeaders.add("Content-Type", contentType)
-    applyCorsHeaders(exchange)
     fileName?.let { name ->
         exchange.responseHeaders.add("Content-Disposition", "attachment; filename=\"${name.replace("\"", "")}\"")
     }
@@ -51,12 +49,6 @@ internal fun sendFileResponse(
     file.inputStream().use { input -> input.copyTo(exchange.responseBody, DEFAULT_FILE_COPY_BUFFER_BYTES) }
     exchange.responseBody.flush()
     exchange.close()
-}
-
-private fun applyCorsHeaders(exchange: AndroidHttpExchange) {
-    exchange.responseHeaders.add("Access-Control-Allow-Origin", "*")
-    exchange.responseHeaders.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
-    exchange.responseHeaders.add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 }
 
 private const val DEFAULT_FILE_COPY_BUFFER_BYTES = 64 * 1024

@@ -62,7 +62,7 @@
     <string name="profile_transfer_confirm">Confirm import</string>
     <string name="profile_transfer_cancel">Cancel</string>
     <string name="profile_transfer_edit">Back to edit</string>
-    <string name="local_backup_error_busy">Agent tasks are unfinished, including paused tasks or tasks awaiting approval. End them and try again.</string>
+    <string name="local_backup_error_busy">Agent tasks are still running. End them and try again (paused tasks and tasks awaiting approval no longer block backups).</string>
     <string name="local_backup_error_version">The backup data version or fields are incompatible with this app. Check the app versions used to export and restore.</string>
     <string name="local_backup_error_changed">Data changed or the preview expired. Select the backup again and preview before restoring.</string>
     <string name="local_backup_error_archive">Backup manifest or resource verification failed. Select a complete 天衍 backup ZIP or export it again.</string>

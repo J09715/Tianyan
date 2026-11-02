@@ -18,7 +18,8 @@ sealed interface AppDestination : NavKey
 @Serializable data object SettingsDestination : AppDestination
 @Serializable data object SettingsSearchDestination : AppDestination
 @Serializable data object AgentEcoSettingsDestination : AppDestination
-@Serializable data object LinuxEnvSettingsDestination : AppDestination
+/** Linux 环境设置页；openWebChat=true 时进入即展开 Web 协作台弹窗（设置搜索「网页对话」直达）。 */
+@Serializable data class LinuxEnvSettingsDestination(val openWebChat: Boolean = false) : AppDestination
 @Serializable data object AppearanceSettingsDestination : AppDestination
 @Serializable data object SystemDevSettingsDestination : AppDestination
 @Serializable data object AboutCommunityDestination : AppDestination

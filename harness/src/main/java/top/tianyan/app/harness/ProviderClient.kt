@@ -439,7 +439,7 @@ internal class ChatApi(
             })
         }
         return Request.Builder()
-            .url("${model.baseUrl.trimEnd('/')}/chat/completions")
+            .url(secureProviderUrl(model.baseUrl, "chat/completions"))
             .header("Content-Type", "application/json")
             .apply {
                 model.apiKey?.let { header("Authorization", "Bearer $it") }

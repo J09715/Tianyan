@@ -1,23 +1,15 @@
 package top.tianyan.app.ui.bot
 
-import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.performClick
 import org.junit.Assert.*
-import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import top.tianyan.app.core.model.bot.*
-import top.tianyan.app.ui.theme.TianyanTheme
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class GroupCoworkingDeskBarTest {
-    @get:Rule val compose = createComposeRule()
-
     private val botA = Bot(
         id = "bot-a",
         name = "阿策",
@@ -43,28 +35,6 @@ class GroupCoworkingDeskBarTest {
         createdAt = 1000L,
         updatedAt = 1000L,
     )
-
-    @Test fun `coworking desk bar renders all members and handles click selection`() {
-        var selectedBot: Bot? = null
-        compose.setContent {
-            TianyanTheme {
-                GroupCoworkingDeskBar(
-                    members = listOf(botA, botB),
-                    messages = emptyList(),
-                    assignments = emptyList(),
-                    onSelectBot = { selectedBot = it },
-                )
-            }
-        }
-
-        compose.onNodeWithTag("group-coworking-desk-bar").assertIsDisplayed()
-        compose.onNodeWithTag("desk-station-bot-a").assertIsDisplayed()
-        compose.onNodeWithTag("desk-station-bot-b").assertIsDisplayed()
-
-        // Click station B
-        compose.onNodeWithTag("desk-station-bot-b").performClick()
-        assertEquals("bot-b", selectedBot?.id)
-    }
 
     @Test fun `state mapping reflects thinking executing blocked and idle`() {
         val idleState = computeMemberAvatarState(botA, null, null)

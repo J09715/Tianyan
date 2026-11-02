@@ -388,7 +388,7 @@ private fun DaemonServiceCard(
                         Text("一键复制", style = MaterialTheme.typography.labelSmall)
                     }
                     RuntimeTextButton(
-                        onClick = { onResetPassword("admin123") },
+                        onClick = { onResetPassword(generateCcSwitchPassword()) },
                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
                     ) {
                         Text("重置密码", style = MaterialTheme.typography.labelSmall)

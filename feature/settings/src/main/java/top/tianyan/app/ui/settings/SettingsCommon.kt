@@ -52,6 +52,8 @@ import top.tianyan.app.runtime.webchat.WebChatServerStatus
 fun WebChatBridgeDialog(
     status: WebChatServerStatus,
     toggling: Boolean = false,
+    allowLan: Boolean = false,
+    onLanChange: ((Boolean) -> Unit)? = null,
     onToggle: (Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -73,6 +75,30 @@ fun WebChatBridgeDialog(
                     text = "在同一 Wi-Fi / 局域网下，通过电脑浏览器连接天衍智枢，同步处理 Agent 任务、对话与 Linux 工作区文件。",
                     style = MaterialTheme.typography.bodyMedium,
                 )
+
+                if (onLanChange != null) {
+                    RuntimeCard(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text("允许局域网访问", style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    "关闭时仅监听 127.0.0.1（只有本机浏览器可连）；开启后同一 Wi-Fi 下的电脑才能访问。",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            RuntimeSwitch(
+                                checked = allowLan,
+                                onCheckedChange = onLanChange,
+                                enabled = !toggling,
+                            )
+                        }
+                    }
+                }
 
                 RuntimeCard(
                     modifier = Modifier.fillMaxWidth(),

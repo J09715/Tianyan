@@ -103,6 +103,8 @@ interface HarnessRuntimeRepository {
     }
     suspend fun beginOperation(lane: HarnessLaneEntity, operation: HarnessOperationEntity)
     suspend fun saveOperation(operation: HarnessOperationEntity)
+    /** 见 HarnessRuntimeDao.suspendStaleOperations；默认无操作以便既有测试替身不受影响。 */
+    suspend fun suspendStaleOperations(before: Long, now: Long): Int = 0
     suspend fun settleEffect(entry: HarnessEntryEntity?, usage: HarnessUsageEntity?, operation: HarnessOperationEntity, lane: HarnessLaneEntity)
     suspend fun finishOperation(result: HarnessLaneResultEntity, lane: HarnessLaneEntity)
     suspend fun completeTaskOperation(taskId: String, result: HarnessLaneResultEntity,
@@ -327,6 +329,7 @@ class RoomHarnessRuntimeRepository(
         dao.acceptTaskOperation(taskId, sanitizeForStorage(unique), lane.copy(leafId = unique.id), operation, queueItemId)
     }
     override suspend fun saveOperation(operation: HarnessOperationEntity) = dao.upsertOperation(operation)
+    override suspend fun suspendStaleOperations(before: Long, now: Long): Int = dao.suspendStaleOperations(before, now)
     override suspend fun acceptRunTakeover(queueItemId: String?, entry: HarnessEntryEntity?, lane: HarnessLaneEntity,
         operation: HarnessOperationEntity, previousLane: HarnessLaneEntity,
         previousResult: HarnessLaneResultEntity?, taskId: String?) {

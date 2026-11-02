@@ -53,6 +53,8 @@ fun LinuxEnvironmentSettingsScreen(
     onOpenEnvironmentVariables: () -> Unit,
     onOpenSshSettings: () -> Unit,
     onOpenFtpSettings: () -> Unit,
+    /** 直接展开 Web 协作台弹窗（设置搜索「网页对话」跳进来时为 true）。 */
+    openWebChatOnEntry: Boolean = false,
     viewModel: SettingsViewModel? = previewOrNull { koinViewModel() },
 ) {
     val executionMode by viewModel?.executionMode?.collectAsStateWithLifecycle() ?: previewStateOf(top.tianyan.app.core.model.ExecutionMode.PROOT)
@@ -63,10 +65,12 @@ fun LinuxEnvironmentSettingsScreen(
     val webChatStatus by viewModel?.webChatStatus?.collectAsStateWithLifecycle() ?: previewStateOf(top.tianyan.app.runtime.webchat.WebChatServerStatus())
 
     var showExecutionModeDialog by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
-    var showWebChatDialog by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    var showWebChatDialog by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(openWebChatOnEntry) }
     var privilegeResultMessage by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
     // Web 开关切换进行中指示，防止重复点击
     var webChatToggling by remember { mutableStateOf(false) }
+    // 局域网暴露必须显式打开；默认 false（只绑 127.0.0.1）。
+    var webChatAllowLan by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(webChatStatus.isRunning) { webChatToggling = false }
 
     if (showExecutionModeDialog) {
@@ -105,9 +109,17 @@ fun LinuxEnvironmentSettingsScreen(
         WebChatBridgeDialog(
             status = webChatStatus,
             toggling = webChatToggling,
+            allowLan = webChatAllowLan,
+            onLanChange = { allow ->
+                webChatAllowLan = allow
+                if (webChatStatus.isRunning) {
+                    webChatToggling = true
+                    viewModel?.toggleWebChatServer(true, allowLan = allow)
+                }
+            },
             onToggle = { enabled ->
                 webChatToggling = true
-                viewModel?.toggleWebChatServer(enabled)
+                viewModel?.toggleWebChatServer(enabled, allowLan = webChatAllowLan)
             },
             onDismiss = { showWebChatDialog = false },
         )

@@ -199,6 +199,16 @@ class OperationCoordinator(
         return repository.listActiveOperations(sessionId).firstOrNull { it.laneName == laneName }
     }
 
+    /**
+     * 进程重启后归一上个进程遗留的 running/aborting 操作。
+     *
+     * 这些行不存在对应的协程，却会让 lane 永久处于"有活动操作"，并使本地备份无法进行
+     * （备份要求执行态表干净）。waiting_approval 不在此列：审批可能仍在有效期内可恢复。
+     *
+     * @param before 本次启动的时间戳；只处理该时刻之前更新的行，避免误伤本次恢复流程新建的操作。
+     */
+    suspend fun suspendStale(before: Long): Int = repository.suspendStaleOperations(before, System.currentTimeMillis())
+
     suspend fun completeTask(sessionId: String, taskId: String): TaskDelivery {
         val lane = repository.findLane(sessionId, SessionTreeStore.MAIN_LANE) ?: error("Delivery lane missing")
         val operation = requireOperation(lane.currentOperationId ?: error("Delivery operation missing"))

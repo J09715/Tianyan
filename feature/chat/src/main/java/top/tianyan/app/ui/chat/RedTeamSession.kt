@@ -12,6 +12,7 @@ import top.tianyan.app.core.database.updateRedTeamBinding
 import top.tianyan.app.core.database.RedTeamFactEntity
 import top.tianyan.app.core.model.RedTeamMode
 import top.tianyan.app.core.model.RedTeamPhase
+import top.tianyan.app.core.model.RedTeamTargetExtractor
 
 /**
  * 红队会话状态的实现（从 ChatViewModel 拆出）。
@@ -65,4 +66,24 @@ internal fun ChatViewModel.bindRedTeam(
             updatedAt = System.currentTimeMillis(),
         )
     }
+}
+
+/**
+ * 用户发消息时的红队自动绑定：消息里能认出演练目标、且该目标还没绑定时，
+ * 直接按默认授权范围绑定并给出提示——不再逼用户把「帮我测 example.com」抄进表单。
+ *
+ * 只在红队会话（mode=RED_TEAM）生效：普通会话里的 URL/域名太多了，
+ * 误绑比不绑危险（后续所有派活和越界校验都挂在目标上）。
+ */
+internal fun ChatViewModel.maybeAutoBindRedTeamTarget(text: String?) {
+    val sessionId = currentSessionId.value.takeIf { it.isNotBlank() } ?: return
+    val hit = RedTeamTargetExtractor.extract(text) ?: return
+    // 经公开的 sessions 快照读当前会话：sessionDao 是 ViewModel 私有构造参数，扩展拿不到。
+    val session = sessions.value.firstOrNull { it.id == sessionId } ?: return
+    if (session.redTeamMode != RedTeamMode.RED_TEAM.id) return
+    // 已绑定同一目标就不重复写；绑定了别的目标也不覆盖——显式绑定优先于自动识别。
+    if (!session.redTeamTarget.isNullOrBlank()) return
+    val scope = RedTeamTargetExtractor.defaultScope(hit)
+    bindRedTeamTarget(hit.target, scope)
+    redTeamConsoleController.proposeAutoBind(hit.target, scope)
 }

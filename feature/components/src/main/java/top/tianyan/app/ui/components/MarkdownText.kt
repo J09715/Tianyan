@@ -97,6 +97,7 @@ import top.tianyan.app.ui.components.RuntimeCircularProgressIndicator as Circula
 import top.tianyan.app.ui.components.RuntimeIcon
 import top.tianyan.app.ui.components.RuntimeIconName
 import top.tianyan.app.ui.components.SyntaxHighlighter
+import top.tianyan.app.ui.theme.semanticColors
 import android.util.Log
 import java.io.File
 
@@ -161,12 +162,32 @@ fun StreamingMarkdownText(
 @Composable
 private fun MarkdownBlocks(blocks: List<MdBlock>, modifier: Modifier, cacheKey: String?) {
     SelectionContainer {
-        Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // 间距按「上一块 → 下一块」的类型分别给，不再一律 8dp：
+        // 一律同距会让标题糊进上文、代码块与表格贴着段落边，整段回复看上去挤成一团。
+        Column(modifier = modifier) {
             blocks.forEachIndexed { index, block ->
+                if (index > 0) {
+                    Spacer(Modifier.height(markdownBlockSpacing(blocks[index - 1], block).dp))
+                }
                 key(index) { MarkdownBlock(block, cacheKey?.let { "$it:media:$index" }) }
             }
         }
     }
+}
+
+/** 相邻两个 Markdown 块之间的留白（dp）。纯函数，便于单测与调参。 */
+internal fun markdownBlockSpacing(previous: MdBlock, next: MdBlock): Float = when {
+    // 标题自成一段：上文留足，下文紧跟正文
+    next is MdHeading -> if (next.level <= 2) 16f else 11f
+    previous is MdHeading -> if (previous.level <= 2) 10f else 7f
+    // 代码块与表格是「重块」，四周需要更明显的呼吸区
+    previous is MdCodeBlock || next is MdCodeBlock -> 12f
+    previous is MdTable || next is MdTable -> 12f
+    previous is MdRemoteMedia || next is MdRemoteMedia -> 10f
+    previous is MdHr || next is MdHr -> 12f
+    // 相邻列表块是同一组条目被空行切开，靠紧一点才像一串
+    previous is MdList && next is MdList -> 6f
+    else -> 9f
 }
 
 @Composable
@@ -182,8 +203,6 @@ private fun MarkdownBlock(block: MdBlock, mediaCacheKey: String?) {
                 else -> MaterialTheme.typography.titleSmall
             },
             bold = true,
-            // 标题与上文之间留白：二级及以上给 6dp，一屏内多个标题不再糊成一段。
-            modifier = Modifier.padding(top = if (block.level <= 2) 6.dp else 2.dp),
         )
         is MdCodeBlock -> CodeBlock(block)
         is MdList -> ListBlock(block)
@@ -196,7 +215,10 @@ private fun MarkdownBlock(block: MdBlock, mediaCacheKey: String?) {
 
 // ---------- 解析 ----------
 
-private val inlineSpanCache = LruCache<String, AnnotatedString>(500)
+/** 行内 span 缓存按**字符数**计费（不是条数）：500 条 × 100 KB 正文可常驻数百 MB。 */
+internal val inlineSpanCache = object : LruCache<String, AnnotatedString>(INLINE_SPAN_CACHE_CHARS) {
+    override fun sizeOf(key: String, value: AnnotatedString) = (key.length + value.length).coerceAtLeast(1)
+}
 private val LocalMarkdownCacheEnabled = staticCompositionLocalOf { true }
 
 @Composable
@@ -210,8 +232,9 @@ internal fun InlineText(
     val linkColor = MaterialTheme.colorScheme.primary
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val cacheEnabled = LocalMarkdownCacheEnabled.current
-    val inlineCodeBg = if (isDark) Color(0xFF21262D) else Color(0xFFEFF1F4)
-    val inlineCodeColor = if (isDark) Color(0xFF79C0FF) else Color(0xFF0969DA)
+    // 行内代码走语义令牌（随明暗主题与动态色板切换），不再硬编码 GitHub 色板。
+    val inlineCodeBg = semanticColors().codeSurface
+    val inlineCodeColor = semanticColors().code
     val annotated = remember(text, bold, linkColor, isDark, cacheEnabled) {
         buildInline(text, bold, linkColor, inlineCodeBg, inlineCodeColor, cacheEnabled)
     }
@@ -678,10 +701,10 @@ private fun CodeBlock(block: MdCodeBlock) {
         SyntaxHighlighter.highlight(block.code, block.language, isDark = isDark)
     }
 
-    val containerBg = if (isDark) Color(0xFF0D1117) else Color(0xFFF6F8FA)
-    val headerBg = if (isDark) Color(0xFF161B22) else Color(0xFFEAEEF2)
-    val borderColor = if (isDark) Color(0xFF30363D) else Color(0xFFD0D7DE)
-    val headerTextColor = if (isDark) Color(0xFF8B949E) else Color(0xFF57606A)
+    val containerBg = semanticColors().codeSurface
+    val headerBg = MaterialTheme.colorScheme.surfaceContainerHigh
+    val borderColor = MaterialTheme.colorScheme.outlineVariant
+    val headerTextColor = MaterialTheme.colorScheme.onSurfaceVariant
 
     Surface(
         color = containerBg,
@@ -702,7 +725,6 @@ private fun CodeBlock(block: MdCodeBlock) {
                 Text(
                     text = if (block.language.isNotBlank()) block.language.uppercase() else stringResource(R.string.components_md_code_badge),
                     style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 10.5.sp,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.SemiBold,
                     ),
@@ -725,7 +747,7 @@ private fun CodeBlock(block: MdCodeBlock) {
                         )
                         Text(
                             text = stringResource(R.string.components_md_copy),
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                            style = MaterialTheme.typography.labelSmall,
                             color = headerTextColor,
                         )
                     }
@@ -739,14 +761,9 @@ private fun CodeBlock(block: MdCodeBlock) {
                     .horizontalScroll(rememberScrollState())
                     .padding(horizontal = 10.dp, vertical = 7.dp),
             ) {
-                Text(
-                    text = highlightedText,
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 11.5.sp,
-                        lineHeight = 16.5.sp,
-                    ),
-                )
+                // 代码正文用 bodySmall 的同档字高（11/16 成对），不再自造 11.5/16.5。
+                Text(highlightedText, style = MaterialTheme.typography.bodySmall.copy(
+                    fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 16.sp))
             }
         }
     }

@@ -33,9 +33,36 @@ internal val inlineWebUrlRegex = Regex("https?://[^\\s<>\\[\\]{}\"']+", RegexOpt
 /** 视为图片的 URL 后缀（原始 URL 嵌在段落中时，匹配这些后缀则渲染为图片）。 */
 private val imageFileExtensions = setOf("jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "avif", "heic", "heif")
 
-private val markdownBlockCache by lazy { LruCache<String, List<MdBlock>>(300) }
+/** 缓存额度按**字符数**计费（不是条数）：单条正文上限 128 KB 时 300 条可常驻 ≈38 MB。 */
+internal const val MARKDOWN_BLOCK_CACHE_CHARS = 8 * 1024 * 1024
+internal const val LARGE_MARKDOWN_CACHE_CHARS = 2 * 1024 * 1024
+internal const val INLINE_SPAN_CACHE_CHARS = 8 * 1024 * 1024
+
+private val markdownBlockCache by lazy {
+    object : LruCache<String, List<MdBlock>>(MARKDOWN_BLOCK_CACHE_CHARS) {
+        override fun sizeOf(key: String, value: List<MdBlock>) = (key.length + blockChars(value)).coerceAtLeast(1)
+    }
+}
 /** Generated image / oversized markdown is expensive to parse; retain a few by message id + content fingerprint. */
-private val largeMarkdownBlockCache by lazy { LruCache<String, CachedMarkdownBlocks>(4) }
+private val largeMarkdownBlockCache by lazy {
+    object : LruCache<String, CachedMarkdownBlocks>(LARGE_MARKDOWN_CACHE_CHARS) {
+        override fun sizeOf(key: String, value: CachedMarkdownBlocks) = (key.length + blockChars(value.blocks)).coerceAtLeast(1)
+    }
+}
+
+/** 一条 [MdBlock] 的字符占用（正文 + 语言标签），缓存预算按它计费。 */
+private fun blockChars(blocks: List<MdBlock>): Int = blocks.sumOf { block ->
+    when (block) {
+        is MdParagraph -> block.text.length
+        is MdHeading -> block.text.length
+        is MdCodeBlock -> block.language.length + block.code.length
+        is MdList -> block.items.sumOf { it.text.length }
+        is MdQuote -> block.lines.sumOf { it.length }
+        is MdTable -> block.headers.sumOf { it.length } + block.rows.sumOf { row -> row.sumOf { it.length } }
+        is MdRemoteMedia -> block.url.length + block.description.length
+        MdHr -> 0
+    }
+}
 
 private data class CachedMarkdownBlocks(
     val fingerprint: Int,
@@ -290,6 +317,12 @@ internal fun trimUrlPunctuation(value: String): String {
 
 
 internal const val MARKDOWN_CACHE_MAX_CHARS = 128_000
+
+/** 运行期内存回收入口：三套 markdown/span 缓存全部丢弃（重算即可再生），由 onTrimMemory/看门狗调用。 */
+fun evictMarkdownCaches() {
+    clearParsedMarkdownCaches()
+    inlineSpanCache.evictAll()
+}
 
 internal fun clearParsedMarkdownCaches() {
     markdownBlockCache.evictAll()

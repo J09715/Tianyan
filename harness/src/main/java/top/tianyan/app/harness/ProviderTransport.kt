@@ -20,11 +20,17 @@ internal class ProviderTransport(
         .addInterceptor(ProviderRequestBudget())
         .callTimeout(5 * 60 * 1_000L, TimeUnit.MILLISECONDS)
         .readTimeout(ProviderClient.READ_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        // Provider 请求不跟随重定向：https 被 302 降级到 http 时 OkHttp 会保留鉴权头，
+        // 等于把 API Key 明文送出。baseUrl 已由 secureProviderUrl 强制 https（回环除外）。
+        .followRedirects(false)
+        .followSslRedirects(false)
         .build()
     private val streamClient = client.newBuilder()
         .addInterceptor(ProviderRequestBudget())
         .callTimeout(0, TimeUnit.MILLISECONDS)
         .readTimeout(REASONING_STREAM_WAIT_MS, TimeUnit.MILLISECONDS)
+        .followRedirects(false)
+        .followSslRedirects(false)
         .build()
     private val ordinaryApis = adapters(httpClient)
     private val streamApis = adapters(streamClient)

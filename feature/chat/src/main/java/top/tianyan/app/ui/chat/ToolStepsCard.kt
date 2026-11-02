@@ -4,6 +4,7 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -45,8 +46,9 @@ internal fun ToolStepsCard(item: ToolStepsItem, results: Map<String, ToolResult>
         toolStepState(results[id], executing) in
             setOf(ToolStepState.FAILED, ToolStepState.UNKNOWN, ToolStepState.WAITING, ToolStepState.DEFERRED)
     }
-    Column(Modifier.fillMaxWidth().then(chatGreetingModifier()).animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec())) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 28.dp).clickable {
+    Column(Modifier.fillMaxWidth().then(Modifier.chatMessageContainer()).animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec())) {
+        // 48dp 触控下限：这一行是「读过程链」的唯一入口，28dp 高在全宽横条上极易点空。
+        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable {
             expanded = !expanded
             if (!expanded) focus?.value = null
         }.semantics { stateDescription = stateLabel }.padding(horizontal = 2.dp, vertical = 4.dp),
@@ -62,7 +64,8 @@ internal fun ToolStepsCard(item: ToolStepsItem, results: Map<String, ToolResult>
         if (expanded) Column(Modifier.fillMaxWidth().padding(start = 8.dp).drawBehind {
             drawLine(lineColor, Offset.Zero, Offset(0f, size.height), strokeWidth = 1.dp.toPx())
         }.padding(start = 12.dp)) {
-            if (hidden > 0) RuntimeTextButton(onClick = { visibleCount += 8 }, modifier = Modifier.height(28.dp),
+            if (hidden > 0) RuntimeTextButton(onClick = { visibleCount += 8 },
+                modifier = Modifier.minimumInteractiveComponentSize().height(28.dp),
                 contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp)) {
                 Text(stringResource(R.string.chat_steps_show_more, hidden), style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)

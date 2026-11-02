@@ -477,7 +477,7 @@ internal class AnthropicApi(
         }
 
         return Request.Builder()
-            .url("${model.baseUrl.trimEnd('/')}/messages")
+            .url(secureProviderUrl(model.baseUrl, "messages"))
             .header("Content-Type", "application/json")
             .header("anthropic-version", ANTHROPIC_VERSION)
             .apply {

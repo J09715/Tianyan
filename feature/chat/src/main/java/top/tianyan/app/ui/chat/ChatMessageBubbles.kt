@@ -47,6 +47,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import top.tianyan.app.ui.components.RuntimeIconButton as IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import top.tianyan.app.ui.components.RuntimeTextButton as TextButton
@@ -173,7 +174,7 @@ internal fun UserBubble(
                     onClick = { showMenu = true },
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
                     shape = CircleShape,
-                    modifier = Modifier.size(28.dp),
+                    modifier = Modifier.minimumInteractiveComponentSize().size(28.dp),
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         RuntimeIcon(
@@ -443,7 +444,7 @@ internal fun AssistantBubble(
             }
         }
 
-        if (message.text.isNotBlank()) ChatReadableMessage {
+        if (message.textContent.hasText) ChatReadableMessage {
             if (live) {
                 val liveImageDataStart = remember(message.text) {
                     message.text.indexOf("data:image/", ignoreCase = true)
@@ -500,7 +501,7 @@ internal fun AssistantBubble(
         }
 
         // 统计区域占满剩余宽度，操作按钮始终贴右；长统计文本可收缩省略。
-        if (!live && message.text.isNotBlank()) {
+        if (!live && message.textContent.hasText) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 0.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -549,17 +550,17 @@ internal fun AssistantBubble(
                 }
 
                 if (showRegenerate) {
-                    IconButton(onClick = onRegenerate, modifier = Modifier.size(24.dp), contentDescription = stringResource(R.string.chat_regenerate)) {
+                    IconButton(onClick = onRegenerate, modifier = Modifier.minimumInteractiveComponentSize().size(24.dp), contentDescription = stringResource(R.string.chat_regenerate)) {
                         RuntimeIcon(RuntimeIconName.Refresh, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
                     }
                 }
 
-                IconButton(onClick = onCreateBranch, modifier = Modifier.size(24.dp), contentDescription = stringResource(R.string.chat_branch_from_here)) {
+                IconButton(onClick = onCreateBranch, modifier = Modifier.minimumInteractiveComponentSize().size(24.dp), contentDescription = stringResource(R.string.chat_branch_from_here)) {
                     RuntimeIcon(RuntimeIconName.GitBranch, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
 
                 // 复制按钮
-                IconButton(onClick = copyAll, modifier = Modifier.size(24.dp), contentDescription = stringResource(R.string.chat_copy)) {
+                IconButton(onClick = copyAll, modifier = Modifier.minimumInteractiveComponentSize().size(24.dp), contentDescription = stringResource(R.string.chat_copy)) {
                     RuntimeIcon(
                         RuntimeIconName.Copy,
                         Modifier.size(18.dp),
@@ -675,63 +676,47 @@ internal fun ThinkingBlock(
                 if (!live) {
                     IconButton(
                         onClick = {
-                            val isReady = translationManager?.isReady() == true
-                            if (!isReady) {
+                            if (translationManager?.isReady() != true) {
                                 showMissingModelDialog = true
+                            } else if (showTranslation) {
+                                showTranslation = false
+                            } else if (translatedText != null) {
+                                showTranslation = true
                             } else {
-                                if (showTranslation) {
-                                    showTranslation = false
-                                } else if (translatedText != null) {
-                                    showTranslation = true
-                                } else {
-                                    scope.launch {
-                                        isTranslating = true
-                                        val result = translationManager.translate(reasoning)
-                                        if (result.isSuccess) {
-                                            translatedText = result.getOrNull()
-                                            showTranslation = true
-                                        } else {
-                                            Toast.makeText(
-                                                context,
-                                                result.exceptionOrNull()?.message ?: "离线翻译失败",
-                                                Toast.LENGTH_SHORT,
-                                            ).show()
-                                        }
-                                        isTranslating = false
+                                scope.launch {
+                                    isTranslating = true
+                                    val result = translationManager.translate(reasoning)
+                                    if (result.isSuccess) {
+                                        translatedText = result.getOrNull()
+                                        showTranslation = true
+                                    } else {
+                                        Toast.makeText(
+                                            context,
+                                            result.exceptionOrNull()?.message ?: "离线翻译失败",
+                                            Toast.LENGTH_SHORT,
+                                        ).show()
                                     }
+                                    isTranslating = false
                                 }
                             }
                         },
-                        modifier = Modifier.size(18.dp),
+                        modifier = Modifier.minimumInteractiveComponentSize().size(18.dp),
                         contentDescription = if (showTranslation) "查看英文原文" else "离线翻译思考",
                     ) {
                         if (isTranslating) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 1.5.dp,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
+                            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 1.5.dp,
+                                color = MaterialTheme.colorScheme.primary)
                         } else {
-                            RuntimeIcon(
-                                RuntimeIconName.Globe,
-                                Modifier.size(18.dp),
+                            RuntimeIcon(RuntimeIconName.Globe, Modifier.size(18.dp),
                                 tint = if (showTranslation) MaterialTheme.colorScheme.primary
-                                       else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                                       else MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
 
-                IconButton(
-                    onClick = copyToClipboard,
-                    modifier = Modifier.size(18.dp),
-                    contentDescription = stringResource(R.string.chat_copy_reasoning),
-                ) {
-                    RuntimeIcon(
-                        RuntimeIconName.Copy,
-                        Modifier.size(18.dp),
-                        MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                IconButton(onClick = copyToClipboard, modifier = Modifier.minimumInteractiveComponentSize().size(18.dp),
+                    contentDescription = stringResource(R.string.chat_copy_reasoning)) {
+                    RuntimeIcon(RuntimeIconName.Copy, Modifier.size(18.dp), MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
@@ -983,16 +968,13 @@ internal fun CapabilityEventCard(event: CapabilityEvent) {
                 if (isSkill) R.string.chat_capability_skill_fmt else R.string.chat_capability_mcp_fmt,
                 event.name,
             ),
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontSize = 11.5.sp,
-                fontWeight = FontWeight.Medium,
-            ),
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
             color = MaterialTheme.colorScheme.primary,
         )
         if (event.details.isNotBlank()) {
             Text(
                 "· ${event.details}",
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -1046,10 +1028,7 @@ internal fun ModelSwitchCard(event: ModelSwitchEvent) {
                 )
                 Text(
                     title,
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.Medium,
-                    ),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -1064,7 +1043,7 @@ internal fun ModelSwitchCard(event: ModelSwitchEvent) {
         }
         Text(
             subtitle,
-            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
             modifier = Modifier.fillMaxWidth(),
             maxLines = 2,

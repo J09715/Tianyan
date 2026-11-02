@@ -59,6 +59,8 @@ data class WebChatServerStatus(
     val localIp: String = "127.0.0.1",
     val pinCode: String = "",
     val activeConnections: Int = 0,
+    /** 是否显式开放局域网绑定；false 时只监听 127.0.0.1。 */
+    val lanEnabled: Boolean = false,
 ) {
     val accessUrl: String get() = "http://$localIp:$port"
 }
@@ -89,6 +91,7 @@ class WebChatBridgeServer(
     }
 
     private val sseEmitters = ConcurrentHashMap.newKeySet<AndroidHttpExchange>()
+    private val pinGuard = WebChatPinGuard()
     private val runTracker = WebChatRunTracker(scope, agentGateway,
         messages = { sessionId, snapshot -> broadcastEvent("messages_replaced", buildJsonObject {
             put("conversationId", sessionId); put("conversationMode", "normal")
@@ -101,13 +104,15 @@ class WebChatBridgeServer(
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
 
-    fun start(port: Int = DEFAULT_WEBCHAT_PORT, pin: String? = null): Boolean {
+    fun start(port: Int = DEFAULT_WEBCHAT_PORT, pin: String? = null, allowLan: Boolean = false): Boolean {
         if (_status.value.isRunning) return true
         return try {
             val generatedPin = pin ?: generatePin()
             // 工作线程池由 AndroidHttpServer 自己持有：stop() 时随服务一起回收，
             // 不再让本类持有一个永不 shutdown 的 fixedThreadPool。
-            val server = AndroidHttpServer.create(InetSocketAddress(port), 0)
+            // 默认只绑回环：局域网访问必须由用户显式打开开关（allowLan=true）。
+            val bindAddress = if (allowLan) InetSocketAddress(port) else InetSocketAddress("127.0.0.1", port)
+            val server = AndroidHttpServer.create(bindAddress, 0)
             server.createContext("/webchat/api/session/bootstrap", SessionBootstrapHandler())
             server.createContext("/webchat/api/bootstrap", BootstrapHandler())
             server.createContext("/webchat/api/conversations", ConversationsHandler())
@@ -121,8 +126,8 @@ class WebChatBridgeServer(
             server.start()
             httpServer = server
 
-            val localIp = resolveLocalIp()
-            _status.value = WebChatServerStatus(true, port, localIp, generatedPin)
+            val localIp = if (allowLan) resolveLocalIp() else "127.0.0.1"
+            _status.value = WebChatServerStatus(true, port, localIp, generatedPin, lanEnabled = allowLan)
             acquireLocks()
             notification.show("http://$localIp:$port", generatedPin)
             heartbeatJob?.cancel()
@@ -179,7 +184,6 @@ class WebChatBridgeServer(
      * 请求协程的统一兜底。handler 在 [scope] 里异步执行，抛出的异常不会回到
      * [AndroidHttpServer] 的 accept 循环，socket 会连同工作线程一起挂住：
      * 这里保证异常路径也回一个 500 并最终关闭连接（[AndroidHttpExchange.close] 幂等）。
-     *
      * 返回 Unit 而不是 Job：调用点是 `override fun handle(...) = launchRequest(...) { }`，
      * 返回 Job 会迫使每个 handler 末尾补一个 `.let { }` 才能满足 Unit 覆写。
      */
@@ -221,9 +225,12 @@ class WebChatBridgeServer(
     private inner class SessionBootstrapHandler : AndroidHttpHandler {
         override fun handle(exchange: AndroidHttpExchange) = launchRequest(exchange) {
             if (handlePreflight(exchange)) return@launchRequest
-            val token = requestJson(exchange)["token"]?.jsonPrimitive?.content.orEmpty()
-            if (token != _status.value.pinCode) sendJson(exchange, 401, errorJson("配对码不正确"))
-            else sendJson(exchange, 200, buildJsonObject { put("authenticated", true) })
+            val result = exchange.admitPinAttempt(pinGuard, requestJson(exchange)["token"]?.jsonPrimitive?.content.orEmpty())
+            when {
+                result == 0L -> { exchange.markAuthenticated(_status.value.pinCode); sendJson(exchange, 200, buildJsonObject { put("authenticated", true) }) }
+                result < 0L -> sendJson(exchange, 401, errorJson("配对码不正确"))
+                else -> sendJson(exchange, 429, errorJson("尝试次数过多，请 ${result / 1000} 秒后重试"))
+            }
         }
     }
 
@@ -392,10 +399,7 @@ class WebChatBridgeServer(
     private inner class SseEventsHandler : AndroidHttpHandler {
         override fun handle(exchange: AndroidHttpExchange) {
             if (handlePreflight(exchange)) return
-            if (!isAuthenticated(exchange)) {
-                sendJson(exchange, 401, errorJson("请先配对"))
-                return
-            }
+            if (!requireAuthenticated(exchange)) return
             exchange.responseHeaders.add("Content-Type", "text/event-stream")
             exchange.responseHeaders.add("Cache-Control", "no-cache")
             exchange.responseHeaders.add("Connection", "keep-alive")
@@ -535,16 +539,12 @@ class WebChatBridgeServer(
         return false
     }
 
-    private fun isAuthenticated(exchange: AndroidHttpExchange): Boolean {
-        val token = getQueryParam(exchange, "token")
-            ?: exchange.requestHeaders.getFirst("Authorization")?.removePrefix("Bearer ")
-        return token != null && token == _status.value.pinCode
-    }
-
     private fun requireAuthenticated(exchange: AndroidHttpExchange): Boolean {
-        if (isAuthenticated(exchange)) return true
-        sendJson(exchange, 401, errorJson("请先使用配对码连接"))
-        return false
+        return when (val result = exchange.admitPinAttempt(pinGuard, _status.value.pinCode)) {
+            0L -> true
+            -1L -> { sendJson(exchange, 401, errorJson("请先使用配对码连接")); false }
+            else -> { sendJson(exchange, 429, errorJson("尝试次数过多，请 ${result / 1000} 秒后重试")); false }
+        }
     }
 
     private suspend fun isRegisteredWorkspacePath(path: String): Boolean = runCatching {

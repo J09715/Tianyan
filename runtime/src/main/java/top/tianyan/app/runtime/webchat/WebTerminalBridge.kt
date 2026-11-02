@@ -1,7 +1,6 @@
 package top.tianyan.app.runtime.webchat
 
 import java.io.IOException
-import java.net.URLDecoder
 import java.util.Base64
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -40,6 +39,7 @@ internal class WebTerminalBridge(
     private val scope: CoroutineScope,
     private val pinProvider: () -> String,
 ) {
+    private val pinGuard = WebChatPinGuard()
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true; explicitNulls = false }
     private val handles = ConcurrentHashMap<String, WebTerminalHandle>()
 
@@ -94,10 +94,7 @@ internal class WebTerminalBridge(
             sendResponse(exchange, 204, "text/plain", ByteArray(0))
             return
         }
-        if (!isAuthenticated(exchange)) {
-            sendJson(exchange, 401, errorJson("请先使用配对码连接"))
-            return
-        }
+        if (!requireAuthenticated(exchange)) return
         val suffix = exchange.requestURI.path.substringAfter("/terminal", "").trim('/')
         val parts = suffix.split('/').filter(String::isNotBlank)
         when {
@@ -301,15 +298,13 @@ internal class WebTerminalBridge(
 
     // ------------------------------------------------------------------- io
 
-    private fun isAuthenticated(exchange: AndroidHttpExchange): Boolean {
-        val token = exchange.requestURI.query
-            ?.split('&')
-            ?.firstOrNull { it.substringBefore('=') == "token" }
-            ?.substringAfter('=', "")
-            ?.let { URLDecoder.decode(it, Charsets.UTF_8.name()) }
-            ?: exchange.requestHeaders.getFirst("Authorization")?.removePrefix("Bearer ")
-        return token != null && token == pinProvider()
-    }
+    /** 与主桥同一口径：只认 Authorization 头或配对 Cookie，并计入 PIN 锁定。 */
+    private fun requireAuthenticated(exchange: AndroidHttpExchange): Boolean =
+        when (val result = exchange.admitPinAttempt(pinGuard, pinProvider())) {
+            0L -> true
+            -1L -> { sendJson(exchange, 401, errorJson("请先使用配对码连接")); false }
+            else -> { sendJson(exchange, 429, errorJson("尝试次数过多，请 ${result / 1000} 秒后重试")); false }
+        }
 
     private fun requestJson(exchange: AndroidHttpExchange): JsonObject {
         val raw = exchange.requestBody.bufferedReader().readText()
@@ -326,9 +321,6 @@ internal class WebTerminalBridge(
 
     private fun sendResponse(exchange: AndroidHttpExchange, code: Int, contentType: String, bytes: ByteArray) {
         exchange.responseHeaders.add("Content-Type", contentType)
-        exchange.responseHeaders.add("Access-Control-Allow-Origin", "*")
-        exchange.responseHeaders.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
-        exchange.responseHeaders.add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
         exchange.sendResponseHeaders(code, bytes.size.toLong())
         if (bytes.isNotEmpty()) exchange.responseBody.write(bytes)
         exchange.close()

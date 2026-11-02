@@ -146,7 +146,7 @@ class ProcessRegistryImpl internal constructor(
             val session = checkNotNull(entry.session)
             entry.process = ManagedProcess(id, System.currentTimeMillis(), session, toolId, type = type, distroId = distroId)
             currentCoroutineContext().ensureActive()
-            entry.reader = readLogs(session, setOf(toolId ?: id, id))
+            entry.reader = readLogs(session, id, toolId?.takeIf { it != id })
             currentCoroutineContext().ensureActive()
             checkNotNull(entry.process)
         } catch (failure: Throwable) {
@@ -155,29 +155,28 @@ class ProcessRegistryImpl internal constructor(
         }
     }
 
-    private fun readLogs(session: LinuxSession, logKeys: Set<String>): Job =
+    /**
+     * 日志只写一份：进程 id 是主键，工具 id 登记为别名。
+     * 原来 `setOf(toolId ?: id, id)` 对两个 key 各写一遍 —— 每次输出 2 份列表拷贝、
+     * 2 份内存，工具面板与进程面板要看同一份日志本不必复制。
+     */
+    private fun readLogs(session: LinuxSession, logKey: String, aliasKey: String?): Job =
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
-            logKeys.forEach { key ->
-                logs.retain(key)
-                logs.append(key, "[Tianyan] 正在启动服务进程...")
-            }
+            logs.retain(logKey)
+            aliasKey?.let { logs.alias(it, logKey) }
+            logs.append(logKey, "[Tianyan] 正在启动服务进程...")
             try {
                 session.output.collect { terminalOutput ->
                     terminalOutput.text.lineSequence()
                         .filter { it.isNotBlank() }
-                        .forEach { line ->
-                            logKeys.forEach { logs.append(it, line) }
-                        }
+                        .forEach { line -> logs.append(logKey, line) }
                 }
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (_: Exception) {
             } finally {
-                val exitNotice = "[Tianyan] 服务进程已停止"
-                logKeys.forEach { key ->
-                    logs.append(key, exitNotice)
-                    logs.release(key)
-                }
+                logs.append(logKey, "[Tianyan] 服务进程已停止")
+                logs.release(logKey)
             }
         }
 

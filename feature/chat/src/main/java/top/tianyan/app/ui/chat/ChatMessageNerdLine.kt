@@ -129,7 +129,7 @@ private fun NerdLegend(prompt: Int, completion: Int, cached: Int, limit: Int, ne
     val segments = listOf(
         NerdSegment(stringResource(R.string.chat_nerd_cached), cached, MaterialTheme.colorScheme.primary),
         NerdSegment(stringResource(R.string.chat_nerd_uncached), (prompt - cached).coerceAtLeast(0), MaterialTheme.colorScheme.tertiary),
-        NerdSegment(stringResource(R.string.chat_nerd_output), completion, MaterialTheme.colorScheme.secondary),
+        NerdSegment(stringResource(R.string.chat_nerd_output, completion), completion, MaterialTheme.colorScheme.secondary),
         NerdSegment(stringResource(R.string.chat_nerd_remaining), (limit - prompt - completion).coerceAtLeast(0),
             if (nearLimit) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.surfaceVariant),
     )

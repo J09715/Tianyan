@@ -78,7 +78,7 @@
     <string name="local_backup_close">关闭</string>
     <string name="local_backup_completed">操作已完成。</string>
     <string name="local_backup_error">操作未完成。请停止正在运行的任务，确认备份版本、完整性和存储空间后重试。恢复预览期间数据有变化时，请重新选择文件。</string>
-    <string name="local_backup_error_busy">仍有未结束的智能体任务（包括等待审批或暂停的任务）。请结束任务后重试。</string>
+    <string name="local_backup_error_busy">仍有正在运行的智能体任务。请先结束这些任务再重试（已暂停或等待审批的任务不会阻断备份）。</string>
     <string name="local_backup_error_version">备份的数据版本或字段与当前应用不兼容。请确认导出与恢复时的应用版本。</string>
     <string name="local_backup_error_changed">数据已变化或预览已失效。请重新选择备份文件并预览后恢复。</string>
     <string name="local_backup_error_archive">备份清单或资源校验失败。请重新选择完整的天衍备份 ZIP，必要时重新导出。</string>

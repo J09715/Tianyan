@@ -32,6 +32,7 @@ internal fun ChatTopBar(
     onOpenRunModes: () -> Unit, onOpenBranches: () -> Unit,
     onOpenRuntime: () -> Unit, onOpenBrowser: (() -> Unit)? = null, browserHighlight: Boolean = false,
     onOpenRepository: (() -> Unit)? = null, repositoryHighlight: Boolean = false,
+    onOpenRedTeam: (() -> Unit)? = null, redTeamActive: Boolean = false,
     toolchainHighlight: Boolean = false, onOpenToolchain: () -> Unit,
     onOpenReasoning: (() -> Unit)? = null, companion: ChatCompanionToggle? = null,
     speech: ChatSpeechToggle? = null,
@@ -90,7 +91,8 @@ internal fun ChatTopBar(
                 }
                 ChatWorkspaceBar(
                     onOpenBrowser = onOpenBrowser?.let(closeThen), browserHighlight = browserHighlight,
-                    onOpenRepository = onOpenRepository?.let(closeThen), repositoryHighlight = repositoryHighlight)
+                    onOpenRepository = onOpenRepository?.let(closeThen), repositoryHighlight = repositoryHighlight,
+                    onOpenRedTeam = onOpenRedTeam?.let(closeThen), redTeamActive = redTeamActive)
                 Text(stringResource(R.string.chat_workbench_session), Modifier.padding(top = 8.dp),
                     style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 RuntimeTextButton(onClick = closeThen(onOpenMemory)) {

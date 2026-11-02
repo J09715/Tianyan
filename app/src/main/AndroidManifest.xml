@@ -34,6 +34,13 @@
     <uses-permission android:name="android.permission.WRITE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
 
+    <!-- Shower 虚拟屏 Binder 交接广播的签名级权限：只有同签名（系统/自身）应用能投递，
+         普通三方 App 无法伪造 IShowerService 抢占截图/注入通道。shell 启动的 shower-server
+         走 ShowerServerManager 的进程内动态接收器，不经过 Manifest 接收器。 -->
+    <permission
+        android:name="top.tianyan.app.permission.SHOWER_BINDER"
+        android:protectionLevel="signature" />
+
     <!-- Android 11+ 包可见性：允许解析 Shizuku App 与 QQ（授权弹窗、群卡片调起与 Binder 交互） -->
     <queries>
         <intent>
@@ -161,7 +168,8 @@
              必须 exported=true（发送方不在本应用进程）；action 与预编译 shower-server.jar 内协议绑定，不可改名 -->
         <receiver
             android:name="top.tianyan.app.runtime.virtualdisplay.ShowerBinderReceiver"
-            android:exported="true">
+            android:exported="true"
+            android:permission="top.tianyan.app.permission.SHOWER_BINDER">
             <intent-filter>
                 <action android:name="com.ai.assistance.operit.action.SHOWER_BINDER_READY" />
             </intent-filter>

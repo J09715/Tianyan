@@ -61,6 +61,12 @@ class ShowerBinderReceiver : BroadcastReceiver() {
             intent.getParcelableExtra<ShowerBinderContainer>(EXTRA_BINDER_CONTAINER)
         }
         val binder = container?.binder
+        // Binder 描述符校验：真实 IShowerService 的 descriptor 由 AIDL 固定，
+        // 伪造 Binder 即使绕过发送方权限也拿不到同一 descriptor。
+        if (binder != null && binder.interfaceDescriptor != SHOWER_INTERFACE_DESCRIPTOR) {
+            ShowerLog.w(TAG, "拒绝描述符不匹配的 Binder：${binder.interfaceDescriptor}")
+            return
+        }
         val service = binder?.let { IShowerService.Stub.asInterface(it) }
         val alive = service?.asBinder()?.isBinderAlive == true
         ShowerLog.d(TAG, "onReceive: service=$service alive=$alive")
@@ -83,6 +89,9 @@ class ShowerBinderReceiver : BroadcastReceiver() {
         /** Intent.sentFromUid 未回填时的占位值（android.os.Process.INVALID_UID）。 */
         private const val UID_UNKNOWN = -1
         private val PRIVILEGED_SENDER_UIDS = setOf(ROOT_UID, SYSTEM_UID, SHELL_UID)
+
+        /** AIDL 生成的 IShowerService 描述符（showerclient 内固定，不可由页面/第三方伪造）。 */
+        private const val SHOWER_INTERFACE_DESCRIPTOR = "com.ai.assistance.shower.IShowerService"
 
         const val ACTION_SHOWER_BINDER_READY =
             "com.ai.assistance.operit.action.SHOWER_BINDER_READY"

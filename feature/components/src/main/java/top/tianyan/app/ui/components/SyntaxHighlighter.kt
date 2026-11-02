@@ -88,6 +88,27 @@ object SyntaxHighlighter {
         }
     }
 
+    /**
+     * 按行返回高亮结果，供 `LazyColumn` 一条 item = 一行渲染。
+     *
+     * 万行文件原来会把行号栏组合成 N 个 `Text`、正文是一份覆盖全文的巨型 `AnnotatedString`，
+     * 两件事都在同帧完成（数百 ms 级冻结）。按行切片后只有可视行参与 measure/layout，
+     * span 用 [AnnotatedString.subSequence] 裁剪到行内，跨行 span 不会丢。
+     */
+    fun highlightLines(text: String, extension: String, isDark: Boolean = true): List<AnnotatedString> {
+        val highlighted = highlight(text, extension, isDark)
+        if (highlighted.isEmpty()) return emptyList()
+        return buildList {
+            var start = 0
+            while (true) {
+                val end = highlighted.text.indexOf('\n', start).let { if (it < 0) highlighted.length else it }
+                add(highlighted.subSequence(start, end))
+                if (end >= highlighted.length) break
+                start = end + 1
+            }
+        }
+    }
+
     private fun highlightGeneral(text: String, builder: AnnotatedString.Builder, ext: String, palette: SyntaxPalette) {
         val len = text.length
         var i = 0

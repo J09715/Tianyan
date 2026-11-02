@@ -10,6 +10,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.minimumInteractiveComponentSize
 import top.tianyan.app.ui.components.RuntimeFilledTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -60,15 +61,12 @@ internal fun MessageFeedbackAction(messageId: String) {
         }
     }
 
+    // 触摸区走 M3 48dp 下限，视觉直径保持 24dp（与气泡操作条一致）。
     IconButton(
         onClick = { showDialog = true },
-        modifier = Modifier.size(24.dp),
+        modifier = Modifier.minimumInteractiveComponentSize().size(24.dp),
     ) {
-        RuntimeIcon(
-            RuntimeIconName.Edit,
-            Modifier.size(18.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        RuntimeIcon(RuntimeIconName.Edit, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 
     if (showDialog && prefilled) {

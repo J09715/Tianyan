@@ -108,7 +108,7 @@
 - 沙箱注入：`SandboxCredentialStore` 按发行版、插件身份和安装版本缓存最长 8 小时的可复用、可撤销凭据（实际可用期受确认快照约束），经 `ProotCommandBuilder.build()/buildInteractive()` 的 `hostCredential` 参数在 Provider 环境**之后**叠加导出（`TIANYAN_BRIDGE_TOKEN` / `TIANYAN_BRIDGE_ACTIONS`，凭据覆盖 Provider 同名键）。发行版卸载/重置调 `revoke(distroId)`，`HostBridge.stop()` 调 `revokeAll()` 推进代次，缓存层随后自愈。默认动作集 `SANDBOX_ACTIONS` 仅含 `host.install-apk` / `host.logcat`；开发者模式仅开放原生确认入口。`FullAccessGrant` 在内存中保存最长 30 分钟、绑定发行版/插件/版本的确认；外部插件未确认时注入空令牌覆盖同名 Provider 环境。每次鉴权复核授权代次，撤销、超时、关闭开关及安装/卸载立即拒绝旧令牌，关闭再开启不能使旧令牌复活。
 - 端点按绑定动作放行：未知路径也先要求"持有有效凭据"再返回 404；写入端点不再接受沙箱传入的自由 `port`，端口固定由内置无线 ADB 管理器持有。旧版无凭据的 `tianyan-host` / 硬编码 `.bridge-key` 的脚本一律 401，需重启终端会话刷新凭据（无兼容窗口）。
 - **信任模型必须写明**：PRoot guest 仍以 App uid 运行，凭据可被沙箱内任意进程读取，所以沙箱内容物依旧是「可触发宿主特权动作的半信任方」。本机制是**应用层代理门控**（短寿命、收敛动作、可撤销、跨进程共用同一权威），**不是**对同 uid 恶意代码的强隔离；`host.shell` 已收紧为开发者全权授权：默认不下发，必须在开发者模式中另作限时原生确认，撤销时每次鉴权立即拒绝旧令牌（见 §7 待办 #8）。
-- `resolveSandboxPath` 兜底分支（`HostBridgeApkInstall.kt:110-138`）：路径非 `/sdcard`、`/workspace`、`/attachments` 前缀时先在工作区试一次，否则**原样返回宿主绝对路径**——`install-apk` 因此可读取任意宿主路径下的 `.apk`（有后缀校验，无目录白名单）；另有工作区全树按文件名的模糊兜底扫描（maxDepth 8）。该逻辑已从 `HostBridge.kt` 抽出到 `HostBridgeApkInstall`（guest 端点与插件网关共用同一实例）。
+- `resolveSandboxPath` 目录白名单（`HostBridgeApkInstall.kt`，2026-11 批次 A 收紧）：只接受 `/sdcard`（映射 `/storage/emulated/0`）、`/workspace`（映射 `workspaceDir`）、`/attachments`（映射 `attachmentsDir`）三个根；先 `canonicalFile` 再比对根目录，`..`、符号链接与绝对路径注入一律 400 拒绝。旧实现「未识别路径原样返回宿主绝对路径」已删除；工作区同名兜底扫描仍限 `workspaceDir` 内（maxDepth 8）。该逻辑由 guest 端点与插件网关共用。
 - 日志只记录路径与结果，不记录凭据（`HostBridge.kt` 各 `logger.i`）。
 
 ## 5. 工具审批与特权执行链
@@ -158,12 +158,41 @@ Bot 模型自助工具 `bot-management.list-models` 允许所有已映射的团�
 | --- | --- | --- | --- |
 | 1 | PRoot 非安全边界的定性认知 | 认知 | 本文已明确；对外文案避免「安全沙箱」表述 |
 | 2 | `/api/health` 免认证返回特权状态 | 低 | localhost 限制下可接受；如需收紧可复用 Bearer |
-| 3 | `resolveSandboxPath` 兜底允许任意宿主绝对路径（限 `.apk`） | 低-中 | 记录在案；如需收紧可加目录白名单 |
+| 3 | `resolveSandboxPath` 兜底允许任意宿主绝对路径（限 `.apk`） | 低-中 | **已修复（2026-11 批次 A）**：改为 `/sdcard`、`/workspace`、`/attachments` 三根白名单 + canonical 包含校验，拒绝 `..`/符号链接/绝对路径注入，见 §4 |
 | 4 | Root / Shizuku 通道未清空子进程环境 | 低 | App env 无用户密钥；若未来注入敏感 env 需先补 clear |
 | 5 | ~~`.bridge-key` 文件权限依赖默认 umask~~ 共享密钥已移除 | 已修复 | `DistroConfigurator.installHostBridgeScripts` 不再写 `.bridge-key`（并清理历史残留文件）；凭据改由宿主签发、经 PRoot 环境注入，见 §4 |
 | 6 | SecretRedactor 启发式局限 | 提示 | 见 2.3；高危场景叠加人工检查 |
 | 7 | 用户配置的 MCP / 环境变量明文进沙箱 | 提示 | 配置页宜加风险提示文案 |
 | 8 | `host.shell` 仍随沙箱凭据下发，仅动作目录单列 | 已修复 | 收紧为"开发者全权模式"的应用层授权：默认动作集移除 `host.shell`，开发者模式仅为前提，须按发行版/插件/安装版本原生确认最长 30 分钟；逐次鉴权复核代次并立即撤权（2026-10-19 更新） |
+
+## 8. 密钥轮换记录（2026-11）
+
+**作废的旧发布密钥**：`CN=Tianyan Local, OU=Dev, O=Tianyan, L=SH, ST=Shanghai, C=CN`，
+SHA-256 `29:BA:3B:63:D2:F1:6D:9B:11:18:7A:0E:DA:9A:C7:2F:E3:BA:09:2B:5C:B2:ED:12:97:43:10:9E:97:B8:06:97`。
+该密钥曾以 `tianyan-local.keystore` + 明文口令 `keystore.properties`（`storePassword`/`keyPassword`）
+随工作树副本交付，等同于私钥泄露：拿到目录副本即可签更高 `versionCode` 静默覆盖官方包。
+**该密钥及其口令已作废，不得再用于任何对外构建；凡由它签过名的包一律按泄露流程轮换。**
+
+**新发布密钥**：`~/.tianyan/tianyan-release.keystore`（仓库外，目录 700 / 文件 600），
+alias `tianyan`，RSA 4096，validity 10000。口令只存 `~/.tianyan/keystore.properties`（600），
+**不进入仓库、不进入交付物、不写日志**。新证书 SHA-256 见 `keytool -list -v`（构建机本地记录）。
+
+**构建方式**：`app/build.gradle.kts` 只从环境变量读取四项，缺任意一项则不启用 release 签名
+（只告警、不报错，debug 仍可构建）；仓库内已删除 `keystore.properties` 与 `tianyan-local.keystore`。
+
+| CI secret / 环境变量 | 值 |
+| --- | --- |
+| `TIANYAN_RELEASE_STORE_FILE` | 构建机上的 keystore 绝对路径（CI 由 secret 落盘到临时目录） |
+| `TIANYAN_RELEASE_STORE_PASSWORD` | keystore 口令 |
+| `TIANYAN_RELEASE_KEY_ALIAS` | `tianyan` |
+| `TIANYAN_RELEASE_KEY_PASSWORD` | key 口令 |
+
+**用户影响**：签名已变更，旧包无法用新包覆盖升级（Android 拒绝不同签名的同包名安装），
+老用户需**卸载重装**；卸载会清空应用私有数据（会话、工作区、已保存的 Provider 凭证），
+升级前请先导出需要保留的数据。
+
+**CI 拦截建议**：仓库根与工作树禁止出现 `*.keystore` / `*.jks` / `keystore.properties`；
+提交与制品扫描命中即失败。`.gitignore` 的历史忽略规则保留，但不能替代拦截。
 
 ## 8. 原生页面插件（P2）
 

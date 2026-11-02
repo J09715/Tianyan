@@ -83,7 +83,7 @@ internal fun EmptyChatGuidance(
             ) {
                 TianyanBrandBadge(size = 48.dp)
                 Text(
-                    text = greeting, modifier = chatGreetingModifier(),
+                    text = greeting, modifier = Modifier.chatMessageContainer(),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -110,6 +110,7 @@ fun AgentSettingsScreen(
     val runningSendMode by viewModel?.runningSendMode?.collectAsStateWithLifecycle() ?: previewStateOf(top.tianyan.app.core.model.RunningSendMode.QUEUE)
     val maxToolsPerRound by viewModel?.maxToolsPerRound?.collectAsStateWithLifecycle() ?: previewStateOf(0)
     val maxConsecutiveFailures by viewModel?.maxConsecutiveFailures?.collectAsStateWithLifecycle() ?: previewStateOf(0)
+    val maxConcurrentAgentTurns by viewModel?.maxConcurrentAgentTurns?.collectAsStateWithLifecycle() ?: previewStateOf(2)
     val contextBudgetTokens by viewModel?.contextBudgetTokens?.collectAsStateWithLifecycle() ?: previewStateOf(0)
     val effectiveContextBudget by viewModel?.effectiveContextBudget?.collectAsStateWithLifecycle() ?: previewStateOf(0)
     val activeModelDeclaredTokens by viewModel?.activeModelDeclaredTokens?.collectAsStateWithLifecycle() ?: previewStateOf(null)
@@ -311,6 +312,12 @@ fun AgentSettingsScreen(
                     ConsecutiveFailuresSliderRow(
                         currentValue = maxConsecutiveFailures,
                         onValueChange = { arg0 -> viewModel?.setMaxConsecutiveFailures(arg0) },
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    // 全局并发回合上限：SessionTurnCoordinatorImpl 监听同一偏好实时生效。
+                    ConcurrencySliderRow(
+                        currentValue = maxConcurrentAgentTurns,
+                        onValueChange = { arg0 -> viewModel?.setMaxConcurrentAgentTurns(arg0) },
                     )
                 }
             }
@@ -782,7 +789,6 @@ fun AgentSettingsScreen(
         )
     }
 }
-
 @Composable
 private fun AutoContinuationSliderRow(
     currentValue: Int,
@@ -828,7 +834,6 @@ private fun AutoContinuationSliderRow(
         )
     }
 }
-
 @Composable
 private fun ContextBudgetSliderRow(
     currentValue: Int,
@@ -962,7 +967,6 @@ private fun ContextFoldingRatioSliderRow(
         )
     }
 }
-
 @Composable
 private fun ToolsPerRoundSliderRow(
     currentValue: Int,
@@ -1040,15 +1044,9 @@ private fun ConsecutiveFailuresSliderRow(
         )
     }
 }
-
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun SkillCard(
-    skill: AgentSkill,
-    onToggle: (Boolean) -> Unit,
-    onViewPrompt: () -> Unit,
-    onDelete: (() -> Unit)?,
-) {
+private fun SkillCard(skill: AgentSkill, onToggle: (Boolean) -> Unit, onViewPrompt: () -> Unit, onDelete: (() -> Unit)?) {
     RuntimeCard(
         modifier = Modifier.fillMaxWidth(),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,

@@ -6,6 +6,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -55,13 +56,23 @@ internal fun ChatPageSurface(
     }
 }
 
+/**
+ * 壁纸模式的消息容器样式：纯文本回复、工具链、工具卡、用户气泡共用同一圆角与内边距。
+ *
+ * 开壁纸后原来各写一套（28dp / shapes.medium / 16dp；16 / 12 / 0dp 内距），
+ * 同一列表出现三种左边缘和三种圆角，滚动时块边界来回跳。这里收口成一组常量，
+ * 内缩只作用于背景块内部（padding 在 background 之后），不改变布局宽度。
+ */
+internal val ChatMessageContainerShape = RoundedCornerShape(24.dp)
+internal val ChatMessageContainerPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+
 /** Plain assistant text needs a readable surface on arbitrary light/dark photos. */
 @Composable
 internal fun ChatReadableMessage(content: @Composable ColumnScope.() -> Unit) {
     if (LocalChatBackgroundActive.current) {
         RuntimeCard(
-            modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.extraLarge,
-            containerColor = chatBackdropSurface(), contentPadding = PaddingValues(16.dp),
+            modifier = Modifier.fillMaxWidth(), shape = ChatMessageContainerShape,
+            containerColor = chatBackdropSurface(), contentPadding = ChatMessageContainerPadding,
         ) {
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp), content = content)
         }
@@ -70,8 +81,8 @@ internal fun ChatReadableMessage(content: @Composable ColumnScope.() -> Unit) {
     }
 }
 
+/** 工具链/工具卡/问候语在壁纸模式下的统一容器（与纯文本回复同一圆角、同一内边距）。 */
 @Composable
-internal fun chatGreetingModifier(): Modifier = if (LocalChatBackgroundActive.current) {
-    Modifier.background(chatBackdropSurface(), MaterialTheme.shapes.medium)
-        .padding(horizontal = 12.dp, vertical = 8.dp)
-} else Modifier
+internal fun Modifier.chatMessageContainer(): Modifier = if (LocalChatBackgroundActive.current) {
+    background(chatBackdropSurface(), ChatMessageContainerShape).padding(ChatMessageContainerPadding)
+} else this

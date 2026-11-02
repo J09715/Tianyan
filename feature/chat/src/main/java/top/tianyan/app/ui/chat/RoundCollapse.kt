@@ -90,6 +90,8 @@ fun projectChatMessages(
     expandedOverrides: Map<String, Boolean> = emptyMap(),
     collapseEnabled: Boolean = false,
     revealLimits: Map<String, Int> = emptyMap(),
+    /** 子列表投影时的原始下标偏移：增量投影保证 rawIndex 仍是整条消息流里的位置。 */
+    rawIndexOffset: Int = 0,
 ): List<ChatRenderItem> {
     if (messages.isEmpty()) return emptyList()
 
@@ -100,13 +102,14 @@ fun projectChatMessages(
     if (!collapseEnabled) {
         return messages
             .mapIndexedNotNull { index, message ->
-                if (message is ToolResult || isSilentDelivery(message)) null else ChatRenderItem.MessageItem(message, rawIndex = index)
+                if (message is ToolResult || isSilentDelivery(message)) null else
+                    ChatRenderItem.MessageItem(message, rawIndex = index + rawIndexOffset)
             }
     }
 
     // 开启自动折叠：一次性建立 id -> 原始下标映射，保证折叠态下 rawIndex 语义与默认态一致。
     val rawIndexOf = HashMap<String, Int>(messages.size * 2)
-    messages.forEachIndexed { index, message -> rawIndexOf[message.id] = index }
+    messages.forEachIndexed { index, message -> rawIndexOf[message.id] = index + rawIndexOffset }
 
     val rounds = splitIntoRounds(messages)
     val result = mutableListOf<ChatRenderItem>()

@@ -128,15 +128,20 @@ internal fun ChatMessageList(
     val timelineItems = LocalChatTimelineItems.current
     val timelineSnapshot = ChatTimelineSnapshot(renderItems, timelineFocus?.value)
     androidx.compose.runtime.SideEffect { timelineItems?.value = timelineSnapshot }
-    val toolbarIds = remember(messages, running) { assistantToolbarIds(messages, running) }
-    val lastInputIndex = remember(messages) { messages.indexOfLast { it is UserMessage } }
-    val turnLabelKeys = remember(renderItems) { assistantTurnLabelKeys(renderItems) }
+    // 流式热路径：上面三处的 remember 键收敛到「条数 + 末条签名」，避免每 token 全表重扫。
+    val lastMessage = messages.lastOrNull()
+    val lastHasText = (lastMessage as? AssistantText)?.textContent?.hasText ?: true
+    val toolbarIds = remember(messages.size, lastMessage?.id, lastHasText, running) {
+        assistantToolbarIds(messages, running)
+    }
+    val lastInputIndex = remember(messages.size, lastMessage?.id) { messages.indexOfLast { it is UserMessage } }
+    val turnLabelKeys = remember(renderItems.size, renderItems.lastOrNull()?.stableKey) { assistantTurnLabelKeys(renderItems) }
     val waitingForFirstOutput = remember(
         // 仅依赖末条消息内容签名，避免流式期间每帧扫描历史。
         messages.lastOrNull()?.id,
         messages.lastOrNull()?.let { last ->
             when (last) {
-                is AssistantText -> "${last.text.length}:${last.reasoning?.length ?: 0}"
+                is AssistantText -> "${last.textContent.length}:${last.reasoning?.length ?: 0}"
                 is ToolCall -> "tool:${last.id}"
                 else -> "other:${last.id}"
             }
@@ -147,150 +152,153 @@ internal fun ChatMessageList(
     }
 
     // 顶部悬浮栏使用轻量渐变，避免列表滚动期间全量离屏合成。
-    androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalMinimumInteractiveComponentSize provides 0.dp) {
     Box(modifier = modifier) {
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(top = androidx.compose.foundation.layout.WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 64.dp, bottom = 8.dp),
-    ) {
-        if (initializing) {
-            item {
-                ChatMessageSkeleton(modifier = Modifier.padding(vertical = 16.dp))
-            }
-        } else {
-            if (messages.isEmpty()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                end = 16.dp,
+                top = androidx.compose.foundation.layout.WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 64.dp,
+                bottom = 8.dp,
+            ),
+        ) {
+            if (initializing) {
                 item {
-                    EmptyChatGuidance(
-                        workspaceProject = workspaceProject,
-                        onboardingPrivilege = onboardingPrivilege,
-                        onSelectCommand = onSelectCommand,
-                    )
+                    ChatMessageSkeleton(modifier = Modifier.padding(vertical = 16.dp))
                 }
-            }
-            // 上下文压缩透明度横幅：真实折叠条数 + 摘要原地展开预览。
-            activeCompaction?.let { snapshot ->
-                item(key = "session_compaction_banner") {
-                    CompactionBanner(
-                        snapshot = snapshot,
-                        modifier = Modifier.padding(bottom = 2.dp),
-                    )
-                }
-            }
-            itemsIndexed(renderItems, key = { _, item -> item.stableKey }) { index, item ->
-                if (index > 0) Spacer(Modifier.height(chatTimelineItemSpacing(renderItems[index - 1], item).dp))
-                if (item.stableKey in turnLabelKeys) AssistantTurnLabel()
-                when (item) {
-                    is ToolStepsItem -> ToolStepsCard(item, toolResults, messages, workspace, onOpenFile, running, status,
-                        thinkingExpanded, onRetryTool, running && item.steps.first().stepRawIndex > lastInputIndex,
-                        liveThinkingMessageId.takeIf { thinkingLive }, thinkingAutoTranslate, onNavigateToSettings)
-                    is ChatRenderItem.CollapseButtonItem -> {
-                        RoundCollapseButton(
-                            item = item,
-                            onToggle = {
-                                timelineFocus?.value = null
-                                val wasExpanded = item.isExpanded
-                                expandedOverrides = expandedOverrides + (item.roundKey to !wasExpanded)
-                                reveal.onToggled(item, wasExpanded, chatRoundCollapse)
-                            },
+            } else {
+                if (messages.isEmpty()) {
+                    item {
+                        EmptyChatGuidance(
+                            workspaceProject = workspaceProject,
+                            onboardingPrivilege = onboardingPrivilege,
+                            onSelectCommand = onSelectCommand,
                         )
                     }
-                    is ChatRenderItem.ReasoningItem -> ReasoningRow(item, thinkingExpanded,
-                        thinkingLive && item.messageId == liveThinkingMessageId, thinkingAutoTranslate,
-                        onNavigateToSettings)
-                    is ChatRenderItem.MessageItem -> {
-                        when (val message = item.message) {
-                            is CapabilityEvent -> CapabilityEventCard(message)
-                            is TaskDelivery -> TaskDeliveryCard(message, workspace, onOpenFile)
-                            is SkillSuggestion -> if (message.id !in hiddenSkillSuggestions) {
-                                SkillSuggestionCard(
-                                    suggestion = message,
-                                    onCreate = { onApplySkillSuggestion(message, true) }, onUpdate = { onApplySkillSuggestion(message, false) },
-                                    onDismiss = { onDismissSkillSuggestion(message.id) },
-                                )
-                            }
-                            is ModelSwitchEvent -> ModelSwitchCard(message)
-                            is TurnChangesEvent -> TurnChangesCard(message)
-                            is UserMessage -> UserBubble(
-                                message = message,
-                                knownMentionNames = knownMentionNames,
-                                onEdit = { onEditMessage(message) },
-                                onDelete = { onDeleteMessage(message.id) },
-                                onCreateBranch = { onCreateBranch(message.id) },
-                                onRewind = { scope -> onRewindMessage(message.id, scope) },
+                }
+                // 上下文压缩透明度横幅：真实折叠条数 + 摘要原地展开预览。
+                activeCompaction?.let { snapshot ->
+                    item(key = "session_compaction_banner") {
+                        CompactionBanner(
+                            snapshot = snapshot,
+                            modifier = Modifier.padding(bottom = 2.dp),
+                        )
+                    }
+                }
+                itemsIndexed(renderItems, key = { _, item -> item.stableKey }) { index, item ->
+                    if (index > 0) Spacer(Modifier.height(chatTimelineItemSpacing(renderItems[index - 1], item).dp))
+                    if (item.stableKey in turnLabelKeys) AssistantTurnLabel()
+                    when (item) {
+                        is ToolStepsItem -> ToolStepsCard(item, toolResults, messages, workspace, onOpenFile, running, status,
+                            thinkingExpanded, onRetryTool, running && item.steps.first().stepRawIndex > lastInputIndex,
+                            liveThinkingMessageId.takeIf { thinkingLive }, thinkingAutoTranslate, onNavigateToSettings)
+                        is ChatRenderItem.CollapseButtonItem -> {
+                            RoundCollapseButton(
+                                item = item,
+                                onToggle = {
+                                    timelineFocus?.value = null
+                                    val wasExpanded = item.isExpanded
+                                    expandedOverrides = expandedOverrides + (item.roundKey to !wasExpanded)
+                                    reveal.onToggled(item, wasExpanded, chatRoundCollapse)
+                                },
                             )
-                            is AssistantText -> AssistantBubble(
-                                // 思考已作为链内步骤渲染时，气泡不再重复展示。
-                                message = if (item.showReasoning) message else message.copy(reasoning = null),
-                                defaultExpanded = thinkingExpanded,
-                                live = thinkingLive && message.id == liveThinkingMessageId,
-                                showRegenerate = !running && message.id == lastAssistantMessageId, prominentActions = message.id in toolbarIds,
-                                onRegenerate = onRegenerate,
-                                onCreateBranch = { onCreateBranch(message.id) },
-                                autoTranslate = thinkingAutoTranslate,
-                                onNavigateToSettings = onNavigateToSettings,
-                            )
-                            is ToolCall -> {
-                                val rawIndex = item.rawIndex
-                                if (message.tool == HarnessTool.SUBAGENT) {
-                                    SubagentCard(
-                                        call = message,
-                                        result = toolResults[message.id],
-                                        subagentBranches = subagentBranches,
-                                        onOpenSubagent = onOpenSubagent,
-                                        onViewDetails = onViewSubagentLanes,
-                                    )
-                                } else {
-                                    ToolCard(
-                                        call = message,
-                                        result = toolResults[message.id],
-                                        workspace = workspace,
-                                        onOpenFile = onOpenFile,
-                                        running = running, executing = running && item.rawIndex > lastInputIndex,
-                                        liveStatus = status,
-                                        showReasoning = message.reasoning != null &&
-                                            !reasoningAlreadyShown(messages, rawIndex, message.reasoning),
-                                        defaultExpanded = thinkingExpanded,
-                                        onRetry = { onRetryTool(message.id) },
+                        }
+                        is ChatRenderItem.ReasoningItem -> ReasoningRow(item, thinkingExpanded,
+                            thinkingLive && item.messageId == liveThinkingMessageId, thinkingAutoTranslate,
+                            onNavigateToSettings)
+                        is ChatRenderItem.MessageItem -> {
+                            when (val message = item.message) {
+                                is CapabilityEvent -> CapabilityEventCard(message)
+                                is TaskDelivery -> TaskDeliveryCard(message, workspace, onOpenFile)
+                                is SkillSuggestion -> if (message.id !in hiddenSkillSuggestions) {
+                                    SkillSuggestionCard(
+                                        suggestion = message,
+                                        onCreate = { onApplySkillSuggestion(message, true) }, onUpdate = { onApplySkillSuggestion(message, false) },
+                                        onDismiss = { onDismissSkillSuggestion(message.id) },
                                     )
                                 }
+                                is ModelSwitchEvent -> ModelSwitchCard(message)
+                                is TurnChangesEvent -> TurnChangesCard(message)
+                                is UserMessage -> UserBubble(
+                                    message = message,
+                                    knownMentionNames = knownMentionNames,
+                                    onEdit = { onEditMessage(message) },
+                                    onDelete = { onDeleteMessage(message.id) },
+                                    onCreateBranch = { onCreateBranch(message.id) },
+                                    onRewind = { scope -> onRewindMessage(message.id, scope) },
+                                )
+                                is AssistantText -> AssistantBubble(
+                                    // 思考已作为链内步骤渲染时，气泡不再重复展示。
+                                    message = if (item.showReasoning) message else message.copy(reasoning = null),
+                                    defaultExpanded = thinkingExpanded,
+                                    live = thinkingLive && message.id == liveThinkingMessageId,
+                                    showRegenerate = !running && message.id == lastAssistantMessageId, prominentActions = message.id in toolbarIds,
+                                    onRegenerate = onRegenerate,
+                                    onCreateBranch = { onCreateBranch(message.id) },
+                                    autoTranslate = thinkingAutoTranslate,
+                                    onNavigateToSettings = onNavigateToSettings,
+                                )
+                                is ToolCall -> {
+                                    val rawIndex = item.rawIndex
+                                    if (message.tool == HarnessTool.SUBAGENT) {
+                                        SubagentCard(
+                                            call = message,
+                                            result = toolResults[message.id],
+                                            subagentBranches = subagentBranches,
+                                            onOpenSubagent = onOpenSubagent,
+                                            onViewDetails = onViewSubagentLanes,
+                                        )
+                                    } else {
+                                        ToolCard(
+                                            call = message,
+                                            result = toolResults[message.id],
+                                            workspace = workspace,
+                                            onOpenFile = onOpenFile,
+                                            running = running, executing = running && item.rawIndex > lastInputIndex,
+                                            liveStatus = status,
+                                            showReasoning = message.reasoning != null &&
+                                                !reasoningAlreadyShown(messages, rawIndex, message.reasoning),
+                                            defaultExpanded = thinkingExpanded,
+                                            onRetry = { onRetryTool(message.id) },
+                                        )
+                                    }
+                                }
+                                is ToolResult -> Unit
                             }
-                            is ToolResult -> Unit
                         }
                     }
                 }
+                if (waitingForFirstOutput) {
+                    item(key = "assistant_generation_placeholder") {
+                        Spacer(Modifier.height(8.dp))
+                        ChatTypingIndicator(messages.getOrNull(lastInputIndex)?.id ?: "first_output", messages.getOrNull(lastInputIndex)?.createdAt)
+                    }
+                }
             }
-            if (waitingForFirstOutput) {
-                item(key = "assistant_generation_placeholder") {
+            item {
+                pendingApprovals.firstOrNull()?.let { request ->
+                    if (request.toolName == AskUserQuestions.TOOL_NAME) {
+                        AskUserCard(
+                            request = request,
+                            onAnswer = onResolveQuestion,
+                            onSkip = { onResolveApproval(request.id, false, false) },
+                        )
+                    } else {
+                        ApprovalRequestCard(
+                            request = request,
+                            onApprove = { rememberForSession -> onResolveApproval(request.id, true, rememberForSession) },
+                            onReject = { onResolveApproval(request.id, false, false) },
+                        )
+                    }
                     Spacer(Modifier.height(8.dp))
-                    ChatTypingIndicator(messages.getOrNull(lastInputIndex)?.id ?: "first_output", messages.getOrNull(lastInputIndex)?.createdAt)
                 }
+                Spacer(Modifier.height(4.dp))
             }
         }
-        item {
-            pendingApprovals.firstOrNull()?.let { request ->
-                if (request.toolName == AskUserQuestions.TOOL_NAME) {
-                    AskUserCard(
-                        request = request,
-                        onAnswer = onResolveQuestion,
-                        onSkip = { onResolveApproval(request.id, false, false) },
-                    )
-                } else {
-                    ApprovalRequestCard(
-                        request = request,
-                        onApprove = { rememberForSession -> onResolveApproval(request.id, true, rememberForSession) },
-                        onReject = { onResolveApproval(request.id, false, false) },
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-            }
-            Spacer(Modifier.height(4.dp))
-        }
-    }
         ScrollFadeOverlay(top = androidx.compose.foundation.layout.WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 72.dp,
             bottom = 0.dp, color = top.tianyan.app.ui.theme.chatBackdropChrome())
     }
-}
 }
 
 @Composable

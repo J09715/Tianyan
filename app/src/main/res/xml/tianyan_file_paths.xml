@@ -1,7 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    只暴露实际会被 FileProvider 授权的子目录（收敛自 external-path "."）：
+    - files-path: 工作区/附件（HostFileActions、AttachmentOpener）
+    - cache-path: 相机、更新包、通知栏/桥接安装 APK 的临时副本
+    - external-path: 公共下载目录（工作区导出的 APK 由用户从下载目录安装/分享）
+-->
 <paths>
-    <cache-path name="cache" path="." />
-    <external-cache-path name="external_cache" path="." />
-    <external-files-path name="external_files" path="." />
-    <external-path name="external_storage" path="." />
+    <files-path name="workspace" path="linux-runtime/workspace/" />
+    <files-path name="attachments" path="linux-runtime/attachments/" />
+    <cache-path name="camera" path="camera/" />
+    <cache-path name="updates" path="updates/" />
+    <cache-path name="bot_diagnostics" path="bot-diagnostics/" />
+    <cache-path name="notification_apk_installs" path="notification-apk-installs/" />
+    <cache-path name="bridge_installs" path="bridge-installs/" />
+    <external-path name="downloads" path="Download/" />
 </paths>

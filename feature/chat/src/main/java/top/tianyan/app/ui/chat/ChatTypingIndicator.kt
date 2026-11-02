@@ -28,7 +28,7 @@ internal fun isWaitingForFirstToken(messages: List<HarnessMessage>, running: Boo
     for (index in messages.indices.reversed()) {
         when (val message = messages[index]) {
             is UserMessage -> return true
-            is AssistantText -> if (message.text.isNotBlank() || !message.reasoning.isNullOrBlank()) return false
+            is AssistantText -> if (message.textContent.hasText || !message.reasoning.isNullOrBlank()) return false
             is ToolCall -> return false
             else -> Unit
         }

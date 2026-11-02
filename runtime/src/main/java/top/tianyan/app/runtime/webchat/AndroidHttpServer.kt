@@ -196,6 +196,7 @@ internal class AndroidHttpServer private constructor(
 
             val exchange = AndroidHttpExchange(
                 socket = socket,
+                remoteAddress = socket.inetAddress?.hostAddress.orEmpty(),
                 requestMethod = requestParts[0],
                 requestURI = AndroidHttpUri(path, query),
                 requestHeaders = headers,
@@ -289,6 +290,8 @@ internal class AndroidHttpHeaders {
 
 internal class AndroidHttpExchange(
     private val socket: Socket,
+    /** 对端地址：PIN 失败计数按来源隔离，避免单点爆破把整台设备锁死。 */
+    val remoteAddress: String,
     val requestMethod: String,
     val requestURI: AndroidHttpUri,
     val requestHeaders: AndroidHttpHeaders,

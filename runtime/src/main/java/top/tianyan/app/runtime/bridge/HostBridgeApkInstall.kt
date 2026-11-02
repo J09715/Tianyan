@@ -26,9 +26,10 @@ internal class HostBridgeApkInstall(
     private val pathManager: RuntimePathManager,
 ) {
     suspend fun installAt(apkPath: String): HttpResponse {
-        // 将沙箱路径映射到宿主路径
-        val hostPath = resolveSandboxPath(apkPath)
-        var apkFile = File(hostPath)
+        // 将沙箱路径映射到宿主允许目录（/sdcard、/workspace、/attachments），并做 canonical 包含校验
+        val hostFile = resolveSandboxPath(apkPath)
+            ?: return HttpResponse(400, errorJson("APK 路径不在允许目录内（仅 /sdcard、/workspace、/attachments）: $apkPath"))
+        var apkFile = hostFile
         if (!apkFile.isFile) {
             // 智能容错：如果在指定路径未找到，尝试在工作区目录中按文件名模糊搜索匹配的最新 APK
             val candidateName = apkFile.name.takeIf { it.endsWith(".apk", ignoreCase = true) }
@@ -40,10 +41,10 @@ internal class HostBridgeApkInstall(
             } else null
 
             if (fallback != null) {
-                logger.i("HostBridge: APK 在 '$hostPath' 未找到，通过工作区扫描智能匹配到 '${fallback.absolutePath}'")
+                logger.i("HostBridge: APK 在 '$apkPath' 未找到，通过工作区扫描智能匹配到 '${fallback.absolutePath}'")
                 apkFile = fallback
             } else {
-                return HttpResponse(404, errorJson("APK file not found: $apkPath (resolved: $hostPath)"))
+                return HttpResponse(404, errorJson("APK file not found: $apkPath (resolved: ${apkFile.absolutePath})"))
             }
         }
         if (!apkFile.name.endsWith(".apk", ignoreCase = true)) {
@@ -102,38 +103,35 @@ internal class HostBridgeApkInstall(
     }
 
     /**
-     * 将沙箱内路径映射到宿主路径。
-     * /sdcard/Download/app.apk → /storage/emulated/0/Download/app.apk
-     * /workspace/... → pathManager.workspaceDir/...
-     * /attachments/... → pathManager.attachmentsDir/...
+     * 将沙箱内路径映射到宿主路径，并限制在三个白名单根目录内：
+     * /sdcard/... → /storage/emulated/0/...；/workspace/... → workspaceDir/...；/attachments/... → attachmentsDir/...
+     *
+     * 先 canonical 再比对根目录：`/workspace/../../data/...`、符号链接与绝对路径注入都会落到根目录外，
+     * 一律拒绝（旧实现把未识别路径原样当宿主绝对路径返回，等于任意路径安装）。
      */
-    private fun resolveSandboxPath(sandboxPath: String): String {
+    private fun resolveSandboxPath(sandboxPath: String): File? {
         val trimmed = sandboxPath.trim()
-        return when {
-            trimmed.startsWith("/sdcard/") ->
-                "/storage/emulated/0/${trimmed.removePrefix("/sdcard/")}"
-            trimmed == "/sdcard" ->
-                "/storage/emulated/0"
-            trimmed.startsWith("/storage/emulated/0/") ->
-                trimmed // 已经是宿主存储路径
-            trimmed.startsWith("/workspace/") ->
-                File(pathManager.workspaceDir, trimmed.removePrefix("/workspace/")).absolutePath
-            trimmed == "/workspace" ->
-                pathManager.workspaceDir.absolutePath
-            trimmed.startsWith("/attachments/") ->
-                File(pathManager.attachmentsDir, trimmed.removePrefix("/attachments/")).absolutePath
-            trimmed == "/attachments" ->
-                pathManager.attachmentsDir.absolutePath
-            else -> {
-                // 若为相对路径或去除了开头的斜杠，先在工作区内检查是否存在
-                val wsRelative = File(pathManager.workspaceDir, trimmed.removePrefix("/"))
-                if (wsRelative.exists()) {
-                    wsRelative.absolutePath
-                } else {
-                    trimmed // 原样返回（可能是宿主绝对路径）
-                }
-            }
+        val storageRoot = File("/storage/emulated/0")
+        val root = when {
+            trimmed == "/sdcard" || trimmed.startsWith("/sdcard/") -> storageRoot
+            trimmed == "/storage/emulated/0" || trimmed.startsWith("/storage/emulated/0/") -> storageRoot
+            trimmed == "/workspace" || trimmed.startsWith("/workspace/") -> pathManager.workspaceDir
+            trimmed == "/attachments" || trimmed.startsWith("/attachments/") -> pathManager.attachmentsDir
+            else -> return null
         }
+        val relative = when (root) {
+            storageRoot -> when {
+                trimmed.startsWith("/sdcard") -> trimmed.removePrefix("/sdcard")
+                else -> trimmed.removePrefix("/storage/emulated/0")
+            }
+            else -> trimmed.substringAfter('/', "").substringAfter('/', "")
+        }
+        val target = File(root, relative.trimStart('/'))
+        val canonical = runCatching { target.canonicalFile }.getOrNull() ?: return null
+        val canonicalRoot = runCatching { root.canonicalFile }.getOrNull() ?: return null
+        val inside = canonical == canonicalRoot ||
+            canonical.path.startsWith(canonicalRoot.path + File.separator)
+        return canonical.takeIf { inside }
     }
 
     private fun errorJson(message: String): String = buildJsonObject {

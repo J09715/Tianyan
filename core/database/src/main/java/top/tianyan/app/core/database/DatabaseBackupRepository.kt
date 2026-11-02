@@ -17,7 +17,14 @@ class RoomDatabaseBackupRepository(private val database: AppDatabase) : Database
     private val sql get() = database.openHelper.writableDatabase
 
     override suspend fun snapshot(): BackupRecords = database.withTransaction {
-        check(sql.query("SELECT COUNT(*) FROM harness_operations").use { it.moveToFirst(); it.getLong(0) == 0L }) {
+        // 只有真正可能还在写库的操作才设闸。suspended（进程被杀后的恢复态、用户暂停态）与
+        // waiting_approval（等审批，不写库）都是静默态，原先"表内有任意一行即拒绝"会让备份
+        // 在一次意外中断后永久不可用，而界面上并没有任何任务在跑。
+        // 孤儿行（会话已删除）同样先清掉，否则一样会永久阻断。
+        sql.execSQL("DELETE FROM harness_operations WHERE sessionId NOT IN (SELECT id FROM harness_sessions)")
+        check(sql.query("SELECT COUNT(*) FROM harness_operations WHERE status IN ('running', 'aborting')").use {
+            it.moveToFirst(); it.getLong(0) == 0L
+        }) {
             "请先停止正在运行的智能体任务，再执行备份或恢复"
         }
         BackupRecords(BackupRecordPolicy.tables.associateWith { table ->

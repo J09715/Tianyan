@@ -7,6 +7,7 @@ import org.koin.core.context.startKoin
 import top.tianyan.app.di.tianyanModule
 import android.annotation.SuppressLint
 import android.app.Application
+import android.content.ComponentCallbacks2
 import android.database.CursorWindow
 import android.util.Log
 import androidx.work.Configuration
@@ -18,6 +19,7 @@ import top.tianyan.app.core.datastore.AppStatsPreferences
 import top.tianyan.app.core.database.AgentSkillRepository
 import top.tianyan.app.core.database.McpServerRepository
 import top.tianyan.app.service.AgentForegroundService
+import top.tianyan.app.ui.components.evictMarkdownCaches
 import top.tianyan.app.service.NOTIFIABLE_AGENT_STATES
 import top.tianyan.app.service.WorkflowForegroundService
 import top.tianyan.app.runtime.privilege.PrivilegeManager
@@ -213,7 +215,21 @@ class TianyanApplication : Application(), Configuration.Provider {
         memoryWatchdog.registerReleaser("shower-video-pending-frames") {
             virtualDisplayCoordinatorLazy.value.trimVideoBuffers()
         }
+        // markdown/span 三套缓存是纯可再生数据（丢了按需重算）：水位越线先丢它们，
+        // 避免长会话把正文块与 span 常驻到数十 MB（历史上这三套缓存没有任何运行期释放路径）。
+        memoryWatchdog.registerReleaser("markdown-caches") { evictMarkdownCaches() }
         memoryWatchdog.start()
+    }
+
+    /** 系统内存回收回调：语义与看门狗一致，只丢可再生缓存，不动有序状态。 */
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) evictMarkdownCaches()
+    }
+
+    override fun onLowMemory() {
+        super.onLowMemory()
+        evictMarkdownCaches()
     }
 
     /**

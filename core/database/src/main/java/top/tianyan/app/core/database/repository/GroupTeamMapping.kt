@@ -3,14 +3,6 @@ package top.tianyan.app.core.database.repository
 import top.tianyan.app.core.database.GroupChatEntity
 import top.tianyan.app.core.model.bot.GroupChat
 import top.tianyan.app.core.model.bot.GroupReplyMode
-import top.tianyan.app.core.database.GroupMemberEntity
-import top.tianyan.app.core.model.bot.GroupTeam
-
-internal fun teamFromRows(adminId: String, rows: List<GroupMemberEntity>) = GroupTeam(
-    adminId,
-    rows.map { it.botId }.toSet(),
-    rows.mapNotNull { row -> row.supervisorBotId?.takeIf { id -> rows.any { it.botId == id } }?.let { row.botId to it } }.toMap(),
-)
 
 internal fun GroupChatEntity.toModel() = GroupChat(
     id = id,

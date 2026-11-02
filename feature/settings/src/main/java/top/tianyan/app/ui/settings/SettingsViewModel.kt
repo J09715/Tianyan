@@ -270,9 +270,9 @@ class SettingsViewModel(
     val webChatStatus: StateFlow<WebChatServerStatus> =
         webChatBridgeServer?.status ?: MutableStateFlow(WebChatServerStatus()).asStateFlow()
 
-    fun toggleWebChatServer(enabled: Boolean, port: Int = 8899) {
+    fun toggleWebChatServer(enabled: Boolean, port: Int = 8899, allowLan: Boolean = false) {
         if (enabled) {
-            webChatBridgeServer?.start(port)
+            webChatBridgeServer?.start(port, allowLan = allowLan)
         } else {
             webChatBridgeServer?.stop()
         }
@@ -822,6 +822,10 @@ class SettingsViewModel(
     val maxToolRounds: StateFlow<Int> = agentPreferences.maxToolRounds
         .stateIn(viewModelScope, SharingStarted.Eagerly, 100)
 
+    /** 全局并发 Agent 回合上限（群聊多成员同时执行数；SessionTurnCoordinator 监听生效）。 */
+    val maxConcurrentAgentTurns: StateFlow<Int> = agentPreferences.maxConcurrentAgentTurns
+        .stateIn(viewModelScope, SharingStarted.Eagerly, agentPreferences.defaultMaxConcurrentAgentTurns)
+
     val roundLimitAutoContinuations: StateFlow<Int> = agentPreferences.roundLimitAutoContinuations
         .stateIn(viewModelScope, SharingStarted.Eagerly, agentPreferences.defaultRoundLimitAutoContinuations)
 
@@ -1035,21 +1039,15 @@ class SettingsViewModel(
 
     fun setContextCompactionEnabled(value: Boolean) { viewModelScope.launch { agentPreferences.setContextCompactionEnabled(value) } }
 
-    fun setMaxToolRounds(value: Int) {
-        viewModelScope.launch { agentPreferences.setMaxToolRounds(value) }
-    }
+    fun setMaxToolRounds(value: Int) { viewModelScope.launch { agentPreferences.setMaxToolRounds(value) } }
 
-    fun setRoundLimitAutoContinuations(value: Int) {
-        viewModelScope.launch { agentPreferences.setRoundLimitAutoContinuations(value) }
-    }
+    fun setMaxConcurrentAgentTurns(value: Int) { viewModelScope.launch { agentPreferences.setMaxConcurrentAgentTurns(value) } }
 
-    fun setAutoWorkspaceCwd(value: Boolean) {
-        viewModelScope.launch { agentPreferences.setAutoWorkspaceCwd(value) }
-    }
+    fun setRoundLimitAutoContinuations(value: Int) { viewModelScope.launch { agentPreferences.setRoundLimitAutoContinuations(value) } }
 
-    fun setCommandOutputCompressionEnabled(value: Boolean) {
-        viewModelScope.launch { agentPreferences.setCommandOutputCompressionEnabled(value) }
-    }
+    fun setAutoWorkspaceCwd(value: Boolean) { viewModelScope.launch { agentPreferences.setAutoWorkspaceCwd(value) } }
+
+    fun setCommandOutputCompressionEnabled(value: Boolean) { viewModelScope.launch { agentPreferences.setCommandOutputCompressionEnabled(value) } }
 
     fun setBaseCommandTimeoutSeconds(value: Int) {
         viewModelScope.launch { agentPreferences.setBaseCommandTimeoutSeconds(value) }
@@ -1070,13 +1068,9 @@ class SettingsViewModel(
         viewModelScope.launch { approvalRepository.setRunMode(mode) }
     }
 
-    fun setContextBudgetTokens(value: Int) {
-        viewModelScope.launch { agentPreferences.setContextBudgetTokens(value) }
-    }
+    fun setContextBudgetTokens(value: Int) { viewModelScope.launch { agentPreferences.setContextBudgetTokens(value) } }
 
-    fun setMaxToolsPerRound(value: Int) {
-        viewModelScope.launch { agentPreferences.setMaxToolsPerRound(value) }
-    }
+    fun setMaxToolsPerRound(value: Int) { viewModelScope.launch { agentPreferences.setMaxToolsPerRound(value) } }
 
     fun setMaxConsecutiveFailures(value: Int) {
         viewModelScope.launch { agentPreferences.setMaxConsecutiveFailures(value) }

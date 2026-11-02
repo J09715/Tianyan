@@ -121,8 +121,8 @@ internal fun ToolCard(
             }
             RuntimeCard(
                 modifier = Modifier.fillMaxWidth(), onClick = { expanded = !expanded },
-                shape = MaterialTheme.shapes.large, contentPadding = PaddingValues(0.dp),
-                containerColor = Color.Transparent,
+                shape = ChatMessageContainerShape, containerColor = Color.Transparent, // 壁纸模式统一圆角
+                contentPadding = if (top.tianyan.app.ui.theme.LocalChatBackgroundActive.current) ChatMessageContainerPadding else PaddingValues(0.dp),
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,

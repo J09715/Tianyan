@@ -67,6 +67,7 @@ import top.tianyan.app.ui.settings.McpSettingsScreen
 import top.tianyan.app.ui.settings.PhoneAgentSettingsScreen
 import top.tianyan.app.ui.settings.QuickPhrasesScreen
 import top.tianyan.app.ui.settings.RemotePluginLibraryScreen
+import top.tianyan.app.ui.settings.SponsorScreen
 import top.tianyan.app.ui.settings.SshSettingsScreen
 import top.tianyan.app.ui.settings.StorageMountSettingsScreen
 import top.tianyan.app.ui.settings.StorageUsageScreen
@@ -108,9 +109,7 @@ fun TianyanNavHost(
     var showNavigation by rememberSaveable { mutableStateOf(false) }; var sidebarDocked by rememberSaveable { mutableStateOf(true) }
     var showNewSession by rememberSaveable { mutableStateOf(false) }
     /** Programmatic stack mutation (bus / workflow). */
-    fun NavBackStack<NavKey>.pushRaw(destination: NavKey) {
-        if (lastOrNull() != destination) add(destination)
-    }
+    fun NavBackStack<NavKey>.pushRaw(destination: NavKey) { if (lastOrNull() != destination) add(destination) }
     val sidebarGesturesEnabled = activeStack.canSwipeOpenNavigation()
     LaunchedEffect(sidebarGesturesEnabled) { if (!sidebarGesturesEnabled) showNavigation = false }
     val selectedMain = activeStack.lastOrNull { it == HomeDestination || it == WorkspaceDestination || it == BotsDestination || it == SettingsDestination }.toMainDestination()
@@ -153,14 +152,9 @@ fun TianyanNavHost(
             add(destination)
         }
     }
-    fun popBack() {
-        if (activeStack.size > 1) activeStack.removeLastOrNull()
-    }
+    fun popBack() { if (activeStack.size > 1) activeStack.removeLastOrNull() }
     @Composable
-    fun GuardedEntry(
-        destination: NavKey,
-        content: @Composable () -> Unit,
-    ) {
+    fun GuardedEntry(destination: NavKey, content: @Composable () -> Unit) {
         val isActive = destination == activeStack.lastOrNull()
         Box(
             modifier = Modifier
@@ -299,7 +293,7 @@ fun TianyanNavHost(
                     SettingsScreen(
                         onNavigate = ::navigateMain, onBack = ::popBack,
                         onOpenAgentEco = { activeStack.push(SettingsDestination, AgentEcoSettingsDestination) },
-                        onOpenLinuxEnv = { activeStack.push(SettingsDestination, LinuxEnvSettingsDestination) },
+                        onOpenLinuxEnv = { activeStack.push(SettingsDestination, LinuxEnvSettingsDestination()) },
                         onOpenAppearance = { activeStack.push(SettingsDestination, AppearanceSettingsDestination) },
                         onOpenSystemDev = { activeStack.push(SettingsDestination, SystemDevSettingsDestination) },
                         onOpenAboutCommunity = { activeStack.push(SettingsDestination, AboutCommunityDestination) },
@@ -334,8 +328,8 @@ fun TianyanNavHost(
                                 SettingsSearchTarget.ENV_VARS -> activeStack.push(SettingsSearchDestination, EnvironmentVariableSettingsDestination)
                                 SettingsSearchTarget.SSH_SETTINGS -> activeStack.push(SettingsSearchDestination, SshSettingsDestination)
                                 SettingsSearchTarget.FTP_SETTINGS -> activeStack.push(SettingsSearchDestination, FtpSettingsDestination)
-                                SettingsSearchTarget.WEB_CHAT,
-                                SettingsSearchTarget.PRIVILEGE_MODE -> activeStack.push(SettingsSearchDestination, LinuxEnvSettingsDestination)
+                                SettingsSearchTarget.WEB_CHAT -> activeStack.push(SettingsSearchDestination, LinuxEnvSettingsDestination(openWebChat = true))
+                                SettingsSearchTarget.PRIVILEGE_MODE -> activeStack.push(SettingsSearchDestination, LinuxEnvSettingsDestination())
                                 SettingsSearchTarget.APP_MANAGEMENT -> activeStack.push(SettingsSearchDestination, AppManagementDestination)
                                 SettingsSearchTarget.APPEARANCE_SETTINGS,
                                 SettingsSearchTarget.THEME_MODE,
@@ -413,17 +407,18 @@ fun TianyanNavHost(
                     )
                 }
             }
-            entry<LinuxEnvSettingsDestination> {
-                GuardedEntry(LinuxEnvSettingsDestination) {
+            entry<LinuxEnvSettingsDestination> { destination ->
+                GuardedEntry(destination) {
                     LinuxEnvironmentSettingsScreen(
                         onBack = ::popBack,
-                        onOpenDistroManagement = { activeStack.push(LinuxEnvSettingsDestination, DistroManagementDestination) },
-                        onOpenStorageMounts = { activeStack.push(LinuxEnvSettingsDestination, StorageMountSettingsDestination) },
-                        onOpenStorageUsage = { activeStack.push(LinuxEnvSettingsDestination, StorageUsageDestination) },
-                        onOpenAppManagement = { activeStack.push(LinuxEnvSettingsDestination, AppManagementDestination) },
-                        onOpenEnvironmentVariables = { activeStack.push(LinuxEnvSettingsDestination, EnvironmentVariableSettingsDestination) },
-                        onOpenSshSettings = { activeStack.push(LinuxEnvSettingsDestination, SshSettingsDestination) },
-                        onOpenFtpSettings = { activeStack.push(LinuxEnvSettingsDestination, FtpSettingsDestination) },
+                        openWebChatOnEntry = destination.openWebChat,
+                        onOpenDistroManagement = { activeStack.push(LinuxEnvSettingsDestination(), DistroManagementDestination) },
+                        onOpenStorageMounts = { activeStack.push(LinuxEnvSettingsDestination(), StorageMountSettingsDestination) },
+                        onOpenStorageUsage = { activeStack.push(LinuxEnvSettingsDestination(), StorageUsageDestination) },
+                        onOpenAppManagement = { activeStack.push(LinuxEnvSettingsDestination(), AppManagementDestination) },
+                        onOpenEnvironmentVariables = { activeStack.push(LinuxEnvSettingsDestination(), EnvironmentVariableSettingsDestination) },
+                        onOpenSshSettings = { activeStack.push(LinuxEnvSettingsDestination(), SshSettingsDestination) },
+                        onOpenFtpSettings = { activeStack.push(LinuxEnvSettingsDestination(), FtpSettingsDestination) },
                         viewModel = settingsViewModel,
                     )
                 }
@@ -451,10 +446,13 @@ fun TianyanNavHost(
                 GuardedEntry(AboutCommunityDestination) {
                     AboutCommunityScreen(
                         onBack = ::popBack,
+                        onOpenSponsor = { activeStack.push(AboutCommunityDestination, SponsorDestination) },
                         viewModel = settingsViewModel,
                     )
                 }
             }
+            // 赞助支持：鸣谢名单 + 收款码（入口在「关于与社区」页）。
+            entry<SponsorDestination> { GuardedEntry(SponsorDestination) { SponsorScreen(onBack = ::popBack) } }
             entry<DistroManagementDestination> {
                 GuardedEntry(DistroManagementDestination) {
                     DistroManagementScreen(

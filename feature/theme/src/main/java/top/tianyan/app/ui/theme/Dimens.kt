@@ -22,9 +22,6 @@ import androidx.compose.ui.unit.dp
  * - 间距只允许从 [Spacing] 取六档。写 `16.dp` 的地方改成 `Spacing.md`。
  * - 圆角只允许从 [Radius] 取。它与 `TianyanShapes`（M3 Shapes）同源，
  *   组件内部走 Shapes，组件外部的局部圆角走 [Radius]。
- * - 触摸目标下限见 [Touch]。48dp 是 Android 无障碍硬要求，低于它的可点击元素
- *   在 TalkBack 与单手操作下都会失准。
- * - 内容宽度上限见 [Content]。聊天气泡 560dp 是既有铁律，此处收口避免各屏各写。
  */
 object Spacing {
     /** 4dp — 图标与文字之间、标签内部。 */
@@ -73,53 +70,4 @@ object Radius {
     val mdShape = RoundedCornerShape(md)
     val lgShape = RoundedCornerShape(lg)
     val xlShape = RoundedCornerShape(xl)
-}
-
-/**
- * 触摸目标与最小可点尺寸。
- *
- * 48dp 不是设计偏好，是 Android 无障碍规范的下限：低于它，TalkBack 的触摸探索
- * 会在相邻元素间误判，单手拇指操作也会频繁点空。
- */
-object Touch {
-    /** 48dp — 任何可点击元素的最小边长。 */
-    val min: Dp = 48.dp
-
-    /** 44dp — 密集列表内的次级操作（如行尾图标），已是可接受的下限。 */
-    val compact: Dp = 44.dp
-}
-
-/** 内容宽度上限。 */
-object Content {
-    /** 560dp — 聊天消息气泡最大宽度（既有铁律，此处收口）。 */
-    val bubbleMax: Dp = 560.dp
-
-    /** 720dp — 双栏布局的宽度阈值（沿用既有实现，勿在别处另写断点）。 */
-    val dualPaneMin: Dp = 720.dp
-}
-
-/**
- * 响应式断点。
- *
- * 引入前全仓只有 1 处 `720.dp` 硬断点、0 处 `WindowSizeClass`。三档与 Material 3
- * 的 window size class 对齐，但用 Dp 常量表达以便在 `BoxWithConstraints` 里直接用
- * （不引入额外依赖，也不强制 Activity 层先算出 size class）。
- */
-object Breakpoints {
-    /** < 600dp — 手机竖屏。 */
-    val compactMax: Dp = 600.dp
-
-    /** 600dp – 840dp — 折叠屏展开、小平板。 */
-    val mediumMax: Dp = 840.dp
-
-    /** ≥ 840dp — 平板横屏、桌面模式。 */
-    val expandedMin: Dp = 840.dp
-
-    fun of(width: Dp): WindowClass = when {
-        width < compactMax -> WindowClass.Compact
-        width < expandedMin -> WindowClass.Medium
-        else -> WindowClass.Expanded
-    }
-
-    enum class WindowClass { Compact, Medium, Expanded }
 }
