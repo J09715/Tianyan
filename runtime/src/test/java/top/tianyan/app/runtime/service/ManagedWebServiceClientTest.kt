@@ -18,7 +18,7 @@ class ManagedWebServiceClientTest {
                 val request = server.takeRequest()
                 assertEquals("POST", request.method)
                 assertEquals("/plugin/api/auth", request.path)
-                assertEquals("1", request.getHeader("X-Taixu-Plugin-Write"))
+                assertEquals("1", request.getHeader("X-Tianyan-Plugin-Write"))
                 assertEquals("{\"token\":\"secret\"}", request.body.readUtf8())
                 assertNull(client.write("api/auth", "{}"))
                 assertNull(client.write("../escape", "{}"))

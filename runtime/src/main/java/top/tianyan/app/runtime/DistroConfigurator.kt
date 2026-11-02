@@ -348,19 +348,19 @@ class DistroConfigurator(
 
     /** 安装宿主桥接沙箱端脚本到 /opt/tianyan/（bind-mounted 到沙箱）：
      *  bin/tianyan-host 桥接 CLI（install-apk / shell / logcat / health）与 bin/tianyan-android-exec 链接环境包装器。
-     *  桥接凭据由宿主在每次命令/会话构建时经环境注入（TAIXU_BRIDGE_TOKEN），沙箱内不落盘任何密钥文件。 */
+     *  桥接凭据由宿主在每次命令/会话构建时经环境注入（TIANYAN_BRIDGE_TOKEN），沙箱内不落盘任何密钥文件。 */
     private fun installHostBridgeScripts(distroId: String) {
         val binDir = pathManager.tianyanBinDir(distroId)
         binDir.mkdirs()
 
         // tianyan-host — 宿主桥接 CLI
         val hostScript = File(binDir, "tianyan-host")
-        hostScript.writeText(TAIXU_HOST_SCRIPT)
+        hostScript.writeText(TIANYAN_HOST_SCRIPT)
         runCatching { Os.chmod(hostScript.absolutePath, 0x1ED) } // 0755
 
         // tianyan-android-exec — Android 二进制执行包装器
         val androidExecScript = File(binDir, "tianyan-android-exec")
-        androidExecScript.writeText(TAIXU_ANDROID_EXEC_SCRIPT)
+        androidExecScript.writeText(TIANYAN_ANDROID_EXEC_SCRIPT)
         runCatching { Os.chmod(androidExecScript.absolutePath, 0x1ED) }
 
         // 迁移收尾：清理历史版本写入的共享密钥文件（旧脚本会因此失效，需重启会话刷新凭据）
@@ -370,7 +370,7 @@ class DistroConfigurator(
     }
 
     companion object {
-        val TAIXU_HOST_SCRIPT = listOf(
+        val TIANYAN_HOST_SCRIPT = listOf(
             "#!/bin/sh",
             "# Tianyan Host Bridge CLI",
             "# Usage: tianyan-host install-apk <path> | tianyan-host shell <cmd> | tianyan-host logcat [pkg] [tag] [prio] [kw] [lines] | tianyan-host health",
@@ -378,7 +378,7 @@ class DistroConfigurator(
             "BRIDGE_URL=\"http://127.0.0.1:7980\"",
             "",
             "# 桥接凭据由宿主签发并经 PRoot 命令环境注入（宿主可撤销）；沙箱内不再有共享密钥文件。",
-            "if [ -z \"\${TAIXU_BRIDGE_TOKEN:-}\" ] && [ \"\${1:-}\" != \"health\" ] && [ \"\${1:-}\" != \"status\" ]; then",
+            "if [ -z \"\${TIANYAN_BRIDGE_TOKEN:-}\" ] && [ \"\${1:-}\" != \"health\" ] && [ \"\${1:-}\" != \"status\" ]; then",
             "  echo '{\"success\":false,\"error\":\"missing host credential: restart the Tianyan session to refresh it\"}' >&2",
             "  exit 1",
             "fi",
@@ -387,7 +387,7 @@ class DistroConfigurator(
             "  echo '{\"success\":false,\"error\":\"curl not installed\"}' >&2; exit 1",
             "fi",
             "",
-            "AUTH=\"Authorization: Bearer \${TAIXU_BRIDGE_TOKEN:-}\"",
+            "AUTH=\"Authorization: Bearer \${TIANYAN_BRIDGE_TOKEN:-}\"",
             "",
             "case \"\$1\" in",
             "  install-apk)",
@@ -467,7 +467,7 @@ class DistroConfigurator(
             "esac",
         ).joinToString("\n") + "\n"
 
-        val TAIXU_ANDROID_EXEC_SCRIPT = listOf(
+        val TIANYAN_ANDROID_EXEC_SCRIPT = listOf(
             "#!/bin/sh",
             "# Tianyan Android Binary Executor",
             "# Sets up correct linker env for Android system binaries in PRoot sandbox.",

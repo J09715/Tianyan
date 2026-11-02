@@ -131,7 +131,7 @@ class ManagedWebServiceClient(
 
     private fun request(path: String, body: String? = null): Request {
         val request = Request.Builder().url("http://127.0.0.1:$port$basePath$path").header("Accept-Encoding", "identity")
-        if (body != null) request.header("X-Taixu-Plugin-Write", "1")
+        if (body != null) request.header("X-Tianyan-Plugin-Write", "1")
             .post(body.toRequestBody("application/json; charset=utf-8".toMediaType()))
         authorization?.let { request.header("Authorization", it) }
         return request.build()

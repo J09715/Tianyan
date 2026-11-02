@@ -24,7 +24,7 @@ class CustomIterationBootstrapTest {
     private val workflowText = """
         name: Build TianyanDev APK
         env:
-          TAIXU_DEV_BUILD: "1"
+          TIANYAN_DEV_BUILD: "1"
         packages: 'platform-tools'
     """.trimIndent().toByteArray()
 
@@ -89,7 +89,7 @@ class CustomIterationBootstrapTest {
         assertTrue("workflow cache must exist: $workflow", workflow.isFile)
         val text = workflow.readText()
         assertTrue(text.contains("packages: 'platform-tools'"))
-        assertTrue(text.contains("TAIXU_DEV_BUILD"))
+        assertTrue(text.contains("TIANYAN_DEV_BUILD"))
 
         val cloneTarget = File(home, CustomIterationBootstrap.WORKSPACE_NAME)
         assertTrue(cloneTarget.list().isNullOrEmpty())
@@ -160,7 +160,7 @@ class CustomIterationBootstrapTest {
 
         assertFalse(result.success)
         assertEquals("", result.prompt)
-        assertTrue(result.errorMessage?.contains("TAIXU_DEV_BUILD") == true)
+        assertTrue(result.errorMessage?.contains("TIANYAN_DEV_BUILD") == true)
     }
 
     @Test

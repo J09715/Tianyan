@@ -131,7 +131,7 @@ class GenericRecipeInstallerTest {
         )
         runtime.commandResults["install-progress-tool"] = CommandResult(
             0,
-            "[TAIXU_PROGRESS:50] [EXTRACT] 正在解压测试资源\n",
+            "[TIANYAN_PROGRESS:50] [EXTRACT] 正在解压测试资源\n",
             "",
             1,
         )

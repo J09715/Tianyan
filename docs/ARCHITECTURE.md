@@ -28,7 +28,7 @@
 ## 2. 🗺️ 模块拓扑与职责 (Module Topology)
 
 ```text
-LinuxAIRuntime/
+Tianyan/
 ├── app/                  # 应用壳工程：MainActivity、Koin 初始化、JNI C 代码、前台保活 Service
 ├── core/
 │   ├── model/           # 纯 Kotlin 数据模型 (不含 Android SDK 依赖)

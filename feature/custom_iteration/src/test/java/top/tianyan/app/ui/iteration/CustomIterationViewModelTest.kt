@@ -178,7 +178,7 @@ class CustomIterationViewModelTest {
     private fun assetReader() = AssetReader { path ->
         when (path) {
             CustomIterationBootstrap.ASSET_SKILL -> "skill".toByteArray()
-            CustomIterationBootstrap.ASSET_WORKFLOW -> "TAIXU_DEV_BUILD".toByteArray()
+            CustomIterationBootstrap.ASSET_WORKFLOW -> "TIANYAN_DEV_BUILD".toByteArray()
             else -> null
         }
     }

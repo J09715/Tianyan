@@ -65,29 +65,45 @@ class SponsorListRepository(
 
     /**
      * 拉取 GitHub 上的赞助者名单。仅在赞助页面打开时调用。
+     *
+     * 依次尝试 [SPONSORS_JSON_URLS]：main 分支 → 当前发布分支。
+     * 之所以要多个地址：仓库默认分支是 main，而实际发版分支另有其名，
+     * 文件只存在于其中一个时，单地址会让赞助页永远显示「加载失败」。
      */
     suspend fun loadEntries(): Result<List<SponsorEntry>> = withContext(Dispatchers.IO) {
-        runCatching {
-            val request = Request.Builder()
-                .url(SPONSORS_JSON_URL)
-                .header("User-Agent", "Tianyan-App")
-                .get()
-                .build()
-            httpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    throw IllegalStateException("名单加载失败 HTTP ${response.code}")
+        var lastError: Throwable? = null
+        for (url in SPONSORS_JSON_URLS) {
+            val result = runCatching {
+                val request = Request.Builder()
+                    .url(url)
+                    .header("User-Agent", "Tianyan-App")
+                    .get()
+                    .build()
+                httpClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        throw IllegalStateException("HTTP ${response.code}")
+                    }
+                    val body = response.body?.string().orEmpty()
+                    if (body.isBlank()) throw IllegalStateException("名单内容为空")
+                    json.decodeFromString(SponsorListDto.serializer(), body).entries
                 }
-                val body = response.body?.string().orEmpty()
-                if (body.isBlank()) {
-                    throw IllegalStateException("名单内容为空")
-                }
-                json.decodeFromString(SponsorListDto.serializer(), body).entries
             }
+            if (result.isSuccess) return@withContext result
+            lastError = result.exceptionOrNull()
         }
+        Result.failure(lastError ?: IllegalStateException("名单加载失败"))
     }
 
     companion object {
-        // TODO: 把仓库根目录的 sponsors.json 推送到 GitHub 后，确认该地址可访问
-        const val SPONSORS_JSON_URL = "https://raw.githubusercontent.com/tianyan-lab/tianyan/main/sponsors.json"
+        private const val REPO = "J09715/Tianyan"
+
+        /** 按顺序尝试；第一个可用即返回。 */
+        val SPONSORS_JSON_URLS: List<String> = listOf(
+            "https://raw.githubusercontent.com/$REPO/main/sponsors.json",
+            "https://raw.githubusercontent.com/$REPO/merge/taixu-v1.5.0/sponsors.json",
+        )
+
+        /** 兼容旧引用：默认使用第一个地址。 */
+        const val SPONSORS_JSON_URL = "https://raw.githubusercontent.com/J09715/Tianyan/main/sponsors.json"
     }
 }

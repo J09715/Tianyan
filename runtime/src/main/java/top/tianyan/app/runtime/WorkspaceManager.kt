@@ -730,8 +730,8 @@ class WorkspaceManager(
                 ShellCommand(
                     commandLine = "sh ${ShellQuote.of(linuxPathFor(hookFile))}",
                     workingDirectory = linuxPathFor(projectDir),
-                    environment = values.mapKeys { (name, _) -> "TAIXU_VAR_${name.uppercase()}" } +
-                        ("TAIXU_PROJECT_DIR" to linuxPathFor(projectDir)),
+                    environment = values.mapKeys { (name, _) -> "TIANYAN_VAR_${name.uppercase()}" } +
+                        ("TIANYAN_PROJECT_DIR" to linuxPathFor(projectDir)),
                     timeoutMs = TEMPLATE_HOOK_TIMEOUT_MS,
                 ),
             )

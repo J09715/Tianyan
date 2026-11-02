@@ -39,8 +39,8 @@ class ToolServiceAuthentication private constructor(private val key: ByteArray) 
     })
 
     companion object {
-        const val HEADER = "X-Taixu-Service-Authorization"
-        const val RESPONSE_HEADER = "X-Taixu-Service-Response"
+        const val HEADER = "X-Tianyan-Service-Authorization"
+        const val RESPONSE_HEADER = "X-Tianyan-Service-Response"
         private const val MAX_RESPONSE_BYTES = 2 * 1024 * 1024L
         private fun hex(bytes: ByteArray) = bytes.joinToString("") { "%02x".format(it) }
         private fun digest(bytes: ByteArray) = hex(MessageDigest.getInstance("SHA-256").digest(bytes))

@@ -37,8 +37,8 @@ object GuestLoginEnvironment {
             export PATH=$path
             export HOME=/root
             # HostBridge — 沙箱通过 localhost HTTP 桥接触发宿主侧操作
-            export TAIXU_BRIDGE_URL="http://127.0.0.1:7980"
-            export TAIXU_BRIDGE_PORT=7980
+            export TIANYAN_BRIDGE_URL="http://127.0.0.1:7980"
+            export TIANYAN_BRIDGE_PORT=7980
             # Android 二进制参考路径（用 tianyan-android-exec 包装器执行）
             export ANDROID_BIN_PATH="/system/bin:/system/xbin"
             export ANDROID_LIB_PATH="/system/lib64:/system/lib:/vendor/lib64:/vendor/lib"

@@ -11,7 +11,7 @@ object RemotePluginSource {
             manifest.id == release.toolId && manifest.version == release.version &&
             (manifest.plugin?.execution ?: "PROCESS") == release.execution
     fun base(channel: PluginLibraryChannel) = when (channel) {
-        PluginLibraryChannel.GITHUB -> "https://raw.githubusercontent.com/tianyan-lab/tianyan-library/main"
+        PluginLibraryChannel.GITHUB -> "https://raw.githubusercontent.com/J09715/Tianyan-library/main"
         PluginLibraryChannel.GITEE -> "https://gitee.com/wang_ke_bin/tianyan-library/raw/main"
     }
     fun available(release: RemotePluginRelease, channel: PluginLibraryChannel): Boolean =

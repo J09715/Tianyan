@@ -300,9 +300,9 @@ class GenericRecipeInstaller(
         return providerManager.environment().filterKeys { it != "PATH" } +
             manifest.environment.filterKeys { it != "PATH" } +
             mapOf(
-                "TAIXU_TOOL_ID" to toolId,
-                "TAIXU_TOOL_DIR" to toolDir,
-                "TAIXU_TOOL_DATA" to ToolLayout.toolDataDirectory(toolId),
+                "TIANYAN_TOOL_ID" to toolId,
+                "TIANYAN_TOOL_DIR" to toolDir,
+                "TIANYAN_TOOL_DATA" to ToolLayout.toolDataDirectory(toolId),
                 "npm_config_prefix" to toolDir,
                 "NPM_CONFIG_PREFIX" to toolDir,
                 "PATH" to "$toolDir/bin:$effectivePath",
@@ -334,8 +334,8 @@ class GenericRecipeInstaller(
                 '[ -x "${'$'}{jar_bin}" ] || { echo "JDK jar unavailable for ZIP extraction" >&2; exit 127; }' \
                 'mkdir -p "${'$'}dest"' \
                 '(cd "${'$'}dest" && "${'$'}{jar_bin}" xf "${'$'}archive")' \
-                > "${'$'}TAIXU_TOOL_DIR/bin/unzip"
-            chmod 755 "${'$'}TAIXU_TOOL_DIR/bin/unzip"
+                > "${'$'}TIANYAN_TOOL_DIR/bin/unzip"
+            chmod 755 "${'$'}TIANYAN_TOOL_DIR/bin/unzip"
         fi
     """.trimIndent()
 
@@ -382,6 +382,6 @@ class GenericRecipeInstaller(
 
         /** 进程超时强杀的统一退出码（见 ProcessShellExecutor.TIMEOUT_EXIT_CODE）。 */
         const val VERIFY_TIMEOUT_EXIT_CODE = 124
-        val INSTALLER_PROGRESS_PATTERN = Regex("""\[TAIXU_PROGRESS:(\d{1,3})]\s+(.+)""")
+        val INSTALLER_PROGRESS_PATTERN = Regex("""\[TIANYAN_PROGRESS:(\d{1,3})]\s+(.+)""")
     }
 }
