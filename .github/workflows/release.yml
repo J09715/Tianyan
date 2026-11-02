@@ -65,6 +65,14 @@ jobs:
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
 
+      # 测试门禁：全量单测不过不发版。失败（编译错/用例错）直接中止，
+      # 不会走到 Build Release APK 与后续发布步骤。全部为离线测试，
+      # Provider/网络一律 MockWebServer / 假 Provider，不需要任何 API Key。
+      - name: Test Gate (testDebugUnitTest, all modules)
+        run: |
+          ./gradlew testDebugUnitTest --no-daemon --console=plain --continue \
+            -x :app:packageDebug -x :app:lintVitalRelease --stacktrace
+
       # 从 Secrets 还原签名 keystore
       - name: Restore Release Keystore
         env:

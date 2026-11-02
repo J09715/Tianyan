@@ -29,6 +29,8 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
         run: python tools/check-architecture-baseline.py --base-ref "$BASE_SHA"
 
+  # 全量单测由 unit-test.yml 负责（x86_64 runner，Robolectric NATIVE graphics 可跑）；
+  # 本 job 只做协议/输出契约的快速子集（PR 每 push 都跑，控时长）。
   harness-contracts:
     runs-on: ubuntu-24.04
     timeout-minutes: 30

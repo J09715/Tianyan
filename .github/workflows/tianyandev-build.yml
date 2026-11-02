@@ -64,6 +64,17 @@ jobs:
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
 
+      # 批次 E 扩面：全仓单测（不再只跑 48 条 --tests 白名单）。
+      # 排除项与原因（显式列出，不静默跳过）：
+      #   - :feature:settings / :core:network：Robolectric NATIVE graphics 渲染与
+      #     EncryptedFile 在 ubuntu runner 需要 SDK 35 platform 下载，首次运行可能
+      #     超时；CI 内存受限时 Robolectric 下载 android-all jar 也偶发 OOM。保留
+      #     在命令里但用 --continue，让其余模块照常执行并收集结果。
+      #   - 其余模块全部跑全量 testDebugUnitTest。
+      - name: Run All Unit Tests
+        run: |
+          ./gradlew testDebugUnitTest --no-daemon --console=plain --continue --stacktrace
+
       - name: Build TianyanDev APK
         env:
           TIANYAN_DEV_BUILD: "1"

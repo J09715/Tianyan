@@ -18,4 +18,15 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     // JGit：MGit 同款 Git 实现，宿主侧直接操作工作区仓库
     implementation(libs.jgit)
+
+    testImplementation(libs.bundles.test.robolectric)
+    testImplementation(libs.kotlinx.coroutines.test)
+}
+
+android {
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
 }

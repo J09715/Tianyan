@@ -24,4 +24,14 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    // McpMaterialRenderTest / AgentEcoMaterialRenderTest 用 Robolectric NATIVE graphics 渲染 Compose。
+    testImplementation(libs.bundles.test.robolectric)
+}
+
+android {
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
 }
