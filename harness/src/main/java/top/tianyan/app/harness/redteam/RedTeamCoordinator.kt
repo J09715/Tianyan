@@ -144,7 +144,7 @@ class RedTeamCoordinator(
      */
     suspend fun skillHealth(sessionId: String): RedTeamPreflightReport {
         val session = requireNotNull(sessions.findById(sessionId)) { "session not found" }
-        require(session.redTeamMode == "red_team") { "red-team mode is not enabled for this session" }
+        // 不要求 redTeamMode：体检只问技能能否运行，与会话模式无关；开工作台时模式仍是 off。
 
         val fs = RedTeamSkillAvailability.fileSystemFs()
         val home = System.getProperty("user.home").orEmpty()

@@ -167,7 +167,14 @@ internal class RedTeamConsoleController(
     }
 
     fun refreshSkillHealth() = launch { coordinator, sessionId ->
-        val report = withContext(Dispatchers.IO) { coordinator.skillHealth(sessionId) }
+        // 体检失败不能拖垮控制台：技能库可能为空、DSH_HOME 可能不存在，
+        // 这些都不是「控制台不可用」，只需把原因写进 error 让界面提示。
+        val report = runCatching {
+            withContext(Dispatchers.IO) { coordinator.skillHealth(sessionId) }
+        }.getOrElse { failure ->
+            _state.update { it.copy(error = failure.message ?: "技能体检失败") }
+            return@launch
+        }
         _skillHealth.value = report
     }
 
