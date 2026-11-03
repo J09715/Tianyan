@@ -9,8 +9,6 @@ import top.tianyan.app.ui.settings.FirstResponseTimeoutViewModel
 import top.tianyan.app.ui.settings.LocalLlmViewModel
 import top.tianyan.app.ui.settings.PhoneAgentSettingsViewModel
 import top.tianyan.app.ui.settings.SettingsViewModel
-import top.tianyan.app.ui.settings.SponsorListRepository
-import top.tianyan.app.ui.settings.SponsorListViewModel
 import top.tianyan.app.ui.settings.SshSettingsViewModel
 import top.tianyan.app.ui.settings.StorageUsageViewModel
 import top.tianyan.app.ui.settings.McpCatalogViewModel
@@ -121,10 +119,6 @@ val featureSettingsModule = module {
             logger = get(),
         )
     }
-
-    single<SponsorListRepository> { SponsorListRepository(httpClient = get()) }
-
-    viewModel<SponsorListViewModel> { SponsorListViewModel(repository = get()) }
 
     viewModel<SshSettingsViewModel> {
         SshSettingsViewModel(

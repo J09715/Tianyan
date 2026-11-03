@@ -21,7 +21,7 @@ enum class RuntimeIconName {
     Bot, Palette, FontSize, Battery, Bug, Update, Extension, Hub, Mount, OpenInNew, Key, Tune,
     Brain, Sparkles, Vibrate, FolderDownload, Document, SdCard, Server, Compress,
     Prompt, Wrench, Model, Network, Community, FolderOpen, Speed, Cable, Admin, Link,
-    Reverse, PowerSettingsNew, Visibility, VisibilityOff, Sponsor, Mail,
+    Reverse, PowerSettingsNew, Visibility, VisibilityOff, Mail,
     GitBranch, GitCommit, Alarm,
     Phone, Bookmark, Checklist, StickyNote, History, Hammer, BookOpen,
     Menu, Sessions, PanelLeftClose, PanelRightOpen, WriteDocument,
@@ -129,7 +129,6 @@ fun RuntimeIcon(
         RuntimeIconName.PowerSettingsNew -> R.drawable.components_ic_powersettingsnew
         RuntimeIconName.Visibility -> R.drawable.components_ic_visibility
         RuntimeIconName.VisibilityOff -> R.drawable.components_ic_visibilityoff
-        RuntimeIconName.Sponsor -> R.drawable.components_ic_sponsor
         RuntimeIconName.Mail -> R.drawable.components_ic_mail
         RuntimeIconName.GitBranch -> R.drawable.components_ic_gitbranch
         RuntimeIconName.GitCommit -> R.drawable.components_ic_gitcommit
