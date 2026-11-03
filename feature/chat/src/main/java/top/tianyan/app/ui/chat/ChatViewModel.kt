@@ -166,7 +166,7 @@ class ChatViewModel(
     internal val redTeamCoordinatorRef: top.tianyan.app.harness.redteam.RedTeamCoordinator? = null,
 ) : ViewModel() {
     val failureMemoryAccess get() = operationCoordinator.failureMemories
-    val redTeamFacts: kotlinx.coroutines.flow.Flow<List<top.tianyan.app.core.database.RedTeamFactEntity>> = redTeamFactStream(); fun bindRedTeamTarget(target: String, scope: String) = bindRedTeam(sessionDao, target, scope); internal val redTeamConsoleController by lazy { buildRedTeamConsoleController() }
+    val redTeamFacts: kotlinx.coroutines.flow.Flow<List<top.tianyan.app.core.database.RedTeamFactEntity>> by lazy { redTeamFactStream() } /* 必须 lazy：依赖后声明的 currentSessionId，初始化期求值会拿到 null */ ; fun bindRedTeamTarget(target: String, scope: String) = bindRedTeam(sessionDao, target, scope); internal val redTeamConsoleController by lazy { buildRedTeamConsoleController() }
 
     private val _workflowLaunchRequests = MutableSharedFlow<WorkflowLaunchRequest>(extraBufferCapacity = 2)
     val workflowLaunchRequests: SharedFlow<WorkflowLaunchRequest> = _workflowLaunchRequests
