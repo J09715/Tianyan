@@ -67,7 +67,6 @@ import top.tianyan.app.ui.settings.McpSettingsScreen
 import top.tianyan.app.ui.settings.PhoneAgentSettingsScreen
 import top.tianyan.app.ui.settings.QuickPhrasesScreen
 import top.tianyan.app.ui.settings.RemotePluginLibraryScreen
-import top.tianyan.app.ui.settings.SponsorScreen
 import top.tianyan.app.ui.settings.SshSettingsScreen
 import top.tianyan.app.ui.settings.StorageMountSettingsScreen
 import top.tianyan.app.ui.settings.StorageUsageScreen
@@ -446,13 +445,10 @@ fun TianyanNavHost(
                 GuardedEntry(AboutCommunityDestination) {
                     AboutCommunityScreen(
                         onBack = ::popBack,
-                        onOpenSponsor = { activeStack.push(AboutCommunityDestination, SponsorDestination) },
                         viewModel = settingsViewModel,
                     )
                 }
             }
-            // 赞助支持：鸣谢名单 + 收款码（入口在「关于与社区」页）。
-            entry<SponsorDestination> { GuardedEntry(SponsorDestination) { SponsorScreen(onBack = ::popBack) } }
             entry<DistroManagementDestination> {
                 GuardedEntry(DistroManagementDestination) {
                     DistroManagementScreen(

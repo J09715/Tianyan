@@ -53,7 +53,6 @@ import top.tianyan.app.core.model.UpdateCheckState
 @Composable
 fun AboutCommunityScreen(
     onBack: () -> Unit,
-    onOpenSponsor: () -> Unit = {},
     viewModel: SettingsViewModel? = previewOrNull { koinViewModel() },
 ) {
     val autoCheckUpdates by viewModel?.autoCheckUpdates?.collectAsStateWithLifecycle() ?: previewStateOf(false)
@@ -218,14 +217,6 @@ fun AboutCommunityScreen(
                     title = "关于天衍 · Tianyan",
                     subtitle = "Android 原生 Linux PRoot 沙箱与 AI 结对中枢",
                     onClick = { showAboutDialog = true },
-                )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                // 赞助支持：鸣谢名单页（GitHub sponsors.json + 收款码），此前整链未接线。
-                SettingsRow(
-                    icon = RuntimeIconName.Sponsor,
-                    title = "赞助支持",
-                    subtitle = "查看赞助者鸣谢名单，或通过支付宝 / 微信赞赏",
-                    onClick = onOpenSponsor,
                 )
             }
         }
