@@ -19,6 +19,7 @@ import top.tianyan.app.core.database.AgentApprovalRequestEntity
 import top.tianyan.app.core.datastore.AgentPreferences
 import top.tianyan.app.harness.session.InteractiveSessionControl
 import top.tianyan.app.harness.HarnessMessage
+import top.tianyan.app.harness.MessageAttachment
 import top.tianyan.app.harness.SkillSuggestion
 import top.tianyan.app.harness.UserMessage
 import top.tianyan.app.harness.AssistantText
@@ -1011,18 +1012,18 @@ class ChatViewModel(
         AttachmentHelper.deleteHostFile(attachment.hostFilePath)
     }
 
-    /** 组装附件挂载说明并委托 send() 发送；View 只需在输入框非空或有附件时触发 */
+    /** 组装附件载荷并委托 send()：附件必须走结构化通道，拼进正文会让气泡退化成纯文本。 */
     fun sendFromComposer() {
         val trimmedInput = _input.value.trim()
         val attachments = _pendingAttachments.value
         if (trimmedInput.isBlank() && attachments.isEmpty()) return
-        val imageUrls = attachments.mapNotNull { it.base64DataUrl }
-        val fullMessage = buildComposerMessage(context, trimmedInput, attachments)
+        val payload = prepareComposerPayload(context, trimmedInput, attachments)
         _pendingAttachments.value = emptyList()
-        send(fullMessage, imageUrls)
+        send(payload.text, payload.imageUrls, payload.attachments)
     }
 
-    fun send(customText: String? = null, imageUrls: List<String> = emptyList()) {
+    fun send(customText: String? = null, imageUrls: List<String> = emptyList(),
+             attachments: List<MessageAttachment> = emptyList()) {
         val rawText = (customText ?: _input.value).trim()
         if (rawText.isBlank() && imageUrls.isEmpty()) return
         WORKFLOW_COMMAND.matchEntire(rawText)?.let { match ->
@@ -1055,13 +1056,13 @@ class ChatViewModel(
         }
 
         if (!running.value) {
-            harnessLoop.send(effectiveText, imageUrls = imageUrls)
+            harnessLoop.send(effectiveText, imageUrls = imageUrls, attachments = attachments)
         } else {
             // 运行中投递语义跟随「运行中发送方式」偏好；send() 非挂起函数，故读 stateIn 快照。
             // STEER 在当前这批工具调用完成后、下一轮推理开始前注入，不打断正在执行的工具调用。
             when (runningSendModePref.value) {
-                RunningSendMode.STEER -> harnessLoop.steer(effectiveText, imageUrls = imageUrls)
-                RunningSendMode.QUEUE -> harnessLoop.send(effectiveText, imageUrls = imageUrls)
+                RunningSendMode.STEER -> harnessLoop.steer(effectiveText, imageUrls = imageUrls, attachments = attachments)
+                RunningSendMode.QUEUE -> harnessLoop.send(effectiveText, imageUrls = imageUrls, attachments = attachments)
             }
         }
         // 红队会话：消息里带演练目标（如「测试 example.com」）时自动提议绑定目标与授权范围。
