@@ -1,6 +1,9 @@
 package top.tianyan.app.di.core.datastore
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import org.koin.dsl.module
+import top.tianyan.app.core.datastore.settingsDataStore
 import top.tianyan.app.core.datastore.AgentPreferences
 import top.tianyan.app.core.datastore.AgentServerPreferences
 import top.tianyan.app.core.datastore.AppStatsPreferences
@@ -22,7 +25,14 @@ import top.tianyan.app.core.datastore.WorkshopPreferences
 
 /** Dependency registrations owned by the core:datastore module. */
 val coreDatastoreModule = module {
-    single { top.tianyan.app.core.datastore.ChatIdentityPreferences(context = get()) }
+    // ChatIdentityPreferences 的主构造器收 DataStore<Preferences>，次构造器收 Context。
+    // Koin 的图校验按主构造器反射，之前只注册了 `context = get()` 这条次构造器路径，
+    // 校验时就会报 "Missing definition for 'dataStore'"。这里显式注册共享的 settings
+    // DataStore（同一个 preferencesDataStore 委托实例），两条构造路径都能解析。
+    single<DataStore<Preferences>> {
+        get<android.content.Context>().applicationContext.settingsDataStore
+    }
+    single { top.tianyan.app.core.datastore.ChatIdentityPreferences(dataStore = get()) }
     single(org.koin.core.qualifier.named("chatIdentityImages")) {
         val context = get<android.content.Context>().applicationContext
         top.tianyan.app.core.datastore.ChatBackgroundImageStore(
