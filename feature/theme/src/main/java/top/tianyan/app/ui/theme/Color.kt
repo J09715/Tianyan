@@ -59,8 +59,8 @@ val M3ExpLightSurfaceTint = Color(0xFF4259C3)
 val M3ExpDarkSurfaceTint = Color(0xFFBAC3FF)
 val M3ExpLightSurfaceBright = Color(0xFFFAF8FD)
 val M3ExpLightSurfaceDim = Color(0xFFDAD9E0)
-val M3ExpDarkSurfaceBright = Color(0xFF38393F)
-val M3ExpDarkSurfaceDim = Color(0xFF121318)
+val M3ExpDarkSurfaceBright = Color(0xFF3A3B44)
+val M3ExpDarkSurfaceDim = Color(0xFF0A0B10)
 
 val M3ExpPrimaryFixed = Color(0xFFDFE1FF)
 val M3ExpPrimaryFixedDim = Color(0xFFBAC3FF)
@@ -91,16 +91,42 @@ val M3ExpLightOutline = Color(0xFF757680)
 val M3ExpLightOutlineVariant = Color(0xFFC6C6D0)
 
 // M3 Expressive 深色表面层级 (Obsidian Velvet Layers)
-val M3ExpDarkBackground = Color(0xFF121318)
+//
+// 旧阶梯 background=0x121318 / containerLow=0x1A1B21 / container=0x1E1F25 / high=0x282A30，
+// 相邻层只差 4–8 个亮度单位：卡片、列表行、弹层在手机上几乎贴平，整屏糊成一片灰；
+// 而深色下阴影本来就近乎无效，等于没有任何层次手段。这里把阶梯拉开到 8–12 个亮度单位，
+// 并把 outlineVariant 提亮到能画出 1dp 发丝边的程度（0x3A3B45）。
+val M3ExpDarkBackground = Color(0xFF0E0F14)
 val M3ExpDarkOnBackground = Color(0xFFE3E2E9)
-val M3ExpDarkSurface = Color(0xFF121318)
+val M3ExpDarkSurface = Color(0xFF0E0F14)
 val M3ExpDarkOnSurface = Color(0xFFE3E2E9)
 val M3ExpDarkSurfaceVariant = Color(0xFF45464F)
 val M3ExpDarkOnSurfaceVariant = Color(0xFFC6C6D0)
-val M3ExpDarkSurfaceContainerLowest = Color(0xFF0D0E13)
-val M3ExpDarkSurfaceContainerLow = Color(0xFF1A1B21)
-val M3ExpDarkSurfaceContainer = Color(0xFF1E1F25)
-val M3ExpDarkSurfaceContainerHigh = Color(0xFF282A30)
-val M3ExpDarkSurfaceContainerHighest = Color(0xFF33343B)
+val M3ExpDarkSurfaceContainerLowest = Color(0xFF08090D)
+val M3ExpDarkSurfaceContainerLow = Color(0xFF15161C)
+val M3ExpDarkSurfaceContainer = Color(0xFF1A1B22)
+val M3ExpDarkSurfaceContainerHigh = Color(0xFF23242C)
+val M3ExpDarkSurfaceContainerHighest = Color(0xFF2D2E37)
 val M3ExpDarkOutline = Color(0xFF90909A)
-val M3ExpDarkOutlineVariant = Color(0xFF45464F)
+val M3ExpDarkOutlineVariant = Color(0xFF3A3B45)
+
+// ======================= 强调与叠层（Accent & Scrim Tokens） =======================
+//
+// 全仓 561 处硬编码色值，其中大量是「品牌感」的临时涂色：渐变、悬浮层的半透明底、
+// 选中态的淡色面。它们散落在各 feature 里，切主题时不会跟着变。这里把它们收成 token：
+// 一屏只允许出现一次强调渐变（hero / 空状态 / 选中卡），其余区域靠表面阶梯说话。
+
+/** 品牌强调渐变（浅色）：主色 → 三级色，用于 hero 与空状态。 */
+val TianyanAccentGradientLight = listOf(Color(0xFF4259C3), Color(0xFF8666AE))
+
+/** 品牌强调渐变（深色）：提亮后的主色 → 三级色，避免深底上发灰。 */
+val TianyanAccentGradientDark = listOf(Color(0xFFBAC3FF), Color(0xFFD3BBFF))
+
+/** 悬浮层压暗（对话框背后的 scrim），比纯黑更贴主题。 */
+val TianyanScrim = Color(0x99000000)
+
+/** 浅色下的发丝边（1dp 描边），比 outlineVariant 更淡，避免卡片显脏。 */
+val TianyanHairlineLight = Color(0x1F1A1B21)
+
+/** 深色下的发丝边：亮线而非暗线，卡片才能在深底上「浮」起来。 */
+val TianyanHairlineDark = Color(0x1FFFFFFF)

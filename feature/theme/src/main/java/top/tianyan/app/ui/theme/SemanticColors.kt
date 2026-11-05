@@ -115,8 +115,8 @@ internal val DarkSemantics = SemanticColors(
     agentContainer = Color(0xFF573590),
     onAgentContainer = Color(0xFFE9DDFF),
     code = Color(0xFF9FD97F),
-    codeSurface = Color(0xFF1E1F25),
-    terminalSurface = Color(0xFF0D0E13),
+    codeSurface = Color(0xFF1A1B22),
+    terminalSurface = Color(0xFF06070A),
     terminalText = Color(0xFFE3E2E9),
     categorical = listOf(
         Color(0xFF9CA3AF),

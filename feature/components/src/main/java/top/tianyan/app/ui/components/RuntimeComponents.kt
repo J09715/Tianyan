@@ -200,44 +200,6 @@ fun SectionHeader(
     }
 }
 
-/**
- * 天衍精制卡片组件：支持自适应表面色与细腻描边
- */
-@Composable
-fun RuntimeCard(
-    modifier: Modifier = Modifier,
-    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow,
-    borderColor: Color = Color.Transparent,
-    shape: Shape = MaterialTheme.shapes.large,
-    onClick: (() -> Unit)? = null,
-    contentPadding: PaddingValues = PaddingValues(16.dp),
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    val colors = CardDefaults.cardColors(containerColor = containerColor)
-    val border = borderColor.takeIf { it.alpha > 0f }?.let { BorderStroke(1.dp, it) }
-
-    if (onClick == null) {
-        Card(
-            modifier = modifier,
-            shape = shape,
-            colors = colors,
-            border = border,
-        ) {
-            Column(Modifier.padding(contentPadding), content = content)
-        }
-    } else {
-        Card(
-            onClick = onClick,
-            modifier = modifier,
-            shape = shape,
-            colors = colors,
-            border = border,
-        ) {
-            Column(Modifier.padding(contentPadding), content = content)
-        }
-    }
-}
-
 @Composable
 fun RuntimeSwitch(
     checked: Boolean,

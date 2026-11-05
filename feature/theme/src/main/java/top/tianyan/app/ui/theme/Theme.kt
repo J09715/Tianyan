@@ -5,9 +5,11 @@ import top.tianyan.app.core.model.ThemePalette
 import android.app.Activity
 import android.content.ContextWrapper
 import android.os.Build
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
@@ -16,9 +18,12 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
@@ -203,4 +208,63 @@ fun TianyanTheme(
         val semantics = remember(colorScheme) { buildSemanticColors(colorScheme) }
         CompositionLocalProvider(LocalSemanticColors provides semantics, content = content)
     }
+}
+
+/**
+ * 品牌强调渐变：一屏只允许出现一次（hero、空状态、当前选中的模型卡）。
+ *
+ * 之所以要收成函数而不是让各页面自己 `Brush.linearGradient(listOf(...))`：全仓已有 561 处
+ * 硬编码色值，动态取色开启后这些渐变不会跟随壁纸，深色下还会发灰。这里统一按 surface
+ * 亮度切换深浅两套 stops。
+ */
+@Composable
+@ReadOnlyComposable
+fun tianyanAccentGradient(): Brush {
+    val stops = if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) {
+        TianyanAccentGradientDark
+    } else {
+        TianyanAccentGradientLight
+    }
+    return Brush.linearGradient(stops)
+}
+
+/**
+ * 1dp 发丝边颜色。
+ *
+ * 浅色用半透明暗线、深色用半透明白线——深色主题的层次不能靠阴影（几乎不可见），
+ * 只能靠「表面阶梯 + 亮发丝边」，这是 [tianyanCardColors] 的默认组合。
+ */
+@Composable
+@ReadOnlyComposable
+fun tianyanHairline(): Color {
+    val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    return if (dark) TianyanHairlineDark else TianyanHairlineLight
+}
+
+/** 卡片默认配色与描边：1 层表面 + 发丝边，深色不投影、浅色轻投影。 */
+@Composable
+@ReadOnlyComposable
+fun tianyanCardColors(): Pair<Color, BorderStroke> {
+    val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val container = if (dark) {
+        MaterialTheme.colorScheme.surfaceContainerLow
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerLowest
+    }
+    return container to BorderStroke(Hairline.width, tianyanHairline())
+}
+
+/**
+ * 把调用点传入的描边色解析成实际边框。
+ *
+ * - [Color.Unspecified] = 「没指定」→ 用主题发丝边（默认精致态）；
+ * - 显式半透明以上颜色 → 用它，宽度仍锁 1dp；
+ * - [Color.Transparent] = 「明确不要边」→ null。
+ */
+@Composable
+@ReadOnlyComposable
+fun resolveCardBorder(explicit: Color): BorderStroke? = when {
+    explicit == Color.Unspecified -> BorderStroke(Hairline.width, tianyanHairline())
+    explicit.alpha > 0f -> BorderStroke(Hairline.width, explicit)
+    else -> null
 }

@@ -71,3 +71,56 @@ object Radius {
     val lgShape = RoundedCornerShape(lg)
     val xlShape = RoundedCornerShape(xl)
 }
+
+/**
+ * 层次令牌（Elevation & Hairline）。
+ *
+ * 全仓 `elevation =` 只出现 1 次，`Surface(shadowElevation=)` 更少——也就是说当前界面
+ * **没有任何统一的层次语言**：卡片有时靠底色、有时靠阴影、有时什么都不靠。深色主题下
+ * 阴影本来就几乎不可见，唯一可靠的层次手段是「表面阶梯 + 1dp 发丝边」。
+ *
+ * 约定：
+ * - 0 层（页面底）用 `surface`，不加边；
+ * - 1 层（卡片、列表行组）用 `containerLow` + 发丝边（[Hairline.width]）；
+ * - 2 层（弹层、底部面板）用 `container` + 更高一档阴影；
+ * - 阴影只在浅色主题参与，深色主题恒为 0（避免发灰）。
+ */
+object Elevation {
+    /** 0dp — 贴底内容，无阴影无边框。 */
+    val level0: Dp = 0.dp
+
+    /** 1dp — 卡片默认投影（浅色可见，深色由调用方置 0）。 */
+    val level1: Dp = 1.dp
+
+    /** 3dp — 悬浮按钮、菜单。 */
+    val level2: Dp = 3.dp
+
+    /** 6dp — 底部弹层、对话框。 */
+    val level3: Dp = 6.dp
+}
+
+/** 描边令牌。1dp 是全仓唯一正确的发丝边宽度，禁止出现 0.5dp / 1.5dp 混用。 */
+object Hairline {
+    val width: Dp = 1.dp
+}
+
+/**
+ * 动效令牌。
+ *
+ * 主题已启用 `MotionScheme.expressive()`，但各 feature 仍在写 `tween(180)` / `tween(220)` /
+ * `tween(300)` 之类随手值，同一类交互在不同页面的速度不同，观感就碎。这里给出四档，
+ * 覆盖 95% 的场景；特殊动效（如过程脉冲）仍可自带曲线。
+ */
+object Motion {
+    /** 120ms — 按下 / 抬起、开关切换。 */
+    const val instant = 120
+
+    /** 180ms — 展开 / 收起、淡入淡出。 */
+    const val quick = 180
+
+    /** 260ms — 页面内元素位移、列表重排。 */
+    const val standard = 260
+
+    /** 400ms — 全屏转场、底部弹层。 */
+    const val emphasized = 400
+}
