@@ -2,6 +2,7 @@ package top.tianyan.app.harness.mcp
 
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import top.tianyan.app.core.common.net.PrivateNetworkHosts
 import top.tianyan.app.core.model.BuiltinMcpPresets
 
 /**
@@ -17,17 +18,20 @@ internal fun resolveBrowserEffectiveUrl(serverUrl: String, serverId: String, run
     return serverUrl.replace(Regex("^(https?://[^/:]+):\\d+"), "$1:$runtimePort")
 }
 
-internal fun isAllowedCleartextMcpHost(host: String): Boolean {
-    if (host == "localhost" || host == "127.0.0.1" || host == "::1") return true
-    val octets = host.split('.')
-    if (octets.size != 4 || octets[0] != "192" || octets[1] != "168") return false
-    return octets.all { it.toIntOrNull()?.let { value -> value in 0..255 } == true }
-}
+/**
+ * 允许明文 HTTP 的 MCP 主机：回环 + 全部私有网段。
+ *
+ * 早先只白名单 192.168.*，导致 10.x、172.16-31.x、169.254.x、100.64.x（Tailscale）
+ * 以及 mDNS `.local` 名字的局域网 MCP 服务一律被拒。现在与 Provider 端点共用
+ * [top.tianyan.app.core.common.net.PrivateNetworkHosts] 的判定口径。
+ */
+internal fun isAllowedCleartextMcpHost(host: String): Boolean =
+    PrivateNetworkHosts.isPrivateOrLoopback(host)
 
 internal fun validatedMcpHttpEndpoint(baseUrl: String): HttpUrl {
     val url = baseUrl.trim().toHttpUrl()
     require(url.isHttps || isAllowedCleartextMcpHost(url.host)) {
-        "明文 MCP 仅允许 localhost、回环地址或 192.168.* 局域网地址"
+        "明文 MCP 仅允许 localhost、回环地址或局域网私有网段（10/8、172.16/12、192.168/16 等）"
     }
     return url
 }

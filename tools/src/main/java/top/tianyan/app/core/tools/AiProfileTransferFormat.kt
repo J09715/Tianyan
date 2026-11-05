@@ -82,11 +82,10 @@ object AiProfileTransferFormat {
         if (raw.isBlank()) return // Legacy profiles can use their provider's default endpoint.
         val uri = runCatching { URI(raw.trim()) }.getOrNull()
         val host = uri?.host?.lowercase().orEmpty().removeSurrounding("[", "]")
-        val octets = host.split('.')
-        val loopback = host == "localhost" || host == "::1" ||
-            (octets.size == 4 && octets.first() == "127" && octets.all { it.toIntOrNull() in 0..255 })
-        require(uri != null && host.isNotBlank() && (uri.scheme.equals("https", true) || (uri.scheme.equals("http", true) && loopback))) {
-            prefix + "端点需使用 HTTPS，本地回环地址可使用 HTTP"
+        // 与请求层共用同一份私有网段判定：导入时能通过的端点，运行时也必须能连。
+        val cleartextAllowed = ProviderEndpointPolicy.isPrivateOrLoopbackHost(host)
+        require(uri != null && host.isNotBlank() && (uri.scheme.equals("https", true) || (uri.scheme.equals("http", true) && cleartextAllowed))) {
+            prefix + "端点需使用 HTTPS，局域网与本地回环地址可使用 HTTP"
         }
     }
 }

@@ -3,6 +3,7 @@ package top.tianyan.app.core.tools
 import java.net.URI
 import kotlinx.coroutines.flow.first
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import top.tianyan.app.core.common.net.PrivateNetworkHosts
 
 open class ProviderManager {
     private val providerRepository: ProviderRepository?
@@ -99,22 +100,13 @@ object ProviderEndpointPolicy {
             uri.scheme.equals("http", ignoreCase = true)
     }
 
-    private fun isLocalOrPrivateHost(host: String): Boolean {
-        val h = host.trim().lowercase().removePrefix("[").removeSuffix("]")
-        if (h in LOOPBACK_HOSTS) return true
-        if (h.endsWith(".local") || h.endsWith(".lan") || h.endsWith(".internal") || h.endsWith(".home.arpa")) return true
-        val ipv4Parts = h.split('.').mapNotNull { it.toIntOrNull() }
-        if (ipv4Parts.size == 4 && ipv4Parts.all { it in 0..255 }) {
-            val (a, b, _, _) = ipv4Parts
-            if (a == 127) return true
-            if (a == 10) return true
-            if (a == 192 && b == 168) return true
-            if (a == 172 && b in 16..31) return true
-            if (a == 100 && b in 64..127) return true
-            if (a == 169 && b == 254) return true
-        }
-        return false
-    }
+    /**
+     * 是否为允许明文 HTTP 的本地/私有网段主机。
+     *
+     * 与 URL 归一化、端点校验、network-security-config 共用同一份判定，
+     * 避免出现「补了 http:// 又被别处按 https 拒掉」的分裂行为。
+     */
+    fun isPrivateOrLoopbackHost(host: String): Boolean = PrivateNetworkHosts.isPrivateOrLoopback(host)
 
-    private val LOOPBACK_HOSTS = setOf("localhost", "127.0.0.1", "::1")
+    private fun isLocalOrPrivateHost(host: String): Boolean = isPrivateOrLoopbackHost(host)
 }

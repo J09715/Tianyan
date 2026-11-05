@@ -1446,7 +1446,10 @@ class SettingsViewModel(
                 }
                 .onFailure {
                     logger.w("Model discovery failed: ${it.message}", it)
-                    _modelDiscoveryError.value = "获取模型列表失败，请检查 Base URL、API Key 与网络后重试"
+                    // 保留真实原因：明文被拦、证书不匹配、404 路径写错、401 Key 失效
+                    // 全都长得一样会让人无法判断该改哪一项。
+                    val detail = it.message?.takeIf { message -> message.isNotBlank() } ?: it.javaClass.simpleName
+                    _modelDiscoveryError.value = "获取模型列表失败：$detail"
                 }
             _discoveringModels.value = false
         }

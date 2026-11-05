@@ -37,6 +37,7 @@ import org.koin.compose.viewmodel.koinViewModel
 import top.tianyan.app.core.datastore.AgentPreferences
 import top.tianyan.app.core.datastore.PhoneAgentEndpoint
 import top.tianyan.app.core.tools.AgentModelConnectionTester
+import top.tianyan.app.core.tools.ProviderEndpointPolicy
 import top.tianyan.app.ui.components.RuntimeButton
 import top.tianyan.app.ui.components.RuntimeCircularProgressIndicator
 import top.tianyan.app.ui.components.RuntimeIconName
@@ -202,7 +203,13 @@ fun PhoneAgentSettingsScreen(
 private fun phoneAgentConfigError(baseUrl: String, model: String, apiKey: String): String? {
     val url = baseUrl.trim()
     if (url.isBlank() || model.isBlank() || apiKey.isBlank()) return "接口地址、模型名和密钥都要填写"
-    val local = url.startsWith("http://127.0.0.1") || url.startsWith("http://localhost")
-    if (!url.startsWith("https://") && !local) return "外部接口必须使用 https://"
+    val scheme = url.substringBefore("://", missingDelimiterValue = "").lowercase()
+    val host = runCatching { java.net.URI(url).host }.getOrNull()
+        ?.lowercase()?.removeSurrounding("[", "]").orEmpty()
+    // 与 Provider 请求层同一口径：局域网/回环允许明文，公网仍要求 https。
+    val cleartextAllowed = ProviderEndpointPolicy.isPrivateOrLoopbackHost(host)
+    if (scheme != "https" && !(scheme == "http" && cleartextAllowed)) {
+        return "外部接口必须使用 https://；局域网与本地回环地址可用 http://"
+    }
     return null
 }

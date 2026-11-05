@@ -1,18 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
     <!--
-        默认拒绝明文（base-config=false）。Android 的 network-security-config 不支持按
-        CIDR/通配符放行 192.168.0.0/16，因此局域网明文端点（如 MCP 192.168.*）由各业务
-        端点策略单独校验（McpHttpEndpoints 仅允许 localhost/回环与 192.168.*），
-        平台层不再为全局明文兜底。
-    -->
-    <base-config cleartextTrafficPermitted="false" />
+        平台层放行明文，具体端点由代码策略逐处把关。
 
-    <!-- 仅豁免本机回环：HostBridge 127.0.0.1:7980、沙箱本地 Web 服务、模拟器网关 -->
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">localhost</domain>
-        <domain includeSubdomains="false">127.0.0.1</domain>
-        <domain includeSubdomains="false">::1</domain>
-        <domain includeSubdomains="false">10.0.2.2</domain>
-    </domain-config>
+        为什么不能在 XML 里精确放行：network-security-config 只支持域名/子域，不支持
+        CIDR 与通配 IP，无法表达 192.168.0.0/16、172.16.0.0/12 这类局域网网段。局域网
+        自建推理服务（Ollama / LM Studio / vLLM / one-api / OpenWebUI）几乎都只监听明文
+        HTTP，若 base-config 保持 false，连接会在 socket 层被拦成
+        java.net.UnknownServiceException: CLEARTEXT communication not permitted，
+        表现为「局域网端点连不上、模型列表拉不出来」。
+
+        因此这里放行明文，把合法性判定下沉到统一口径（均引用
+        top.tianyan.app.core.common.net.PrivateNetworkHosts）：
+          1. ProviderEndpointPolicy.normalizeUrl  —— 私有主机补 http://，公网补 https://
+          2. secureProviderUrl / buildUrl         —— 公网强制 https，私有网段放行 http
+          3. validatedMcpHttpEndpoint             —— MCP 端点同口径
+        AiProfile 导入校验同样收口到该判定，不再出现「能导入却不能请求」的分裂。
+    -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- 调试包额外信任用户 CA，便于自签证书的局域网中转联调；正式包不受影响。 -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
 </network-security-config>
