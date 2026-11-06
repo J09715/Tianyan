@@ -308,11 +308,11 @@ class SettingsViewModel(
         }
     }
 
-    fun downloadAndInstall(apkUrl: String) {
+    fun downloadAndInstall(apkUrl: String, currentVersion: String? = null) {
         viewModelScope.launch {
             _isDownloading.value = true
             _downloadProgress.value = 0f
-            val res = appUpdateManager.downloadApk(apkUrl) { downloaded, total ->
+            val res = appUpdateManager.downloadApk(apkUrl, currentVersion) { downloaded, total ->
                 if (total != null && total > 0) {
                     _downloadProgress.value = downloaded.toFloat() / total.toFloat()
                 } else {

@@ -122,10 +122,16 @@ class AppUpdateManager(
     }
 
     /**
-     * 下载 APK 文件并报告下载进度
+     * 下载 APK 文件并报告下载进度。
+     *
+     * [currentVersionName] 非空时会校验下载到的包：若包内 versionName 不比当前新，
+     * 直接删除并失败。这条校验专治「点更新→下完装完→版本没变→下次又提示同一版本」——
+     * 典型成因是安装被系统静默拒绝（签名不一致、用户取消、渠道包指向旧 commit），
+     * 没有校验时界面只会表现为「更新成功但版本没动」。
      */
     suspend fun downloadApk(
         downloadUrl: String,
+        currentVersionName: String? = null,
         onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
     ): Result<File> = withContext(Dispatchers.IO) {
         runCatching {
@@ -160,7 +166,28 @@ class AppUpdateManager(
                 }
             }
 
+            verifyDownloadedApk(apkFile, currentVersionName, downloadUrl)
             apkFile
+        }
+    }
+
+    /** 校验下载到的 APK 确实是更高的版本；不通过就删包抛错，避免装了个寂寞。 */
+    @Suppress("DEPRECATION")
+    private fun verifyDownloadedApk(apkFile: File, currentVersionName: String?, downloadUrl: String) {
+        if (currentVersionName.isNullOrBlank()) return
+        val archiveInfo = context.packageManager.getPackageArchiveInfo(apkFile.absolutePath, 0)
+            ?: run {
+                apkFile.delete()
+                throw IllegalStateException("下载到的文件不是有效的安装包（URL：$downloadUrl）")
+            }
+        val downloadedVersion = archiveInfo.versionName.orEmpty()
+        if (downloadedVersion.isBlank()) return
+        if (!VersionCompare.isNewer(downloadedVersion, currentVersionName)) {
+            apkFile.delete()
+            throw IllegalStateException(
+                "下载到的安装包是 v$downloadedVersion，不比当前 v$currentVersionName 新；" +
+                    "若系统提示签名不一致，需要先卸载当前已安装的版本再安装",
+            )
         }
     }
 

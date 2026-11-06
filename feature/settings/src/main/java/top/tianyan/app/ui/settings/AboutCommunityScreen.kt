@@ -73,7 +73,7 @@ fun AboutCommunityScreen(
                     info = state.info,
                     downloadProgress = downloadProgress,
                     isDownloading = isDownloading,
-                    onDownload = { state.info.apkDownloadUrl?.let { viewModel?.downloadAndInstall(it) } },
+                    onDownload = { state.info.apkDownloadUrl?.let { viewModel?.downloadAndInstall(it, currentVersion) } },
                     onOpenBrowser = { openBrowser(context, state.info.releaseUrl) },
                     onDismiss = { viewModel?.clearUpdateState() },
                 )

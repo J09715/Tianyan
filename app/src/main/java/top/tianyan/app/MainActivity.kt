@@ -152,7 +152,7 @@ class MainActivity : AppCompatActivity() {
                 var updateInfo by remember { mutableStateOf<AppUpdateInfo?>(null) }
                 var downloadProgress by remember { mutableStateOf<Float?>(null) }
                 var isDownloading by remember { mutableStateOf(false) }
-                var downloadFailed by remember { mutableStateOf(false) }
+                var downloadError by remember { mutableStateOf<String?>(null) }
                 val scope = rememberCoroutineScope()
                 val mainContext = LocalContext.current
                 val currentVersionName = remember {
@@ -243,10 +243,11 @@ class MainActivity : AppCompatActivity() {
                                         }
                                     }
                                 }
-                                if (downloadFailed) {
-                                    // 下载失败必须可见：不再静默停止
+                                if (downloadError != null) {
+                                    // 下载失败必须可见，且要带出真实原因：签名不一致、包版本没变、
+                                    // 网络中断的表现完全不同，只显示一句「下载失败」无法定位。
                                     Text(
-                                        text = stringResource(R.string.tianyan_update_download_failed),
+                                        text = downloadError ?: stringResource(R.string.tianyan_update_download_failed),
                                         style = MaterialTheme.typography.labelMedium,
                                         color = MaterialTheme.colorScheme.error,
                                     )
@@ -260,9 +261,9 @@ class MainActivity : AppCompatActivity() {
                                     onClick = {
                                         isDownloading = true
                                         downloadProgress = 0f
-                                        downloadFailed = false
+                                        downloadError = null
                                         scope.launch {
-                                            val res = appUpdateManager.downloadApk(apkUrl) { dl, tot ->
+                                            val res = appUpdateManager.downloadApk(apkUrl, currentVersionName) { dl, tot ->
                                                 if (tot != null && tot > 0) downloadProgress = dl.toFloat() / tot.toFloat()
                                             }
                                             isDownloading = false
@@ -270,9 +271,9 @@ class MainActivity : AppCompatActivity() {
                                                 downloadProgress = 1f
                                                 appUpdateManager.installApk(apkFile)
                                                 updateInfo = null
-                                            }.onFailure {
+                                            }.onFailure { error ->
                                                 // 下载失败：在更新对话框内给出可见的错误文案（跟随现有 UI 模式）
-                                                downloadFailed = true
+                                                downloadError = "更新包下载失败：${error.message ?: error.javaClass.simpleName}"
                                             }
                                         }
                                     },
