@@ -19,19 +19,18 @@ internal fun resolveBrowserEffectiveUrl(serverUrl: String, serverId: String, run
 }
 
 /**
- * 允许明文 HTTP 的 MCP 主机：回环 + 全部私有网段。
+ * 明文 MCP 主机判定：保留用于提示，不再用于拦截。
  *
- * 早先只白名单 192.168.*，导致 10.x、172.16-31.x、169.254.x、100.64.x（Tailscale）
- * 以及 mDNS `.local` 名字的局域网 MCP 服务一律被拒。现在与 Provider 端点共用
- * [top.tianyan.app.core.common.net.PrivateNetworkHosts] 的判定口径。
+ * MCP 服务同样由用户自己配置（局域网、公网裸 IP、自建中转都有），因此
+ * [validatedMcpHttpEndpoint] 不再按主机白名单拒绝明文，只校验地址合法性与同源约束。
  */
 internal fun isAllowedCleartextMcpHost(host: String): Boolean =
     PrivateNetworkHosts.isPrivateOrLoopback(host)
 
 internal fun validatedMcpHttpEndpoint(baseUrl: String): HttpUrl {
     val url = baseUrl.trim().toHttpUrl()
-    require(url.isHttps || isAllowedCleartextMcpHost(url.host)) {
-        "明文 MCP 仅允许 localhost、回环地址或局域网私有网段（10/8、172.16/12、192.168/16 等）"
+    require(url.username.isEmpty() && url.password.isEmpty()) {
+        "MCP 端点不能内嵌用户名或密码：$baseUrl"
     }
     return url
 }
